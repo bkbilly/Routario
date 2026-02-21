@@ -563,6 +563,14 @@ class DatabaseService:
                 .values(alert_states=alert_states)
             )
 
+    async def get_user_by_username(self, username: str) -> Optional[User]:
+        async with self.get_session() as session:
+            result = await session.execute(
+                select(User).where(User.username == username)
+            )
+            return result.scalar_one_or_none()
+
+
 # Global instances
 db_service: Optional[DatabaseService] = None
 

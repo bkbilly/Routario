@@ -1,42 +1,43 @@
-FROM python:3.11-slim
+# ── Stage 1: Builder ──────────────────────────────────────────────
+FROM python:3.11-slim AS builder
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    g++ \
     libpq-dev \
-    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
+# Install Python dependencies into a prefix we can copy cleanly
+COPY requirements.txt .
+RUN pip install --prefix=/install --no-cache-dir -r requirements.txt
+
+
+# ── Stage 2: Runtime ──────────────────────────────────────────────
+FROM python:3.11-slim
+
 WORKDIR /app
 
-# Copy requirements first (for layer caching)
-COPY requirements.txt .
+# Runtime system deps only (libpq for asyncpg)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy installed packages from builder
+COPY --from=builder /install /usr/local
 
-# Copy application code
-COPY *.py ./
-COPY README.md ARCHITECTURE.md ./
+# Copy application source
+COPY app/     ./app/
+COPY web/     ./web/
 
-# Create non-root user
-RUN useradd -m -u 1000 gpsuser && \
-    chown -R gpsuser:gpsuser /app
+# Non-root user for security
+RUN addgroup --system routario && adduser --system --ingroup routario routario
+RUN chown -R routario:routario /app
+USER routario
 
-# Create logs directory
-RUN mkdir -p /app/logs && chown gpsuser:gpsuser /app/logs
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app
 
-# Switch to non-root user
-USER gpsuser
-
-# Expose ports
-EXPOSE 8000 5023 5024/udp
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"
-
-# Run application
-CMD ["python", "main.py"]
+CMD ["python", "app/main.py"]

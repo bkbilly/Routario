@@ -1,97 +1,72 @@
-version: '3.8'
-
 services:
-  # PostgreSQL with PostGIS
-  postgres:
-    image: postgis/postgis:14-3.3
-    container_name: gps-postgres
-    environment:
-      POSTGRES_DB: gps_platform
-      POSTGRES_USER: gps_user
-      POSTGRES_PASSWORD: gps_password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    networks:
-      - gps-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gps_user -d gps_platform"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-  # Redis for caching and Pub/Sub
-  redis:
-    image: redis:7-alpine
-    container_name: gps-redis
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-    networks:
-      - gps-network
+  # ── Routario Application ─────────────────────────────────────────
+  routario:
+    image: bkbilly/routario:latest    # use 'build: .' during development
+    build: .                          # uncomment to build locally instead
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-
-  # GPS Platform Application
-  gps-platform:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: gps-platform-app
-    environment:
-      DATABASE_URL: postgresql+asyncpg://gps_user:gps_password@postgres/gps_platform
-      REDIS_URL: redis://redis:6379
-      GT06_PORT: 5023
-      TELTONIKA_PORT: 5027
-      H02_PORT: 5024
-      API_PORT: 8000
-      LOG_LEVEL: INFO
-    ports:
-      - "8000:8000"   # API
-      - "5023:5023"   # GT06
-      - "5027:5027"   # Teltonika
-      - "5024:5024/udp"  # H02 UDP
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - gps-network
-    restart: unless-stopped
-    volumes:
-      - ./logs:/app/logs
-
-  # Nginx reverse proxy (optional)
-  nginx:
-    image: nginx:alpine
-    container_name: gps-nginx
+    env_file: .env
     ports:
-      - "80:80"
-      - "443:443"
+      # Web UI + API + WebSocket
+      - "8000:8000"
+      # GPS Protocol TCP Ports
+      - "5021:5021"     # TK103
+      - "5022:5022"     # GPS103
+      - "5023:5023"     # GT06 / Concox
+      - "5025:5025"     # H02
+      - "5026:5026"     # Queclink
+      - "5027:5027"     # Teltonika
+      - "5028:5028"     # Totem
+      - "5149:5149"     # Flespi
+      # GPS Protocol UDP Ports
+      - "5055:5055/udp" # OsmAnd
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - gps-platform
+      - ./web:/app/web   # live-reload web assets without rebuild
     networks:
-      - gps-network
+      - routario-net
+
+  # ── PostgreSQL + PostGIS ─────────────────────────────────────────
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
     restart: unless-stopped
+    environment:
+      POSTGRES_DB:       routario
+      POSTGRES_USER:     routario
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-routariopass}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - routario-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U routario -d routario"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis-data:/data
+    networks:
+      - routario-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  postgres_data:
-    driver: local
-  redis_data:
-    driver: local
+  postgres-data:
+  redis-data:
 
 networks:
-  gps-network:
+  routario-net:
     driver: bridge

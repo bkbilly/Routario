@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     vapid_public_key: str = ""
     vapid_mailto: str = "mailto:admin@example.com"
 
+    # Admin User (for initial setup)
+    admin_username: str = "admin"
+    admin_email: str = "admin@example.com"
+    admin_password: str = "admin_password"
+
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

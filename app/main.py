@@ -188,6 +188,26 @@ async def lifespan(app: FastAPI):
 
     await init_database(settings.database_url)
 
+    # Create default admin on first run
+    if settings.admin_password:
+        db = get_db()
+        try:
+            existing = await db.get_user_by_username(settings.admin_username)
+            if not existing:
+                from models.schemas import UserCreate
+                await db.create_user(UserCreate(
+                    username=settings.admin_username,
+                    email=settings.admin_email,
+                    password=settings.admin_password,
+                    is_admin=True
+                ))
+                logger.info(f"Default admin '{settings.admin_username}' created.")
+            else:
+                logger.info(f"Admin '{settings.admin_username}' already exists, skipping.")
+        except Exception as e:
+            logger.warning(f"Could not create default admin: {e}")
+
+
     redis_pubsub.redis_url = settings.redis_url
     await redis_pubsub.connect()
 
