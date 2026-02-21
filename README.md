@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🛰️ Routario
+![Routario](web/icons/logo-700.png)
 
 **Real-time fleet tracking, smart alerts, and sensor analytics — all in one platform.**
 
