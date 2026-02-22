@@ -282,6 +282,7 @@ class DatabaseService:
                 username=user_data.username,
                 email=user_data.email,
                 password_hash=password_hash,
+                is_admin=user_data.is_admin,
                 notification_channels=user_data.notification_channels
             )
             session.add(user)
