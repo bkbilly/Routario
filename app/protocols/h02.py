@@ -6,7 +6,7 @@ from . import BaseProtocolDecoder, ProtocolRegistry
 @ProtocolRegistry.register("h02")
 class H02Decoder(BaseProtocolDecoder):
     PORT = 5013
-    PROTOCOL_TYPE = 'udp'
+    PROTOCOL_TYPES = ['tcp']
     
     async def decode(self, data: bytes, client_info: Dict[str, Any], known_imei: Optional[str] = None) -> Tuple[Union[NormalizedPosition, Dict[str, Any], None], int]:
         try:

@@ -18,7 +18,7 @@ class BaseProtocolDecoder(ABC):
     
     # Default port for the protocol (Must be overridden by subclasses)
     PORT: int = 0
-    PROTOCOL_TYPE: str = 'tcp'
+    PROTOCOL_TYPES: list = ['tcp']  # default to TCP, override in subclass
     
     @abstractmethod
     async def decode(self, data: bytes, client_info: Dict[str, Any], known_imei: Optional[str] = None) -> Tuple[Union[NormalizedPosition, Dict[str, Any], None], int]:

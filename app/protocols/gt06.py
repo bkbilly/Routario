@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 @ProtocolRegistry.register("gt06")
 class GT06Decoder(BaseProtocolDecoder):
     PORT = 5023
-    PROTOCOL_TYPE = 'tcp'
+    PROTOCOL_TYPES = ['tcp']
     
     async def decode(self, data: bytes, client_info: Dict[str, Any], known_imei: Optional[str] = None) -> Tuple[Union[NormalizedPosition, Dict[str, Any], None], int]:
         try:

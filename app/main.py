@@ -217,15 +217,15 @@ async def lifespan(app: FastAPI):
     protocols = ProtocolRegistry.get_all()
     for name, decoder in protocols.items():
         port = decoder.PORT
-        protocol_type = getattr(decoder, "PROTOCOL_TYPE", "tcp").lower()
-        if protocol_type == "udp":
-            server = UDPServer(settings.udp_host, port, name, process_position_callback)
-            asyncio.create_task(server.start())
-            logger.info(f"Started UDP Server for {name} on port {port}")
-        else:
-            server = TCPServer(settings.tcp_host, port, name, process_position_callback, command_callback)
-            asyncio.create_task(server.start())
-            logger.info(f"Started TCP Server for {name} on port {port}")
+        for protocol_type in decoder.PROTOCOL_TYPES:
+            if protocol_type == "udp":
+                server = UDPServer(settings.udp_host, port, name, process_position_callback)
+                asyncio.create_task(server.start())
+                logger.info(f"Started UDP Server for {name} on port {port}")
+            else:
+                server = TCPServer(settings.tcp_host, port, name, process_position_callback, command_callback)
+                asyncio.create_task(server.start())
+                logger.info(f"Started TCP Server for {name} on port {port}")
 
     asyncio.create_task(periodic_alert_task())
     logger.info("Routario Platform started successfully")

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 @ProtocolRegistry.register("teltonika")
 class TeltonikaDecoder(BaseProtocolDecoder):
     PORT = 5027
-    PROTOCOL_TYPE = 'tcp'
+    PROTOCOL_TYPES = ['tcp', 'udp']
 
     # Command mapping for Teltonika SMS/GPRS commands
     COMMAND_MAPPING = {

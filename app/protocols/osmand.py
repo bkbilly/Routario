@@ -28,7 +28,7 @@ class OsmAndDecoder(BaseProtocolDecoder):
     """
     
     PORT = 5055
-    PROTOCOL_TYPE = 'tcp'
+    PROTOCOL_TYPES = ['tcp']
     
     # OsmAnd parameter mapping
     PARAM_MAPPING = {

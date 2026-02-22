@@ -29,7 +29,7 @@ class TK103Decoder(BaseProtocolDecoder):
     """
     
     PORT = 5001
-    PROTOCOL_TYPE = 'tcp'
+    PROTOCOL_TYPES = ['tcp']
     
     def __init__(self):
         super().__init__()

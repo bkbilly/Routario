@@ -25,7 +25,7 @@ class FlespiDecoder(BaseProtocolDecoder):
     """
     
     PORT = 5149
-    PROTOCOL_TYPE = 'tcp'
+    PROTOCOL_TYPES = ['tcp']
     
     # Flespi standard field mappings
     FIELD_MAPPING = {

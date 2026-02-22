@@ -2,31 +2,32 @@ services:
 
   # ── Routario Application ─────────────────────────────────────────
   routario:
-    image: bkbilly/routario:latest    # use 'build: .' during development
-    build: .                          # uncomment to build locally instead
+    image: bkbillybk/routario:dev
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://routario:routariopass@postgres/routario?ssl=disable
+      REDIS_URL: redis://redis:6379
+      GEOCODING_ENABLED: false
+      VAPID_PUBLIC_KEY: BGQ3prURPQf1PZSGKySh1Mnr1QQW5pVBGZujTApG_zhqKxGnCz30umqOg5Mh_Q6U-5nNbAtO7XVmz0G-3RR_84g
+      VAPID_PRIVATE_KEY: Qk1wdfPJGQ4nLYN2SKLNGR5Z3FrD-e_LfByMTUyJ3Hc
     ports:
       # Web UI + API + WebSocket
       - "8000:8000"
-      # GPS Protocol TCP Ports
+      # GPS Protocol Ports
       - "5021:5021"     # TK103
       - "5022:5022"     # GPS103
       - "5023:5023"     # GT06 / Concox
-      - "5025:5025"     # H02
+      - "5025:5025/udp" # H02
       - "5026:5026"     # Queclink
       - "5027:5027"     # Teltonika
       - "5028:5028"     # Totem
+      - "5055:5055"     # OsmAnd
       - "5149:5149"     # Flespi
-      # GPS Protocol UDP Ports
-      - "5055:5055/udp" # OsmAnd
-    volumes:
-      - ./web:/app/web   # live-reload web assets without rebuild
     networks:
       - routario-net
 
@@ -37,7 +38,7 @@ services:
     environment:
       POSTGRES_DB:       routario
       POSTGRES_USER:     routario
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-routariopass}
+      POSTGRES_PASSWORD: routariopass
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
