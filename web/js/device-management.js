@@ -39,6 +39,8 @@ async function loadAlertTypes() {
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const DEFAULT_PROTOCOL = 'teltonika';
 const DEFAULT_TYPE     = 'car';
+const isAdmin = localStorage.getItem('is_admin') === 'true';
+
 
 // ── Boot ─────────────────────────────────────────────────────────
 
@@ -47,6 +49,9 @@ function checkLogin() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    const addBtn = document.querySelector('button[onclick="openAddDeviceModal()"]');
+    if (addBtn) addBtn.style.display = isAdmin ? '' : 'none';
+
     checkLogin();
     await loadAlertTypes();
     await loadAvailableProtocols();

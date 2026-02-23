@@ -885,19 +885,66 @@ h1 {
     .alerts-add-divider { width: auto; height: 1px; margin: 0; }
 }
 
+/* ── Mobile: Device Table ───────────────────────────────────────── */
+
 @media (max-width: 768px) {
-    .command-tabs       { flex-direction: column; }
-    .command-subtabs    { flex-direction: column; }
 
-    .command-tab {
-        border-bottom: 1px solid var(--border-color);
-        border-left: 3px solid transparent;
+    /* Header: stack buttons below title */
+    .header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
     }
-    .command-tab.active {
-        border-left-color: var(--accent-primary);
-        border-bottom-color: var(--border-color);
+    .header > div:last-child {
+        width: 100%;
+        justify-content: flex-end;
     }
 
-    .alerts-table th:nth-child(5),
-    .alerts-table td:nth-child(5) { display: none; }
+    /* Hide less important columns on mobile */
+    .devices-table th:nth-child(4),   /* Protocol */
+    .devices-table td:nth-child(4),
+    .devices-table th:nth-child(5),   /* Plate */
+    .devices-table td:nth-child(5),
+    .devices-table th:nth-child(8),   /* Odometer */
+    .devices-table td:nth-child(8) {
+        display: none;
+    }
+
+    /* Tighten up padding */
+    .devices-table th,
+    .devices-table td {
+        padding: 0.625rem 0.5rem;
+        font-size: 0.8rem;
+    }
+
+    /* Make action buttons stack vertically */
+    .device-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .device-actions .btn {
+        font-size: 0.7rem;
+        padding: 0.3rem 0.5rem;
+        white-space: nowrap;
+    }
+
+    /* Shrink action column */
+    .devices-table th:last-child,
+    .devices-table td:last-child {
+        width: auto;
+    }
+}
+
+@media (max-width: 480px) {
+    /* On very small screens, also hide Last Seen */
+    .devices-table th:nth-child(7),
+    .devices-table td:nth-child(7) {
+        display: none;
+    }
+
+    .container {
+        padding: 1rem 0.75rem;
+    }
 }

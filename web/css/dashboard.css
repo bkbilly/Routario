@@ -1192,3 +1192,15 @@ body::before {
 /* Sensor attr list scrollbar */
 #sensorAttrList::-webkit-scrollbar { height: 4px; width: 4px; }
 #sensorAttrList::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 2px; }
+
+@media (max-width: 1024px) {
+    .history-controls {
+        position: fixed;
+        z-index: 1100;  /* above the sidebar overlay */
+        bottom: 1rem;
+        width: 95%;
+    }
+    .sidebar.history-active .sidebar-section {
+        margin-bottom: 150px;
+    }
+}

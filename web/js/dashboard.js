@@ -274,7 +274,7 @@ function handleLogout() {
 
 // Initialize Leaflet Map
 function initMap() {
-    map = L.map('map').setView([37.7749, -122.4194], 12);
+    map = L.map('map').setView([20, 0], 2);
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
@@ -304,6 +304,7 @@ async function loadDevices() {
         }
         
         updateStats();
+        fitMapToMarkers();
     } catch (error) {
         console.error('Error loading devices:', error);
         showAlert({ title: 'Connection Failed', message: 'Unable to connect to the server.', type: 'error' });
@@ -327,6 +328,19 @@ async function loadDeviceState(deviceId) {
         }
     } catch (error) {
         console.error(`Error loading state for device ${deviceId}:`, error);
+    }
+}
+
+// Fit map to markers
+function fitMapToMarkers() {
+    const validMarkers = Object.values(markers).filter(m => m && m.getLatLng);
+    if (validMarkers.length === 0) return;  // no markers, stay at world view
+
+    if (validMarkers.length === 1) {
+        map.setView(validMarkers[0].getLatLng(), 15);
+    } else {
+        const group = L.featureGroup(validMarkers);
+        map.fitBounds(group.getBounds().pad(0.2));
     }
 }
 
@@ -743,6 +757,7 @@ async function loadHistory(deviceId, startTime, endTime) {
         // Actually, we need to show the history footer
         const footer = document.getElementById('historyControls');
         if (footer) footer.style.display = 'flex';
+        document.querySelector('.sidebar').classList.add('history-active');
         
         // Hide regular list
         document.getElementById('sidebarDeviceList').style.display = 'none';
@@ -785,6 +800,7 @@ function exitHistoryMode() {
     // Hide history footer
     const footer = document.getElementById('historyControls');
     if (footer) footer.style.display = 'none';
+    document.querySelector('.sidebar').classList.remove('history-active');
 
     historyTrips = [];
     const tripLabel = document.getElementById('historyTripLabel');
