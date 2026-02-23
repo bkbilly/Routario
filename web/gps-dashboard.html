@@ -134,6 +134,43 @@
         
         <main class="main-content" style="position: relative;">
             <div id="map"></div>
+            <!-- Map Tile Picker -->
+            <div style="position: absolute; top: 1rem; right: 1rem; z-index: 1000;">
+                <button id="mapPickerBtn" onclick="toggleMapPicker()" 
+                    style="background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary);
+                           padding: 0.5rem 0.9rem; border-radius: 8px; cursor: pointer; font-size: 0.85rem;
+                           box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 0.4rem;">
+                    🗺️ Map Style
+                </button>
+                <div id="mapTilePicker" style="display: none; position: absolute; right: 0; top: calc(100% + 0.5rem);
+                     background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;
+                     padding: 0.5rem; min-width: 200px; box-shadow: 0 4px 20px rgba(0,0,0,0.4);">
+                    <div style="font-size: 0.7rem; color: var(--text-muted); padding: 0.3rem 0.6rem 0.5rem;">Select map style</div>
+                    <script>
+                        // Render options dynamically once MAP_TILES is available
+                        document.addEventListener('DOMContentLoaded', () => {
+                            const picker = document.getElementById('mapTilePicker');
+                            const saved = localStorage.getItem('mapTileLayer') || 'openstreetmap';
+                            Object.entries(MAP_TILES).forEach(([key, tile]) => {
+                                const btn = document.createElement('button');
+                                btn.className = 'map-tile-option';
+                                btn.dataset.tile = key;
+                                btn.textContent = tile.label;
+                                btn.onclick = () => { applyTileLayer(key); toggleMapPicker(); };
+                                if (key === saved) btn.classList.add('active');
+                                btn.style.cssText = `display: block; width: 100%; text-align: left; background: transparent;
+                                    border: none; color: var(--text-primary); padding: 0.5rem 0.75rem; border-radius: 6px;
+                                    cursor: pointer; font-size: 0.85rem; transition: background 0.15s;`;
+                                btn.addEventListener('mouseenter', () => btn.style.background = 'var(--bg-hover, rgba(255,255,255,0.05))');
+                                btn.addEventListener('mouseleave', () => {
+                                    btn.style.background = btn.classList.contains('active') ? 'rgba(59,130,246,0.15)' : 'transparent';
+                                });
+                                picker.appendChild(btn);
+                            });
+                        });
+                    </script>
+                </div>
+            </div>
             <!-- Floating History Controls (Shown when history is active) -->
             <div id="historyControls" class="history-controls" style="display: none;">
                 <!-- Row 1: timestamp · trip pill · close -->

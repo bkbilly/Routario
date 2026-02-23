@@ -26,6 +26,10 @@
     
     --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
     --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+
+    --sidebar-width: 320px;        /* desktop sidebar width */
+    --sidebar-width-mobile: 230px; /* ← change this to taste */
+
 }
 
 * {
@@ -72,11 +76,11 @@ body::before {
 }
 .dashboard {
     display: grid;
-    grid-template-columns: 320px 1fr;
+    grid-template-columns: var(--sidebar-width) 1fr;
     grid-template-rows: 70px 1fr;
     height: 100vh;
     gap: 0;
-    transition: grid-template-columns var(--transition-base), grid-template-rows var(--transition-base);
+    transition: grid-template-columns var(--transition-base);
 }
 
 /* Header */
@@ -1203,4 +1207,15 @@ body::before {
     .sidebar.history-active .sidebar-section {
         margin-bottom: 150px;
     }
+    .dashboard {
+        grid-template-columns: var(--sidebar-width-mobile) 1fr;
+    }
+
+    .dashboard.sidebar-hidden {
+        grid-template-columns: 0px 1fr;
+    }
+    .sidebar-action-btn {
+        padding: 0.75rem 0.1rem;
+    }
+
 }

@@ -35,11 +35,58 @@ let currentSort = localStorage.getItem('vehicleSortMode') || 'name';
 let sensorChart = null;
 let selectedSensorAttrs = new Set(['speed']);   // default selection
 let currentHistoryTab = 'details';
+let currentTileLayer = null;
 
 const SENSOR_COLORS = [
     '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
     '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'
 ];
+
+const MAP_TILES = {
+    openstreetmap: {
+        label: '🗺️ OpenStreetMap',
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+    },
+    google_streets: {
+        label: '🛣️ Google Streets',
+        url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+        attribution: '© Google Maps',
+        maxZoom: 21
+    },
+    google_satellite: {
+        label: '🛰️ Google Satellite',
+        url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        attribution: '© Google Maps',
+        maxZoom: 21
+    },
+    google_hybrid: {
+        label: '🌍 Google Hybrid',
+        url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+        attribution: '© Google Maps',
+        maxZoom: 21
+    },
+    carto_dark: {
+        label: '🌑 Dark Mode',
+        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        attribution: '© <a href="https://carto.com/">CARTO</a>',
+        maxZoom: 19
+    },
+    carto_light: {
+        label: '☀️ Light Mode',
+        url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+        attribution: '© <a href="https://carto.com/">CARTO</a>',
+        maxZoom: 19
+    },
+    esri_satellite: {
+        label: '🌐 ESRI Satellite',
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attribution: '© Esri, Maxar, Earthstar Geographics',
+        maxZoom: 19
+    }
+};
+
 
 
 // Helper to format dates to local time for display
@@ -251,6 +298,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     setInterval(updateSidebarTimes, 60000);
 });
 
+document.addEventListener('click', closePicker);
+
 // Login Check Function
 function checkLogin() {
     const token = localStorage.getItem('auth_token');
@@ -276,10 +325,41 @@ function handleLogout() {
 function initMap() {
     map = L.map('map').setView([20, 0], 2);
     
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
+    const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap';
+    applyTileLayer(savedTile);
+}
+
+function applyTileLayer(tileKey) {
+    const tile = MAP_TILES[tileKey] || MAP_TILES['openstreetmap'];
+
+    if (currentTileLayer) {
+        map.removeLayer(currentTileLayer);
+    }
+
+    currentTileLayer = L.tileLayer(tile.url, {
+        attribution: tile.attribution,
+        maxZoom: tile.maxZoom
     }).addTo(map);
+
+    localStorage.setItem('mapTileLayer', tileKey);
+
+    // Update picker UI if open
+    document.querySelectorAll('.map-tile-option').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tile === tileKey);
+    });
+}
+
+function toggleMapPicker() {
+    const picker = document.getElementById('mapTilePicker');
+    picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
+}
+
+function closePicker(e) {
+    const picker = document.getElementById('mapTilePicker');
+    const btn = document.getElementById('mapPickerBtn');
+    if (picker && !picker.contains(e.target) && !btn.contains(e.target)) {
+        picker.style.display = 'none';
+    }
 }
 
 // Load Devices
