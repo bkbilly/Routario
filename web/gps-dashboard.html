@@ -41,18 +41,20 @@
         
         <aside class="sidebar">
             <div class="sidebar-section" id="sidebarDeviceList" style="flex: 1; overflow-y: auto;">
-                <div class="search-container">
-                    <input type="text" 
-                           class="search-input" 
-                           id="deviceSearchInput" 
-                           placeholder="🔍 Search vehicles..." 
-                           oninput="filterDevices()">
-                </div>
-                <div style="display:flex; gap:0.5rem; padding: 0 0.75rem 0.75rem; flex-wrap:wrap;">
-                    <span style="font-size:0.75rem;color:var(--text-muted);align-self:center;margin-right:0.25rem;">Sort:</span>
-                    <button class="btn btn-secondary" style="font-size:0.75rem;padding:0.3rem 0.6rem;" onclick="setSortMode('name')" id="sort-name">Name</button>
-                    <button class="btn btn-secondary" style="font-size:0.75rem;padding:0.3rem 0.6rem;" onclick="setSortMode('lastseen')" id="sort-lastseen">Last Seen</button>
-                    <button class="btn btn-secondary" style="font-size:0.75rem;padding:0.3rem 0.6rem;" onclick="setSortMode('status')" id="sort-status">Status</button>
+                <div class="search-bar-row">
+                    <div class="search-input-wrap">
+                        <span class="search-icon">🔍</span>
+                        <input type="text"
+                               class="search-input"
+                               id="deviceSearchInput"
+                               placeholder="Search vehicles..."
+                               oninput="filterDevices()">
+                    </div>
+                    <select class="sort-select" id="sortSelect" onchange="setSortMode(this.value)" title="Sort order">
+                        <option value="name">Name</option>
+                        <option value="lastseen">Recent</option>
+                        <option value="status">Status</option>
+                    </select>
                 </div>
                 <div class="device-list" id="deviceList"></div>
             </div>
@@ -117,11 +119,6 @@
                     </a>
                 </div>
                 
-                <button class="sidebar-action-btn" id="alertsBtn" onclick="openAlertsModal()">
-                    <span>Alerts (<span id="alertCount">0</span>)</span>
-                    <span class="sidebar-action-icon">🔔</span>
-                </button>
-
                 <div class="user-profile" id="sidebarUserProfile">
                     <div class="user-info">
                         <span class="user-name" id="userNameDisplay">User</span>
@@ -135,12 +132,18 @@
         <main class="main-content" style="position: relative;">
             <div id="map"></div>
             <!-- Map Tile Picker -->
-            <div style="position: absolute; top: 1rem; right: 1rem; z-index: 1000;">
+            <div style="position: absolute; top: 1rem; right: 1rem; z-index: 1000; display: grid;">
                 <button id="mapPickerBtn" onclick="toggleMapPicker()" 
                     style="background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary);
                            padding: 0.5rem 0.9rem; border-radius: 8px; cursor: pointer; font-size: 0.85rem;
                            box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 0.4rem;">
                     🗺️ Map Style
+                </button>
+                <button id="alertsBtn" onclick="openAlertsModal()"
+                    style="background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary);
+                           padding: 0.5rem 0.9rem; border-radius: 8px; cursor: pointer; font-size: 0.85rem;
+                           box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 0.4rem;">
+                    🔔 <span id="alertCount">0</span> Alerts
                 </button>
                 <div id="mapTilePicker" style="display: none; position: absolute; right: 0; top: calc(100% + 0.5rem);
                      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;

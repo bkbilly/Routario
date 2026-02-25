@@ -215,16 +215,10 @@ function getCurrentTripForPoint(isoTimeStr) {
 
 function setSortMode(mode) {
     currentSort = mode;
-    localStorage.setItem('vehicleSortMode', mode);  // ← ADD THIS LINE
-    document.querySelectorAll('[id^="sort-"]').forEach(b => {
-        b.style.borderColor = '';
-        b.style.color = '';
-    });
-    const active = document.getElementById('sort-' + mode);
-    if (active) {
-        active.style.borderColor = 'var(--accent-primary)';
-        active.style.color = 'var(--accent-primary)';
-    }
+    localStorage.setItem('vehicleSortMode', mode);
+    // Sync the dropdown (handles both programmatic calls and direct user clicks)
+    const sel = document.getElementById('sortSelect');
+    if (sel && sel.value !== mode) sel.value = mode;
     renderDeviceList();
 }
 
@@ -247,13 +241,11 @@ function getSortedDevices() {
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
     checkLogin(); 
-    // Restore sort button highlight
+    // Restore saved sort (fixes the bug where sort was highlighted but not active)
     const savedSort = localStorage.getItem('vehicleSortMode') || 'name';
-    const activeBtn = document.getElementById('sort-' + savedSort);
-    if (activeBtn) {
-        activeBtn.style.borderColor = 'var(--accent-primary)';
-        activeBtn.style.color = 'var(--accent-primary)';
-    }
+    currentSort = savedSort;
+    const sel = document.getElementById('sortSelect');
+    if (sel) sel.value = savedSort;
 
     initMap();
     await loadDevices();
@@ -550,7 +542,7 @@ function getDeviceCardContent(device, icon) {
                 <span class="info-value" id="mileage-${device.id}">${mileage}</span>
             </div>
         </div>
-        <div class="device-actions" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+        <div class="device-actions">
             <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openHistoryModal(${device.id})">🕒 History</button>
         </div>
     `;
