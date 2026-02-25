@@ -174,7 +174,6 @@ function renderDeviceTable(list) {
         return `<tr class="device-row" ondblclick="openDeviceModal(${d.id},'general')">
             <td style="text-align:center;font-size:1.2rem;">${icon}</td>
             <td><span class="device-row-name">${d.name}</span><div class="device-row-imei">${d.imei}</div></td>
-            <td><span style="font-family:var(--font-mono);font-size:0.8rem;">${d.imei}</span></td>
             <td><span class="proto-badge">${proto}</span></td>
             <td>${plate}</td>
             <td>

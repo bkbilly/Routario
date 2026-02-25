@@ -901,12 +901,12 @@ h1 {
     }
 
     /* Hide less important columns on mobile */
-    .devices-table th:nth-child(4),   /* Protocol */
+    .devices-table th:nth-child(3),   /* Protocol */
+    .devices-table td:nth-child(3),
+    .devices-table th:nth-child(4),   /* Plate */
     .devices-table td:nth-child(4),
-    .devices-table th:nth-child(5),   /* Plate */
-    .devices-table td:nth-child(5),
-    .devices-table th:nth-child(8),   /* Odometer */
-    .devices-table td:nth-child(8) {
+    .devices-table th:nth-child(7),   /* Odometer */
+    .devices-table td:nth-child(7) {
         display: none;
     }
 
