@@ -3,7 +3,7 @@ Alert Engine
 Rule-based alerting with temporal logic and notifications
 """
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional, Callable
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -66,7 +66,7 @@ class AlertEngine:
         if not schedule or not schedule.get('days'):
             return True  # no schedule set → always active
 
-        now       = datetime.utcnow()
+        now       = datetime.now(timezone.utc)
         today_dow = now.weekday()   # Monday = 0, Sunday = 6
         current_h = now.hour
 

@@ -1,19 +1,20 @@
 // Vehicle Type Icons Mapping
 const VEHICLE_ICONS = {
-    car: '🚗',
-    truck: '🚛',
-    van: '🚐',
-    motorcycle: '🏍️',
-    bus: '🚌',
-    person: '🚶',
-    airplane: '✈️',
-    bicycle: '🚲',
-    boat: '🚢',
-    scooter: '🛴',
-    tractor: '🚜',
-    arrow: '▲', // This will be rendered as SVG on map
-    other: '📦'
+    arrow:      { emoji: '▲',  offset: 0   },
+    car:        { emoji: '🚗', offset: 90 },
+    truck:      { emoji: '🚛', offset: 90 },
+    van:        { emoji: '🚐', offset: 90 },
+    motorcycle: { emoji: '🏍️', offset: 90 },
+    bus:        { emoji: '🚌', offset: 90 },
+    person:     { emoji: '🚶', offset: 0   },
+    airplane:   { emoji: '✈️', offset: -45 },
+    bicycle:    { emoji: '🚲', offset: 90 },
+    boat:       { emoji: '🚢', offset: 90 },
+    scooter:    { emoji: '🛴', offset: 90 },
+    tractor:    { emoji: '🚜', offset: 90 },
+    other:      { emoji: '📦', offset: 0   },
 };
+
 
 // State
 let map = null;
@@ -514,7 +515,7 @@ function renderDeviceList() {
         card.id = `device-card-${device.id}`; // Add ID for easier updates
         card.onclick = () => selectDevice(device.id);
         
-        const vehicleIcon = VEHICLE_ICONS[device.vehicle_type] || '📍';
+        const vehicleIcon = (VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other']).emoji;
         
         card.innerHTML = getDeviceCardContent(device, vehicleIcon);
         
@@ -561,7 +562,7 @@ function updateSidebarCard(deviceId) {
 
     const card = document.getElementById(`device-card-${deviceId}`);
     if (card) {
-        const vehicleIcon = VEHICLE_ICONS[device.vehicle_type] || '📍';
+        const vehicleIcon = (VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other']).emoji;
         // Only update innerHTML if card exists, effectively re-rendering with new state
         card.innerHTML = getDeviceCardContent(device, vehicleIcon);
         
@@ -597,25 +598,27 @@ function selectDevice(deviceId) {
 }
 
 // Helper to generate custom marker HTML
-function getMarkerHtml(type, ignitionOn) {
+function getMarkerHtml(type, ignitionOn, heading = 0) {
     let iconContent;
 
     if (type === 'arrow') {
         iconContent = `
             <svg class="marker-svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
                  xmlns="http://www.w3.org/2000/svg"
-                 style="filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.5));">
+                 style="transform: rotate(${heading}deg); filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.5));">
                 <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z"
                       fill="#3b82f6" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
             </svg>`;
     } else {
-        const emoji = VEHICLE_ICONS[type] || '📍';
-        iconContent = `<div class="marker-svg" style="font-size: 28px;">${emoji}</div>`;
+        const vehicle = VEHICLE_ICONS[type] || VEHICLE_ICONS['other'];
+        const emoji   = vehicle.emoji;
+        const offset  = vehicle.offset;
+        const rotation = heading + offset;
+        iconContent = `<div class="marker-svg" style="font-size: 28px; transform: rotate(${rotation}deg); display: inline-block;">${emoji}</div>`;
     }
 
     return `<div class="marker-container" style="position:relative;display:flex;align-items:center;justify-content:center;">${iconContent}</div>`;
 }
-
 // Update Device Marker
 function updateDeviceMarker(deviceId, state) {
     if (!state.last_latitude || !state.last_longitude) return;
@@ -651,7 +654,10 @@ function updateDeviceMarker(deviceId, state) {
         const el = markers[deviceId].getElement();
         if (el) {
             const svg = el.querySelector('.marker-svg');
-            if (svg) svg.style.transform = `rotate(${toHead}deg)`;
+            const vehicle = VEHICLE_ICONS[device?.vehicle_type];
+            const offset  = (!vehicle || device?.vehicle_type === 'arrow') ? 0 : vehicle.offset;
+            if (svg) svg.style.transform = `rotate(${toHead + offset}deg)`;
+
         }
 
         markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead };
@@ -934,7 +940,7 @@ function updatePlaybackUI() {
     if (!markers['history_pos']) createHistoryMarker();
     
     markers['history_pos'].setLatLng(position).setIcon(L.divIcon({
-        html: getMarkerHtml(device?.vehicle_type, heading, p.ignition),
+        html: getMarkerHtml(device?.vehicle_type, p.ignition, heading),
         className: 'history-marker',
         iconSize: [32, 32],
         iconAnchor: [16, 16]
@@ -988,7 +994,7 @@ function updatePointDetails(feature) {
 
 function createHistoryMarker() {
     const device = devices.find(d => d.id === historyDeviceId);
-    const vehicleIcon = VEHICLE_ICONS[device?.vehicle_type] || '🟣';
+    const vehicleIcon = (VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other']).emoji;
     const heading = historyData[historyIndex].properties.course || 0;
     const rotationStyle = (device?.vehicle_type === 'arrow') ? `transform: rotate(${heading}deg);` : '';
 

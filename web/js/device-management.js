@@ -22,9 +22,19 @@ let currentRawDeviceId = null;
 // ── Constants ────────────────────────────────────────────────────
 
 const VEHICLE_ICONS = {
-    car:'🚗', truck:'🚛', van:'🚐', motorcycle:'🏍️', bus:'🚌',
-    person:'🚶', airplane:'✈️', bicycle:'🚲', boat:'🚢',
-    scooter:'🛴', tractor:'🚜', arrow:'▲', other:'📦'
+    arrow:'▲',
+    car:'🚗',
+    truck:'🚛',
+    van:'🚐',
+    motorcycle:'🏍️',
+    bus:'🚌',
+    person:'🚶',
+    airplane:'✈️',
+    bicycle:'🚲',
+    boat:'🚢',
+    scooter:'🛴',
+    tractor:'🚜',
+    other:'📦',
 };
 
 let ALERT_TYPES = {};

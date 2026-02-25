@@ -4,267 +4,199 @@ Supports the OsmAnd mobile app GPS tracking protocol
 """
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Tuple, Union
+from urllib.parse import parse_qs
+from http.server import BaseHTTPRequestHandler
+from io import BytesIO
 import logging
-from urllib.parse import parse_qs, urlparse
+
 from models.schemas import NormalizedPosition
 from . import BaseProtocolDecoder, ProtocolRegistry
 
 logger = logging.getLogger(__name__)
 
+HTTP_200 = b'HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n'
+
+
+class _HTTPRequest(BaseHTTPRequestHandler):
+    """Minimal HTTP request parser — no socket, no logging."""
+    def __init__(self, raw: bytes):
+        self.rfile = BytesIO(raw)
+        self.raw_requestline = self.rfile.readline()
+        self.error_code = None
+        self.parse_request()
+
+    def send_error(self, code, message=None, explain=None):
+        self.error_code = code
+
+    def log_message(self, *args):
+        pass  # silence BaseHTTPRequestHandler stdout logging
+
+
 @ProtocolRegistry.register("osmand")
 class OsmAndDecoder(BaseProtocolDecoder):
     """
     OsmAnd Protocol Decoder
-    
-    OsmAnd is a popular open-source mobile navigation app that can send
-    GPS tracking data via HTTP GET requests. This decoder supports the
-    OsmAnd tracking protocol over TCP with HTTP-style requests.
-    
+
+    OsmAnd sends GPS data as HTTP GET requests, either with parameters in the
+    query string or in the request body (as used by Home Assistant).
+
     Port: 5055 (TCP)
-    Format: HTTP GET with query parameters
-    
-    Example request:
-    GET /?id=123456&lat=37.7749&lon=-122.4194&speed=45.5&bearing=180&altitude=15&timestamp=1234567890
+    Format: HTTP GET — query string or URL-encoded body
+
+    Example (query string):
+        GET /?id=123&lat=37.77&lon=-122.41&speed=0&bearing=0&altitude=10&timestamp=1234567890 HTTP/1.1
+
+    Example (body, Home Assistant style):
+        GET / HTTP/1.1
+        Content-Type: application/x-www-form-urlencoded
+        Content-Length: 170
+
+        id=864454079682667&lat=37.99&lon=23.79&...
     """
-    
+
     PORT = 5055
     PROTOCOL_TYPES = ['tcp']
-    
-    # OsmAnd parameter mapping
-    PARAM_MAPPING = {
-        'id': 'device_id',
-        'deviceid': 'device_id',
-        'lat': 'latitude',
-        'latitude': 'latitude',
-        'lon': 'longitude',
-        'longitude': 'longitude',
-        'speed': 'speed',
-        'bearing': 'course',
-        'course': 'course',
-        'altitude': 'altitude',
-        'alt': 'altitude',
-        'hdop': 'hdop',
-        'accuracy': 'accuracy',
-        'batt': 'battery',
-        'battery': 'battery',
-        'timestamp': 'timestamp',
-        'sat': 'satellites'
-    }
-    
+
     async def decode(
-        self, 
-        data: bytes, 
-        client_info: Dict[str, Any], 
+        self,
+        data: bytes,
+        client_info: Dict[str, Any],
         known_imei: Optional[str] = None
     ) -> Tuple[Union[NormalizedPosition, Dict[str, Any], None], int]:
-        """
-        Decode OsmAnd HTTP-style GPS data
-        
-        Args:
-            data: Raw bytes from device
-            client_info: Client connection metadata
-            known_imei: Known device IMEI (if authenticated)
-            
-        Returns:
-            Tuple of (decoded_data, bytes_consumed)
-        """
-        try:
-            # OsmAnd sends HTTP GET requests
-            # Look for complete HTTP request (ends with \r\n\r\n or \n\n)
-            
-            if not data:
-                return None, 0
-            
-            # Try to decode as ASCII/UTF-8
-            try:
-                text = data.decode('utf-8')
-            except UnicodeDecodeError:
-                try:
-                    text = data.decode('ascii', errors='ignore')
-                except:
-                    logger.error("OsmAnd: Failed to decode request")
-                    return None, len(data)
-            
-            # Check for complete HTTP request
-            if '\r\n\r\n' in text:
-                end_idx = text.index('\r\n\r\n') + 4
-                request_text = text[:end_idx]
-                consumed = len(request_text.encode('utf-8'))
-            elif '\n\n' in text:
-                end_idx = text.index('\n\n') + 2
-                request_text = text[:end_idx]
-                consumed = len(request_text.encode('utf-8'))
-            else:
-                # Incomplete request, need more data
-                if len(data) > 4096:  # Prevent buffer overflow
-                    logger.warning("OsmAnd: Buffer too large, resetting")
-                    return None, len(data)
-                return None, 0
-            
-            # Parse HTTP request
-            lines = request_text.split('\n')
-            if not lines or not lines[0].startswith('GET '):
-                logger.warning("OsmAnd: Invalid HTTP request")
-                return None, consumed
-            
-            # Extract URL from first line: "GET /path?params HTTP/1.1"
-            first_line = lines[0].strip()
-            parts = first_line.split(' ')
-            if len(parts) < 2:
-                logger.warning("OsmAnd: Malformed request line")
-                return None, consumed
-            
-            url_path = parts[1]
-            
-            # Parse query parameters
-            params = self._parse_url_params(url_path)
-            
-            if not params:
-                logger.warning("OsmAnd: No parameters in request")
-                return None, consumed
-            
-            # Extract device ID (IMEI)
-            device_id = known_imei
-            if not device_id:
-                device_id = params.get('id') or params.get('deviceid')
-                
-                if not device_id:
-                    logger.warning("OsmAnd: No device ID in request")
-                    return None, consumed
-            
-            # Parse position data
-            position = await self._parse_osmand_params(params, device_id)
-            
-            if position:
-                # Send HTTP 200 OK response
-                response = b'HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n'
-                return position, consumed
-            else:
-                return None, consumed
-                
-        except Exception as e:
-            logger.error(f"OsmAnd decode error: {e}", exc_info=True)
-            return None, len(data) if len(data) > 0 else 1
-    
-    def _parse_url_params(self, url_path: str) -> Dict[str, str]:
-        """
-        Parse URL query parameters
-        
-        Args:
-            url_path: URL path with query string (e.g., "/?lat=37.7&lon=-122.4")
-            
-        Returns:
-            Dictionary of parameters
-        """
-        try:
-            # Handle both /?params and ?params formats
-            if '?' not in url_path:
-                return {}
-            
-            query_string = url_path.split('?', 1)[1]
-            
-            # Parse query string
-            parsed = parse_qs(query_string)
-            
-            # Flatten single-value lists
-            params = {}
-            for key, value_list in parsed.items():
-                if value_list:
-                    params[key] = value_list[0]
-            
-            return params
-        except Exception as e:
-            logger.error(f"OsmAnd URL parse error: {e}")
+
+        if not data:
+            return None, 0
+
+        # Wait for the full HTTP request (headers + body)
+        # Headers end at \r\n\r\n; body length is given by Content-Length
+        header_end = data.find(b'\r\n\r\n')
+        if header_end == -1:
+            if len(data) > 8192:
+                logger.warning("OsmAnd: Buffer too large, resetting")
+                return None, len(data)
+            return None, 0  # Incomplete — wait for more data
+
+        header_bytes = data[:header_end + 4]
+
+        # Parse the HTTP request using stdlib
+        req = _HTTPRequest(header_bytes)
+        if req.error_code:
+            logger.warning(f"OsmAnd: HTTP parse error {req.error_code}")
+            return None, header_end + 4
+
+        # Determine body length from Content-Length header
+        content_length = int(req.headers.get('Content-Length', 0))
+        total_length = header_end + 4 + content_length
+
+        if len(data) < total_length:
+            return None, 0  # Body not yet fully received
+
+        consumed = total_length
+        body = data[header_end + 4:total_length].decode('utf-8', errors='ignore').strip()
+
+        # Parse parameters — query string takes priority, fall back to body
+        params = self._parse_query(req.path)
+        if not params and body:
+            params = self._parse_query_string(body)
+
+        if not params:
+            logger.warning("OsmAnd: No parameters in request")
+            return None, consumed
+
+        # Resolve device ID
+        device_id = known_imei or params.get('id') or params.get('deviceid')
+        if not device_id:
+            logger.warning("OsmAnd: No device ID in request")
+            return None, consumed
+
+        position = await self._parse_osmand_params(params, device_id)
+        if position:
+            return {"imei": device_id, "position": position, "response": HTTP_200}, consumed
+
+        return None, consumed
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _parse_query(self, path: str) -> Dict[str, str]:
+        """Parse parameters from a URL path query string."""
+        if '?' not in path:
             return {}
-    
+        return self._parse_query_string(path.split('?', 1)[1])
+
+    def _parse_query_string(self, qs: str) -> Dict[str, str]:
+        """Parse a URL-encoded query string into a flat dict."""
+        try:
+            return {k: v[0] for k, v in parse_qs(qs).items() if v}
+        except Exception as e:
+            logger.error(f"OsmAnd: Query string parse error: {e}")
+            return {}
+
     async def _parse_osmand_params(
-        self, 
-        params: Dict[str, str], 
+        self,
+        params: Dict[str, str],
         device_id: str
     ) -> Optional[NormalizedPosition]:
-        """
-        Parse OsmAnd parameters into NormalizedPosition
-        
-        Args:
-            params: Query parameters dictionary
-            device_id: Device IMEI/ID
-            
-        Returns:
-            NormalizedPosition object or None
-        """
+
         try:
-            # Extract required fields
-            latitude = params.get('lat') or params.get('latitude')
-            longitude = params.get('lon') or params.get('longitude')
-            
-            if latitude is None or longitude is None:
+            lat = params.get('lat') or params.get('latitude')
+            lon = params.get('lon') or params.get('longitude')
+
+            if lat is None or lon is None:
                 logger.warning("OsmAnd: Missing GPS coordinates")
                 return None
-            
-            # Convert to float
+
             try:
-                latitude = float(latitude)
-                longitude = float(longitude)
+                latitude = float(lat)
+                longitude = float(lon)
             except (ValueError, TypeError):
                 logger.warning("OsmAnd: Invalid GPS coordinates")
                 return None
-            
-            # Extract timestamp
-            timestamp_str = params.get('timestamp')
-            if timestamp_str:
+
+            # Timestamp — OsmAnd sends milliseconds, standard sends seconds
+            device_time = datetime.now(timezone.utc)
+            ts = params.get('timestamp')
+            if ts:
                 try:
-                    # OsmAnd typically sends Unix timestamp in seconds
-                    timestamp = int(float(timestamp_str))
-                    if timestamp > 10000000000:  # Milliseconds
-                        device_time = datetime.fromtimestamp(timestamp / 1000.0, tz=timezone.utc)
-                    else:  # Seconds
-                        device_time = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+                    t = int(float(ts))
+                    device_time = datetime.fromtimestamp(
+                        t / 1000.0 if t > 10_000_000_000 else t,
+                        tz=timezone.utc
+                    )
                 except (ValueError, TypeError):
-                    device_time = datetime.now(timezone.utc)
-            else:
-                device_time = datetime.now(timezone.utc)
-            
-            # Extract optional fields with defaults
-            speed = float(params.get('speed', 0))  # m/s in OsmAnd
-            speed_kmh = speed * 3.6  # Convert m/s to km/h
-            
+                    pass
+
+            speed_ms = float(params.get('speed', 0))
             course = float(params.get('bearing', params.get('course', 0)))
             altitude = float(params.get('altitude', params.get('alt', 0)))
             satellites = int(float(params.get('sat', 0)))
-            
-            # Extract sensor data
+
+            # Sensor / extra data
+            known_keys = {
+                'id', 'deviceid', 'lat', 'latitude', 'lon', 'longitude',
+                'speed', 'bearing', 'course', 'altitude', 'alt',
+                'timestamp', 'sat', 'hdop', 'accuracy', 'batt', 'battery',
+            }
             sensors = {}
-            
-            # HDOP
-            if 'hdop' in params:
+            for key in ('hdop', 'accuracy'):
+                if key in params:
+                    try:
+                        sensors[key] = float(params[key])
+                    except (ValueError, TypeError):
+                        pass
+
+            batt = params.get('batt') or params.get('battery')
+            if batt:
                 try:
-                    sensors['hdop'] = float(params['hdop'])
-                except:
+                    sensors['battery'] = float(batt)
+                except (ValueError, TypeError):
                     pass
-            
-            # Accuracy
-            if 'accuracy' in params:
-                try:
-                    sensors['accuracy'] = float(params['accuracy'])
-                except:
-                    pass
-            
-            # Battery
-            if 'batt' in params or 'battery' in params:
-                try:
-                    battery = params.get('batt', params.get('battery'))
-                    sensors['battery'] = float(battery)
-                except:
-                    pass
-            
-            # Add any other custom parameters
-            for key, value in params.items():
-                if key not in ['id', 'deviceid', 'lat', 'latitude', 'lon', 'longitude', 
-                              'speed', 'bearing', 'course', 'altitude', 'alt', 
-                              'timestamp', 'sat', 'hdop', 'accuracy', 'batt', 'battery']:
-                    sensors[key] = value
-            
-            # Create normalized position
+
+            for k, v in params.items():
+                if k not in known_keys:
+                    sensors[k] = v
+
             position = NormalizedPosition(
                 imei=str(device_id),
                 device_time=device_time,
@@ -272,56 +204,26 @@ class OsmAndDecoder(BaseProtocolDecoder):
                 latitude=latitude,
                 longitude=longitude,
                 altitude=altitude,
-                speed=speed_kmh,
+                speed=speed_ms * 3.6,   # m/s → km/h
                 course=course,
                 satellites=satellites,
-                valid=True,  # OsmAnd only sends when GPS has fix
-                sensors=sensors
+                valid=True,
+                sensors=sensors,
             )
-            
-            logger.debug(f"OsmAnd decoded position: {device_id} @ {latitude},{longitude}")
+
+            logger.debug(f"OsmAnd decoded: {device_id} @ {latitude},{longitude}")
             return position
-            
+
         except Exception as e:
-            logger.error(f"OsmAnd params parse error: {e}", exc_info=True)
+            logger.error(f"OsmAnd: Params parse error: {e}", exc_info=True)
             return None
-    
+
     async def encode_command(self, command_type: str, params: Dict[str, Any]) -> bytes:
-        """
-        Encode command for OsmAnd device
-        
-        OsmAnd is a mobile app that doesn't support server-to-device commands
-        in the standard protocol. Commands would need to be sent through push
-        notifications or other channels.
-        
-        Args:
-            command_type: Type of command
-            params: Command parameters
-            
-        Returns:
-            Empty bytes (commands not supported)
-        """
-        # OsmAnd protocol doesn't support server-to-device commands
         logger.warning("OsmAnd protocol does not support commands")
         return b''
-    
+
     def get_available_commands(self) -> list:
-        """
-        Get list of available commands
-        
-        Returns:
-            Empty list (commands not supported)
-        """
         return []
-    
+
     def get_command_info(self, command_type: str) -> Dict[str, Any]:
-        """
-        Get command information
-        
-        Returns:
-            Empty dict (commands not supported)
-        """
-        return {
-            'description': 'OsmAnd protocol does not support commands',
-            'supported': False
-        }
+        return {'description': 'OsmAnd protocol does not support commands', 'supported': False}

@@ -8,7 +8,7 @@ import json
 import logging
 import signal
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 
 import jwt
@@ -93,7 +93,7 @@ class WebSocketManager:
         message = {
             "type": WSMessageType.POSITION_UPDATE.value,
             "device_id": device.id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "data": {
                 "last_latitude": position.latitude,
                 "last_longitude": position.longitude,

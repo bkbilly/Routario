@@ -118,7 +118,10 @@ class TCPDeviceHandler:
                             if "response" in result:
                                 self.writer.write(result["response"])
                                 await self.writer.drain()
-                                
+
+                            if "position" in result:
+                                await self.position_callback(result["position"])
+                            
                         # Handle Position Data
                         elif isinstance(result, NormalizedPosition):
                             if not self.imei and result.imei:

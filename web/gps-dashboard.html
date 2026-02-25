@@ -261,21 +261,29 @@
         });
 
         // Add resize listener to handle dynamic window resizing
+        let lastWasWide = window.innerWidth > 1024;
+
         window.addEventListener('resize', () => {
             const dashboard = document.querySelector('.dashboard');
-            if (window.innerWidth <= 1024) {
-                if (!dashboard.classList.contains('sidebar-hidden')) {
-                    dashboard.classList.add('sidebar-hidden');
-                }
-            } else {
-                 if (dashboard.classList.contains('sidebar-hidden')) {
-                    dashboard.classList.remove('sidebar-hidden');
-                }
+            const isWide = window.innerWidth > 1024;
+
+            if (!lastWasWide && !isWide) {
+                // Still in mobile range — don't touch the sidebar
+            } else if (lastWasWide && !isWide) {
+                // Crossed INTO mobile — hide sidebar
+                dashboard.classList.add('sidebar-hidden');
+            } else if (!lastWasWide && isWide) {
+                // Crossed INTO desktop — show sidebar
+                dashboard.classList.remove('sidebar-hidden');
             }
-             setTimeout(() => {
+
+            lastWasWide = isWide;
+
+            setTimeout(() => {
                 if (map) map.invalidateSize();
             }, 300);
         });
+
     </script>
 </body>
 </html>
