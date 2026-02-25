@@ -51,10 +51,10 @@ class NormalizedPosition(BaseModel):
     longitude: float = Field(..., ge=-180, le=180)
     altitude: Optional[float] = None
     
-    speed: Optional[float] = Field(None, ge=0)  # km/h
-    course: Optional[float] = Field(None, ge=0, le=360)  # degrees
+    speed: Optional[float] = Field(default=None, ge=0)  # km/h
+    course: Optional[float] = Field(default=None, ge=0, le=360)  # degrees
     
-    satellites: Optional[int] = Field(None, ge=0)
+    satellites: Optional[int] = Field(default=None, ge=0)
     hdop: Optional[float] = None
     
     ignition: Optional[bool] = None

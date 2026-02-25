@@ -168,15 +168,16 @@ class OsmAndDecoder(BaseProtocolDecoder):
                     pass
 
             speed_ms = float(params.get('speed', 0))
-            course = float(params.get('bearing', params.get('course', 0)))
+            course = float(params.get('bearing', params.get('heading', params.get('course', 0))))
             altitude = float(params.get('altitude', params.get('alt', 0)))
             satellites = int(float(params.get('sat', 0)))
 
             # Sensor / extra data
             known_keys = {
                 'id', 'deviceid', 'lat', 'latitude', 'lon', 'longitude',
-                'speed', 'bearing', 'course', 'altitude', 'alt',
+                'speed', 'bearing', 'heading', 'course', 'altitude', 'alt',
                 'timestamp', 'sat', 'hdop', 'accuracy', 'batt', 'battery',
+                'ignition',
             }
             sensors = {}
             for key in ('hdop', 'accuracy'):
@@ -193,6 +194,12 @@ class OsmAndDecoder(BaseProtocolDecoder):
                 except (ValueError, TypeError):
                     pass
 
+            # Ignition — accepts true/false strings or 0/1
+            ignition = None
+            if 'ignition' in params:
+                raw = params['ignition'].strip().lower()
+                ignition = raw in ('true', '1', 'yes')
+
             for k, v in params.items():
                 if k not in known_keys:
                     sensors[k] = v
@@ -208,6 +215,7 @@ class OsmAndDecoder(BaseProtocolDecoder):
                 course=course,
                 satellites=satellites,
                 valid=True,
+                ignition=ignition,
                 sensors=sensors,
             )
 

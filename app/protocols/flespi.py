@@ -262,6 +262,7 @@ class FlespiDecoder(BaseProtocolDecoder):
                 course=float(course),
                 satellites=int(satellites),
                 valid=bool(valid),
+                ignition=bool(ignition) if ignition is not None else None,
                 sensors=sensors
             )
             

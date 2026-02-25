@@ -107,31 +107,40 @@ class TCPDeviceHandler:
                             # Packet parsed but no result (e.g. heartbeat or skip)
                             continue
                             
-                        # Handle Control Events
+                        # Handle Control Events / mixed results
                         if isinstance(result, dict):
                             if "imei" in result:
                                 self.imei = result["imei"]
                                 connection_manager.register_connection(self.imei, self.protocol, self.writer)
                                 if self.command_callback:
                                     await self.command_callback(self.imei, self.writer)
-                            
+
                             if "response" in result:
                                 self.writer.write(result["response"])
                                 await self.writer.drain()
 
+                            # Some protocols (Teltonika, Meitrack) return a
+                            # position embedded in the dict alongside a response
                             if "position" in result:
-                                await self.position_callback(result["position"])
-                            
-                        # Handle Position Data
+                                pos = result["position"]
+                                if isinstance(pos, NormalizedPosition):
+                                    if not self.imei and pos.imei:
+                                        self.imei = pos.imei
+                                        connection_manager.register_connection(self.imei, self.protocol, self.writer)
+                                    await self.position_callback(pos)
+
+                            # Teltonika multi-record: process any additional positions
+                            for extra_pos in result.get("extra_positions", []):
+                                if isinstance(extra_pos, NormalizedPosition):
+                                    await self.position_callback(extra_pos)
+
+                        # Handle plain NormalizedPosition
                         elif isinstance(result, NormalizedPosition):
                             if not self.imei and result.imei:
                                 self.imei = result.imei
                                 connection_manager.register_connection(self.imei, self.protocol, self.writer)
-                            
+
                             await self.position_callback(result)
-                            
-                            # Send Protocol Specific ACKs
-                            await self._send_ack(self.protocol)
                             
                 except asyncio.TimeoutError:
                     break # Timeout logic
@@ -149,11 +158,8 @@ class TCPDeviceHandler:
             except:
                 pass
 
-    async def _send_ack(self, protocol):
-        if protocol == "teltonika":
-            # Teltonika needs 4 byte integer count of records received (usually 1)
-            self.writer.write(struct.pack('>I', 1))
-            await self.writer.drain()
+    # _send_ack removed: each protocol now includes its ACK bytes
+    # directly in the result dict under the "response" key.
 
 
 class TCPServer:
