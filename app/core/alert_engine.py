@@ -10,13 +10,13 @@ from concurrent.futures import ThreadPoolExecutor
 import re
 
 import rule_engine
-from apprise import Apprise
 
 from models import Device, DeviceState, User, AlertHistory
 from models.schemas import AlertCreate, AlertType, Severity, NormalizedPosition
 from core.database import get_db
 from alerts import ALERT_REGISTRY
 from core.push_notifications import get_push_service
+from notifications import get_channel
 
 
 logger = logging.getLogger(__name__)
@@ -155,7 +155,7 @@ class AlertEngine:
                 await self.alert_callback(alert)
                 broadcasted = True
                 
-            # 3. External notifications (Email, Telegram, etc. per user)
+            # 3. External notifications (Email, Telegram, SIP call, etc. per user)
             await self._send_notification(user, device, alert_data)
 
     async def _send_notification(self, user: User, device: Device, alert_data: Dict[str, Any]):
@@ -170,32 +170,46 @@ class AlertEngine:
             elif 'config_key' in metadata:
                 # Keyed configuration (Speeding, Idling, etc)
                 config_key = metadata['config_key']
-                # Get selected channel names from device config
-                # Default to None if key not found (which triggers fallback)
-                # If key found but value is empty list, that means explicitly disabled
                 alert_channels = device.config.get('alert_channels', {})
                 if config_key in alert_channels:
                     selected_names = alert_channels[config_key]
                 else:
-                    selected_names = None # Not configured, use fallback
+                    selected_names = None  # Not configured, use fallback
 
             user_ch = user.notification_channels or []
-            urls = []
 
-            # 2. Filter URLs based on names
+            # 2. Filter channels by selected names
             if selected_names is not None:
-                # If names is a list (even empty), respect it strictly
-                # This ensures an empty selection results in NO notifications
-                urls = [c['url'] for c in user_ch if c['name'] in selected_names and c.get('url')]
+                active_channels = [c for c in user_ch if c['name'] in selected_names and c.get('url')]
             else:
-                # Fallback: If no configuration exists for this alert type, 
-                # send to all available user channels by default
-                urls = [c['url'] for c in user_ch if c.get('url')]
-            
-            if urls:
-                title = f"🚗 {device.name} - {alert_data['type'].value.upper()}"
-                loop = asyncio.get_event_loop()
-                await loop.run_in_executor(self.executor, self._send_apprise_notification, urls, title, alert_data['message'])
+                active_channels = [c for c in user_ch if c.get('url')]
+
+            if not active_channels:
+                # Still send push notification even with no channels
+                push = get_push_service()
+                await push.notify_user(
+                    db_service=get_db(),
+                    user_id=user.id,
+                    alert_type=alert_data['type'].value,
+                    message=alert_data['message'],
+                    severity=alert_data.get('severity', 'info'),
+                    device_name=device.name,
+                )
+                return
+
+            # 3. Dispatch each URL to the matching channel handler
+            title = f"🚗 {device.name} - {alert_data['type'].value.upper()}"
+            message = f"{device.name}. {alert_data['message']}"
+            await asyncio.gather(
+                *[
+                    ch.send(c['url'], title, message)
+                    for c in active_channels
+                    if (ch := get_channel(c['url'])) is not None
+                ],
+                return_exceptions=True
+            )
+
+            # 4. Push notification (browser/PWA)
             push = get_push_service()
             await push.notify_user(
                 db_service=get_db(),
@@ -209,12 +223,8 @@ class AlertEngine:
         except Exception as e: 
             logger.error(f"Notify error: {e}")
     
-    def _send_apprise_notification(self, urls, title, body):
-        try:
-            apobj = Apprise()
-            for url in urls: apobj.add(url)
-            apobj.notify(title=title, body=body)
-        except: pass
+
+
 
 async def periodic_alert_task():
     """
@@ -224,49 +234,53 @@ async def periodic_alert_task():
     Any alert module that implements check_device() will be called here for
     every active device.
     """
-
+    engine = get_alert_engine()
     while True:
         try:
+            await asyncio.sleep(60)
             db = get_db()
-            devices_with_state = await db.get_all_active_devices_with_state()
-
-            for device, state in devices_with_state:
-                if state.alert_states is None:
-                    state.alert_states = {}
-
-                alert_rows = device.config.get("alert_rows", [])
-
-                for row in alert_rows:
-                    if not isinstance(row, dict):
+            devices = await db.get_all_active_devices_with_state()
+            for device, state in devices:
+                for alert_key, alert_cls in ALERT_REGISTRY.items():
+                    if not hasattr(alert_cls, 'check_device'):
                         continue
-
-                    alert_key = row.get("alertKey")
-                    if not alert_key:
+                    if not engine._is_alert_active(alert_key, device):
                         continue
+                    try:
+                        alert_rows = device.config.get('alert_rows', [])
+                        row = next(
+                            (r for r in alert_rows
+                             if isinstance(r, dict) and r.get('alertKey') == alert_key),
+                            None
+                        )
+                        params = row.get('params', {}) if row else {}
 
-                    alert_cls = ALERT_REGISTRY.get(alert_key)
-                    if not alert_cls:
-                        continue
+                        if state.alert_states is None:
+                            state.alert_states = {}
 
-                    # Only process modules that support time-based checking
-                    instance = alert_cls()
-                    if not hasattr(instance, "check_device"):
-                        continue
+                        result = await alert_cls().check_device(device, state, params)
 
-                    if not alert_engine._is_alert_active(alert_key, device):
-                        continue
-
-                    params = row.get("params", {})
-                    alert_data = await instance.check_device(device, state, params)
-
-                    if alert_data:
+                        # Always persist alert_states — check_device() may have mutated
+                        # it (e.g. setting offline_alerted=True or resetting it to False)
+                        # even when no alert is returned. Without this the flag is lost
+                        # on the next tick and the alert fires again every minute.
                         await db.update_device_alert_state(device.id, state.alert_states)
-                        await alert_engine._dispatch_alert(device.users, device, alert_data)
 
+                        if result:
+                            result.setdefault('latitude',  state.last_latitude)
+                            result.setdefault('longitude', state.last_longitude)
+                            await engine._dispatch_alert(device.users, device, result)
+                    except Exception as e:
+                        logger.error(f"Periodic alert check error ({alert_key}): {e}")
         except Exception as e:
             logger.error(f"Periodic alert task error: {e}")
 
-        await asyncio.sleep(60)  # check every minute — fine for sub-hour timeouts
 
-alert_engine = AlertEngine()
-def get_alert_engine() -> AlertEngine: return alert_engine
+# Global singleton
+_alert_engine: Optional[AlertEngine] = None
+
+def get_alert_engine() -> AlertEngine:
+    global _alert_engine
+    if _alert_engine is None:
+        _alert_engine = AlertEngine()
+    return _alert_engine

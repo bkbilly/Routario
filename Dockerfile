@@ -19,9 +19,16 @@ FROM python:3.14-slim
 
 WORKDIR /app
 
-# Runtime system deps only (libpq for asyncpg)
+# Runtime system deps:
+#   libpq5   — asyncpg / psycopg2
+#   espeak   — offline TTS engine (optional; gTTS is the default)
+#   ffmpeg   — audio conversion (mp3→wav for gTTS, resampling for eSpeak)
+#
+# Note: pyVoIP is pure Python — no native SIP libraries needed.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    espeak \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages from builder

@@ -56,3 +56,10 @@ httpx==0.28.1
 
 PyJWT==2.11.0
 pywebpush==2.3.0
+
+# SIP Voice Call Notifications
+audioop-lts==0.2.2
+pyVoIP==1.6.8
+
+# TTS Engines
+gTTS==2.5.4
