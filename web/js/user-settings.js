@@ -87,68 +87,52 @@ function renderUserList(users) {
         div.className = 'user-list-item';
         
         const deviceCountText = u.deviceCount !== undefined 
-            ? `<span style="font-size: 0.8rem; color: var(--accent-secondary); margin-left: 0.5rem;">(${u.deviceCount} devices)</span>` 
+            ? `${u.deviceCount} device${u.deviceCount !== 1 ? 's' : ''}`
             : '';
-            
+
         div.innerHTML = `
             <div class="user-info">
-                <div class="user-name">${u.username} ${deviceCountText}</div>
-                <div class="user-email">${u.email}</div>
+                <span class="user-name">${u.username}</span>
+                <span class="user-email">${u.email} · ${deviceCountText}</span>
             </div>
             <div class="user-actions">
-                <button type="button" class="btn btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.75rem;" onclick="openAssignModal(${u.id}, '${u.username}')">Devices</button>
-                <button type="button" class="btn btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.75rem;" onclick="promptPasswordChange(${u.id})">Reset Pass</button>
-                <button type="button" class="btn btn-danger" style="padding:0.4rem 0.8rem; font-size:0.75rem;" onclick="deleteUser(${u.id})">Delete</button>
+                <button type="button" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;" onclick="openAssignModal(${u.id}, '${u.username}')">
+                    Devices
+                </button>
+                <button type="button" class="btn btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;" onclick="promptPasswordChange(${u.id})">
+                    Password
+                </button>
+                <button type="button" class="btn btn-danger" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;" onclick="deleteUser(${u.id})">
+                    Delete
+                </button>
             </div>
         `;
         container.appendChild(div);
     });
 }
 
-async function openAssignModal(userId, username) {
-    currentAssignUserId = userId;
-    document.getElementById('assignUserName').textContent = username;
-    
-    // Get user's current devices
-    try {
-        const res = await apiFetch(`${API_BASE}/users/${userId}/devices`);
-        if (res.ok) {
-            const devices = await res.json();
-            currentUserDevices = new Set(devices.map(d => d.id));
-            renderAssignList();
-            document.getElementById('assignModal').classList.add('active');
-        }
-    } catch (e) { showAlert("Error loading user devices", "error"); }
-}
-
-function closeAssignModal() {
-    document.getElementById('assignModal').classList.remove('active');
-    loadAllUsers(); // Reload user list to update device counts
-}
-
 function renderAssignList() {
     const list = document.getElementById('deviceAssignList');
+    const search = document.getElementById('deviceSearch')?.value.toLowerCase() || '';
     list.innerHTML = '';
-    const search = document.getElementById('deviceSearch').value.toLowerCase();
-    
-    allDevices.filter(d => 
-        d.name.toLowerCase().includes(search) || d.imei.includes(search)
-    ).forEach(d => {
-        const isAssigned = currentUserDevices.has(d.id);
-        const div = document.createElement('div');
-        div.className = 'device-assign-item';
-        div.innerHTML = `
-            <div>
-                <div class="device-assign-name">${d.name}</div>
-                <div class="device-assign-imei">${d.imei}</div>
-            </div>
-            <label class="switch">
-                <input type="checkbox" ${isAssigned ? 'checked' : ''} onchange="toggleAssignment(${d.id}, this.checked)">
-                <span class="slider round"></span>
-            </label>
-        `;
-        list.appendChild(div);
-    });
+
+    allDevices
+        .filter(d => d.name.toLowerCase().includes(search) || d.imei.includes(search))
+        .forEach(d => {
+            const div = document.createElement('div');
+            div.className = 'user-list-item';
+            div.innerHTML = `
+                <div class="user-info">
+                    <span class="user-name">${d.name}</span>
+                    <span class="user-email">${d.imei}</span>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" ${currentUserDevices.has(d.id) ? 'checked' : ''} onchange="toggleAssignment(${d.id}, this.checked)">
+                    <span class="slider round"></span>
+                </label>
+            `;
+            list.appendChild(div);
+        });
 }
 
 function filterDeviceList() { renderAssignList(); }
@@ -160,16 +144,33 @@ async function toggleAssignment(deviceId, assign) {
         if (res.ok) {
             if (assign) currentUserDevices.add(deviceId);
             else currentUserDevices.delete(deviceId);
-            // Don't re-render list to avoid focus loss, just trust the toggle state unless error
         } else {
             showAlert("Failed to update assignment", "error");
-            renderAssignList(); // Revert UI
+            renderAssignList();
         }
     } catch (e) {
         console.error(e);
         showAlert("Error updating assignment", "error");
-        renderAssignList(); // Revert UI
+        renderAssignList();
     }
+}
+
+async function openAssignModal(userId, username) {
+    currentAssignUserId = userId;
+    document.getElementById('assignUserName').textContent = username;
+    try {
+        const res = await apiFetch(`${API_BASE}/users/${userId}/devices`);
+        if (res.ok) {
+            const userDevices = await res.json();
+            currentUserDevices = new Set(userDevices.map(d => d.id));
+        }
+    } catch (e) { console.error(e); }
+    renderAssignList();
+    document.getElementById('assignModal').classList.add('active');
+}
+
+function closeAssignModal() {
+    document.getElementById('assignModal').classList.remove('active');
 }
 
 async function addNewUser() {
@@ -258,12 +259,32 @@ function renderChannels() {
     });
 }
 
-function addChannel() {
+async function saveChannels() {
+    try {
+        const res = await apiFetch(`${API_BASE}/users/${USER_ID}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notification_channels: channels }),
+        });
+        if (res.ok) {
+            showAlert('Channel saved', 'success');
+        } else {
+            const err = await res.json();
+            throw new Error(err.detail || 'Failed to save channels');
+        }
+    } catch (error) {
+        console.error('Save channels error:', error);
+        showAlert(error.message, 'error');
+        await loadSettings(); // restore consistent state on failure
+    }
+}
+
+async function addChannel() {
     const nameInput = document.getElementById('newChannelName');
-    const urlInput = document.getElementById('newChannelUrl');
+    const urlInput  = document.getElementById('newChannelUrl');
     
     const name = nameInput.value.trim();
-    const url = urlInput.value.trim();
+    const url  = urlInput.value.trim();
     
     if (!name || !url) {
         showAlert('Please provide both name and URL', 'error');
@@ -272,14 +293,17 @@ function addChannel() {
     
     channels.push({ name, url });
     nameInput.value = '';
-    urlInput.value = '';
-    
+    urlInput.value  = '';
     renderChannels();
+
+    await saveChannels();
 }
 
-function removeChannel(index) {
+async function removeChannel(index) {
     channels.splice(index, 1);
     renderChannels();
+
+    await saveChannels();
 }
 
 async function saveSettings(e) {

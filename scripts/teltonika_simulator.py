@@ -34,8 +34,8 @@ class TeltonikaSimulator:
         self.port = port
         self.imei = imei
         self.sock = None
-        self.lat = 37.7749  # Start Lat (San Francisco)
-        self.lon = -122.4194 # Start Lon
+        self.lat = 37.989332  # Start Lat (San Francisco)
+        self.lon = 23.793724 # Start Lon
         self.speed = 0
         self.course = 0
         
@@ -75,7 +75,7 @@ class TeltonikaSimulator:
     def generate_avl_data(self):
         """Generate a single Codec 8 AVL Data record"""
         # Simulate movement
-        self.lat += random.uniform(-0.0005, 0.0005)
+        self.lat += random.uniform(-0.005, 0.0005)
         self.lon += random.uniform(-0.0005, 0.0005)
         self.speed = random.randint(10, 60)
         self.course = random.randint(0, 360)

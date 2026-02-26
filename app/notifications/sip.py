@@ -1,15 +1,24 @@
 """
 SIP Voice Call Notification Channel
-Places a SIP call with a TTS message when an alert fires.
+Places a SIP call with a TTS message (or pre-recorded audio) when an alert fires.
 
 URL format:
     sip://username:password@server:port/extension?repeat=3&pause=2&tts=gtts&lang=en
 
 Query parameters (all optional):
+    file    — path to a pre-recorded WAV file to play instead of TTS
+              e.g. file=/audio/alert.wav
     repeat  — how many times to repeat the message    (default: 1)
     pause   — seconds of silence between repeats      (default: 2)
-    tts     — TTS engine: "gtts" or "espeak"          (default: gtts)
-    lang    — BCP-47 language code                    (default: en)
+    tts     — TTS engine: "gtts" or "espeak"          (default: gtts, ignored if file= set)
+    lang    — BCP-47 language code                    (default: en,   ignored if file= set)
+
+Examples:
+    # Pre-recorded file, repeat 3 times
+    sip://user:pass@192.168.1.100/1001?file=/audio/alert.wav&repeat=3
+
+    # TTS (default behaviour when file= is absent)
+    sip://user:pass@192.168.1.100/1001?repeat=2&lang=en
 """
 
 import asyncio
@@ -40,6 +49,22 @@ class SipChannel(BaseNotificationChannel):
         if not params:
             return False
 
+        prerecorded = params.get("file")
+
+        if prerecorded:
+            # ── Pre-recorded file ─────────────────────────────────
+            if not os.path.isfile(prerecorded):
+                logger.error(f"SIP: pre-recorded file not found: {prerecorded}")
+                return False
+            logger.info(
+                f"SIP: calling {params['extension']}@{params['server']} "
+                f"(repeat={params['repeat']}, file={prerecorded})"
+            )
+            return await asyncio.get_event_loop().run_in_executor(
+                None, self._call, params, prerecorded
+            )
+
+        # ── TTS (default) ─────────────────────────────────────────
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             audio_path = f.name
 
@@ -104,6 +129,7 @@ class SipChannel(BaseNotificationChannel):
                 "pause":     _int("pause",  2),
                 "tts":       _str("tts",    "gtts"),
                 "lang":      _str("lang",   "en"),
+                "file":      _str("file",   None),
             }
         except Exception as e:
             logger.error(f"SIP: failed to parse URL '{url}': {e}")

@@ -368,19 +368,21 @@ async function loadDevices() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         devices = await response.json();
-        
-        renderDeviceList();
-        
-        // Load state for each device
+
+        // Load state for each device before rendering, so sort fields
+        // (last_update, speed, ignition) are available on the first render.
         for (const device of devices) {
             await loadDeviceState(device.id);
         }
-        
+
+        // Single render after all states are present — sort is now correct
+        renderDeviceList();
+
         updateStats();
         fitMapToMarkers();
     } catch (error) {
         console.error('Error loading devices:', error);
-        showAlert({ title: 'Connection Failed', message: 'Unable to connect to the server.', type: 'error' });
+        showAlert({ title: 'Connection Failed', message: 'Unable to connect to the server.' });
     }
 }
 
