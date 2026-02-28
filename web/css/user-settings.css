@@ -167,15 +167,28 @@ h1 { font-size: 2rem; font-weight: 700; }
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 1rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
-.user-info { display: flex; flex-direction: column; gap: 0.25rem; }
-.user-name { font-weight: 600; color: var(--text-primary); }
-.user-email { font-size: 0.85rem; color: var(--text-muted); }
-.user-actions { display: flex; gap: 0.5rem; }
+.user-list-item:last-child { margin-bottom: 0; }
+.user-info { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.user-name { font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-email { font-size: 0.85rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+@media (max-width: 600px) {
+    .user-list-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+    .user-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
 
 @media (max-width: 768px) {
     .add-channel-form {

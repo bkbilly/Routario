@@ -67,18 +67,21 @@
 
                 <!-- Tab switcher -->
                 <div class="history-tab-bar" style="display:flex; gap:0.5rem; margin-bottom:1rem;">
-                    <button class="history-tab active" id="tabBtnDetails" onclick="switchHistoryTab('details')">📍 Details</button>
-                    <button class="history-tab" id="tabBtnGraph" onclick="switchHistoryTab('graph')">📈 Sensor Graph</button>
+                    <button class="history-tab active" id="tabBtnTrips" onclick="switchHistoryTab('trips')">🗺️ Trips</button>
+                    <button class="history-tab" id="tabBtnDetails" onclick="switchHistoryTab('details')">📍 Details</button>
+                    <button class="history-tab" id="tabBtnGraph" onclick="switchHistoryTab('graph')">📈 Graph</button>
+                </div>
+
+                <!-- Tab: Trips -->
+                <div id="tabTrips">
+                    <div id="tripsSection">
+                        <div id="tripListContent"></div>
+                    </div>
                 </div>
 
                 <!-- Tab: Point Details -->
-                <div id="tabDetails">
+                <div id="tabDetails" style="display:none;">
                     <div id="pointDetailsContent"></div>
-                    <div id="tripsSection" style="margin-top: 1.25rem;">
-                        <h4 style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.07em;
-                                   color:var(--text-muted); margin-bottom:0.75rem;">Trips in Range</h4>
-                        <div id="tripListContent"></div>
-                    </div>
                 </div>
 
                 <!-- Tab: Sensor Graph -->
@@ -100,6 +103,11 @@
                             <div id="sensorChartEmpty" style="display:none;text-align:center;padding:2rem;color:var(--text-muted);font-size:0.85rem;">
                                 Select at least one attribute above to plot.
                             </div>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-top:0.75rem;">
+                            <button class="btn btn-secondary" onclick="exportHistoryCSV()" style="font-size:0.78rem; padding:0.4rem 0.9rem; display:flex; align-items:center; gap:0.4rem;">
+                                ⬇️ Export CSV
+                            </button>
                         </div>
                     </div>
                 </div>

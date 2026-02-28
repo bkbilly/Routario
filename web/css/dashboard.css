@@ -1248,6 +1248,126 @@ body::before {
 #sensorAttrList::-webkit-scrollbar { height: 4px; width: 4px; }
 #sensorAttrList::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 2px; }
 
+/* Alert highlight — shown when device has unread alerts */
+.device-card.has-alert {
+    border-color: rgba(239, 68, 68, 0.6);
+    background: rgba(239, 68, 68, 0.05);
+}
+
+.device-card.has-alert::before {
+    background: var(--accent-danger);
+    transform: scaleY(1);
+}
+
+.device-card.has-alert:hover {
+    border-color: var(--accent-danger);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.alert-pulse {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-danger);
+    margin-left: 0.35rem;
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    animation: alertPulse 1.8s ease-out infinite;
+    flex-shrink: 0;
+}
+
+@keyframes alertPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+    70%  { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+/* ── Vehicle Popup ─────────────────────────────────────────────── */
+
+.leaflet-popup-content-wrapper {
+    background: #131825;
+    border: 1px solid #374151;
+    border-radius: 12px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    padding: 0;
+    color: #e5e7eb;
+}
+
+.leaflet-popup-content {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.leaflet-popup-tip {
+    background: #131825;
+}
+
+.leaflet-popup-close-button {
+    color: #6b7280 !important;
+    font-size: 1.1rem !important;
+    top: 8px !important;
+    right: 10px !important;
+}
+
+.leaflet-popup-close-button:hover {
+    color: #e5e7eb !important;
+}
+
+.vp-popup {
+    min-width: 220px;
+    font-family: 'Outfit', sans-serif;
+}
+
+.vp-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #374151;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #e5e7eb;
+}
+
+.vp-icon {
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+.vp-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.vp-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.4rem 1rem;
+    padding: 0.75rem 1rem;
+    align-items: baseline;
+}
+
+.vp-label {
+    font-size: 0.78rem;
+    color: #6b7280;
+    white-space: nowrap;
+}
+
+.vp-value {
+    font-size: 0.85rem;
+    color: #e5e7eb;
+    text-align: right;
+    font-weight: 500;
+}
+
+.vp-mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: #9ca3af;
+}
+
 @media (max-width: 1024px) {
     .history-controls {
         position: fixed;

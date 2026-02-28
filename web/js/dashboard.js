@@ -557,14 +557,13 @@ function updateSidebarCard(deviceId) {
     const card = document.getElementById(`device-card-${deviceId}`);
     if (card) {
         const vehicleIcon = (VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other']).emoji;
-        // Only update innerHTML if card exists, effectively re-rendering with new state
         card.innerHTML = getDeviceCardContent(device, vehicleIcon);
         
-        // Re-apply active class if selected
         if (selectedDevice === deviceId) {
             card.classList.add('active');
         }
     }
+    applyDeviceAlertHighlights();
 }
 
 // Function to update just the times in the sidebar (called every minute)
@@ -623,15 +622,27 @@ function updateDeviceMarker(deviceId, state) {
     const device  = devices.find(d => d.id === deviceId);
     const deviceName = device ? device.name : 'Unknown Device';
 
+    const vehicle = VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other'];
+    const ignitionColor = state.ignition_on ? '#10b981' : '#ef4444';
+    const ignitionText  = state.ignition_on ? 'ON' : 'OFF';
     const popupContent = `
-        <strong>${deviceName}</strong><br>
-        Lat: ${toLat.toFixed(5)}, Lon: ${toLng.toFixed(5)}<br>
-        Satellites: ${state.satellites || 0} | Alt: ${Math.round(state.last_altitude || 0)}m<br>
-        Speed: ${state.last_speed !== undefined ? Number(state.last_speed).toFixed(1) : 0} km/h<br>
-        ${state.ignition_on ? '🟢 Ignition ON' : '🔴 Ignition OFF'}<br>
-        <small style="color:var(--text-muted);">Updated: ${formatDateToLocal(state.last_update)}</small>
+        <div class="vp-popup">
+            <div class="vp-header">
+                <span class="vp-icon">${vehicle.emoji}</span>
+                <span class="vp-name">${deviceName}</span>
+            </div>
+            <div class="vp-grid">
+                <span class="vp-label">Plate</span>      <span class="vp-value">${device?.license_plate || '—'}</span>
+                <span class="vp-label">Speed</span>      <span class="vp-value">${Number(state.last_speed || 0).toFixed(1)} km/h</span>
+                <span class="vp-label">Ignition</span>   <span class="vp-value" style="color:${ignitionColor};font-weight:700;">${ignitionText}</span>
+                <span class="vp-label">Satellites</span> <span class="vp-value">${state.satellites || 0}</span>
+                <span class="vp-label">Lat/Lng</span>    <span class="vp-value">${toLat.toFixed(5)}, ${toLng.toFixed(5)}</span>
+                <span class="vp-label">Altitude</span>   <span class="vp-value">${Math.round(state.last_altitude || 0)} m</span>
+                <span class="vp-label">Odometer</span>   <span class="vp-value">${Math.round((state.total_odometer || 0))} km</span>
+                <span class="vp-label">IMEI</span>       <span class="vp-value vp-mono">${device?.imei || '—'}</span>
+            </div>
+        </div>
     `;
-
     if (!markers[deviceId]) {
         // ── First appearance: create marker, no animation ──
         const icon = L.divIcon({
@@ -869,8 +880,8 @@ function exitHistoryMode() {
     }
     if (sensorChart) { sensorChart.destroy(); sensorChart = null; }
     selectedSensorAttrs = new Set(['speed']);
-    currentHistoryTab = 'details';
-    switchHistoryTab('details');
+    currentHistoryTab = 'trips';
+    switchHistoryTab('trips');
     
     // FIXED: Restore live marker when exiting history mode
     if (markers[historyDeviceId]) {
@@ -933,12 +944,31 @@ function updatePlaybackUI() {
     
     if (!markers['history_pos']) createHistoryMarker();
     
+    const vehicle = VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other'];
+    const ignColor = p.ignition ? '#10b981' : '#ef4444';
+    const historyPopup = `
+        <div class="vp-popup">
+            <div class="vp-header">
+                <span class="vp-icon">${vehicle.emoji}</span>
+                <span class="vp-name">${device?.name || 'History'}</span>
+            </div>
+            <div class="vp-grid">
+                <span class="vp-label">Time</span>      <span class="vp-value vp-mono">${time}</span>
+                <span class="vp-label">Speed</span>     <span class="vp-value">${Number(p.speed || 0).toFixed(1)} km/h</span>
+                <span class="vp-label">Heading</span>   <span class="vp-value">${Number(p.course || 0).toFixed(0)}°</span>
+                <span class="vp-label">Ignition</span>  <span class="vp-value" style="color:${ignColor};font-weight:700;">${p.ignition ? 'ON' : 'OFF'}</span>
+                <span class="vp-label">Satellites</span><span class="vp-value">${p.satellites || 0}</span>
+                <span class="vp-label">Altitude</span>  <span class="vp-value">${Number(p.altitude || 0).toFixed(0)} m</span>
+                <span class="vp-label">Lat/Lng</span>   <span class="vp-value">${position[0].toFixed(5)}, ${position[1].toFixed(5)}</span>
+            </div>
+        </div>
+    `;
     markers['history_pos'].setLatLng(position).setIcon(L.divIcon({
         html: getMarkerHtml(device?.vehicle_type, p.ignition, heading),
         className: 'history-marker',
         iconSize: [32, 32],
         iconAnchor: [16, 16]
-    })).bindPopup(`<strong>${time}</strong><br>Speed: ${p.speed} km/h<br>Alt: ${p.altitude} m`);
+    })).bindPopup(historyPopup);
     
     updatePointDetails(feature);
 
@@ -1046,9 +1076,21 @@ async function loadAlerts() {
                 messageText = alert.message;
             }
             
+            const device = devices.find(d => d.id === alert.device_id);
+            const vehicleTag = device
+                ? `<span style="
+                    display:inline-flex; align-items:center; gap:0.3rem;
+                    background:rgba(59,130,246,0.12); border:1px solid rgba(59,130,246,0.25);
+                    border-radius:5px; padding:0.15rem 0.5rem;
+                    font-size:0.7rem; font-weight:600; color:var(--accent-primary);
+                    margin-bottom:0.3rem;"
+                  >${(VEHICLE_ICONS[device.vehicle_type] || VEHICLE_ICONS['other']).emoji} ${device.name}</span>`
+                : '';
+
             item.innerHTML = `
                 <div class="alert-icon">${icon}</div>
                 <div class="alert-content">
+                    ${vehicleTag}
                     <div class="alert-title">${title}</div>
                     <div class="alert-message">${messageText}</div>
                     <div class="alert-time">${formatDateToLocal(alert.created_at)}</div>
@@ -1058,9 +1100,40 @@ async function loadAlerts() {
             
             list.appendChild(item);
         });
+        applyDeviceAlertHighlights();
     } catch (error) {
         console.error('Error loading alerts:', error);
     }
+}
+
+function applyDeviceAlertHighlights() {
+    // Collect device IDs that have unread alerts
+    const alertDeviceIds = new Set(
+        loadedAlerts
+            .filter(a => a.device_id != null)
+            .map(a => a.device_id)
+    );
+
+    // Apply or remove .has-alert on every device card
+    document.querySelectorAll('.device-card').forEach(card => {
+        const deviceId = parseInt(card.id.replace('device-card-', ''));
+        const hasAlert = alertDeviceIds.has(deviceId);
+        card.classList.toggle('has-alert', hasAlert);
+
+        // Add/remove the pulsing dot next to the device name
+        const nameEl = card.querySelector('.device-name');
+        if (nameEl) {
+            const existing = nameEl.querySelector('.alert-pulse');
+            if (hasAlert && !existing) {
+                const dot = document.createElement('span');
+                dot.className = 'alert-pulse';
+                dot.title = 'Unread alert';
+                nameEl.appendChild(dot);
+            } else if (!hasAlert && existing) {
+                existing.remove();
+            }
+        }
+    });
 }
 
 function openAlertsModal() {
@@ -1189,13 +1262,14 @@ function filterDevices() {
 // ── Tab switcher ───────────────────────────────────────────────
 function switchHistoryTab(tab) {
     currentHistoryTab = tab;
+    document.getElementById('tabTrips').style.display   = tab === 'trips'   ? 'block' : 'none';
     document.getElementById('tabDetails').style.display = tab === 'details' ? 'block' : 'none';
     document.getElementById('tabGraph').style.display   = tab === 'graph'   ? 'block' : 'none';
+    document.getElementById('tabBtnTrips').classList.toggle('active',   tab === 'trips');
     document.getElementById('tabBtnDetails').classList.toggle('active', tab === 'details');
-    document.getElementById('tabBtnGraph').classList.toggle('active', tab === 'graph');
+    document.getElementById('tabBtnGraph').classList.toggle('active',   tab === 'graph');
     if (tab === 'graph') renderSensorGraph();
 }
-
 // ── Build attribute list from all historyData ──────────────────
 function buildSensorAttrList() {
     if (!historyData || historyData.length === 0) return;
@@ -1435,4 +1509,68 @@ function updateSensorChartCursor(idx) {
     if (!sensorChart) return;
     sensorChart.options.plugins.verticalLine.index = idx;
     sensorChart.update('none');
+}
+
+// ── Export history data to CSV ─────────────────────────────────
+function exportHistoryCSV() {
+    if (!historyData || historyData.length === 0) {
+        showAlert({ title: 'Export', message: 'No history data to export.', type: 'warning' });
+        return;
+    }
+
+    // Collect all sensor keys across all points
+    const sensorKeys = new Set();
+    historyData.forEach(f => {
+        if (f.properties.sensors) {
+            Object.keys(f.properties.sensors).forEach(k => {
+                if (k !== 'raw') sensorKeys.add(k);
+            });
+        }
+    });
+
+    const coreFields = ['time', 'latitude', 'longitude', 'speed', 'altitude', 'course', 'satellites', 'ignition'];
+    const sensorCols = Array.from(sensorKeys).sort();
+    const allHeaders = [...coreFields, ...sensorCols];
+
+    // Build CSV rows
+    const rows = historyData.map(f => {
+        const p = f.properties;
+        const coords = f.geometry.coordinates;
+        const row = {
+            time:       p.time || '',
+            latitude:   coords[1],
+            longitude:  coords[0],
+            speed:      p.speed      ?? '',
+            altitude:   p.altitude   ?? '',
+            course:     p.course     ?? '',
+            satellites: p.satellites ?? '',
+            ignition:   p.ignition != null ? (p.ignition ? 'true' : 'false') : '',
+        };
+        sensorCols.forEach(k => {
+            row[k] = p.sensors?.[k] ?? '';
+        });
+        return allHeaders.map(h => {
+            const val = row[h] ?? '';
+            // Wrap in quotes if value contains comma or quote
+            const str = String(val);
+            return str.includes(',') || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str;
+        }).join(',');
+    });
+
+    const csvContent = [allHeaders.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const device = devices.find(d => d.id === historyDeviceId);
+    const deviceName = (device?.name || 'device').replace(/\s+/g, '_');
+    const now = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+    const filename = `history_${deviceName}_${now}.csv`;
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    showAlert({ title: 'Export', message: `Exported ${historyData.length} points to ${filename}`, type: 'success' });
 }

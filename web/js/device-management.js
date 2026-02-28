@@ -832,20 +832,35 @@ async function deleteCurrentDevice() {
 }
 
 // ── Raw Data ──────────────────────────────────────────────────────
-
 async function loadRawDataForModal(deviceId) {
     currentRawDeviceId = deviceId;
     currentPage = 1;
     const tbody = document.getElementById('rawDataBody');
     tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:2rem;">Loading&#8230;</td></tr>';
-    const end = new Date(), start = new Date(end - 86400000);
+
+    const end = new Date();
+
     try {
-        const res = await apiFetch(`${API_BASE}/positions/history`, {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ device_id:deviceId, start_time:start.toISOString(), end_time:end.toISOString(), max_points:1000, order:'desc' })
+        // First try: last 24 hours
+        const start24h = new Date(end - 86400000);
+        const res24h = await apiFetch(`${API_BASE}/positions/history`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_id: deviceId, start_time: start24h.toISOString(), end_time: end.toISOString(), max_points: 5000, order: 'desc' })
         });
-        if (!res.ok) throw new Error(`${res.status}`);
-        rawData = (await res.json()).features || [];
+        if (!res24h.ok) throw new Error(`${res24h.status}`);
+        rawData = (await res24h.json()).features || [];
+
+        // If 24h returned nothing, fall back to last 150 messages (up to 30 days)
+        if (rawData.length === 0) {
+            const start150 = new Date(end - 86400000 * 30);
+            const res150 = await apiFetch(`${API_BASE}/positions/history`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ device_id: deviceId, start_time: start150.toISOString(), end_time: end.toISOString(), max_points: 150, order: 'desc' })
+            });
+            if (!res150.ok) throw new Error(`${res150.status}`);
+            rawData = (await res150.json()).features || [];
+        }
+
         renderRawDataPage();
     } catch (e) {
         tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--accent-danger);">Failed to load: ${e.message}</td></tr>`;

@@ -636,7 +636,9 @@ h1 {
 .alerts-table-wrap {
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
 }
 
 .alerts-table {
