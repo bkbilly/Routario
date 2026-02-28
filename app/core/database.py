@@ -259,9 +259,14 @@ class DatabaseService:
     async def create_geofence(self, geofence_data: Dict[str, Any]) -> Geofence:
         async with self.get_session() as session:
             coords = geofence_data['polygon']
+            geometry_type = geofence_data.get('geometry_type', 'polygon')
             wkt_coords = ', '.join([f"{lon} {lat}" for lon, lat in coords])
-            polygon_wkt = f"POLYGON(({wkt_coords}))"
-            
+
+            if geometry_type == 'polyline':
+                polygon_wkt = f"LINESTRING({wkt_coords})"
+            else:
+                polygon_wkt = f"POLYGON(({wkt_coords}))"
+
             geofence = Geofence(
                 device_id=geofence_data.get('device_id'),
                 name=geofence_data['name'],
@@ -269,9 +274,41 @@ class DatabaseService:
                 polygon=f'SRID=4326;{polygon_wkt}',
                 alert_on_enter=geofence_data.get('alert_on_enter', False),
                 alert_on_exit=geofence_data.get('alert_on_exit', False),
-                color=geofence_data.get('color', '#3388ff')
+                color=geofence_data.get('color', '#3388ff'),
+                geometry_type=geometry_type,
             )
             session.add(geofence)
+            await session.flush()
+            return geofence
+
+    async def update_geofence(self, geofence_id: int, update_data: dict) -> Optional[Geofence]:
+        async with self.get_session() as session:
+            result = await session.execute(select(Geofence).where(Geofence.id == geofence_id))
+            geofence = result.scalar_one_or_none()
+            if not geofence:
+                return None
+
+            if 'name' in update_data and update_data['name'] is not None:
+                geofence.name = update_data['name']
+            if 'description' in update_data:
+                geofence.description = update_data['description']
+            if 'color' in update_data and update_data['color'] is not None:
+                geofence.color = update_data['color']
+            if 'alert_on_enter' in update_data and update_data['alert_on_enter'] is not None:
+                geofence.alert_on_enter = update_data['alert_on_enter']
+            if 'alert_on_exit' in update_data and update_data['alert_on_exit'] is not None:
+                geofence.alert_on_exit = update_data['alert_on_exit']
+            if 'geometry_type' in update_data and update_data['geometry_type'] is not None:
+                geofence.geometry_type = update_data['geometry_type']
+            if 'polygon' in update_data and update_data['polygon'] is not None:
+                coords = update_data['polygon']
+                wkt_coords = ', '.join([f"{lon} {lat}" for lon, lat in coords])
+                gtype = update_data.get('geometry_type') or geofence.geometry_type or 'polygon'
+                if gtype == 'polyline':
+                    geofence.polygon = f'SRID=4326;LINESTRING({wkt_coords})'
+                else:
+                    geofence.polygon = f'SRID=4326;POLYGON(({wkt_coords}))'
+
             await session.flush()
             return geofence
 
@@ -401,13 +438,56 @@ class DatabaseService:
             result = await session.execute(select(Trip).where(Trip.id == trip_id))
             return result.scalar_one_or_none()
 
-    async def get_geofences(self, device_id: Optional[int] = None) -> List[Geofence]:
+    async def get_geofences(self, device_id: Optional[int] = None) -> List[dict]:
         async with self.get_session() as session:
-            query = select(Geofence).where(Geofence.is_active == True)
+            # Use ST_AsGeoJSON to get coordinates as JSON from PostGIS
+            query = select(
+                Geofence.id,
+                Geofence.device_id,
+                Geofence.name,
+                Geofence.description,
+                Geofence.alert_on_enter,
+                Geofence.alert_on_exit,
+                Geofence.is_active,
+                Geofence.color,
+                Geofence.geometry_type,
+                Geofence.created_at,
+                func.ST_AsGeoJSON(Geofence.polygon).label('geojson'),
+            ).where(Geofence.is_active == True)
+
             if device_id is not None:
                 query = query.where(or_(Geofence.device_id == device_id, Geofence.device_id.is_(None)))
+
             result = await session.execute(query)
-            return result.scalars().all()
+            rows = result.mappings().all()
+
+            geofences = []
+            for row in rows:
+                import json as _json
+                coords = []
+                if row['geojson']:
+                    geojson = _json.loads(row['geojson'])
+                    # GeoJSON polygon: coordinates[0] is the outer ring [[lng,lat],...]
+                    if geojson.get('type') == 'Polygon':
+                        coords = geojson['coordinates'][0]
+                    elif geojson.get('type') == 'LineString':
+                        coords = geojson['coordinates']
+
+                geofences.append({
+                    'id': row['id'],
+                    'device_id': row['device_id'],
+                    'name': row['name'],
+                    'description': row['description'],
+                    'alert_on_enter': row['alert_on_enter'],
+                    'alert_on_exit': row['alert_on_exit'],
+                    'is_active': row['is_active'],
+                    'color': row['color'],
+                    'geometry_type': row['geometry_type'] or 'polygon',
+                    'created_at': row['created_at'],
+                    'coordinates': coords,
+                })
+
+            return geofences
 
     async def delete_geofence(self, geofence_id: int) -> bool:
         async with self.get_session() as session:

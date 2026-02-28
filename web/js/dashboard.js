@@ -320,7 +320,11 @@ function initMap() {
     
     const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap';
     applyTileLayer(savedTile);
+
+    // Initialize geofences module
+    initGeofences(map);
 }
+
 
 function applyTileLayer(tileKey) {
     const tile = MAP_TILES[tileKey] || MAP_TILES['openstreetmap'];

@@ -1368,6 +1368,31 @@ body::before {
     color: #9ca3af;
 }
 
+/* ── Geofences ──────────────────────────────────────────────────── */
+.geofence-tooltip {
+    background: var(--bg-card, #1e293b);
+    border: 1px solid var(--border-color, #334155);
+    color: var(--text-primary, #f1f5f9);
+    border-radius: 6px;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.geofence-tooltip::before {
+    display: none;
+}
+
+/* Draw mode cursor feedback */
+.leaflet-crosshair,
+.leaflet-draw-draw-polygon,
+.leaflet-draw-draw-polyline {
+    cursor: crosshair !important;
+}
+
+/* ── Mobile ──────────────────────────────────────────────────── */
 @media (max-width: 1024px) {
     .history-controls {
         position: fixed;

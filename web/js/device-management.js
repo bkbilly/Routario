@@ -215,7 +215,9 @@ async function loadGeofencesForDevice(deviceId) {
         const res = await apiFetch(`${API_BASE}/geofences?device_id=${deviceId}`);
         if (!res.ok) return [];
         const geofences = await res.json();
-        return geofences.map(g => ({ value: String(g.id), label: g.name }));
+        return geofences
+            .filter(g => g.geometry_type !== 'polyline')
+            .map(g => ({ value: g.id, label: g.name }));
     } catch (e) {
         console.error('Failed to load geofences:', e);
         return [];

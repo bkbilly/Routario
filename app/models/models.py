@@ -179,11 +179,12 @@ class Geofence(Base):
     device_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('devices.id', ondelete='CASCADE'), nullable=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    polygon = mapped_column(Geometry('POLYGON', srid=4326), nullable=False)
+    polygon = mapped_column(Geometry(srid=4326), nullable=False)
     alert_on_enter: Mapped[bool] = mapped_column(Boolean, default=False)
     alert_on_exit: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     color: Mapped[str] = mapped_column(String(20), default='#3388ff')
+    geometry_type: Mapped[str] = mapped_column(String(20), default='polygon')  # 'polygon' | 'polyline'
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Relationships
