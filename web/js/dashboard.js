@@ -42,6 +42,8 @@ const SENSOR_COLORS = [
     '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
     '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'
 ];
+const tripColors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+
 
 const MAP_TILES = {
     openstreetmap: {
@@ -819,7 +821,7 @@ async function handleHistorySubmit(e) {
 
 async function loadHistory(deviceId, startTime, endTime) {
     if (polylines['history']) {
-        map.removeLayer(polylines['history']);
+        polylines['history'].eachLayer(l => map.removeLayer(l));
         delete polylines['history'];
     }
     if (markers['history_pos']) {
@@ -845,7 +847,24 @@ async function loadHistory(deviceId, startTime, endTime) {
         if (historyData.length === 0) { showAlert({ title: 'History', message: 'No data found.', type: 'warning' }); return; }
         document.getElementById('historySlider').max = historyData.length - 1;
         document.getElementById('historySlider').value = 0;
-        polylines['history'] = L.polyline(historyData.map(f => [f.geometry.coordinates[1], f.geometry.coordinates[0]]), { color: '#ef4444', weight: 4, opacity: 0.8 }).addTo(map);
+
+        // Group history points by trip_id
+        const tripGroups = {};
+        historyData.forEach(f => {
+            const tripId = f.properties?.trip_id ?? 'unknown';
+            if (!tripGroups[tripId]) tripGroups[tripId] = [];
+            tripGroups[tripId].push([f.geometry.coordinates[1], f.geometry.coordinates[0]]);
+        });
+
+        // Draw one polyline per trip with a different color
+        const tripIds = Object.keys(tripGroups);
+        const allLayers = [];
+        tripIds.forEach((tripId, idx) => {
+            const color = tripColors[idx % tripColors.length];
+            const pl = L.polyline(tripGroups[tripId], { color, weight: 4, opacity: 0.8 }).addTo(map);
+            allLayers.push(pl);
+        });
+        polylines['history'] = L.featureGroup(allLayers);
         map.fitBounds(polylines['history'].getBounds());
         
         // Correcting ID for new separate structure (footer is now separate from sidebar)
@@ -875,9 +894,10 @@ async function loadHistory(deviceId, startTime, endTime) {
 function exitHistoryMode() {
     stopPlayback();
     if (polylines['history']) {
-        map.removeLayer(polylines['history']);
+        polylines['history'].eachLayer(l => map.removeLayer(l));
         delete polylines['history'];
     }
+
     if (markers['history_pos']) {
         map.removeLayer(markers['history_pos']);
         delete markers['history_pos'];
