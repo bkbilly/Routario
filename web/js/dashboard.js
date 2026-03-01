@@ -569,7 +569,10 @@ function selectDevice(deviceId) {
     selectedDevice = deviceId;
     document.querySelectorAll('.device-card').forEach(card => card.classList.remove('active'));
     const card = document.getElementById(`device-card-${deviceId}`);
-    if(card) card.classList.add('active');
+    if (card) {
+        card.classList.add('active');
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
     
     const marker = markers[deviceId];
     if (marker) {
@@ -620,6 +623,8 @@ function updateDeviceMarker(deviceId, state) {
         markers[deviceId] = L.marker([toLat, toLng], { icon })
             .bindPopup(popupContent)
             .addTo(map);
+
+        markers[deviceId].on('click', () => selectDevice(deviceId));
 
         // Set initial rotation immediately
         const el = markers[deviceId].getElement();

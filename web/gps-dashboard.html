@@ -25,6 +25,11 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/dashboard.css">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Routario">
+    <meta name="theme-color" content="#3b82f6">
 </head>
 <body>
     <div class="dashboard">
@@ -107,17 +112,18 @@
                                 Select at least one attribute above to plot.
                             </div>
                         </div>
-                        <div style="display:flex; justify-content:flex-end; margin-top:0.75rem;">
-                            <button class="btn btn-secondary" onclick="exportHistoryCSV()" style="font-size:0.78rem; padding:0.4rem 0.9rem; display:flex; align-items:center; gap:0.4rem;">
-                                ⬇️ Export CSV
-                            </button>
-                        </div>
                     </div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; margin-top:0.75rem;">
+                    <button class="btn btn-secondary" onclick="exportHistoryCSV()" style="font-size:0.78rem; padding:0.4rem 0.9rem; display:flex; align-items:center; gap:0.4rem;">
+                        ⬇️ Export CSV
+                    </button>
                 </div>
             </div>
 
             
-            <!-- New Sidebar Footer for App Navigation -->
+            <!-- Sidebar Footer for App Navigation -->
             <div class="sidebar-footer" id="sidebarNavRow">
                 <div class="sidebar-row">
                     <a href="device-management.html" class="sidebar-action-btn" title="Manage Devices">
@@ -142,6 +148,7 @@
         
         <main class="main-content" style="position: relative;">
             <div id="map"></div>
+
             <!-- Map Tile Picker -->
             <div style="position: absolute; top: 1rem; right: 1rem; z-index: 1000; display: grid; gap: 0.5rem;">
                 <!-- Map style picker button -->
@@ -188,33 +195,10 @@
 
                 <div id="mapTilePicker" style="display: none; position: absolute; right: 0; top: calc(100% + 0.5rem);
                      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px;
-                     padding: 0.5rem; min-width: 200px; box-shadow: 0 4px 20px rgba(0,0,0,0.4);">
-                    <div style="font-size: 0.7rem; color: var(--text-muted); padding: 0.3rem 0.6rem 0.5rem;">Select map style</div>
-                    <script>
-                        // Render options dynamically once MAP_TILES is available
-                        document.addEventListener('DOMContentLoaded', () => {
-                            const picker = document.getElementById('mapTilePicker');
-                            const saved = localStorage.getItem('mapTileLayer') || 'openstreetmap';
-                            Object.entries(MAP_TILES).forEach(([key, tile]) => {
-                                const btn = document.createElement('button');
-                                btn.className = 'map-tile-option';
-                                btn.dataset.tile = key;
-                                btn.textContent = tile.label;
-                                btn.onclick = () => { applyTileLayer(key); toggleMapPicker(); };
-                                if (key === saved) btn.classList.add('active');
-                                btn.style.cssText = `display: block; width: 100%; text-align: left; background: transparent;
-                                    border: none; color: var(--text-primary); padding: 0.5rem 0.75rem; border-radius: 6px;
-                                    cursor: pointer; font-size: 0.85rem; transition: background 0.15s;`;
-                                btn.addEventListener('mouseenter', () => btn.style.background = 'var(--bg-hover, rgba(255,255,255,0.05))');
-                                btn.addEventListener('mouseleave', () => {
-                                    btn.style.background = btn.classList.contains('active') ? 'rgba(59,130,246,0.15)' : 'transparent';
-                                });
-                                picker.appendChild(btn);
-                            });
-                        });
-                    </script>
+                     padding: 0.5rem; min-width: 160px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); z-index: 1001;">
                 </div>
             </div>
+
             <!-- Geofence Edit Toolbar (shown when a geofence is selected) -->
             <div id="geofenceEditToolbar"
                 style="display: none; position: absolute; bottom: 2rem; left: 50%; transform: translateX(-50%);
@@ -242,6 +226,7 @@
                     ✕ Cancel
                 </button>
             </div>
+
             <!-- Floating History Controls (Shown when history is active) -->
             <div id="historyControls" class="history-controls" style="display: none;">
                 <!-- Row 1: timestamp · trip pill · close -->
@@ -275,7 +260,8 @@
             <div class="alerts-list" id="alertsList"></div>
         </div>
     </div>
-    <!-- ── Geofence Save / Edit Modal ─────────────────────────────── -->
+
+    <!-- Geofence Save / Edit Modal -->
     <div class="modal" id="geofenceModal">
         <div class="modal-content" style="max-width: 480px;">
             <div class="modal-header">
@@ -332,6 +318,7 @@
             </div>
         </div>
     </div>
+
     <!-- History Selection Modal -->
     <div class="modal" id="historyModal">
         <div class="modal-content">
@@ -375,12 +362,18 @@
     <script src="js/dashboard.js"></script>
     
     <script>
-        // Inline script to set username on load
+        // Set real viewport height as CSS variable — fixes sidebar height in PWA standalone mode
+        function setAppHeight() {
+            document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const username = localStorage.getItem('username');
             if (username) {
                 document.getElementById('userNameDisplay').textContent = username;
             }
+
+            setAppHeight();
             
             // Auto-collapse sidebar on mobile/tablet load
             if (window.innerWidth <= 1024) {
@@ -393,6 +386,8 @@
         let lastWasWide = window.innerWidth > 1024;
 
         window.addEventListener('resize', () => {
+            setAppHeight();
+
             const dashboard = document.querySelector('.dashboard');
             const isWide = window.innerWidth > 1024;
 
@@ -412,7 +407,6 @@
                 if (map) map.invalidateSize();
             }, 300);
         });
-
     </script>
 </body>
 </html>

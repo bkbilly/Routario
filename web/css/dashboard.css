@@ -79,7 +79,7 @@ body::before {
     grid-template-columns: var(--sidebar-width) 1fr;
     grid-template-rows: 70px 1fr;
     height: 100vh;
-    height: 100dvh; /* ← fixes mobile browser chrome causing sidebar overflow */
+    height: var(--app-height, 100dvh);
     gap: 0;
     transition: grid-template-columns var(--transition-base);
 }
