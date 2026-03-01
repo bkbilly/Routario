@@ -10,17 +10,22 @@ const VEHICLE_ICONS = {
 
     // ── Emoji vehicles ────────────────────────────────────────────
     car:          { label: 'Car',             emoji: '🚗',  offset:  90 },
+    motorcycle:   { label: 'Motorcycle',      emoji: '🏍️',  offset:  90 },
     truck:        { label: 'Truck',           emoji: '🚛',  offset:  90 },
-    van:          { label: 'Van',             emoji: '🚐',  offset:  90 },
-    motorcycle:   { label: 'Motorcycle',      emoji: '🏍️', offset:  90 },
-    bus:          { label: 'Bus',             emoji: '🚌',  offset:  90 },
-    person:       { label: 'Personal Tracker',emoji: '🚶',  offset:   0 },
-    airplane:     { label: 'Airplane',        emoji: '✈️', offset: -45 },
-    bicycle:      { label: 'Bicycle',         emoji: '🚲',  offset:  90 },
-    boat:         { label: 'Boat / Marine',   emoji: '🚢',  offset:  90 },
-    scooter:      { label: 'Scooter',         emoji: '🛴',  offset:  90 },
     tractor:      { label: 'Tractor',         emoji: '🚜',  offset:  90 },
-    other:        { label: 'Other',           emoji: '📦',  offset:   0 },
+    van:          { label: 'Van',             emoji: '🚐',  offset:  90 },
+    bus:          { label: 'Bus',             emoji: '🚌',  offset:  90 },
+    animal:       { label: 'Animal',          emoji: '🐾',  offset:   5 },
+    person:       { label: 'Personal Tracker',emoji: '🚶',  offset:   0 },
+    bicycle:      { label: 'Bicycle',         emoji: '🚲',  offset:  90 },
+    scooter:      { label: 'Scooter',         emoji: '🛴',  offset:  90 },
+    rocket:       { label: 'Rocket',          emoji: '🚀',  offset: -45 },
+    airplane:     { label: 'Airplane',        emoji: '✈️',  offset: -45 },
+    helicopter:   { label: 'Helicopter',      emoji: '🚁',  offset:  90 },
+    boat:         { label: 'Boat',            emoji: '🛥️',  offset:  90 },
+    steam_train:  { label: 'Train',           emoji: '🚂',  offset:  90 },
+    other:        { label: 'Other',           emoji: '📍',  offset:   0 },
+
 };
 
 /**
