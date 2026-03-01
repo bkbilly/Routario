@@ -813,22 +813,48 @@ async function loadHistory(deviceId, startTime, endTime) {
         document.getElementById('historySlider').max = historyData.length - 1;
         document.getElementById('historySlider').value = 0;
 
-        // Group history points by trip_id
-        const tripGroups = {};
-        historyData.forEach(f => {
-            const tripId = f.properties?.trip_id ?? 'unknown';
-            if (!tripGroups[tripId]) tripGroups[tripId] = [];
-            tripGroups[tripId].push([f.geometry.coordinates[1], f.geometry.coordinates[0]]);
-        });
-
-        // Draw one polyline per trip with a different color
-        const tripIds = Object.keys(tripGroups);
+        // Draw trip polylines — each contiguous run of the same trip_id gets its own color.
+        // Points between trips (trip_id: null) are drawn as a subtle dashed grey line.
         const allLayers = [];
-        tripIds.forEach((tripId, idx) => {
-            const color = tripColors[idx % tripColors.length];
-            const pl = L.polyline(tripGroups[tripId], { color, weight: 4, opacity: 0.8 }).addTo(map);
-            allLayers.push(pl);
+        let tripColorMap = {};
+        let tripColorIdx = 0;
+        let currentTripId = undefined;
+        let currentSegment = [];
+
+        const flushSegment = () => {
+            if (currentSegment.length < 2) { currentSegment = []; return; }
+            if (currentTripId) {
+                if (!(currentTripId in tripColorMap)) {
+                    tripColorMap[currentTripId] = tripColors[tripColorIdx++ % tripColors.length];
+                }
+                const pl = L.polyline(currentSegment, {
+                    color:   tripColorMap[currentTripId],
+                    weight:  4,
+                    opacity: 0.85,
+                }).addTo(map);
+                allLayers.push(pl);
+            } else {
+                const pl = L.polyline(currentSegment, {
+                    color:     '#6b7280',
+                    weight:    2,
+                    opacity:   0.4,
+                    dashArray: '4 6',
+                }).addTo(map);
+                allLayers.push(pl);
+            }
+            currentSegment = [];
+        };
+
+        historyData.forEach(f => {
+            const tripId = f.properties?.trip_id ?? null;
+            const latlng = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
+            if (tripId !== currentTripId) {
+                flushSegment();
+                currentTripId = tripId;
+            }
+            currentSegment.push(latlng);
         });
+        flushSegment();
         polylines['history'] = L.featureGroup(allLayers);
         map.fitBounds(polylines['history'].getBounds());
         
