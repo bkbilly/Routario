@@ -1,68 +1,53 @@
 // ================================================================
 //  device-management.js
+//  Depends on: vehicle-icons.js (loaded before this file)
 // ================================================================
 
+// ── State ────────────────────────────────────────────────────────
 let availableProtocols = [];
 let devices            = [];
+let allDevices         = [];
 let userChannels       = [];
 let editingDeviceId    = null;
-let allDevices         = [];      // unfiltered master list for search
 
-// Alerts: array-based so same type can be added multiple times
+// Alerts
 let alertRows       = [];
 let editingAlertUid = null;
 let uidCounter      = 0;
+let ALERT_TYPES     = {};
 
-// Raw data
+// Raw data tab
 let rawData            = [];
 let currentPage        = 1;
 const itemsPerPage     = 50;
 let currentRawDeviceId = null;
 
 // ── Constants ────────────────────────────────────────────────────
-
-const VEHICLE_ICONS = {
-    arrow:'▲',
-    car:'🚗',
-    truck:'🚛',
-    van:'🚐',
-    motorcycle:'🏍️',
-    bus:'🚌',
-    person:'🚶',
-    airplane:'✈️',
-    bicycle:'🚲',
-    boat:'🚢',
-    scooter:'🛴',
-    tractor:'🚜',
-    other:'📦',
-};
-
-let ALERT_TYPES = {};
-
-async function loadAlertTypes() {
-    const res = await apiFetch(`${API_BASE}/alerts/types`);
-    ALERT_TYPES = await res.json();
-    populateAddAlertDropdown(); // re-render once loaded
-}
-
-
-const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const DAYS             = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DEFAULT_PROTOCOL = 'teltonika';
 const DEFAULT_TYPE     = 'car';
-const isAdmin = localStorage.getItem('is_admin') === 'true';
+const isAdmin          = localStorage.getItem('is_admin') === 'true';
 
-
-// ── Boot ─────────────────────────────────────────────────────────
-
+// ── Helpers ───────────────────────────────────────────────────────
 function checkLogin() {
     if (!localStorage.getItem('auth_token')) window.location.href = 'login.html';
 }
+function nextUid() { return ++uidCounter; }
+function pad(n)    { return String(n).padStart(2, '0'); }
 
+function formatDateToLocal(str) {
+    if (!str) return 'Never';
+    if (!str.includes('Z') && !str.includes('+')) str += 'Z';
+    return new Date(str).toLocaleString();
+}
+
+// ── Boot ─────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+    checkLogin();
+
     const addBtn = document.querySelector('button[onclick="openAddDeviceModal()"]');
     if (addBtn) addBtn.style.display = isAdmin ? '' : 'none';
 
-    checkLogin();
     await loadAlertTypes();
     await loadAvailableProtocols();
     await loadUserChannels();
@@ -70,7 +55,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     populateAddAlertDropdown();
 });
 
-// ── Loaders ──────────────────────────────────────────────────────
+// ── API Loaders ───────────────────────────────────────────────────
+async function loadAlertTypes() {
+    try {
+        const res = await apiFetch(`${API_BASE}/alerts/types`);
+        if (res.ok) {
+            ALERT_TYPES = await res.json();
+            populateAddAlertDropdown();
+        }
+    } catch (e) { console.error('Failed to load alert types:', e); }
+}
 
 async function loadAvailableProtocols() {
     try {
@@ -82,9 +76,10 @@ async function loadAvailableProtocols() {
         const sel = document.getElementById('deviceProtocol');
         if (!sel) return;
         sel.innerHTML = '<option value="">-- Select Protocol --</option>';
+
         const names = {
-            teltonika:'Teltonika', gt06:'GT06 / Concox', osmand:'OsmAnd',
-            flespi:'Flespi', totem:'Totem', tk103:'TK103', gps103:'GPS103', h02:'H02'
+            teltonika: 'Teltonika', gt06: 'GT06 / Concox', osmand: 'OsmAnd',
+            flespi: 'Flespi', totem: 'Totem', tk103: 'TK103', gps103: 'GPS103', h02: 'H02',
         };
         [...availableProtocols].sort().forEach(p => {
             const opt = document.createElement('option');
@@ -113,19 +108,19 @@ async function loadDevices() {
         const userId = localStorage.getItem('user_id') || 1;
         const res    = await apiFetch(`${API_BASE}/devices?user_id=${userId}&_t=${Date.now()}`);
         if (!res.ok) throw new Error(`Server returned ${res.status}`);
-        devices     = await res.json();
-        allDevices  = devices;
+        devices    = await res.json();
+        allDevices = devices;
 
-        for (const device of devices) {
+        await Promise.all(devices.map(async device => {
             try {
                 const sr = await apiFetch(`${API_BASE}/devices/${device.id}/state`);
                 if (sr.ok) device.state = await sr.json();
-            } catch (e) { /* ignore */ }
+            } catch { /* ignore */ }
             try {
                 const cr = await apiFetch(`${API_BASE}/devices/${device.id}/command-support`);
                 device.supports_commands = cr.ok ? (await cr.json()).supports_commands : false;
-            } catch (e) { device.supports_commands = false; }
-        }
+            } catch { device.supports_commands = false; }
+        }));
 
         renderDeviceTable(devices);
     } catch (e) {
@@ -134,8 +129,15 @@ async function loadDevices() {
     }
 }
 
-// ── Device Table ─────────────────────────────────────────────────
+async function loadGeofencesForDevice(deviceId) {
+    try {
+        const res = await apiFetch(`${API_BASE}/geofences?device_id=${deviceId}`);
+        if (!res.ok) return [];
+        return (await res.json()).map(g => ({ value: String(g.id), label: g.name }));
+    } catch { return []; }
+}
 
+// ── Device Table ──────────────────────────────────────────────────
 function filterDevices() {
     const q = (document.getElementById('deviceSearch').value || '').toLowerCase().trim();
     const filtered = q
@@ -155,32 +157,38 @@ function renderDeviceTable(list) {
     count.textContent = `${list.length} device${list.length !== 1 ? 's' : ''}`;
 
     if (!list.length) {
-        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:3rem;color:var(--text-muted);">
-            <div style="font-size:2.5rem;margin-bottom:0.75rem;">📡</div>
-            No devices found
-        </td></tr>`;
+        tbody.innerHTML = `
+            <tr><td colspan="9" style="text-align:center;padding:3rem;color:var(--text-muted);">
+                <div style="font-size:2.5rem;margin-bottom:0.75rem;">📡</div>
+                No devices found
+            </td></tr>`;
         return;
     }
 
     tbody.innerHTML = list.map(d => {
-        const icon       = VEHICLE_ICONS[d.vehicle_type] || '📦';
-        const isOnline   = d.state?.is_online;
-        const lastUpdate = d.state?.last_update ? formatDateToLocal(d.state.last_update) : '—';
-        const odometer   = d.state?.total_odometer != null ? `${d.state.total_odometer.toFixed(0)} km` : '—';
-        const plate      = d.license_plate || '—';
-        const proto      = d.protocol ? (d.protocol.charAt(0).toUpperCase() + d.protocol.slice(1)) : '—';
-        const cmds       = d.supports_commands !== false;
+        // Use VEHICLE_ICONS from vehicle-icons.js
+        const icon     = (VEHICLE_ICONS[d.vehicle_type] || VEHICLE_ICONS['other']).emoji;
+        const isOnline = d.state?.is_online;
+        const lastSeen = d.state?.last_update ? formatDateToLocal(d.state.last_update) : '—';
+        const odometer = d.state?.total_odometer != null ? `${d.state.total_odometer.toFixed(0)} km` : '—';
+        const plate    = d.license_plate || '—';
+        const proto    = d.protocol ? (d.protocol.charAt(0).toUpperCase() + d.protocol.slice(1)) : '—';
+        const cmds     = d.supports_commands !== false;
 
-        return `<tr class="device-row" ondblclick="openDeviceModal(${d.id},'general')">
-            <td style="text-align:center;font-size:1.2rem;">${icon}</td>
-            <td><span class="device-row-name">${d.name}</span><div class="device-row-imei">${d.imei}</div></td>
+        return `
+        <tr class="device-row" ondblclick="openDeviceModal(${d.id},'general')">
+            <td style="text-align:center;font-size:1.25rem;">${icon}</td>
+            <td>
+                <span class="device-row-name">${d.name}</span>
+                <div class="device-row-imei">${d.imei}</div>
+            </td>
             <td><span class="proto-badge">${proto}</span></td>
             <td>${plate}</td>
             <td>
                 <span class="status-dot ${d.is_active ? (isOnline ? 'online' : 'active') : 'inactive'}"></span>
                 ${d.is_active ? (isOnline ? 'Online' : 'Active') : 'Inactive'}
             </td>
-            <td style="font-size:0.85rem;color:var(--text-secondary);">${lastUpdate}</td>
+            <td style="font-size:0.85rem;color:var(--text-secondary);">${lastSeen}</td>
             <td style="font-family:var(--font-mono);font-size:0.85rem;">${odometer}</td>
             <td style="text-align:right;white-space:nowrap;">
                 ${cmds ? `<button class="btn btn-secondary tbl-btn" onclick="openCommandModal(${d.id})">📡</button>` : ''}
@@ -190,50 +198,31 @@ function renderDeviceTable(list) {
     }).join('');
 }
 
-// ── Helpers ───────────────────────────────────────────────────────
-
-function formatDateToLocal(str) {
-    if (!str) return 'Never';
-    if (!str.includes('Z') && !str.includes('+')) str += 'Z';
-    return new Date(str).toLocaleString();
-}
-function nextUid() { return ++uidCounter; }
-function pad(n)    { return String(n).padStart(2, '0'); }
-
 // ── Modal Tab Switcher ────────────────────────────────────────────
-
 function switchModalTab(tabId, btn) {
     document.querySelectorAll('.modal-tab-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.modal-tab').forEach(el => el.classList.remove('active'));
-    document.getElementById(`tab-${tabId}`).classList.add('active');
+    document.getElementById(`tab-${tabId}`)?.classList.add('active');
     (btn || document.querySelector(`.modal-tab[data-tab="${tabId}"]`))?.classList.add('active');
     if (tabId === 'rawdata' && editingDeviceId) loadRawDataForModal(editingDeviceId);
 }
 
-async function loadGeofencesForDevice(deviceId) {
-    try {
-        const res = await apiFetch(`${API_BASE}/geofences?device_id=${deviceId}`);
-        if (!res.ok) return [];
-        const geofences = await res.json();
-        return geofences
-            .filter(g => g.geometry_type !== 'polyline')
-            .map(g => ({ value: g.id, label: g.name }));
-    } catch (e) {
-        console.error('Failed to load geofences:', e);
-        return [];
-    }
-}
-
 // ── Open / Close Device Modal ─────────────────────────────────────
-
 function openAddDeviceModal() {
+    if (!isAdmin) return;
     editingDeviceId = null;
-    document.getElementById('modalTitle').textContent  = 'Add New Device';
-    document.getElementById('submitText').textContent   = 'Add Device';
+
+    document.getElementById('modalTitle').textContent           = 'Add New Device';
+    document.getElementById('submitText').textContent           = 'Add Device';
+    document.getElementById('deleteDeviceBtn').style.display    = 'none';
     document.getElementById('deviceForm').reset();
-    document.getElementById('deviceProtocol').value    = DEFAULT_PROTOCOL;
-    document.getElementById('currentOdometer').value   = '0.0';
-    document.getElementById('deleteDeviceBtn').style.display = 'none';
+    document.getElementById('deviceProtocol').value             = DEFAULT_PROTOCOL;
+    document.getElementById('currentOdometer').value            = '0.0';
+    document.getElementById('offlineTimeoutHours').value        = '24';
+
+    // Populate vehicle type from shared vehicle-icons.js
+    populateVehicleTypeSelect(document.getElementById('vehicleType'), DEFAULT_TYPE);
+
     alertRows = [];
     renderAlertsTable();
     populateAddAlertDropdown();
@@ -246,37 +235,38 @@ function openDeviceModal(deviceId, startTab = 'general') {
     if (!d) return;
     editingDeviceId = d.id;
 
-    document.getElementById('modalTitle').textContent  = 'Edit Device';
-    document.getElementById('submitText').textContent   = 'Save Changes';
-    document.getElementById('deleteDeviceBtn').style.display = 'block';
+    document.getElementById('modalTitle').textContent           = 'Edit Device';
+    document.getElementById('submitText').textContent           = 'Save Changes';
+    document.getElementById('deleteDeviceBtn').style.display    = isAdmin ? 'block' : 'none';
 
-    document.getElementById('deviceName').value      = d.name;
-    document.getElementById('deviceImei').value      = d.imei;
-    document.getElementById('deviceProtocol').value  = d.protocol || DEFAULT_PROTOCOL;
-    document.getElementById('vehicleType').value     = d.vehicle_type || '';
-    document.getElementById('licensePlate').value    = d.license_plate || '';
-    document.getElementById('vin').value             = d.vin || '';
-    document.getElementById('currentOdometer').value = d.state?.total_odometer != null ? d.state.total_odometer.toFixed(1) : '0.0';
-    document.getElementById('offlineTimeoutHours').value = 24;
+    document.getElementById('deviceName').value                 = d.name;
+    document.getElementById('deviceImei').value                 = d.imei;
+    document.getElementById('deviceProtocol').value             = d.protocol || DEFAULT_PROTOCOL;
+    document.getElementById('licensePlate').value               = d.license_plate || '';
+    document.getElementById('vin').value                        = d.vin || '';
+    document.getElementById('currentOdometer').value            =
+        d.state?.total_odometer != null ? d.state.total_odometer.toFixed(1) : '0.0';
+    document.getElementById('offlineTimeoutHours').value        =
+        d.config?.offline_timeout_hours ?? 24;
 
-    const config = d.config || {};
+    // Populate vehicle type from shared vehicle-icons.js
+    populateVehicleTypeSelect(document.getElementById('vehicleType'), d.vehicle_type || DEFAULT_TYPE);
 
-    loadAlertsFromConfig(config);
+    loadAlertsFromConfig(d.config || {});
     switchModalTab(startTab);
     document.getElementById('deviceModal').classList.add('active');
 }
-
-// Shims for backward-compat calls from card buttons
-function editDevice(id)       { openDeviceModal(id, 'general'); }
-function openRawDataModal(id) { openDeviceModal(id, 'rawdata'); }
 
 function closeDeviceModal() {
     document.getElementById('deviceModal').classList.remove('active');
 }
 
-// ── Commands Modal ────────────────────────────────────────────────
-// currentCommandDeviceId and currentCommandDevice are declared in device-commands.js
+// Backward-compat shims
+function editDevice(id)       { openDeviceModal(id, 'general'); }
+function openRawDataModal(id) { openDeviceModal(id, 'rawdata'); }
 
+// ── Commands Modal ────────────────────────────────────────────────
+// currentCommandDeviceId / currentCommandDevice declared in device-commands.js
 function openCommandModal(deviceId) {
     currentCommandDeviceId = deviceId;
     currentCommandDevice   = devices.find(d => d.id == deviceId);
@@ -287,9 +277,89 @@ function openCommandModal(deviceId) {
     loadAvailableCommands();
 }
 
-// closeCommandModal is defined in device-commands.js
+// ── Form Submit ───────────────────────────────────────────────────
+async function handleSubmit(event) {
+    event.preventDefault();
+    const submitBtn  = document.getElementById('submitBtn');
+    const submitText = document.getElementById('submitText');
+    const submitLoad = document.getElementById('submitLoading');
+    submitBtn.disabled = true;
+    submitText.style.display = 'none';
+    submitLoad.style.display = 'inline-block';
 
-// switchCommandTab and switchCommandSubtab are defined in device-commands.js
+    try {
+        const existingConfig = editingDeviceId
+            ? (devices.find(d => d.id === editingDeviceId)?.config || {})
+            : {};
+
+        const newConfig = buildConfigFromAlertRows(existingConfig);
+        newConfig.sensors                = existingConfig.sensors     || {};
+        newConfig.maintenance            = existingConfig.maintenance || {};
+        newConfig.speed_duration_seconds = existingConfig.speed_duration_seconds || 30;
+        newConfig.offline_timeout_hours  = parseInt(document.getElementById('offlineTimeoutHours').value) || 24;
+
+        const payload = {
+            name:          document.getElementById('deviceName').value.trim(),
+            imei:          document.getElementById('deviceImei').value.trim(),
+            protocol:      document.getElementById('deviceProtocol').value || DEFAULT_PROTOCOL,
+            vehicle_type:  document.getElementById('vehicleType').value    || DEFAULT_TYPE,
+            license_plate: document.getElementById('licensePlate').value   || null,
+            vin:           document.getElementById('vin').value            || null,
+            config:        newConfig,
+        };
+
+        let response;
+        if (editingDeviceId) {
+            const odo = parseFloat(document.getElementById('currentOdometer').value) || null;
+            const url = `${API_BASE}/devices/${editingDeviceId}${odo !== null ? `?new_odometer=${odo}` : ''}`;
+            response = await apiFetch(url, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+        } else {
+            response = await apiFetch(`${API_BASE}/devices`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+        }
+
+        if (response.ok) {
+            showAlert(editingDeviceId ? 'Device updated' : 'Device added', 'success');
+            closeDeviceModal();
+            await loadDevices();
+        } else {
+            const err = await response.json();
+            showAlert(err.detail || 'Failed to save device', 'error');
+        }
+    } catch (e) {
+        showAlert('Failed to save device', 'error');
+        console.error(e);
+    } finally {
+        submitBtn.disabled   = false;
+        submitText.style.display = 'inline';
+        submitLoad.style.display = 'none';
+    }
+}
+
+// ── Delete Device ─────────────────────────────────────────────────
+async function deleteCurrentDevice() {
+    if (!editingDeviceId || !isAdmin) return;
+    const d = devices.find(x => x.id === editingDeviceId);
+    if (!confirm(`Delete "${d?.name || 'this device'}"?\n\nThis cannot be undone.`)) return;
+    try {
+        const res = await apiFetch(`${API_BASE}/devices/${editingDeviceId}`, { method: 'DELETE' });
+        if (res.ok) {
+            showAlert('Device deleted', 'success');
+            closeDeviceModal();
+            await loadDevices();
+        } else {
+            const err = await res.json();
+            showAlert(err.detail || 'Failed to delete device', 'error');
+        }
+    } catch (e) { showAlert('Failed to delete device', 'error'); }
+}
 
 // ================================================================
 //  ALERTS SYSTEM
@@ -297,20 +367,23 @@ function openCommandModal(deviceId) {
 
 function loadAlertsFromConfig(config) {
     alertRows = [];
+
     if (Array.isArray(config.alert_rows)) {
         config.alert_rows.forEach(r => alertRows.push({ ...r, uid: nextUid() }));
     } else {
+        // Legacy flat config migration
         const ch = config.alert_channels || {};
         for (const [key] of Object.entries(ALERT_TYPES)) {
             if (config[key] != null) {
-                alertRows.push({ uid:nextUid(), alertKey:key, value:config[key], channels:ch[key]||[], schedule:null });
+                alertRows.push({ uid: nextUid(), alertKey: key, value: config[key], channels: ch[key] || [], schedule: null });
             }
         }
         (config.custom_rules || []).forEach(r => {
-            const obj = typeof r === 'string' ? { name:'Custom Alert', rule:r, channels:[] } : r;
-            alertRows.push({ uid:nextUid(), alertKey:'__custom__', name:obj.name, rule:obj.rule, channels:obj.channels||[], schedule:null });
+            const obj = typeof r === 'string' ? { name: 'Custom Alert', rule: r, channels: [] } : r;
+            alertRows.push({ uid: nextUid(), alertKey: '__custom__', name: obj.name, rule: obj.rule, channels: obj.channels || [], schedule: null });
         });
     }
+
     renderAlertsTable();
     populateAddAlertDropdown();
 }
@@ -318,12 +391,13 @@ function loadAlertsFromConfig(config) {
 function populateAddAlertDropdown() {
     const sel = document.getElementById('addAlertSelect');
     if (!sel) return;
-    sel.innerHTML = '<option value="">Select a system alert&#8230;</option>';
+    sel.innerHTML = '<option value="">Select a system alert…</option>';
     const grp = document.createElement('optgroup');
     grp.label = 'System Alerts';
     for (const [key, def] of Object.entries(ALERT_TYPES)) {
         const opt = document.createElement('option');
-        opt.value = key; opt.textContent = def.label;
+        opt.value       = key;
+        opt.textContent = def.label;
         grp.appendChild(opt);
     }
     sel.appendChild(grp);
@@ -336,7 +410,6 @@ function addSelectedAlert() {
     const def = ALERT_TYPES[val];
     if (!def) return;
 
-    // Build default params from field definitions
     const params = {};
     (def.fields || []).forEach(f => { params[f.key] = f.default; });
 
@@ -348,10 +421,12 @@ function addSelectedAlert() {
 function addCustomRule() {
     const nameEl = document.getElementById('newRuleName');
     const ruleEl = document.getElementById('newRuleCond');
-    const name = nameEl.value.trim(), rule = ruleEl.value.trim();
+    const name   = nameEl.value.trim();
+    const rule   = ruleEl.value.trim();
     if (!name || !rule) return;
-    alertRows.push({ uid:nextUid(), alertKey:'__custom__', name, rule, channels:[], schedule:null });
-    nameEl.value = ''; ruleEl.value = '';
+    alertRows.push({ uid: nextUid(), alertKey: '__custom__', name, rule, channels: [], schedule: null });
+    nameEl.value = '';
+    ruleEl.value = '';
     renderAlertsTable();
 }
 
@@ -364,43 +439,48 @@ function renderAlertsTable() {
     const tbody    = document.getElementById('alertsTableBody');
     const emptyRow = document.getElementById('alertsEmptyRow');
     if (!tbody) return;
+
     tbody.querySelectorAll('tr.alert-data-row').forEach(r => r.remove());
-    if (!alertRows.length) { emptyRow.style.display = ''; return; }
-    emptyRow.style.display = 'none';
+
+    if (!alertRows.length) {
+        if (emptyRow) emptyRow.style.display = '';
+        return;
+    }
+    if (emptyRow) emptyRow.style.display = 'none';
 
     alertRows.forEach((row, idx) => {
         const isCustom = row.alertKey === '__custom__';
         const def      = isCustom ? null : ALERT_TYPES[row.alertKey];
-        const label    = isCustom
-            ? `⚡ ${row.name}`
-            : (def?.icon ? `${def.icon} ${def.label}` : def?.label) || row.alertKey;
 
-        // Threshold column: all fields except checkboxes
+        const label = isCustom
+            ? `<span class="custom-alert-module">
+                   <span class="custom-alert-module-title">⚡ ${row.name}</span>
+                   <span class="custom-alert-module-cond">${row.rule}</span>
+               </span>`
+            : (def?.icon ? `${def.icon} ` : '') + (def?.label || row.alertKey);
+
+        // Threshold summary
         let thresh;
         if (isCustom) {
-            thresh = `<span style="font-family:var(--font-mono);font-size:0.73rem;color:var(--text-muted);word-break:break-all;">${row.rule}</span>`;
+            thresh = `<span style="color:var(--text-muted);font-size:0.8rem;">—</span>`;
         } else {
             const visibleFields = (def?.fields || []).filter(f => f.field_type !== 'checkbox');
-            if (visibleFields.length) {
-                thresh = visibleFields.map(f => {
-                    const val = row.params?.[f.key];
-                    if (val == null || val === '') return null;
-
-                    // For select fields, show the option label instead of the raw value
-                    let display = val;
-                    if (f.field_type === 'select' && f.options?.length) {
-                        const opt = f.options.find(o => String(o.value) === String(val));
-                        if (opt) display = opt.label;
-                    }
-
-                    return `<span class="alert-threshold-badge">
-                        <small style="color:var(--text-muted);margin-right:0.2rem;">${f.label}:</small>
-                        ${display}
-                        ${f.unit ? `<small>${f.unit}</small>` : ''}
-                    </span>`;
-                }).filter(Boolean).join(' ');
-            }
-            if (!thresh) thresh = `<span style="color:var(--text-muted);font-size:0.8rem;">—</span>`;
+            const badges = visibleFields.map(f => {
+                const val = row.params?.[f.key];
+                if (val == null || val === '') return null;
+                let display = val;
+                if (f.field_type === 'select' && f.options?.length) {
+                    const opt = f.options.find(o => String(o.value) === String(val));
+                    if (opt) display = opt.label;
+                }
+                return `<span class="alert-threshold-badge">
+                    <small style="color:var(--text-muted);margin-right:0.2rem;">${f.label}:</small>
+                    ${display}${f.unit ? ` <small>${f.unit}</small>` : ''}
+                </span>`;
+            }).filter(Boolean);
+            thresh = badges.length
+                ? badges.join(' ')
+                : `<span style="color:var(--text-muted);font-size:0.8rem;">—</span>`;
         }
 
         const chHtml = row.channels?.length
@@ -408,16 +488,15 @@ function renderAlertsTable() {
             : `<span style="color:var(--text-muted);font-size:0.8rem;">None</span>`;
 
         const sched = row.schedule;
-        let schedHtml = `<span style="color:var(--text-muted);font-size:0.8rem;">Always</span>`;
-        if (sched?.days?.length) {
-            const daysStr = sched.days.map(d => DAYS[d]).join(', ');
-            schedHtml = `<span class="schedule-badge">${daysStr}<br><small>${pad(sched.hourStart ?? 0)}:00–${pad(sched.hourEnd ?? 23)}:59</small></span>`;
-        }
+        const schedHtml = sched?.days?.length
+            ? `<span class="schedule-badge">${sched.days.map(d => DAYS[d]).join(', ')}<br>
+               <small>${pad(sched.hourStart ?? 0)}:00–${pad(sched.hourEnd ?? 23)}:59</small></span>`
+            : `<span style="color:var(--text-muted);font-size:0.8rem;">Always</span>`;
 
         const tr = document.createElement('tr');
         tr.className   = 'alert-data-row';
         tr.dataset.uid = row.uid;
-        tr.innerHTML   = `
+        tr.innerHTML = `
             <td style="color:var(--text-muted);font-size:0.82rem;">${idx + 1}</td>
             <td><span class="alert-type-label ${isCustom ? 'custom' : 'system'}">${label}</span></td>
             <td><div style="display:flex;flex-wrap:wrap;gap:0.3rem;">${thresh}</div></td>
@@ -425,93 +504,13 @@ function renderAlertsTable() {
             <td>${schedHtml}</td>
             <td style="text-align:center;white-space:nowrap;">
                 <button type="button" class="btn btn-secondary tbl-btn" onclick="openAlertEditor(${row.uid})">✏️</button>
-                <button type="button" class="btn btn-danger tbl-btn"    onclick="removeAlertRow(${row.uid})">✕</button>
+                <button type="button" class="btn btn-danger    tbl-btn" onclick="removeAlertRow(${row.uid})">✕</button>
             </td>`;
         tbody.appendChild(tr);
     });
 }
 
 // ── Alert Editor ──────────────────────────────────────────────────
-
-function renderAlertsTable() {
-    const tbody    = document.getElementById('alertsTableBody');
-    const emptyRow = document.getElementById('alertsEmptyRow');
-    if (!tbody) return;
-    tbody.querySelectorAll('tr.alert-data-row').forEach(r => r.remove());
-    if (!alertRows.length) { emptyRow.style.display = ''; return; }
-    emptyRow.style.display = 'none';
-
-    alertRows.forEach((row, idx) => {
-        const isCustom = row.alertKey === '__custom__';
-        const def      = isCustom ? null : ALERT_TYPES[row.alertKey];
-        const label    = isCustom
-            ? `<span class="custom-alert-module">
-                   <span class="custom-alert-module-title">⚡ ${row.name}</span>
-                   <span class="custom-alert-module-cond">${row.rule}</span>
-               </span>`
-            : (def?.icon ? `${def.icon} ${def.label}` : def?.label) || row.alertKey;
-
-        // Threshold column: all fields except checkboxes
-        let thresh;
-        if (isCustom) {
-            thresh = `<span style="color:var(--text-muted);font-size:0.8rem;">—</span>`;
-        } else {
-            const visibleFields = (def?.fields || []).filter(f => f.field_type !== 'checkbox');
-            if (visibleFields.length) {
-                thresh = visibleFields.map(f => {
-                    const val = row.params?.[f.key];
-                    if (val == null || val === '') return null;
-
-                    // For select fields, show the option label instead of the raw value
-                    let display = val;
-                    if (f.field_type === 'select' && f.options?.length) {
-                        const opt = f.options.find(o => String(o.value) === String(val));
-                        if (opt) display = opt.label;
-                    }
-
-                    return `<span class="alert-threshold-badge">
-                        <small style="color:var(--text-muted);margin-right:0.2rem;">${f.label}:</small>
-                        ${display}
-                        ${f.unit ? `<small>${f.unit}</small>` : ''}
-                    </span>`;
-                }).filter(Boolean).join(' ');
-            }
-            if (!thresh) thresh = `<span style="color:var(--text-muted);font-size:0.8rem;">—</span>`;
-        }
-
-        const chHtml = row.channels?.length
-            ? row.channels.map(c => `<span class="channel-pill active" style="pointer-events:none;">${c}</span>`).join('')
-            : `<span style="color:var(--text-muted);font-size:0.8rem;">None</span>`;
-
-        const sched = row.schedule;
-        let schedHtml = `<span style="color:var(--text-muted);font-size:0.8rem;">Always</span>`;
-        if (sched?.days?.length) {
-            const daysStr = sched.days.map(d => DAYS[d]).join(', ');
-            schedHtml = `<span class="schedule-badge">${daysStr}<br><small>${pad(sched.hourStart ?? 0)}:00–${pad(sched.hourEnd ?? 23)}:59</small></span>`;
-        }
-
-        const tr = document.createElement('tr');
-        tr.className   = 'alert-data-row';
-        tr.dataset.uid = row.uid;
-        tr.innerHTML   = `
-            <td style="color:var(--text-muted);font-size:0.82rem;">${idx + 1}</td>
-            <td>${isCustom
-                ? label
-                : `<span class="alert-type-label system">${label}</span>`
-            }</td>
-            <td><div style="display:flex;flex-wrap:wrap;gap:0.3rem;">${thresh}</div></td>
-            <td><div style="display:flex;flex-wrap:wrap;gap:0.3rem;">${chHtml}</div></td>
-            <td>${schedHtml}</td>
-            <td style="text-align:center;white-space:nowrap;">
-                <button type="button" class="btn btn-secondary tbl-btn" onclick="openAlertEditor(${row.uid})">✏️</button>
-                <button type="button" class="btn btn-danger tbl-btn"    onclick="removeAlertRow(${row.uid})">✕</button>
-            </td>`;
-        tbody.appendChild(tr);
-    });
-}
-
-// ── 3. Replace openAlertEditor() ─────────────────────────────────
-
 async function openAlertEditor(uid) {
     const row = alertRows.find(r => r.uid === uid);
     if (!row) return;
@@ -523,14 +522,13 @@ async function openAlertEditor(uid) {
     document.getElementById('alertEditorTitle').textContent =
         isCustom ? `Edit Custom Rule — ${row.name}` : `Edit ${def?.label || row.alertKey}`;
 
-    // ── Build dynamic fields HTML ────────────────────────────
+    // ── Build fields HTML ────────────────────────────────────
     let fieldsHtml = '';
 
     if (!isCustom && def?.fields?.length) {
         for (const f of def.fields) {
             const currentVal = row.params?.[f.key] ?? f.default;
-
-            let inputHtml = '';
+            let inputHtml    = '';
 
             if (f.field_type === 'number') {
                 inputHtml = `
@@ -538,12 +536,13 @@ async function openAlertEditor(uid) {
                         <input type="number" class="form-input alert-param-input"
                                data-param-key="${f.key}"
                                value="${currentVal ?? ''}"
-                               min="${f.min_value}" max="${f.max_value}"
+                               ${f.min_value != null ? `min="${f.min_value}"` : ''}
+                               ${f.max_value != null ? `max="${f.max_value}"` : ''}
                                style="max-width:140px;">
                         ${f.unit ? `<span style="color:var(--text-muted);">${f.unit}</span>` : ''}
                     </div>`;
 
-            } else if (f.field_type === 'text') {           // ← NEW CASE
+            } else if (f.field_type === 'text') {
                 inputHtml = `
                     <input type="text" class="form-input alert-param-input"
                            data-param-key="${f.key}"
@@ -575,7 +574,6 @@ async function openAlertEditor(uid) {
                     </select>`;
             }
 
-            // For checkbox the label is inline; skip the outer label
             if (f.field_type === 'checkbox') {
                 fieldsHtml += `
                     <div class="form-group">
@@ -660,7 +658,7 @@ async function openAlertEditor(uid) {
             </div>
         </div>`;
 
-    // Wire up day pills
+    // Wire up interactive pills
     document.querySelectorAll('#editor-day-picker .day-pill').forEach(pill => {
         const cb = pill.querySelector('input');
         if (!cb) return;
@@ -670,8 +668,6 @@ async function openAlertEditor(uid) {
             pill.classList.toggle('active', cb.checked);
         });
     });
-
-    // Wire up channel pills
     document.querySelectorAll('#alertEditorBody .channel-pill').forEach(pill => {
         const cb = pill.querySelector('input');
         if (!cb) return;
@@ -701,7 +697,6 @@ function saveAlertFromEditor() {
         if (n) row.name = n;
         if (r) row.rule = r;
     } else {
-        // Collect all param inputs
         if (!row.params) row.params = {};
         document.querySelectorAll('#alertEditorBody .alert-param-input').forEach(input => {
             const key = input.dataset.paramKey;
@@ -717,23 +712,22 @@ function saveAlertFromEditor() {
         });
     }
 
-    // Channels
     row.channels = [];
     document.querySelectorAll('.editor-channel-cb:checked').forEach(cb => row.channels.push(cb.value));
 
-    // Schedule
     const activeDays = [];
     document.querySelectorAll('#editor-day-picker input:checked').forEach(cb => activeDays.push(parseInt(cb.value)));
     const hs = parseInt(document.getElementById('editor-hour-start').value);
     const he = parseInt(document.getElementById('editor-hour-end').value);
-    row.schedule = activeDays.length ? { days: activeDays.sort((a, b) => a - b), hourStart: hs, hourEnd: he } : null;
+    row.schedule = activeDays.length
+        ? { days: activeDays.sort((a, b) => a - b), hourStart: hs, hourEnd: he }
+        : null;
 
     closeAlertEditor();
     renderAlertsTable();
 }
 
 // ── Build config from alertRows ───────────────────────────────────
-
 function buildConfigFromAlertRows(existing = {}) {
     const config = {
         ...existing,
@@ -742,17 +736,15 @@ function buildConfigFromAlertRows(existing = {}) {
         custom_rules:   [],
     };
 
-    // Remove old flat alert keys so they don't linger
-    const legacyKeys = ['speed_tolerance', 'idle_timeout_minutes', 'offline_timeout_hours', 'towing_threshold_meters', 'speed_duration_seconds'];
-    legacyKeys.forEach(k => delete config[k]);
+    // Remove legacy flat keys
+    ['speed_tolerance', 'idle_timeout_minutes', 'offline_timeout_hours',
+     'towing_threshold_meters', 'speed_duration_seconds'].forEach(k => delete config[k]);
 
     alertRows.forEach(row => {
         config.alert_rows.push({ ...row });
-
         if (row.alertKey === '__custom__') {
             config.custom_rules.push({ name: row.name, rule: row.rule, channels: row.channels || [] });
         } else {
-            // Keep alert_channels for notification dispatch compatibility
             config.alert_channels[row.alertKey] = row.channels || [];
         }
     });
@@ -760,107 +752,51 @@ function buildConfigFromAlertRows(existing = {}) {
     return config;
 }
 
-// ── Form Submit (saves General + Alerts together) ─────────────────
+// ================================================================
+//  RAW DATA TAB
+// ================================================================
 
-async function handleSubmit(event) {
-    event.preventDefault();
-    const submitBtn  = document.getElementById('submitBtn');
-    const submitText = document.getElementById('submitText');
-    const submitLoad = document.getElementById('submitLoading');
-    submitBtn.disabled = true; submitText.style.display = 'none'; submitLoad.style.display = 'inline-block';
-
-    let existingConfig = {};
-    if (editingDeviceId) {
-        existingConfig = devices.find(d => d.id === editingDeviceId)?.config || {};
-    }
-    const newConfig = buildConfigFromAlertRows(existingConfig);
-    newConfig.speed_duration_seconds = existingConfig.speed_duration_seconds || 30;
-    newConfig.sensors     = existingConfig.sensors || {};
-    newConfig.offline_timeout_hours = parseInt(document.getElementById('offlineTimeoutHours').value) || 24;
-    newConfig.maintenance = existingConfig.maintenance || {};
-
-    const payload = {
-        name:          document.getElementById('deviceName').value,
-        imei:          document.getElementById('deviceImei').value,
-        protocol:      document.getElementById('deviceProtocol').value || DEFAULT_PROTOCOL,
-        vehicle_type:  document.getElementById('vehicleType').value    || DEFAULT_TYPE,
-        license_plate: document.getElementById('licensePlate').value   || null,
-        vin:           document.getElementById('vin').value            || null,
-        config:        newConfig
-    };
-
-    try {
-        let response;
-        if (editingDeviceId) {
-            const odo = parseFloat(document.getElementById('currentOdometer').value) || null;
-            const url = `${API_BASE}/devices/${editingDeviceId}${odo !== null ? `?new_odometer=${odo}` : ''}`;
-            response = await apiFetch(url, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
-        } else {
-            response = await apiFetch(`${API_BASE}/devices`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
-        }
-
-        if (response.ok) {
-            showAlert(editingDeviceId ? 'Device updated' : 'Device added', 'success');
-            closeDeviceModal();
-            await loadDevices();
-        } else {
-            const err = await response.json();
-            showAlert(err.detail || 'Failed to save', 'error');
-        }
-    } catch (e) {
-        showAlert('Failed to save device', 'error');
-    } finally {
-        submitBtn.disabled = false; submitText.style.display = 'inline'; submitLoad.style.display = 'none';
-    }
-}
-
-// ── Delete ────────────────────────────────────────────────────────
-
-async function deleteCurrentDevice() {
-    if (!editingDeviceId) return;
-    const d = devices.find(x => x.id === editingDeviceId);
-    if (!confirm(`Delete "${d?.name || 'this device'}"?\n\nThis cannot be undone.`)) return;
-    try {
-        const res = await apiFetch(`${API_BASE}/devices/${editingDeviceId}`, { method:'DELETE' });
-        if (res.ok) {
-            showAlert('Device deleted', 'success');
-            closeDeviceModal();
-            await loadDevices();
-        } else {
-            const err = await res.json();
-            showAlert(err.detail || 'Failed to delete', 'error');
-        }
-    } catch (e) { showAlert('Failed to delete device', 'error'); }
-}
-
-// ── Raw Data ──────────────────────────────────────────────────────
 async function loadRawDataForModal(deviceId) {
     currentRawDeviceId = deviceId;
-    currentPage = 1;
+    currentPage        = 1;
     const tbody = document.getElementById('rawDataBody');
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:2rem;">Loading&#8230;</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:2rem;">Loading…</td></tr>';
 
     const end = new Date();
 
     try {
-        // First try: last 24 hours
-        const start24h = new Date(end - 86400000);
-        const res24h = await apiFetch(`${API_BASE}/positions/history`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device_id: deviceId, start_time: start24h.toISOString(), end_time: end.toISOString(), max_points: 5000, order: 'desc' })
+        // Try last 24 h first
+        const start24h = new Date(end - 86_400_000);
+        const res24h   = await apiFetch(`${API_BASE}/positions/history`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                device_id: deviceId,
+                start_time: start24h.toISOString(),
+                end_time:   end.toISOString(),
+                max_points: 5000,
+                order:      'desc',
+            }),
         });
         if (!res24h.ok) throw new Error(`${res24h.status}`);
         rawData = (await res24h.json()).features || [];
 
-        // If 24h returned nothing, fall back to last 150 messages (up to 30 days)
-        if (rawData.length === 0) {
-            const start150 = new Date(end - 86400000 * 30);
-            const res150 = await apiFetch(`${API_BASE}/positions/history`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ device_id: deviceId, start_time: start150.toISOString(), end_time: end.toISOString(), max_points: 150, order: 'desc' })
+        // Fall back to last 30 days / 150 points if 24 h is empty
+        if (!rawData.length) {
+            const start30d = new Date(end - 86_400_000 * 30);
+            const res30d   = await apiFetch(`${API_BASE}/positions/history`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    device_id: deviceId,
+                    start_time: start30d.toISOString(),
+                    end_time:   end.toISOString(),
+                    max_points: 150,
+                    order:      'desc',
+                }),
             });
-            if (!res150.ok) throw new Error(`${res150.status}`);
-            rawData = (await res150.json()).features || [];
+            if (!res30d.ok) throw new Error(`${res30d.status}`);
+            rawData = (await res30d.json()).features || [];
         }
 
         renderRawDataPage();
@@ -876,49 +812,46 @@ function changeRawDataPage(delta) {
 }
 
 function renderRawDataPage() {
-    const tbody = document.getElementById('rawDataBody');
-    const slice = rawData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const tbody  = document.getElementById('rawDataBody');
+    const slice  = rawData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
     tbody.innerHTML = '';
+
     if (!slice.length) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted);">No data available for the last 24 hours.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted);">No data available.</td></tr>';
         return;
     }
+
     slice.forEach(feat => {
         const p      = feat.properties || feat;
         const coords = feat.geometry?.coordinates || [p.longitude, p.latitude];
-        const sensors = { ...(p.sensors || {}) }; delete sensors.raw;
-        const attrStr = Object.entries(sensors).map(([k,v]) => `${k}:${v}`).join('|');
+        const sensors = { ...(p.sensors || {}) };
+        delete sensors.raw;
+        const attrStr = Object.entries(sensors).map(([k, v]) => `${k}:${v}`).join('|');
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${p.time ? new Date(p.time).toLocaleString() : 'N/A'}</td>
             <td>${coords[1].toFixed(5)}</td>
             <td>${coords[0].toFixed(5)}</td>
-            <td>${(p.speed||0).toFixed(1)} km/h</td>
-            <td>${(p.course||0).toFixed(0)}°</td>
-            <td>${p.satellites||0}</td>
-            <td>${(p.altitude||0).toFixed(0)} m</td>
-            <td>${p.ignition?'ON':'OFF'}</td>
-            <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:0.72rem;" title="${attrStr}">${attrStr}</td>`;
+            <td>${(p.speed  || 0).toFixed(1)} km/h</td>
+            <td>${(p.course || 0).toFixed(0)}°</td>
+            <td>${p.satellites || 0}</td>
+            <td>${(p.altitude  || 0).toFixed(0)} m</td>
+            <td>${p.ignition ? 'ON' : 'OFF'}</td>
+            <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:0.72rem;"
+                title="${attrStr}">${attrStr}</td>`;
         tbody.appendChild(tr);
     });
+
     const max = Math.ceil(rawData.length / itemsPerPage) || 1;
-    document.getElementById('pageInfo').textContent  = `Page ${currentPage} of ${max}`;
-    document.getElementById('prevPageBtn').disabled  = currentPage === 1;
-    document.getElementById('nextPageBtn').disabled  = currentPage === max;
+    document.getElementById('pageInfo').textContent     = `Page ${currentPage} of ${max}`;
+    document.getElementById('prevPageBtn').disabled     = currentPage === 1;
+    document.getElementById('nextPageBtn').disabled     = currentPage === max;
 }
 
-// ── Toast ─────────────────────────────────────────────────────────
-
-function showAlert(message, type) {
-    const el = document.createElement('div');
-    el.className = `alert alert-${type}`;
-    el.innerHTML = `<span>${type === 'success' ? '✅' : '❌'} ${message}</span>`;
-    document.getElementById('alertContainer').appendChild(el);
-    setTimeout(() => el.remove(), 4000);
-}
-
-// ── Dashboard alert modal shims ───────────────────────────────────
-
+// ================================================================
+//  ALERTS MODAL SHIMS (dashboard compatibility)
+// ================================================================
 let loadedAlerts = [];
 
 async function loadAlerts() {
@@ -930,9 +863,9 @@ async function loadAlerts() {
         if (!list) return;
         list.innerHTML = '';
         loadedAlerts.forEach(alert => {
+            const icon = alert.type === 'speeding' ? '⚡' : alert.type === 'offline' ? '📴' : '🔔';
             const item = document.createElement('div');
             item.className = `alert-item ${alert.severity}`;
-            const icon = alert.type === 'speeding' ? '⚡' : alert.type === 'offline' ? '📴' : '🔔';
             item.innerHTML = `
                 <div class="alert-icon">${icon}</div>
                 <div class="alert-content">
@@ -947,12 +880,29 @@ async function loadAlerts() {
 }
 
 async function dismissAlert(id) {
-    try { const r = await apiFetch(`${API_BASE}/alerts/${id}/read`, {method:'POST'}); if (r.ok) loadAlerts(); } catch(e){}
+    try {
+        const r = await apiFetch(`${API_BASE}/alerts/${id}/read`, { method: 'POST' });
+        if (r.ok) loadAlerts();
+    } catch { /* ignore */ }
 }
+
 function openAlertsModal()  { loadAlerts(); document.getElementById('alertsModal')?.classList.add('active'); }
 function closeAlertsModal() { document.getElementById('alertsModal')?.classList.remove('active'); }
+
 async function clearAllAlerts() {
     if (!loadedAlerts.length || !confirm('Mark all alerts as read?')) return;
-    for (const a of loadedAlerts) try { await apiFetch(`${API_BASE}/alerts/${a.id}/read`, {method:'POST'}); } catch(e){}
-    loadAlerts(); showAlert('All alerts cleared', 'success');
+    for (const a of loadedAlerts) {
+        try { await apiFetch(`${API_BASE}/alerts/${a.id}/read`, { method: 'POST' }); } catch { /* ignore */ }
+    }
+    loadAlerts();
+    showAlert('All alerts cleared', 'success');
+}
+
+// ── Toast ─────────────────────────────────────────────────────────
+function showAlert(message, type) {
+    const el = document.createElement('div');
+    el.className = `alert alert-${type}`;
+    el.innerHTML = `<span>${type === 'success' ? '✅' : '❌'} ${message}</span>`;
+    document.getElementById('alertContainer')?.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
 }

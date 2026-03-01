@@ -1,21 +1,3 @@
-// Vehicle Type Icons Mapping
-const VEHICLE_ICONS = {
-    arrow:      { emoji: '▲',  offset: 0   },
-    car:        { emoji: '🚗', offset: 90 },
-    truck:      { emoji: '🚛', offset: 90 },
-    van:        { emoji: '🚐', offset: 90 },
-    motorcycle: { emoji: '🏍️', offset: 90 },
-    bus:        { emoji: '🚌', offset: 90 },
-    person:     { emoji: '🚶', offset: 0   },
-    airplane:   { emoji: '✈️', offset: -45 },
-    bicycle:    { emoji: '🚲', offset: 90 },
-    boat:       { emoji: '🚢', offset: 90 },
-    scooter:    { emoji: '🛴', offset: 90 },
-    tractor:    { emoji: '🚜', offset: 90 },
-    other:      { emoji: '📦', offset: 0   },
-};
-
-
 // State
 let map = null;
 let markers = {};
@@ -596,28 +578,6 @@ function selectDevice(deviceId) {
     }
 }
 
-// Helper to generate custom marker HTML
-function getMarkerHtml(type, ignitionOn, heading = 0) {
-    let iconContent;
-
-    if (type === 'arrow') {
-        iconContent = `
-            <svg class="marker-svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
-                 xmlns="http://www.w3.org/2000/svg"
-                 style="transform: rotate(${heading}deg); filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.5));">
-                <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z"
-                      fill="#3b82f6" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
-            </svg>`;
-    } else {
-        const vehicle = VEHICLE_ICONS[type] || VEHICLE_ICONS['other'];
-        const emoji   = vehicle.emoji;
-        const offset  = vehicle.offset;
-        const rotation = heading + offset;
-        iconContent = `<div class="marker-svg" style="font-size: 28px; transform: rotate(${rotation}deg); display: inline-block;">${emoji}</div>`;
-    }
-
-    return `<div class="marker-container" style="position:relative;display:flex;align-items:center;justify-content:center;">${iconContent}</div>`;
-}
 // Update Device Marker
 function updateDeviceMarker(deviceId, state) {
     if (!state.last_latitude || !state.last_longitude) return;
