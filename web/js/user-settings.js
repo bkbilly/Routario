@@ -12,6 +12,13 @@ function checkLogin() {
     }
 }
 
+function maskUrl(url) {
+    const schemeEnd = url.indexOf('://');
+    if (schemeEnd === -1) return url.slice(0, 6) + '....';
+    const scheme = url.slice(0, schemeEnd + 3); // e.g. "pbul://"
+    return scheme + '....';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     checkLogin();
     loadSettings();
@@ -248,7 +255,7 @@ function renderChannels() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td class="channel-name-cell">${channel.name}</td>
-            <td class="channel-url-cell">${channel.url}</td>
+            <td class="channel-url-cell">${maskUrl(channel.url)}</td>
             <td style="text-align: right;">
                 <button type="button" class="btn btn-danger" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;" onclick="removeChannel(${index})">
                     Remove

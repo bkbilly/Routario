@@ -424,7 +424,7 @@ function addCustomRule() {
     const name   = nameEl.value.trim();
     const rule   = ruleEl.value.trim();
     if (!name || !rule) return;
-    alertRows.push({ uid: nextUid(), alertKey: '__custom__', name, rule, channels: [], schedule: null });
+    alertRows.push({ uid: nextUid(), alertKey: '__custom__', name, rule, channels: [], schedule: null, duration: null });
     nameEl.value = '';
     ruleEl.value = '';
     renderAlertsTable();
@@ -455,15 +455,23 @@ function renderAlertsTable() {
         const label = isCustom
             ? `<span class="custom-alert-module">
                    <span class="custom-alert-module-title">⚡ ${row.name}</span>
-                   <span class="custom-alert-module-cond">${row.rule}</span>
                </span>`
             : (def?.icon ? `${def.icon} ` : '') + (def?.label || row.alertKey);
 
         // Threshold summary
         let thresh;
         if (isCustom) {
-            thresh = `<span style="color:var(--text-muted);font-size:0.8rem;">—</span>`;
-        } else {
+                const durBadge = row.duration
+                    ? `<span class="alert-threshold-badge" style="margin-left:0.3rem;">
+                           <small style="color:var(--text-muted);margin-right:0.2rem;">for:</small>
+                           ${row.duration}s
+                       </span>`
+                    : '';
+                thresh = `<span class="alert-threshold-badge">
+                    <small style="color:var(--text-muted);margin-right:0.2rem;">condition:</small>
+                    ${row.rule}
+                </span>${durBadge}`;
+            } else {
             const visibleFields = (def?.fields || []).filter(f => f.field_type !== 'checkbox');
             const badges = visibleFields.map(f => {
                 const val = row.params?.[f.key];
@@ -590,6 +598,7 @@ async function openAlertEditor(uid) {
             }
         }
     } else if (isCustom) {
+        const durEnabled = row.duration != null;
         fieldsHtml = `
             <div class="form-group">
                 <label class="form-label">Rule Name</label>
@@ -598,8 +607,27 @@ async function openAlertEditor(uid) {
             <div class="form-group">
                 <label class="form-label">Condition</label>
                 <input type="text" class="form-input" id="editor-custom-rule" value="${row.rule || ''}">
+            </div>
+            <div class="form-group">
+                <label class="form-label" style="display:flex;align-items:center;gap:0.6rem;">
+                    Duration
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="editor-duration-enabled" ${durEnabled ? 'checked' : ''}
+                               onchange="document.getElementById('editor-duration-input').disabled=!this.checked">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span style="font-weight:400;color:var(--text-muted);font-size:0.8rem;">(alert fires only after condition holds for this long)</span>
+                </label>
+                <div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.5rem;">
+                    <input type="number" class="form-input" id="editor-duration-input"
+                           min="1" max="3600" value="${row.duration ?? 30}"
+                           ${!durEnabled ? 'disabled' : ''}
+                           style="max-width:120px;">
+                    <span style="color:var(--text-muted);">seconds</span>
+                </div>
             </div>`;
     }
+
 
     // ── Schedule section ─────────────────────────────────────
     const sched      = row.schedule || {};
@@ -696,6 +724,9 @@ function saveAlertFromEditor() {
         const r = document.getElementById('editor-custom-rule')?.value.trim();
         if (n) row.name = n;
         if (r) row.rule = r;
+        const durEnabled = document.getElementById('editor-duration-enabled')?.checked;
+        const durVal     = parseInt(document.getElementById('editor-duration-input')?.value);
+        row.duration = durEnabled && !isNaN(durVal) && durVal > 0 ? durVal : null;
     } else {
         if (!row.params) row.params = {};
         document.querySelectorAll('#alertEditorBody .alert-param-input').forEach(input => {

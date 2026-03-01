@@ -110,6 +110,7 @@ class AlertEngine:
                         "name":     row.get("name", ""),
                         "rule":     row.get("rule", ""),
                         "channels": row.get("channels", []),
+                        "duration": row.get("duration"),
                     }
                 else:
                     params = row.get("params", {})

@@ -87,6 +87,7 @@ class AlertRow(BaseModel):
     rule:     Optional[str]           = None
     channels: List[str]               = Field(default_factory=list)
     schedule: Optional[AlertSchedule] = None
+    duration: Optional[int]           = Field(None, ge=1)  # seconds; None = disabled
 
 
 class CustomRule(BaseModel):
