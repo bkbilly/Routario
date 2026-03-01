@@ -126,7 +126,7 @@ function renderAssignList() {
                     <span class="user-name">${d.name}</span>
                     <span class="user-email">${d.imei}</span>
                 </div>
-                <label class="toggle-switch">
+                <label class="switch">
                     <input type="checkbox" ${currentUserDevices.has(d.id) ? 'checked' : ''} onchange="toggleAssignment(${d.id}, this.checked)">
                     <span class="slider round"></span>
                 </label>
