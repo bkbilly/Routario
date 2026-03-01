@@ -171,6 +171,10 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         13:  0.01,
         # BLE humidity → %
         29:  0.01,
+        # Odometer & trip odometer: raw value is in meters → km  ← ADD THESE
+        16:  0.001,
+        199: 0.001,
+        87:  0.001,
     }
 
     # ================================================================== #

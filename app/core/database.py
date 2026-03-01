@@ -120,7 +120,11 @@ class DatabaseService:
                     session, state.last_latitude, state.last_longitude,
                     position.latitude, position.longitude
                 )
-            
+                # Sanity check: ignore jumps > 50 km between consecutive points
+                # (catches GPS glitches and stale positions after long offline periods)
+                if distance_km > 50.0:
+                    distance_km = 0.0
+
             await self._handle_trip_logic(session, device, state, position, device_time)
             
             state.total_odometer += distance_km

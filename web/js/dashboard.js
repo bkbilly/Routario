@@ -304,6 +304,7 @@ function initMap() {
     
     const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap';
     applyTileLayer(savedTile);
+    populateMapPicker();
 
     // Initialize geofences module
     initGeofences(map);
@@ -328,6 +329,21 @@ function applyTileLayer(tileKey) {
     document.querySelectorAll('.map-tile-option').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tile === tileKey);
     });
+}
+
+function populateMapPicker() {
+    const picker = document.getElementById('mapTilePicker');
+    if (!picker) return;
+    picker.innerHTML = Object.entries(MAP_TILES).map(([key, tile]) => `
+        <button class="map-tile-option" data-tile="${key}" onclick="applyTileLayer('${key}'); toggleMapPicker();"
+            style="display: block; width: 100%; text-align: left; background: transparent; border: none;
+                   color: var(--text-primary); padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer;
+                   font-size: 0.85rem; transition: background 0.15s;"
+            onmouseover="this.style.background='var(--bg-hover)'"
+            onmouseout="this.style.background='transparent'">
+            ${tile.label}
+        </button>
+    `).join('');
 }
 
 function toggleMapPicker() {
@@ -1253,23 +1269,31 @@ function toggleSatellite() {
 function filterDevices() {
     const searchTerm = document.getElementById('deviceSearchInput').value.toLowerCase().trim();
     const deviceCards = document.querySelectorAll('.device-card');
-    
+
     deviceCards.forEach(card => {
         const deviceName = card.querySelector('.device-name').textContent.toLowerCase();
         const deviceId = card.id.replace('device-card-', '');
         const device = devices.find(d => d.id == deviceId);
-        
-        // Search in name, IMEI, and license plate
+
         const searchableText = [
             deviceName,
             device?.imei || '',
             device?.license_plate || ''
         ].join(' ').toLowerCase();
-        
-        if (searchableText.includes(searchTerm)) {
-            card.style.display = '';
-        } else {
-            card.style.display = 'none';
+
+        const visible = !searchTerm || searchableText.includes(searchTerm);
+
+        // ── Sidebar card ──
+        card.style.display = visible ? '' : 'none';
+
+        // ── Map marker ──
+        if (device && markers[device.id]) {
+            const marker = markers[device.id];
+            if (visible) {
+                if (!map.hasLayer(marker)) marker.addTo(map);
+            } else {
+                if (map.hasLayer(marker)) map.removeLayer(marker);
+            }
         }
     });
 }
