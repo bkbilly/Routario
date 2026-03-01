@@ -565,7 +565,7 @@ function updateSidebarTimes() {
 }
 
 // Select Device
-function selectDevice(deviceId) {
+function selectDevice(deviceId, { zoom = true } = {}) {
     selectedDevice = deviceId;
     document.querySelectorAll('.device-card').forEach(card => card.classList.remove('active'));
     const card = document.getElementById(`device-card-${deviceId}`);
@@ -576,7 +576,7 @@ function selectDevice(deviceId) {
     
     const marker = markers[deviceId];
     if (marker) {
-        map.setView(marker.getLatLng(), 15);
+        if (zoom) map.setView(marker.getLatLng(), 15);
         marker.openPopup();
     }
 }
@@ -624,7 +624,7 @@ function updateDeviceMarker(deviceId, state) {
             .bindPopup(popupContent)
             .addTo(map);
 
-        markers[deviceId].on('click', () => selectDevice(deviceId));
+        markers[deviceId].on('click', () => selectDevice(deviceId, { zoom: false }));
 
         // Set initial rotation immediately
         const el = markers[deviceId].getElement();
