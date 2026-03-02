@@ -28,6 +28,7 @@ from models import Device, AlertHistory
 from models.schemas import NormalizedPosition, WSMessageType
 from protocols import ProtocolRegistry
 from routes import ROUTE_REGISTRY
+from routes.share import page_router
 from core.push_notifications import get_push_service
 
 logger = logging.getLogger(__name__)
@@ -260,6 +261,7 @@ app.add_middleware(
 # Mount all auto-discovered routers
 for router in ROUTE_REGISTRY:
     app.include_router(router)
+app.include_router(page_router)
 
 @app.get("/api/protocols")
 async def get_protocols():
@@ -278,6 +280,10 @@ async def root():
 @app.get("/login.html")
 async def login_page():
     return FileResponse("web/login.html")
+
+@app.get("/share.html")
+async def share_html_page():
+    return FileResponse("web/share.html")
 
 @app.get("/device-management.html")
 async def devices_page():

@@ -233,3 +233,18 @@ class CommandQueue(Base):
 
     # Relationships
     device: Mapped["Device"] = relationship(back_populates="commands")
+
+class LocationShare(Base):
+    """Temporary shareable location link for a single device."""
+    __tablename__ = 'location_shares'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    device_id: Mapped[int] = mapped_column(Integer, ForeignKey('devices.id', ondelete='CASCADE'), nullable=False)
+    created_by: Mapped[int] = mapped_column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    device: Mapped["Device"] = relationship("Device")
+    creator: Mapped["User"] = relationship("User")

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Location Share</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: #0a0e1a;
+            color: #e5e7eb;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+        }
+        #header {
+            padding: 0.75rem 1rem;
+            background: #131825;
+            border-bottom: 1px solid #374151;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            gap: 1rem;
+        }
+        #deviceName {
+            font-weight: 700;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        #statusBadge {
+            font-size: 0.75rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        .badge-moving { background: rgba(16,185,129,0.15); color: #10b981; }
+        .badge-stopped { background: rgba(107,114,128,0.15); color: #9ca3af; }
+        #expiryInfo {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            text-align: right;
+            flex-shrink: 0;
+        }
+        #map { flex: 1; }
+        #footer {
+            padding: 0.6rem 1rem;
+            background: #131825;
+            border-top: 1px solid #374151;
+            display: flex;
+            gap: 1.5rem;
+            font-size: 0.8rem;
+            color: #9ca3af;
+            flex-shrink: 0;
+        }
+        .stat { display: flex; flex-direction: column; }
+        .stat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; }
+        .stat-value { font-weight: 600; color: #e5e7eb; font-family: 'JetBrains Mono', monospace; }
+        #errorState {
+            display: none;
+            flex: 1;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        #errorState .icon { font-size: 3rem; }
+        #pulsingDot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #10b981;
+            animation: pulse 2s infinite;
+            display: inline-block;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(1.4); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="header">
+    <div id="deviceName">
+        <span id="vehicleIcon">📍</span>
+        <span id="nameText">Loading…</span>
+        <span id="statusBadge" class="badge-stopped">–</span>
+    </div>
+    <div id="expiryInfo">
+        <div><span id="pulsingDot"></span> Live</div>
+        <div id="expiresText"></div>
+    </div>
+</div>
+
+<div id="map"></div>
+
+<div id="footer">
+    <div class="stat">
+        <span class="stat-label">Speed</span>
+        <span class="stat-value" id="speedVal">–</span>
+    </div>
+    <div class="stat">
+        <span class="stat-label">Last Update</span>
+        <span class="stat-value" id="lastUpdateVal">–</span>
+    </div>
+    <div class="stat">
+        <span class="stat-label">Ignition</span>
+        <span class="stat-value" id="ignitionVal">–</span>
+    </div>
+</div>
+
+<script>
+    const VEHICLE_EMOJIS = {
+        car: '🚗', truck: '🚛', motorcycle: '🏍️', bus: '🚌',
+        van: '🚐', bicycle: '🚲', boat: '⛵', other: '📍'
+    };
+
+    const token = window.location.pathname.split('/share/')[1];
+    const API_URL = `/api/share/${token}/position`;
+
+    let map, marker;
+
+    function initMap() {
+        map = L.map('map', { zoomControl: true, attributionControl: false });
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19
+        }).addTo(map);
+        map.setView([0, 0], 2);
+    }
+
+    function formatTimeAgo(isoStr) {
+        if (!isoStr) return '–';
+        const diff = Math.floor((Date.now() - new Date(isoStr + 'Z')) / 1000);
+        if (diff < 60) return `${diff}s ago`;
+        if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+        return `${Math.floor(diff/3600)}h ago`;
+    }
+
+    function formatExpiry(isoStr) {
+        if (!isoStr) return '';
+        const d = new Date(isoStr + 'Z');
+        const diff = Math.floor((d - Date.now()) / 60000);
+        if (diff <= 0) return 'Expired';
+        if (diff < 60) return `Expires in ${diff}m`;
+        return `Expires in ${Math.floor(diff/60)}h ${diff%60}m`;
+    }
+
+    async function fetchPosition() {
+        try {
+            const res = await fetch(API_URL);
+            if (res.status === 410 || res.status === 404) {
+                showExpired();
+                return;
+            }
+            const data = await res.json();
+            updateUI(data);
+        } catch (e) {
+            console.error('Fetch error', e);
+        }
+    }
+
+    function updateUI(data) {
+        // Header
+        const emoji = VEHICLE_EMOJIS[data.vehicle_type] || '📍';
+        document.getElementById('vehicleIcon').textContent = emoji;
+        document.getElementById('nameText').textContent = data.device_name;
+
+        const badge = document.getElementById('statusBadge');
+        if (data.is_moving) {
+            badge.textContent = 'Moving';
+            badge.className = 'badge-moving';
+        } else {
+            badge.textContent = 'Stopped';
+            badge.className = 'badge-stopped';
+        }
+
+        document.getElementById('expiresText').textContent = formatExpiry(data.expires_at);
+
+        // Footer stats
+        document.getElementById('speedVal').textContent =
+            data.speed != null ? `${Math.round(data.speed)} km/h` : '–';
+        document.getElementById('lastUpdateVal').textContent = formatTimeAgo(data.last_update);
+        document.getElementById('ignitionVal').textContent =
+            data.ignition_on ? '🟢 On' : '🔴 Off';
+
+        // Map marker
+        if (data.latitude && data.longitude) {
+            const latlng = [data.latitude, data.longitude];
+            const iconHtml = `<div style="font-size:28px;transform:rotate(${data.course||0}deg)">${emoji}</div>`;
+            const icon = L.divIcon({ html: iconHtml, className: '', iconSize: [32,32], iconAnchor: [16,16] });
+
+            if (!marker) {
+                marker = L.marker(latlng, { icon }).addTo(map);
+                map.setView(latlng, 15);
+            } else {
+                marker.setLatLng(latlng);
+                marker.setIcon(icon);
+            }
+        }
+    }
+
+    function showExpired() {
+        document.body.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:center;height:100vh;
+                        background:#0a0e1a;color:#e5e7eb;font-family:sans-serif;flex-direction:column;gap:1rem;text-align:center;">
+                <div style="font-size:3rem">🔗</div>
+                <h2>This link has expired or been revoked</h2>
+                <p style="color:#9ca3af">Ask the sender to generate a new share link.</p>
+            </div>`;
+    }
+
+    initMap();
+    fetchPosition();
+    setInterval(fetchPosition, 5000); // refresh every 5 seconds
+</script>
+</body>
+</html>

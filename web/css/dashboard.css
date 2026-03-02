@@ -1395,6 +1395,13 @@ body::before {
     cursor: crosshair !important;
 }
 
+.share-duration-btn.active {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: white;
+}
+
+
 /* ── Mobile ──────────────────────────────────────────────────── */
 @media (max-width: 1024px) {
     .history-controls {

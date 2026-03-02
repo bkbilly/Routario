@@ -113,6 +113,7 @@ function getDeviceCardContent(device, icon) {
         </div>
         <div class="device-actions">
             <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openHistoryModal(${device.id})">🕒 History</button>
+            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openShareModal(${device.id})" title="Share live location">🔗 Share</button>
         </div>
     `;
 }
@@ -252,4 +253,77 @@ function startPeriodicUpdate() {
 
 function closeDeviceModal() {
     document.getElementById('deviceModal').classList.remove('active');
+}
+
+// ── Location Share ────────────────────────────────────────────────────────────
+
+function openShareModal(deviceId) {
+    const device = devices.find(d => d.id === deviceId);
+    if (!device) return;
+
+    const modal = document.getElementById('shareModal');
+    document.getElementById('shareDeviceName').textContent = device.name;
+    modal.dataset.deviceId = deviceId;
+
+    // Reset state
+    document.getElementById('shareResult').style.display = 'none';
+    document.getElementById('shareDurationSection').style.display = 'block';
+    document.querySelectorAll('.share-duration-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('shareCopyBtn').textContent = '📋 Copy Link';
+
+    modal.classList.add('active');
+}
+
+async function generateShareLink() {
+    const modal = document.getElementById('shareModal');
+    const deviceId = parseInt(modal.dataset.deviceId);
+    const activeBtn = document.querySelector('.share-duration-btn.active');
+    const customVal = document.getElementById('shareCustomMinutes').value;
+
+    let minutes = activeBtn ? parseInt(activeBtn.dataset.minutes) : null;
+    if (!minutes && customVal) minutes = parseInt(customVal);
+    if (!minutes || minutes < 1) {
+        alert('Please select or enter a duration.', 'warning');
+        return;
+    }
+
+    try {
+        const res = await apiFetch(`${API_BASE}/share`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_id: deviceId, duration_minutes: minutes })
+        });
+        if (!res.ok) throw new Error('Failed to create share link');
+        const data = await res.json();
+
+        const fullUrl = window.location.origin + data.url;
+        document.getElementById('shareUrl').value = fullUrl;
+        document.getElementById('shareDurationSection').style.display = 'none';
+        document.getElementById('shareResult').style.display = 'block';
+
+        const exp = new Date(data.expires_at + 'Z');
+        document.getElementById('shareExpiry').textContent =
+            `Expires at ${exp.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+    } catch (e) {
+        alert('Failed to generate share link.', 'error');
+    }
+}
+
+function copyShareLink() {
+    const url = document.getElementById('shareUrl').value;
+    navigator.clipboard.writeText(url).then(() => {
+        const btn = document.getElementById('shareCopyBtn');
+        btn.textContent = '✅ Copied!';
+        setTimeout(() => btn.textContent = '📋 Copy Link', 2000);
+    });
+}
+
+function closeShareModal() {
+    document.getElementById('shareModal').classList.remove('active');
+}
+
+function selectShareDuration(btn) {
+    document.querySelectorAll('.share-duration-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('shareCustomMinutes').value = '';
 }
