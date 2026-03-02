@@ -254,7 +254,6 @@ function startPeriodicUpdate() {
 function closeDeviceModal() {
     document.getElementById('deviceModal').classList.remove('active');
 }
-
 // ── Location Share ────────────────────────────────────────────────────────────
 
 function openShareModal(deviceId) {
@@ -265,57 +264,12 @@ function openShareModal(deviceId) {
     document.getElementById('shareDeviceName').textContent = device.name;
     modal.dataset.deviceId = deviceId;
 
-    // Reset state
-    document.getElementById('shareResult').style.display = 'none';
-    document.getElementById('shareDurationSection').style.display = 'block';
+    // Reset duration picker
     document.querySelectorAll('.share-duration-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('shareCopyBtn').textContent = '📋 Copy Link';
+    document.getElementById('shareCustomMinutes').value = '';
 
     modal.classList.add('active');
-}
-
-async function generateShareLink() {
-    const modal = document.getElementById('shareModal');
-    const deviceId = parseInt(modal.dataset.deviceId);
-    const activeBtn = document.querySelector('.share-duration-btn.active');
-    const customVal = document.getElementById('shareCustomMinutes').value;
-
-    let minutes = activeBtn ? parseInt(activeBtn.dataset.minutes) : null;
-    if (!minutes && customVal) minutes = parseInt(customVal);
-    if (!minutes || minutes < 1) {
-        alert('Please select or enter a duration.', 'warning');
-        return;
-    }
-
-    try {
-        const res = await apiFetch(`${API_BASE}/share`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device_id: deviceId, duration_minutes: minutes })
-        });
-        if (!res.ok) throw new Error('Failed to create share link');
-        const data = await res.json();
-
-        const fullUrl = window.location.origin + data.url;
-        document.getElementById('shareUrl').value = fullUrl;
-        document.getElementById('shareDurationSection').style.display = 'none';
-        document.getElementById('shareResult').style.display = 'block';
-
-        const exp = new Date(data.expires_at + 'Z');
-        document.getElementById('shareExpiry').textContent =
-            `Expires at ${exp.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
-    } catch (e) {
-        alert('Failed to generate share link.', 'error');
-    }
-}
-
-function copyShareLink() {
-    const url = document.getElementById('shareUrl').value;
-    navigator.clipboard.writeText(url).then(() => {
-        const btn = document.getElementById('shareCopyBtn');
-        btn.textContent = '✅ Copied!';
-        setTimeout(() => btn.textContent = '📋 Copy Link', 2000);
-    });
+    loadActiveShareLinks(deviceId);
 }
 
 function closeShareModal() {
@@ -326,4 +280,168 @@ function selectShareDuration(btn) {
     document.querySelectorAll('.share-duration-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('shareCustomMinutes').value = '';
+}
+
+async function generateShareLink() {
+    const modal = document.getElementById('shareModal');
+    const deviceId = parseInt(modal.dataset.deviceId);
+    const activeBtn = document.querySelector('.share-duration-btn.active');
+    const customVal = document.getElementById('shareCustomMinutes').value;
+
+    let minutes = activeBtn ? parseInt(activeBtn.dataset.minutes) : parseInt(customVal);
+    if (!minutes || minutes < 1) {
+        showToast('Please select or enter a duration.', 'warning');
+        return;
+    }
+
+    modal.dataset.lastDurationMinutes = minutes;
+
+    try {
+        const res = await apiFetch(`${API_BASE}/share`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_id: deviceId, duration_minutes: minutes })
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+
+        const fullUrl = window.location.origin + data.url;
+
+        // Auto-copy the link
+        await navigator.clipboard.writeText(fullUrl);
+        showToast('Link copied to clipboard!', 'success');
+
+        loadActiveShareLinks(deviceId);
+    } catch (e) {
+        showToast('Failed to generate share link.', 'error');
+    }
+}
+
+// §1 buttons — always visible
+function openShareInMaps() {
+    const modal = document.getElementById('shareModal');
+    const deviceId = parseInt(modal.dataset.deviceId);
+    const device = devices.find(d => d.id === deviceId);
+    if (!device?.last_latitude || !device?.last_longitude) {
+        showToast('No location available for this device.', 'warning');
+        return;
+    }
+    const { last_latitude: lat, last_longitude: lng, name } = device;
+    const label = encodeURIComponent(name);
+    const url = /iPad|iPhone|iPod/.test(navigator.userAgent)
+        ? `maps://maps.apple.com/?q=${label}&ll=${lat},${lng}`
+        : `https://www.google.com/maps?q=${lat},${lng}`;
+    window.open(url, '_blank');
+}
+
+function copyShareCoords() {
+    const modal = document.getElementById('shareModal');
+    const deviceId = parseInt(modal.dataset.deviceId);
+    const device = devices.find(d => d.id === deviceId);
+    if (!device?.last_latitude) {
+        showToast('No location available.', 'warning');
+        return;
+    }
+    const coords = `${device.last_latitude.toFixed(6)}, ${device.last_longitude.toFixed(6)}`;
+    navigator.clipboard.writeText(coords).then(() => showToast(`Copied: ${coords}`, 'success'));
+}
+
+// §3 active links
+async function loadActiveShareLinks(deviceId) {
+    try {
+        const res = await apiFetch(`${API_BASE}/share?device_id=${deviceId}`);
+        if (!res.ok) return;
+        const links = await res.json();
+        renderActiveShareLinks(links);
+    } catch (e) {
+        console.error('Failed to load active share links', e);
+    }
+}
+
+function renderActiveShareLinks(links) {
+    const container = document.getElementById('shareActiveLinks');
+    const list = document.getElementById('shareActiveLinksList');
+
+    if (!links?.length) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+    list.innerHTML = links.map(link => {
+        const fullUrl = window.location.origin + link.url;
+        const exp = new Date(link.expires_at + 'Z');
+        const expiresStr = exp.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+        return `
+        <div id="share-row-${link.token}"
+             style="background:var(--bg-tertiary); border:1px solid var(--border-color);
+                    border-radius:8px; padding:0.6rem 0.75rem; margin-bottom:0.5rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+                <span style="font-size:0.75rem; color:var(--text-muted);">Expires ${expiresStr}</span>
+                <button onclick="revokeShareLink('${link.token}')"
+                    style="background:none; border:none; color:var(--text-muted); cursor:pointer;
+                           font-size:0.75rem; line-height:1; padding:0;" title="Revoke">✕</button>
+            </div>
+            <div style="display:flex; gap:0.4rem;">
+                <input readonly value="${fullUrl}"
+                    style="flex:1; min-width:0; padding:0.3rem 0.5rem; background:var(--bg-secondary);
+                           border:1px solid var(--border-color); border-radius:5px;
+                           color:var(--text-muted); font-size:0.72rem; font-family:monospace; cursor:text;">
+                <button class="btn btn-secondary" style="font-size:0.75rem; padding:0.3rem 0.55rem;"
+                    onclick="copyLinkUrl('${fullUrl}', this)" title="Copy">📋</button>
+                <button class="btn btn-secondary" style="font-size:0.75rem; padding:0.3rem 0.55rem;"
+                    onclick="renewShareLink('${link.token}')" title="Renew timer">🔄</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function copyLinkUrl(url, btn) {
+    navigator.clipboard.writeText(url).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = '✅';
+        setTimeout(() => btn.textContent = orig, 2000);
+    });
+}
+
+async function renewShareLink(token) {
+    const modal = document.getElementById('shareModal');
+    const deviceId = parseInt(modal.dataset.deviceId);
+
+    const activeBtn = document.querySelector('.share-duration-btn.active');
+    const customVal = document.getElementById('shareCustomMinutes').value;
+    let minutes = activeBtn ? parseInt(activeBtn.dataset.minutes) : parseInt(customVal);
+    if (!minutes || minutes < 1) minutes = parseInt(modal.dataset.lastDurationMinutes || '60');
+
+    try {
+        const res = await apiFetch(`${API_BASE}/share/${token}/renew`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ duration_minutes: minutes })
+        });
+        if (!res.ok) throw new Error();
+        const label = minutes >= 60 ? `${Math.round(minutes / 60)}h` : `${minutes}m`;
+        showToast(`Link renewed for ${label}`, 'success');
+        loadActiveShareLinks(deviceId);
+    } catch (e) {
+        showToast('Failed to renew link.', 'error');
+    }
+}
+
+async function revokeShareLink(token) {
+    const modal = document.getElementById('shareModal');
+    const deviceId = parseInt(modal.dataset.deviceId);
+
+    try {
+        const res = await apiFetch(`${API_BASE}/share/${token}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+        document.getElementById(`share-row-${token}`)?.remove();
+        if (!document.getElementById('shareActiveLinksList').children.length) {
+            document.getElementById('shareActiveLinks').style.display = 'none';
+        }
+        showToast('Link revoked.', 'success');
+    } catch (e) {
+        showToast('Failed to revoke link.', 'error');
+    }
 }

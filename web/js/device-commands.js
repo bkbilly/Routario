@@ -442,28 +442,3 @@ function renderCommandHistory(commands) {
     }).join('');
 }
 
-// Toast notification function
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toastContainer');
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    
-    const icons = {
-        success: '✓',
-        error: '✕',
-        warning: '⚠',
-        info: 'ℹ'
-    };
-    
-    toast.innerHTML = `
-        <span class="toast-icon">${icons[type] || 'ℹ'}</span>
-        <span>${message}</span>
-    `;
-    
-    container.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.style.animation = 'slideInRight 0.3s reverse forwards';
-        setTimeout(() => toast.remove(), 300);
-    }, 4000);
-}
