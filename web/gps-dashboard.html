@@ -351,6 +351,58 @@
         </div>
     </div>
 
+    <!-- ── Location Share Modal ──────────────────────────────────────────── -->
+    <div class="modal" id="shareModal">
+        <div class="modal-content" style="max-width:420px; height:auto; max-height:90vh;">
+            <div class="modal-header" style="padding:1.25rem 1.5rem;">
+                <h2 style="font-size:1.1rem;">🔗 Share Live Location</h2>
+                <button class="modal-close" onclick="closeShareModal()">✕</button>
+            </div>
+            <div style="padding:1.5rem;">
+                <p style="color:var(--text-muted); font-size:0.875rem; margin-bottom:1.25rem;">
+                    Share <strong id="shareDeviceName"></strong>'s live location. Anyone with the link can view it — no login needed.
+                </p>
+
+                <div id="shareDurationSection">
+                    <div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:0.75rem;">
+                        How long should this link be active?
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; margin-bottom:1rem;">
+                        <button class="share-duration-btn btn btn-secondary" data-minutes="15" onclick="selectShareDuration(this)">15 minutes</button>
+                        <button class="share-duration-btn btn btn-secondary" data-minutes="60" onclick="selectShareDuration(this)">1 hour</button>
+                        <button class="share-duration-btn btn btn-secondary" data-minutes="240" onclick="selectShareDuration(this)">4 hours</button>
+                        <button class="share-duration-btn btn btn-secondary" data-minutes="1440" onclick="selectShareDuration(this)">24 hours</button>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1.25rem;">
+                        <span style="font-size:0.85rem; color:var(--text-muted);">Or custom:</span>
+                        <input type="number" id="shareCustomMinutes" min="1" max="10080"
+                            placeholder="minutes"
+                            style="width:100px; padding:0.4rem 0.6rem; background:var(--bg-tertiary);
+                                   border:1px solid var(--border-color); border-radius:6px;
+                                   color:var(--text-primary); font-size:0.875rem;"
+                            oninput="document.querySelectorAll('.share-duration-btn').forEach(b=>b.classList.remove('active'))">
+                    </div>
+                    <button class="btn btn-primary" style="width:100%;" onclick="generateShareLink()">
+                        Generate Link →
+                    </button>
+                </div>
+
+                <div id="shareResult" style="display:none;">
+                    <div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em;
+                                color:var(--text-muted); margin-bottom:0.75rem;">Share link</div>
+                    <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem;">
+                        <input type="text" id="shareUrl" readonly
+                            style="flex:1; padding:0.5rem 0.75rem; background:var(--bg-tertiary);
+                                   border:1px solid var(--border-color); border-radius:6px;
+                                   color:var(--text-primary); font-size:0.8rem; font-family:monospace;">
+                        <button class="btn btn-primary" id="shareCopyBtn" onclick="copyShareLink()">📋 Copy Link</button>
+                    </div>
+                    <div id="shareExpiry" style="font-size:0.8rem; color:var(--text-muted);"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="toast-container" id="toastContainer"></div>
 
     <!-- Custom Scripts -->

@@ -1,4 +1,4 @@
-from .models import Base, User, Device, DeviceState, PositionRecord, Trip, Geofence, AlertHistory, CommandQueue, user_device_association
+from .models import Base, User, Device, DeviceState, PositionRecord, Trip, Geofence, AlertHistory, CommandQueue, user_device_association, LocationShare
 from .schemas import (
     NormalizedPosition, DeviceCreate, DeviceResponse, DeviceStateResponse,
     UserCreate, UserUpdate, UserResponse, UserLogin, Token,
