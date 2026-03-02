@@ -14,156 +14,190 @@ class TeltonikaDecoder(BaseProtocolDecoder):
     PORT = 5027
     PROTOCOL_TYPES = ['tcp', 'udp']
 
-    # ------------------------------------------------------------------ #
-    #  Command helpers                                                     #
-    # ------------------------------------------------------------------ #
-    COMMAND_MAPPING = {
-        'cpureset':   'cpureset',
-        'getver':     'getver',
-        'getgps':     'getgps',
-        'readio':     'readio',
-        'getrecord':  'getrecord',
-        'ggps':       'ggps',
-        'getinfo':    'getinfo',
-        'setparam':   'setparam',
-        'getparam':   'getparam',
-        'flush':      'flush',
-        'readstatus': 'readstatus',
-        'getimei':    'getimei',
+    # ================================================================== #
+    #  Command Registry (Mapping + Metadata merged)                      #
+    # ================================================================== #
+    COMMAND_REGISTRY = {
+        'cpureset': {
+            'cmd': 'cpureset',
+            'description': 'Reset the device CPU',
+            'example': 'cpureset',
+            'requires_params': False
+        },
+        'getver': {
+            'cmd': 'getver',
+            'description': 'Get firmware version',
+            'example': 'getver',
+            'requires_params': False
+        },
+        'getgps': {
+            'cmd': 'getgps',
+            'description': 'Get current GPS position',
+            'example': 'getgps',
+            'requires_params': False
+        },
+        'readio': {
+            'cmd': 'readio',
+            'description': 'Read I/O status',
+            'example': 'readio',
+            'requires_params': False
+        },
+        'getrecord': {
+            'cmd': 'getrecord',
+            'description': 'Get last record',
+            'example': 'getrecord',
+            'requires_params': False
+        },
+        'ggps': {
+            'cmd': 'ggps',
+            'description': 'Get GPS coordinates',
+            'example': 'ggps',
+            'requires_params': False
+        },
+        'getinfo': {
+            'cmd': 'getinfo',
+            'description': 'Get device information',
+            'example': 'getinfo',
+            'requires_params': False
+        },
+        'setparam': {
+            'cmd': 'setparam',
+            'description': 'Set a device parameter',
+            'example': 'setparam 1000:60',
+            'requires_params': True
+        },
+        'getparam': {
+            'cmd': 'getparam',
+            'description': 'Get parameter value',
+            'example': 'getparam 1000',
+            'requires_params': True
+        },
+        'flush': {
+            'cmd': 'flush',
+            'description': 'Flush stored records',
+            'example': 'flush',
+            'requires_params': False
+        },
+        'readstatus': {
+            'cmd': 'readstatus',
+            'description': 'Read device status',
+            'example': 'readstatus',
+            'requires_params': False
+        },
+        'getimei': {
+            'cmd': 'getimei',
+            'description': 'Get IMEI number',
+            'example': 'getimei',
+            'requires_params': False
+        },
+        'custom': {
+            'cmd': None,  # Special handling in encode code
+            'description': 'Send custom command (text/hex)',
+            'example': 'Any text or hex',
+            'requires_params': True
+        },
     }
 
-    # ------------------------------------------------------------------ #
-    #  IO element ID → human-readable name                                #
-    # (covers all standard Teltonika AVL IDs for FMB/FMC/FMM families)   #
-    # ------------------------------------------------------------------ #
-    IO_MAP: Dict[int, str] = {
+    # ================================================================== #
+    #  IO Definitions (List of Dictionaries)                             #
+    # ================================================================== #
+    IO_DEFINITIONS = [
         # --- Digital / Analog inputs ---
-        1:   'din1',
-        2:   'din2',
-        3:   'din3',
-        4:   'pulse_counter_din1',
-        5:   'pulse_counter_din2',
-        6:   'analog_input2',
-        9:   'analog_input1',
+        {'id': 1, 'name': 'din1'},
+        {'id': 2, 'name': 'din2'},
+        {'id': 3, 'name': 'din3'},
+        {'id': 4, 'name': 'pulse_counter_din1'},
+        {'id': 5, 'name': 'pulse_counter_din2'},
+        {'id': 6, 'name': 'analog_input2', 'multiplier': 0.001},  # mV -> V
+        {'id': 9, 'name': 'analog_input1', 'multiplier': 0.001},  # mV -> V
+        {'id': 11, 'name': 'iccid1'},
+        {'id': 12, 'name': 'fuel_used', 'multiplier': 0.001},
+        {'id': 13, 'name': 'fuel_rate', 'multiplier': 0.01},  # L/100km
+        {'id': 14, 'name': 'iccid2'},
+        {'id': 15, 'name': 'eco_score', 'multiplier': 0.01},
+        {'id': 16, 'name': 'odometer', 'multiplier': 0.001},  # m -> km
+        {'id': 17, 'name': 'axis_x'},
+        {'id': 18, 'name': 'axis_y'},
+        {'id': 19, 'name': 'axis_z'},
+        {'id': 20, 'name': 'ble_battery2'},
+        {'id': 21, 'name': 'gsm_signal'},
+        {'id': 22, 'name': 'ble_battery3'},
+        {'id': 23, 'name': 'ble_battery4'},
+        {'id': 24, 'name': 'speed'},
+        {'id': 25, 'name': 'ble_temp1', 'multiplier': 0.01},
+        {'id': 26, 'name': 'ble_temp2', 'multiplier': 0.01},
+        {'id': 27, 'name': 'ble_temp3', 'multiplier': 0.01},
+        {'id': 28, 'name': 'ble_temp4', 'multiplier': 0.01},
+        {'id': 29, 'name': 'ble_battery1'},
+        {'id': 31, 'name': 'obd_engine_load'},
+        {'id': 32, 'name': 'obd_coolant_temp'},
+        {'id': 36, 'name': 'obd_rpm'},
+        {'id': 66, 'name': 'external_voltage', 'multiplier': 0.001},
+        {'id': 67, 'name': 'battery_voltage', 'multiplier': 0.001},
+        {'id': 68, 'name': 'battery_current', 'multiplier': 0.001},
+        {'id': 69, 'name': 'gnss_status'},
+        {'id': 72, 'name': 'dallas_temp1', 'multiplier': 0.1},
+        {'id': 73, 'name': 'dallas_temp2', 'multiplier': 0.1},
+        {'id': 74, 'name': 'dallas_temp3', 'multiplier': 0.1},
+        {'id': 75, 'name': 'dallas_temp4', 'multiplier': 0.1},
+        {'id': 80, 'name': 'data_mode'},
+        {'id': 81, 'name': 'obd_speed'},
+        {'id': 82, 'name': 'obd_throttle'},
+        {'id': 83, 'name': 'obd_fuel_used', 'multiplier': 0.1},
+        {'id': 84, 'name': 'obd_fuel_level', 'multiplier': 0.1},
+        {'id': 85, 'name': 'obd_rpm'},
+        {'id': 86, 'name': 'ble_humidity1', 'multiplier': 0.1},
+        {'id': 87, 'name': 'obd_odometer', 'multiplier': 0.001},
+        {'id': 89, 'name': 'fuel_level_percent'},
+        {'id': 104, 'name': 'ble_humidity2', 'multiplier': 0.1},
+        {'id': 106, 'name': 'ble_humidity3', 'multiplier': 0.1},
+        {'id': 108, 'name': 'ble_humidity4', 'multiplier': 0.1},
+        {'id': 113, 'name': 'battery_level_percent'},
+        {'id': 115, 'name': 'engine_temp', 'multiplier': 0.1},
+        {'id': 175, 'name': 'auto_geofence'},
+        {'id': 179, 'name': 'dout1'},
+        {'id': 180, 'name': 'dout2'},
+        {'id': 181, 'name': 'pdop', 'multiplier': 0.1},
+        {'id': 182, 'name': 'hdop', 'multiplier': 0.1},
+        {'id': 199, 'name': 'trip_odometer', 'multiplier': 0.001},  # m -> km
+        {'id': 200, 'name': 'sleep_mode'},
+        {'id': 205, 'name': 'cell_id_gsm'},
+        {'id': 206, 'name': 'gsm_area_code'},
+        {'id': 236, 'name': 'alarm'},
+        {'id': 237, 'name': 'network_type'},
+        {'id': 238, 'name': 'user_id'},
+        {'id': 239, 'name': 'ignition'},
+        {'id': 240, 'name': 'movement'},
+        {'id': 241, 'name': 'gsm_operator'},
+        {'id': 246, 'name': 'towing'},
+        {'id': 247, 'name': 'crash_detection'},
+        {'id': 248, 'name': 'immobilizer'},
+        {'id': 249, 'name': 'jamming'},
+        {'id': 250, 'name': 'trip_event'},
+        {'id': 251, 'name': 'idling'},
+        {'id': 252, 'name': 'unplug_detection'},
+        {'id': 636, 'name': 'cell_id_4g'},
+        {'id': 13201, 'name': 'pcb_temp', 'multiplier': 0.1},
+    ]
 
-        # --- Identification ---
-        11:  'iccid1',
-        14:  'iccid2',
+    # Pre-calculated lookups for O(1) access during decode
+    _io_name_map: Dict[int, str] = {}
+    _io_mult_map: Dict[int, float] = {}
 
-        # --- Fuel / Engine ---
-        12:  'fuel_used',
-        13:  'fuel_rate',
-        31:  'engine_load',
-        32:  'coolant_temp',
-        36:  'rpm',
-        89:  'fuel_level_percent',
-        115: 'engine_temp',
+    def __init__(self):
+        super().__init__()
+        # Build lookup maps if not already built (safe for multiple instances)
+        if not self._io_name_map:
+            self._build_lookups()
 
-        # --- Motion / Position ---
-        16:  'odometer',
-        17:  'axis_x',
-        18:  'axis_y',
-        19:  'axis_z',
-        24:  'speed',
-        199: 'trip_odometer',
-
-        # --- GSM / Network ---
-        21:  'gsm_signal',
-        205: 'gsm_cell_id',
-        206: 'gspm_area_code',
-        241: 'gsm_operator',
-        636: 'cell_id_4g',
-
-        # --- Power / Battery ---
-        66:  'external_voltage',
-        67:  'battery_voltage',
-        68:  'battery_current',
-        113: 'battery_level_percent',
-
-        # --- GNSS / Signal quality ---
-        69:  'gnss_status',
-        181: 'pdop',
-        182: 'hdop',
-
-        # --- Temperature (Dallas / 1-Wire) ---
-        72:  'dallas_temp1',
-        73:  'dallas_temp2',
-        74:  'dallas_temp3',
-        75:  'dallas_temp4',
-
-        # --- OBD-II ---
-        81:  'obd_speed',
-        82:  'obd_throttle',
-        83:  'obd_fuel_used',
-        84:  'obd_fuel_level',
-        85:  'obd_rpm',
-        87:  'obd_odometer',
-
-        # --- Device state ---
-        13201:  'pcb_temp',
-        80:  'data_mode',
-        200: 'sleep_mode',
-
-        # --- Digital outputs ---
-        179: 'dout1',
-        180: 'dout2',
-
-        # --- Events / Flags ---
-        175: 'auto_geofence',
-        236: 'alarm',
-        239: 'ignition',
-        240: 'movement',
-        246: 'towing',
-        247: 'crash_detection',
-        248: 'immobilizer',
-        249: 'jamming',
-        250: 'trip_event',
-        251: 'idling',
-        252: 'unplug_detection',
-
-        # --- BLE Sensors (standard IDs) ---
-        25:  'ble_temp1',
-        26:  'ble_temp2',
-        27:  'ble_temp3',
-        28:  'ble_temp4',
-        29:  'ble_battery1',
-        20:  'ble_battery2',
-        22:  'ble_battery3',
-        23:  'ble_battery4',
-        86:  'ble_humidity1',
-        104: 'ble_humidity2',
-        106: 'ble_humidity3',
-        108: 'ble_humidity4',
-    }
-
-    # ------------------------------------------------------------------ #
-    #  Multipliers: raw integer value × multiplier = engineering value     #
-    # ------------------------------------------------------------------ #
-    IO_MULTIPLIERS: Dict[int, float] = {
-        # Voltages → V
-        9:   0.001,
-        66:  0.001,
-        67:  0.001,
-        68:  0.001,
-        # Temperatures → °C
-        72:  0.1,
-        73:  0.1,
-        74:  0.1,
-        75:  0.1,
-        83:  0.1,
-        84:  0.1,
-        115: 0.1,
-        # DOP
-        181: 0.1,
-        182: 0.1,
-        # Speed km/h (IO 24 is raw km/h, no multiplier needed; included for safety)
-        # Fuel consumption → L/100 km
-        13:  0.01,
-        # Odometer & trip odometer: raw value is in meters → km  ← ADD THESE
-        16:  0.001,
-        199: 0.001,
-        87:  0.001,
-    }
+    @classmethod
+    def _build_lookups(cls):
+        """Convert list of dicts to efficient lookup dicts."""
+        for item in cls.IO_DEFINITIONS:
+            io_id = item['id']
+            cls._io_name_map[io_id] = item['name']
+            if 'multiplier' in item:
+                cls._io_mult_map[io_id] = item['multiplier']
 
     # ================================================================== #
     #  Public interface                                                    #
@@ -177,24 +211,23 @@ class TeltonikaDecoder(BaseProtocolDecoder):
     ) -> Tuple[Union[NormalizedPosition, Dict[str, Any], None], int]:
         try:
             # ---- TCP data packet ----------------------------------------
-            # Header: 4 zero bytes | 4-byte data-field length | payload | 4-byte CRC
             if len(data) >= 8 and data[0:4] == b'\x00\x00\x00\x00':
                 data_length = struct.unpack('>I', data[4:8])[0]
-                total_len   = 8 + data_length + 4
+                total_len = 8 + data_length + 4
                 if len(data) < total_len:
-                    return None, 0          # wait for more bytes
+                    return None, 0  # wait for more bytes
 
                 packet_data = data[8:8 + data_length]
-                consumed    = total_len
+                consumed = total_len
 
                 if len(packet_data) < 2:
                     return None, consumed
 
-                codec_id     = packet_data[0]
+                codec_id = packet_data[0]
                 record_count = packet_data[1]
 
                 if codec_id in (0x08, 0x8E):
-                    extended  = (codec_id == 0x8E)
+                    extended = (codec_id == 0x8E)
                     positions = self._decode_all_records(
                         packet_data[2:], known_imei, extended
                     )
@@ -202,8 +235,8 @@ class TeltonikaDecoder(BaseProtocolDecoder):
 
                     if positions:
                         return {
-                            'position':        positions[0],
-                            'response':        ack,
+                            'position': positions[0],
+                            'response': ack,
                             'extra_positions': positions[1:],
                         }, consumed
                     else:
@@ -236,6 +269,9 @@ class TeltonikaDecoder(BaseProtocolDecoder):
     async def encode_command(self, command_type: str, params: Dict[str, Any]) -> bytes:
         if not params:
             params = {}
+        
+        cmd_info = self.COMMAND_REGISTRY.get(command_type.lower())
+        
         if command_type == 'custom':
             payload = params.get('payload', '').strip()
             if not payload:
@@ -248,36 +284,33 @@ class TeltonikaDecoder(BaseProtocolDecoder):
                     pass
             return self._encode_text_command(payload)
 
-        cmd = self.COMMAND_MAPPING.get(command_type.lower(), '')
-        if not cmd:
+        if not cmd_info:
+            return b''
+
+        cmd_str = cmd_info.get('cmd')
+        if not cmd_str:
             return b''
 
         if params:
+            # Simple space concatenation for parameters
             param_str = ' '.join(str(v) for v in params.values())
-            cmd = f'{cmd} {param_str}'
+            cmd_str = f'{cmd_str} {param_str}'
 
-        return self._encode_text_command(cmd)
+        return self._encode_text_command(cmd_str)
 
     def get_available_commands(self) -> List[str]:
-        return list(self.COMMAND_MAPPING.keys()) + ['custom']
+        return list(self.COMMAND_REGISTRY.keys())
 
     def get_command_info(self, command: str) -> Dict[str, Any]:
-        info_map = {
-            'cpureset':   {'description': 'Reset the device CPU',            'example': 'cpureset',         'requires_params': False},
-            'getver':     {'description': 'Get firmware version',            'example': 'getver',           'requires_params': False},
-            'getgps':     {'description': 'Get current GPS position',        'example': 'getgps',           'requires_params': False},
-            'readio':     {'description': 'Read I/O status',                 'example': 'readio',           'requires_params': False},
-            'getrecord':  {'description': 'Get last record',                 'example': 'getrecord',        'requires_params': False},
-            'ggps':       {'description': 'Get GPS coordinates',             'example': 'ggps',             'requires_params': False},
-            'getinfo':    {'description': 'Get device information',          'example': 'getinfo',          'requires_params': False},
-            'setparam':   {'description': 'Set a device parameter',          'example': 'setparam 1000:60', 'requires_params': True},
-            'getparam':   {'description': 'Get parameter value',             'example': 'getparam 1000',    'requires_params': True},
-            'flush':      {'description': 'Flush stored records',            'example': 'flush',            'requires_params': False},
-            'readstatus': {'description': 'Read device status',              'example': 'readstatus',       'requires_params': False},
-            'getimei':    {'description': 'Get IMEI number',                 'example': 'getimei',          'requires_params': False},
-            'custom':     {'description': 'Send custom command (text/hex)',  'example': 'Any text or hex',  'requires_params': True},
-        }
-        return info_map.get(command, {'description': 'Unknown command', 'example': '', 'requires_params': False})
+        info = self.COMMAND_REGISTRY.get(command)
+        if info:
+            # Return copy to prevent mutation, filter out internal 'cmd' key if preferred
+            return {
+                'description': info['description'],
+                'example': info['example'],
+                'requires_params': info['requires_params']
+            }
+        return {'description': 'Unknown command', 'example': '', 'requires_params': False}
 
     # ================================================================== #
     #  Internal: single-record decoder                                     #
@@ -285,43 +318,19 @@ class TeltonikaDecoder(BaseProtocolDecoder):
 
     def _decode_single_record(
         self,
-        data:       bytes,
-        offset:     int,
+        data: bytes,
+        offset: int,
         known_imei: str,
-        extended:   bool,
+        extended: bool,
     ) -> Tuple[Optional[NormalizedPosition], int]:
-        """
-        Parse one AVL record starting at *offset*.
-        Returns (NormalizedPosition | None, bytes_consumed).
-
-        AVL record layout
-        -----------------
-        8 B  Timestamp (ms since epoch, big-endian uint64)
-        1 B  Priority
-        4 B  Longitude  (×10⁻⁷, signed int32)
-        4 B  Latitude   (×10⁻⁷, signed int32)
-        2 B  Altitude   (metres, signed int16)
-        2 B  Course     (degrees, uint16)
-        1 B  Satellites (uint8)
-        2 B  Speed      (km/h, uint16)
-
-        IO element header — Codec 8:   1B event-IO-ID  + 1B total-count
-        IO element header — Codec 8E:  2B event-IO-ID  + 2B total-count
-
-        Then for each byte-width (1, 2, 4, 8):
-          Codec 8:   1B count of IOs at this width
-          Codec 8E:  2B count of IOs at this width
-          For each IO:
-            Codec 8:   1B IO-ID  + N bytes value
-            Codec 8E:  2B IO-ID  + N bytes value
-        """
+        
         start = offset
 
         # --- Timestamp ---------------------------------------------------
         if offset + 8 > len(data):
             return None, 0
         timestamp_ms = struct.unpack('>Q', data[offset:offset + 8])[0]
-        device_time  = datetime.fromtimestamp(timestamp_ms / 1000.0, tz=timezone.utc)
+        device_time = datetime.fromtimestamp(timestamp_ms / 1000.0, tz=timezone.utc)
         offset += 8
 
         # --- Priority ----------------------------------------------------
@@ -334,31 +343,27 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         if offset + 15 > len(data):
             return None, 0
 
-        lon   = struct.unpack('>i', data[offset:offset + 4])[0] / 10_000_000.0
-        lat   = struct.unpack('>i', data[offset + 4:offset + 8])[0] / 10_000_000.0
-        alt   = struct.unpack('>h', data[offset + 8:offset + 10])[0]
+        lon = struct.unpack('>i', data[offset:offset + 4])[0] / 10_000_000.0
+        lat = struct.unpack('>i', data[offset + 4:offset + 8])[0] / 10_000_000.0
+        alt = struct.unpack('>h', data[offset + 8:offset + 10])[0]
         angle = struct.unpack('>H', data[offset + 10:offset + 12])[0]
-        sats  = data[offset + 12]
+        sats = data[offset + 12]
         speed = struct.unpack('>H', data[offset + 13:offset + 15])[0]
         offset += 15
 
-        # Discard records with no GPS fix (device reports 0,0 when invalid)
         valid_gps = not (lat == 0.0 and lon == 0.0)
 
         # --- IO element header -------------------------------------------
-        # Codec 8:   event_io_id (1B) + total_io_count (1B) = 2 bytes
-        # Codec 8E:  event_io_id (2B) + total_io_count (2B) = 4 bytes
         header_size = 4 if extended else 2
         if offset + header_size > len(data):
             return None, 0
-        # We don't use the event_io_id or total_io_count values, just skip them.
         offset += header_size
 
         # --- IO elements -------------------------------------------------
         ignition: Optional[bool] = None
-        sensors:  Dict[str, Any] = {}
+        sensors: Dict[str, Any] = {}
 
-        id_width    = 2 if extended else 1
+        id_width = 2 if extended else 1
         count_width = 2 if extended else 1
 
         def read_count() -> int:
@@ -396,13 +401,15 @@ class TeltonikaDecoder(BaseProtocolDecoder):
                 if io_id == 239:
                     ignition = bool(raw)
 
-                # Apply engineering unit multiplier if defined
-                if io_id in self.IO_MULTIPLIERS:
-                    val = round(float(raw) * self.IO_MULTIPLIERS[io_id], 3)
+                # Look up multiplier
+                multiplier = self._io_mult_map.get(io_id)
+                if multiplier is not None:
+                    val = round(float(raw) * multiplier, 3)
                 else:
                     val = raw
 
-                key = self.IO_MAP.get(io_id, f'io_{io_id}')
+                # Look up name
+                key = self._io_name_map.get(io_id, f'io_{io_id}')
                 sensors[key] = val
 
         parse_io_group(1, lambda b: b[0])
@@ -410,49 +417,43 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         parse_io_group(4, lambda b: struct.unpack('>I', b)[0])
         parse_io_group(8, lambda b: struct.unpack('>Q', b)[0])
 
-        # --- IMPORTANT: Consume the trailing 'Total IO count' byte/short ---
-        # Codec 8 uses 1 byte, Codec 8E uses 2 bytes for this trailing count.
+        # --- Footer ------------------------------------------------------
         trailer_size = 2 if extended else 1
         if offset + trailer_size <= len(data):
-            offset += trailer_size # Consume the footer
+            offset += trailer_size 
 
-        # Build position — return None if no valid GPS fix but still consume bytes
         consumed = offset - start
         if not valid_gps:
             logger.debug(f"Teltonika: dropping record with lat=0, lon=0 (no fix) for {known_imei}")
-            # Return a sentinel so the caller still advances the offset correctly,
-            # but does not store the position.  We use a dummy that gets filtered
-            # out in _decode_all_records.
-            return None, consumed   # caller will skip None positions
+            return None, consumed
 
         position = NormalizedPosition(
-            imei        = known_imei,
-            device_time = device_time,
-            server_time = datetime.now(timezone.utc),
-            latitude    = lat,
-            longitude   = lon,
-            altitude    = float(alt),
-            speed       = float(speed),
-            course      = float(angle),
-            satellites  = sats,
-            ignition    = ignition,
-            sensors     = sensors,
-            raw_data    = {'priority': priority, 'codec': '8E' if extended else '8'},
+            imei=known_imei,
+            device_time=device_time,
+            server_time=datetime.now(timezone.utc),
+            latitude=lat,
+            longitude=lon,
+            altitude=float(alt),
+            speed=float(speed),
+            course=float(angle),
+            satellites=sats,
+            ignition=ignition,
+            sensors=sensors,
+            raw_data={'priority': priority, 'codec': '8E' if extended else '8'},
         )
 
         return position, consumed
 
     # ================================================================== #
-    #  Internal: multi-record decoder (updated to handle None positions)   #
+    #  Internal: multi-record decoder                                      #
     # ================================================================== #
 
     def _decode_all_records(
         self,
-        data:       bytes,
+        data: bytes,
         known_imei: Optional[str],
-        extended:   bool,
+        extended: bool,
     ) -> List[NormalizedPosition]:
-        """Decode every AVL record; skip records with no GPS fix."""
         if not known_imei:
             return []
 
@@ -463,7 +464,7 @@ class TeltonikaDecoder(BaseProtocolDecoder):
             try:
                 pos, consumed = self._decode_single_record(data, offset, known_imei, extended)
                 if consumed == 0:
-                    break                        # nothing parsed, stop
+                    break
                 offset += consumed
                 if pos is not None:
                     positions.append(pos)
@@ -481,12 +482,12 @@ class TeltonikaDecoder(BaseProtocolDecoder):
     # ================================================================== #
 
     def _encode_text_command(self, command_text: str) -> bytes:
-        cmd_bytes  = command_text.encode('ascii')
+        cmd_bytes = command_text.encode('ascii')
         cmd_length = len(cmd_bytes)
 
-        codec_id     = 0x0C
+        codec_id = 0x0C
         cmd_quantity = 0x01
-        cmd_type     = 0x05   # type 5 = text command
+        cmd_type = 0x05
 
         data_part = (
             struct.pack('B', codec_id) +
@@ -497,8 +498,8 @@ class TeltonikaDecoder(BaseProtocolDecoder):
             struct.pack('B', cmd_quantity)
         )
 
-        crc              = self._crc16(data_part)
-        data_field_length = 1 + 1 + cmd_length + 1   # type + length (4B implicit) + text + trailing count
+        crc = self._crc16(data_part)
+        data_field_length = 1 + 1 + cmd_length + 1
 
         return (
             b'\x00\x00\x00\x00' +
