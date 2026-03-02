@@ -85,17 +85,24 @@ async function loadHistory(deviceId, startTime, endTime) {
                 if (!(currentTripId in tripColorMap)) {
                     tripColorMap[currentTripId] = tripColors[tripColorIdx++ % tripColors.length];
                 }
-                const pl = L.polyline(currentSegment, {
-                    color:   tripColorMap[currentTripId],
-                    weight:  4,
-                    opacity: 0.85,
+                const color = tripColorMap[currentTripId];
+                const pl = L.polyline.antPath(currentSegment, {
+                    color:     color,
+                    weight:    4,
+                    opacity:   0.85,
+                    delay:     2000,
+                    dashArray: [5, 80],
+                    pulseColor: '#ffffff',
                 }).addTo(map);
                 allLayers.push(pl);
             } else {
-                const pl = L.polyline(currentSegment, {
-                    color:   '#ef4444',
-                    weight:  4,
-                    opacity: 0.85,
+                const pl = L.polyline.antPath(currentSegment, {
+                    color:     '#ef4444',
+                    weight:    4,
+                    opacity:   0.85,
+                    delay:     2000,
+                    dashArray: [5, 80],
+                    pulseColor: '#ffffff',
                 }).addTo(map);
                 allLayers.push(pl);
             }
@@ -111,10 +118,13 @@ async function loadHistory(deviceId, startTime, endTime) {
                 currentTripId = tripId;
                 // Draw a thick red bridge between the two segments
                 if (lastPoint) {
-                    const bridge = L.polyline([lastPoint, latlng], {
-                        color:   '#ef4444',
-                        weight:  4,
-                        opacity: 0.85,
+                    const bridge = L.polyline.antPath([lastPoint, latlng], {
+                        color:     '#ef4444',
+                        weight:    4,
+                        opacity:   0.85,
+                        delay:     2000,
+                        dashArray: [5, 80],
+                        pulseColor: '#ffffff',
                     }).addTo(map);
                     allLayers.push(bridge);
                 }
