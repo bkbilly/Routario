@@ -5,9 +5,9 @@ to share a single device's live location with anyone (no login required).
 """
 import secrets
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy import select, delete
@@ -32,6 +32,15 @@ class ShareCreateResponse(BaseModel):
     url: str
     expires_at: datetime
     device_name: str
+
+class ShareListItem(BaseModel):
+    token: str
+    url: str
+    expires_at: datetime
+    created_at: datetime
+
+class ShareRenewRequest(BaseModel):
+    duration_minutes: int
 
 
 # ── Create share token (authenticated) ───────────────────────────────────────
@@ -102,6 +111,71 @@ async def revoke_share(token: str, current_user: User = Depends(get_current_user
         share.is_active = False
         await session.flush()
     return {"status": "revoked"}
+
+# ── List active shares for a device (authenticated) ──────────────────────────
+
+@router.get("", response_model=List[ShareListItem])
+async def list_shares(
+    device_id: int = Query(...),
+    current_user: User = Depends(get_current_user),
+):
+    """List all active, non-expired share links for a device."""
+    db = get_db()
+    async with db.get_session() as session:
+        if not current_user.is_admin:
+            user_devices = await db.get_user_devices(current_user.id)
+            if not any(d.id == device_id for d in user_devices):
+                raise HTTPException(status_code=403, detail="Access denied")
+
+        result = await session.execute(
+            select(LocationShare).where(
+                LocationShare.device_id == device_id,
+                LocationShare.created_by == current_user.id,
+                LocationShare.is_active == True,
+                LocationShare.expires_at > datetime.utcnow(),
+            )
+        )
+        shares = result.scalars().all()
+
+    return [
+        ShareListItem(
+            token=s.token,
+            url=f"/share/{s.token}",
+            expires_at=s.expires_at,
+            created_at=s.created_at,
+        )
+        for s in shares
+    ]
+
+
+# ── Renew a share token (authenticated) ──────────────────────────────────────
+
+@router.patch("/{token}/renew")
+async def renew_share(
+    token: str,
+    payload: ShareRenewRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Extend the expiry of a share link from now."""
+    if payload.duration_minutes < 1 or payload.duration_minutes > 10080:
+        raise HTTPException(status_code=400, detail="Invalid duration")
+
+    db = get_db()
+    async with db.get_session() as session:
+        result = await session.execute(
+            select(LocationShare).where(LocationShare.token == token)
+        )
+        share = result.scalar_one_or_none()
+        if not share:
+            raise HTTPException(status_code=404, detail="Share not found")
+        if share.created_by != current_user.id and not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="Not allowed")
+
+        share.expires_at = datetime.utcnow() + timedelta(minutes=payload.duration_minutes)
+        share.is_active = True
+        await session.flush()
+
+    return {"status": "renewed", "expires_at": share.expires_at}
 
 
 # ── Public API: get position via token (no auth) ──────────────────────────────

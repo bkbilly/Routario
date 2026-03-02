@@ -227,10 +227,10 @@ async function deleteGeofence() {
         if (!res.ok) throw new Error('Delete failed');
         _cancelEdit();
         await reloadGeofences();
-        _showToast('Geofence deleted.', 'success');
+        showToast('Geofence deleted.', 'success');
     } catch (e) {
         console.error(e);
-        _showToast('Failed to delete geofence.', 'error');
+        showToast('Failed to delete geofence.', 'error');
     }
 }
 
@@ -279,7 +279,7 @@ async function submitGeofenceModal() {
 
     const coords = _pendingCoords;
     if (!coords || coords.length === 0) {
-        _showToast('No shape coordinates. Please draw again.', 'error');
+        showToast('No shape coordinates. Please draw again.', 'error');
         closeGeofenceModal();
         return;
     }
@@ -315,10 +315,10 @@ async function submitGeofenceModal() {
         _cancelEdit();
         _pendingCoords = null;
         await reloadGeofences();
-        _showToast(id ? 'Geofence updated.' : 'Geofence created.', 'success');
+        showToast(id ? 'Geofence updated.' : 'Geofence created.', 'success');
     } catch (e) {
         console.error(e);
-        _showToast(`Error: ${e.message}`, 'error');
+        showToast(`Error: ${e.message}`, 'error');
     }
 }
 
@@ -360,12 +360,3 @@ document.addEventListener('click', (e) => {
         menu.style.display = 'none';
     }
 });
-
-// ── Toast helper (fallback if dashboard's showToast isn't loaded yet) ─────────
-function _showToast(message, type = 'info') {
-    if (typeof showToast === 'function') {
-        showToast(message, type);
-    } else {
-        console.log(`[Geofence ${type}]:`, message);
-    }
-}

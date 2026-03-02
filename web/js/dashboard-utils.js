@@ -60,3 +60,26 @@ function formatDistance(meters) {
     if (meters === undefined || meters === null) return '0 km';
     return `${parseFloat(meters).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
 }
+
+// ── Toast notifications ───────────────────────────────────────────────────────
+
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+
+    const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+        <span class="toast-icon">${icons[type] || 'ℹ'}</span>
+        <span>${message}</span>
+    `;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.animation = 'slideInRight 0.3s reverse forwards';
+        setTimeout(() => toast.remove(), 300);
+    }, 3500);
+}
