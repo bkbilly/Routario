@@ -41,9 +41,10 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         1:   'din1',
         2:   'din2',
         3:   'din3',
-        4:   'din4',
-        9:   'adc1',
-        10:  'adc2',
+        4:   'pulse_counter_din1',
+        5:   'pulse_counter_din2',
+        6:   'analog_input2',
+        9:   'analog_input1',
 
         # --- Identification ---
         11:  'iccid1',
@@ -51,8 +52,7 @@ class TeltonikaDecoder(BaseProtocolDecoder):
 
         # --- Fuel / Engine ---
         12:  'fuel_used',
-        13:  'fuel_consumption',
-        30:  'fault_count',
+        13:  'fuel_rate',
         31:  'engine_load',
         32:  'coolant_temp',
         36:  'rpm',
@@ -69,11 +69,9 @@ class TeltonikaDecoder(BaseProtocolDecoder):
 
         # --- GSM / Network ---
         21:  'gsm_signal',
-        205: 'cell_id',
-        206: 'lac',
-        236: 'active_gsm_operator',
+        205: 'gsm_cell_id',
+        206: 'gspm_area_code',
         241: 'gsm_operator',
-        244: 'roaming',
         636: 'cell_id_4g',
 
         # --- Power / Battery ---
@@ -88,21 +86,21 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         182: 'hdop',
 
         # --- Temperature (Dallas / 1-Wire) ---
-        72:  'temp1',
-        73:  'temp2',
-        74:  'temp3',
-        75:  'temp4',
+        72:  'dallas_temp1',
+        73:  'dallas_temp2',
+        74:  'dallas_temp3',
+        75:  'dallas_temp4',
 
         # --- OBD-II ---
         81:  'obd_speed',
-        82:  'throttle',
-        83:  'fuel_used_obd',
-        84:  'fuel_level_obd',
-        85:  'rpm_obd',
-        87:  'odometer_obd',
+        82:  'obd_throttle',
+        83:  'obd_fuel_used',
+        84:  'obd_fuel_level',
+        85:  'obd_rpm',
+        87:  'obd_odometer',
 
         # --- Device state ---
-        70:  'pcb_temp',
+        13201:  'pcb_temp',
         80:  'data_mode',
         200: 'sleep_mode',
 
@@ -111,6 +109,8 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         180: 'dout2',
 
         # --- Events / Flags ---
+        175: 'auto_geofence',
+        236: 'alarm',
         239: 'ignition',
         240: 'movement',
         246: 'towing',
@@ -118,28 +118,22 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         248: 'immobilizer',
         249: 'jamming',
         250: 'trip_event',
+        251: 'idling',
+        252: 'unplug_detection',
 
         # --- BLE Sensors (standard IDs) ---
         25:  'ble_temp1',
         26:  'ble_temp2',
         27:  'ble_temp3',
         28:  'ble_temp4',
-        29:  'ble_humidity1',
-        86:  'ble_fuel_level',
-        90:  'ble_luminosity',
-        94:  'ble_battery1',
-        95:  'ble_battery2',
-        96:  'ble_battery3',
-        97:  'ble_battery4',
-        105: 'ble_humidity1_alt',
-        106: 'ble_humidity2_alt',
-        107: 'ble_humidity3_alt',
-        108: 'ble_humidity4_alt',
-        110: 'ble_battery_level',
-        121: 'ble_sensor_temp1',
-
-        # --- CAN / LV-CAN ---
-        662: 'door',
+        29:  'ble_battery1',
+        20:  'ble_battery2',
+        22:  'ble_battery3',
+        23:  'ble_battery4',
+        86:  'ble_humidity1',
+        104: 'ble_humidity2',
+        106: 'ble_humidity3',
+        108: 'ble_humidity4',
     }
 
     # ------------------------------------------------------------------ #
@@ -148,29 +142,23 @@ class TeltonikaDecoder(BaseProtocolDecoder):
     IO_MULTIPLIERS: Dict[int, float] = {
         # Voltages → V
         9:   0.001,
-        10:  0.001,
         66:  0.001,
         67:  0.001,
         68:  0.001,
         # Temperatures → °C
-        70:  0.1,
         72:  0.1,
         73:  0.1,
         74:  0.1,
         75:  0.1,
         83:  0.1,
         84:  0.1,
-        110: 0.1,
         115: 0.1,
-        121: 0.1,
         # DOP
         181: 0.1,
         182: 0.1,
         # Speed km/h (IO 24 is raw km/h, no multiplier needed; included for safety)
         # Fuel consumption → L/100 km
         13:  0.01,
-        # BLE humidity → %
-        29:  0.01,
         # Odometer & trip odometer: raw value is in meters → km  ← ADD THESE
         16:  0.001,
         199: 0.001,
@@ -400,7 +388,8 @@ class TeltonikaDecoder(BaseProtocolDecoder):
                 if offset + id_width + byte_width > len(data):
                     break
                 io_id = read_id()
-                raw   = unpack_fn(data[offset:offset + byte_width])
+                val_bytes = data[offset:offset + byte_width]
+                raw = unpack_fn(val_bytes)
                 offset += byte_width
 
                 # Ignition is a special top-level field
@@ -420,6 +409,12 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         parse_io_group(2, lambda b: struct.unpack('>H', b)[0])
         parse_io_group(4, lambda b: struct.unpack('>I', b)[0])
         parse_io_group(8, lambda b: struct.unpack('>Q', b)[0])
+
+        # --- IMPORTANT: Consume the trailing 'Total IO count' byte/short ---
+        # Codec 8 uses 1 byte, Codec 8E uses 2 bytes for this trailing count.
+        trailer_size = 2 if extended else 1
+        if offset + trailer_size <= len(data):
+            offset += trailer_size # Consume the footer
 
         # Build position — return None if no valid GPS fix but still consume bytes
         consumed = offset - start
