@@ -63,6 +63,20 @@ function initMap() {
     // Initialize geofences module
     initGeofences(map);
     initMapFlyoutDismiss()
+
+    let popupWasOpen = false;
+    map.on('popupopen',  () => { popupWasOpen = true; });
+    map.on('popupclose', () => { popupWasOpen = true; setTimeout(() => { popupWasOpen = false; }, 0); });
+    map.on('click', () => {
+        if (window.innerWidth <= 1024) {
+            if (popupWasOpen) return;
+            const dashboard = document.querySelector('.dashboard');
+            if (!dashboard.classList.contains('sidebar-hidden')) {
+                dashboard.classList.add('sidebar-hidden');
+                setTimeout(() => map.invalidateSize(), 300);
+            }
+        }
+    });
 }
 
 function applyTileLayer(tileKey) {

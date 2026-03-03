@@ -416,12 +416,27 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         parse_io_group(2, lambda b: struct.unpack('>H', b)[0])
         parse_io_group(4, lambda b: struct.unpack('>I', b)[0])
         parse_io_group(8, lambda b: struct.unpack('>Q', b)[0])
+        # NX group: variable-length elements, extended (8E) only
+        # Each element: ID (2 bytes) + length (2 bytes) + value (length bytes)
+        if extended:
+            nx_count = read_count()
+            for _ in range(nx_count):
+                if offset + id_width + 2 > len(data):
+                    break
+                io_id = read_id()
+                if offset + 2 > len(data):
+                    break
+                val_len = struct.unpack('>H', data[offset:offset + 2])[0]
+                offset += 2
+                if offset + val_len > len(data):
+                    break
+                val_bytes = data[offset:offset + val_len]
+                offset += val_len
+                key = self._io_name_map.get(io_id, f'io_{io_id}')
+                sensors[key] = val_bytes.hex()
 
-        # --- Footer ------------------------------------------------------
-        trailer_size = 2 if extended else 1
-        if offset + trailer_size <= len(data):
-            offset += trailer_size 
-
+        # No per-record footer in codec 8 or 8E.
+        # The packet-level end marker lives outside records_data in decode().
         consumed = offset - start
         if not valid_gps:
             logger.debug(f"Teltonika: dropping record with lat=0, lon=0 (no fix) for {known_imei}")

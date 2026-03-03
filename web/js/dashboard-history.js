@@ -170,7 +170,7 @@ function exitHistoryMode() {
         delete markers['history_pos'];
     }
     if (sensorChart) { sensorChart.destroy(); sensorChart = null; }
-    selectedSensorAttrs = new Set(['speed']);
+    selectedSensorAttrs = new Set([]);
     currentHistoryTab = 'trips';
     switchHistoryTab('trips');
 
