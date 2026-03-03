@@ -52,7 +52,9 @@ const MAP_TILES = {
 
 // Initialize Leaflet Map
 function initMap() {
-    map = L.map('map').setView([20, 0], 2);
+    map = L.map('map', {
+        zoomControl: false,
+    }).setView([20, 0], 2);
 
     const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap';
     applyTileLayer(savedTile);
@@ -60,6 +62,7 @@ function initMap() {
 
     // Initialize geofences module
     initGeofences(map);
+    initMapFlyoutDismiss()
 }
 
 function applyTileLayer(tileKey) {
@@ -77,29 +80,47 @@ function applyTileLayer(tileKey) {
     localStorage.setItem('mapTileLayer', tileKey);
 
     // Update picker UI if open
-    document.querySelectorAll('.map-tile-option').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tile === tileKey);
+    document.querySelectorAll('input[name="map-tile-radio"]').forEach(r => {
+        r.checked = r.value === tileKey;
     });
 }
 
 function populateMapPicker() {
-    const picker = document.getElementById('mapTilePicker');
-    if (!picker) return;
-    picker.innerHTML = Object.entries(MAP_TILES).map(([key, tile]) => `
-        <button class="map-tile-option" data-tile="${key}" onclick="applyTileLayer('${key}'); toggleMapPicker();"
-            style="display: block; width: 100%; text-align: left; background: transparent; border: none;
-                   color: var(--text-primary); padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer;
-                   font-size: 0.85rem; transition: background 0.15s;"
-            onmouseover="this.style.background='var(--bg-hover)'"
-            onmouseout="this.style.background='transparent'">
-            ${tile.label}
-        </button>
+    const flyout = document.getElementById('mapLayersFlyout');
+    if (!flyout) return;
+    const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap';
+    flyout.innerHTML = Object.entries(MAP_TILES).map(([key, tile]) => `
+        <label>
+            <input type="radio" name="map-tile-radio" value="${key}" ${key === savedTile ? 'checked' : ''}
+                onchange="applyTileLayer('${key}'); closeAllMapFlyouts();">
+            <span>${tile.label}</span>
+        </label>
     `).join('');
 }
 
 function toggleMapPicker() {
-    const picker = document.getElementById('mapTilePicker');
-    picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
+    toggleMapCtrlFlyout('mapLayersFlyout');
+}
+
+function toggleMapCtrlFlyout(id, e) {
+    if (e) e.stopPropagation();
+    const flyout = document.getElementById(id);
+    const isOpen = flyout.classList.contains('open');
+    closeAllMapFlyouts();
+    if (!isOpen) flyout.classList.add('open');
+}
+
+function closeAllMapFlyouts() {
+    document.querySelectorAll('.map-ctrl-flyout').forEach(f => f.classList.remove('open'));
+}
+
+// Close flyouts when clicking on the map
+// (call this after map is initialized in initMap)
+function initMapFlyoutDismiss() {
+    map.on('click', closeAllMapFlyouts);
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.map-ctrl-group')) closeAllMapFlyouts();
+    });
 }
 
 function closePicker(e) {
