@@ -9,13 +9,14 @@ async function loadAlerts() {
         const response = await apiFetch(`${API_BASE}/alerts?unread_only=true`);
         loadedAlerts = await response.json();
 
-        const countEl = document.getElementById('alertCount');
-        if (loadedAlerts.length > 0) {
-            countEl.textContent = loadedAlerts.length;
-            countEl.style.display = 'inline';
-        } else {
-            countEl.textContent = '0';
-            countEl.style.display = 'inline'; // Always show 0 if loaded
+        const badge = document.getElementById('alertCount');
+        if (badge) {
+            if (loadedAlerts.length > 0) {
+                badge.textContent = loadedAlerts.length > 99 ? '99+' : loadedAlerts.length;
+                badge.style.display = 'block';
+            } else {
+                badge.style.display = 'none';
+            }
         }
 
         const list = document.getElementById('alertsList');
