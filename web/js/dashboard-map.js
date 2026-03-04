@@ -84,18 +84,29 @@ function _makeMarkerIcon(vehicleType, ignitionOn, heading) {
 // ── Map initialisation ────────────────────────────────────────────────────────
 
 function initMap() {
-    map = L.map('map').setView([20, 0], 2);
+    map = L.map('map', {
+        zoomControl: false,
+    }).setView([20, 0], 2);
 
     const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap';
     applyTileLayer(savedTile);
     populateMapPicker();
 
     // Close flyouts on map click; also auto-close sidebar on mobile
+    let popupWasOpen = false;
+    map.on('popupopen',  () => { popupWasOpen = true; });
+    map.on('popupclose', () => { popupWasOpen = true; setTimeout(() => { popupWasOpen = false; }, 0); });
     map.on('click', () => {
         closeAllMapFlyouts();
         if (window.innerWidth <= 1024) {
-            document.querySelector('.dashboard')?.classList.add('sidebar-hidden');
+            if (popupWasOpen) return;
+            const dashboard = document.querySelector('.dashboard');
+            if (!dashboard.classList.contains('sidebar-hidden')) {
+                dashboard.classList.add('sidebar-hidden');
+                setTimeout(() => map.invalidateSize(), 300);
+            }
         }
+
     });
 
     initGeofences(map);
@@ -121,37 +132,31 @@ function applyTileLayer(tileKey) {
 }
 
 function populateMapPicker() {
-    const picker = document.getElementById('mapTilePicker');
-    if (!picker) return;
-    picker.innerHTML = Object.entries(MAP_TILES).map(([key, tile]) => `
-        <button class="map-tile-option" data-tile="${key}"
-            onclick="applyTileLayer('${key}'); closeAllMapFlyouts();"
-            style="display:block;width:100%;text-align:left;background:transparent;border:none;
-                   color:var(--text-primary);padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer;
-                   font-size:0.85rem;transition:background 0.15s;"
-            onmouseover="this.style.background='var(--bg-hover)'"
-            onmouseout="this.style.background='transparent'">
-            ${tile.label}
-        </button>
+    const flyout = document.getElementById('mapLayersFlyout');
+    if (!flyout) return;
+    const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap';
+    flyout.innerHTML = Object.entries(MAP_TILES).map(([key, tile]) => `
+        <label>
+            <input type="radio" name="map-tile-radio" value="${key}" ${key === savedTile ? 'checked' : ''}
+                onchange="applyTileLayer('${key}'); closeAllMapFlyouts();">
+            <span>${tile.label}</span>
+        </label>
     `).join('');
 }
 
 // ── Map control flyouts ───────────────────────────────────────────────────────
 
-function toggleMapCtrlFlyout(name) {
-    const flyout = document.getElementById(`mapCtrl_${name}`);
-    if (!flyout) return;
-    const isOpen = flyout.style.display !== 'none';
+function toggleMapCtrlFlyout(id, e) {
+    if (e) e.stopPropagation();
+    const flyout = document.getElementById(id);
+    const isOpen = flyout.classList.contains('open');
     closeAllMapFlyouts();
-    if (!isOpen) flyout.style.display = 'block';
+    if (!isOpen) flyout.classList.add('open');
 }
 
 function closeAllMapFlyouts() {
-    document.querySelectorAll('.map-ctrl-flyout').forEach(f => f.style.display = 'none');
+    document.querySelectorAll('.map-ctrl-flyout').forEach(f => f.classList.remove('open'));
 }
-
-// Legacy shims referenced from HTML
-function toggleMapPicker() { toggleMapCtrlFlyout('layers'); }
 
 function closePicker(e) {
     const picker = document.getElementById('mapTilePicker');
