@@ -237,7 +237,7 @@ function updatePlaybackUI() {
     if (!markers['history_pos']) createHistoryMarker();
 
     const vehicle = VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other'];
-    const ignColor = p.ignition ? '#10b981' : '#ef4444';
+    const ignColor = p.ignition === true ? '#10b981' : p.ignition === false ? '#ef4444' : '#6b7280';
     const historyPopup = `
         <div class="vp-popup">
             <div class="vp-header">
@@ -248,7 +248,7 @@ function updatePlaybackUI() {
                 <span class="vp-label">Time</span>      <span class="vp-value vp-mono">${time}</span>
                 <span class="vp-label">Speed</span>     <span class="vp-value">${Number(p.speed || 0).toFixed(1)} km/h</span>
                 <span class="vp-label">Heading</span>   <span class="vp-value">${Number(p.course || 0).toFixed(0)}°</span>
-                <span class="vp-label">Ignition</span>  <span class="vp-value" style="color:${ignColor};font-weight:700;">${p.ignition ? 'ON' : 'OFF'}</span>
+                <span class="vp-label">Ignition</span>  <span class="vp-value" style="color:${ignColor};font-weight:700;">${p.ignition === true ? 'ON' : p.ignition === false ? 'OFF' : '—'}</span>
                 <span class="vp-label">Satellites</span><span class="vp-value">${p.satellites || 0}</span>
                 <span class="vp-label">Altitude</span>  <span class="vp-value">${Number(p.altitude || 0).toFixed(0)} m</span>
                 <span class="vp-label">Lat/Lng</span>   <span class="vp-value">${position[0].toFixed(5)}, ${position[1].toFixed(5)}</span>
@@ -688,3 +688,21 @@ function exportHistoryCSV() {
 
     showAlert({ title: 'Export', message: `Exported ${historyData.length} points to ${filename}`, type: 'success' });
 }
+
+// --- KEYBOARD SHORTCUTS (history mode only) ---
+document.addEventListener('keydown', (e) => {
+    // Only active when history is loaded and no input/textarea is focused
+    if (!historyData.length) return;
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+
+    if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        stepHistory(-1);
+    } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        stepHistory(1);
+    } else if (e.key === ' ') {
+        e.preventDefault();
+        togglePlayback();
+    }
+});
