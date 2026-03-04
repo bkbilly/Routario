@@ -1,4 +1,5 @@
 import struct
+import uuid
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Tuple, List, Union
 import logging
@@ -176,6 +177,8 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         {'id': 250, 'name': 'trip_event'},
         {'id': 251, 'name': 'idling'},
         {'id': 252, 'name': 'unplug_detection'},
+        {'id': 257, 'name': 'crash_trace_data'},
+        {'id': 385, 'name': 'beacon_ids'},
         {'id': 636, 'name': 'cell_id_4g'},
         {'id': 13201, 'name': 'pcb_temp', 'multiplier': 0.1},
     ]
@@ -316,6 +319,80 @@ class TeltonikaDecoder(BaseProtocolDecoder):
     #  Internal: single-record decoder                                     #
     # ================================================================== #
 
+    def _decode_beacon_list(self, data: bytes) -> List[Dict[str, Any]]:
+        """Decode Teltonika Beacon List (IO 385)."""
+        results = []
+        if len(data) < 1:
+            return results
+
+        # Byte 0 is usually record count or part info.
+        # We skip it and parse until data ends.
+        offset = 1
+
+        while offset < len(data):
+            # Need at least 1 byte for flags
+            if offset + 1 > len(data):
+                break
+
+            flags = data[offset]
+            offset += 1
+
+            # Parse flags
+            has_rssi = bool(flags & 0x01)
+            has_battery = bool(flags & 0x02)
+            has_temp = bool(flags & 0x04)
+            is_ibeacon = bool(flags & 0x20)
+
+            beacon = {}
+
+            # RSSI (1 byte signed)
+            if has_rssi:
+                if offset + 1 > len(data): break
+                beacon['rssi'] = struct.unpack('b', data[offset:offset + 1])[0]
+                offset += 1
+
+            # Battery (2 bytes unsigned, mV)
+            if has_battery:
+                if offset + 2 > len(data): break
+                beacon['battery'] = struct.unpack('>H', data[offset:offset + 2])[0]
+                offset += 2
+
+            # Temp (2 bytes signed, 0.01 C or similar)
+            if has_temp:
+                if offset + 2 > len(data): break
+                beacon['temp'] = struct.unpack('>h', data[offset:offset + 2])[0]
+                offset += 2
+
+            # Beacon ID
+            if is_ibeacon:
+                # UUID (16) + Major (2) + Minor (2) = 20 bytes
+                if offset + 20 > len(data): break
+                uuid_bytes = data[offset:offset + 16]
+                major = struct.unpack('>H', data[offset + 16:offset + 18])[0]
+                minor = struct.unpack('>H', data[offset + 18:offset + 20])[0]
+                offset += 20
+
+                beacon['type'] = 'ibeacon'
+                beacon['uuid'] = str(uuid.UUID(bytes=uuid_bytes))
+                beacon['major'] = major
+                beacon['minor'] = minor
+                beacon['id'] = f"{beacon['uuid']}:{major}:{minor}"
+            else:
+                # Eddystone: Namespace (10) + Instance (6) = 16 bytes
+                if offset + 16 > len(data): break
+                namespace = data[offset:offset + 10].hex()
+                instance = data[offset + 10:offset + 16].hex()
+                offset += 16
+
+                beacon['type'] = 'eddystone'
+                beacon['namespace'] = namespace
+                beacon['instance'] = instance
+                beacon['id'] = f"{namespace}:{instance}"
+
+            results.append(beacon)
+
+        return results
+
     def _decode_single_record(
         self,
         data: bytes,
@@ -433,7 +510,11 @@ class TeltonikaDecoder(BaseProtocolDecoder):
                 val_bytes = data[offset:offset + val_len]
                 offset += val_len
                 key = self._io_name_map.get(io_id, f'io_{io_id}')
-                sensors[key] = val_bytes.hex()
+                
+                if io_id == 385:
+                    sensors[key] = self._decode_beacon_list(val_bytes)
+                else:
+                    sensors[key] = val_bytes.hex()
 
         # No per-record footer in codec 8 or 8E.
         # The packet-level end marker lives outside records_data in decode().

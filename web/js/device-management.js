@@ -857,7 +857,18 @@ function renderRawDataPage() {
         const coords = feat.geometry?.coordinates || [p.longitude, p.latitude];
         const sensors = { ...(p.sensors || {}) };
         delete sensors.raw;
-        const attrStr = Object.entries(sensors).map(([k, v]) => `${k}:${v}`).join('|');
+        const attrStr = Object.entries(sensors)
+            .map(([k, v]) => {
+                if (k === 'beacon_ids' && Array.isArray(v)) {
+                    const summary = v.map(b => `${b.id}${b.rssi !== undefined ? ` (${b.rssi}dBm)` : ''}`).join(', ');
+                    return `${k}: [${summary}]`;
+                }
+                if (Array.isArray(v) || (v !== null && typeof v === 'object')) {
+                    return `${k}:${JSON.stringify(v)}`;
+                }
+                return `${k}:${v}`;
+            })
+            .join(' | ');
 
         const tr = document.createElement('tr');
         tr.innerHTML = `

@@ -301,7 +301,18 @@ function updatePointDetails(feature) {
     if (p.sensors && Object.keys(p.sensors).length > 0) {
         html += '<h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem;">Attributes</h4>';
         html += '<table class="attr-table"><tbody>';
-        Object.keys(p.sensors).sort().forEach(key => { html += `<tr><td class="attr-key">${key}</td><td class="attr-val">${p.sensors[key]}</td></tr>`; });
+        Object.keys(p.sensors).sort().forEach(key => {
+            const v = p.sensors[key];
+            let display;
+            if (key === 'beacon_ids' && Array.isArray(v)) {
+                display = v.map(b => `${b.id}${b.rssi !== undefined ? ` (${b.rssi}dBm)` : ''}`).join('<br>');
+            } else if (Array.isArray(v) || (v !== null && typeof v === 'object')) {
+                display = `<code style="font-size:0.75rem">${JSON.stringify(v)}</code>`;
+            } else {
+                display = v;
+            }
+            html += `<tr><td class="attr-key">${key}</td><td class="attr-val">${display}</td></tr>`;
+        });
         html += '</tbody></table>';
     } else html += '<div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.875rem;">No additional attributes</div>';
     content.innerHTML = html;

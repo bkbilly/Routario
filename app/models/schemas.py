@@ -21,6 +21,7 @@ class AlertType(str, Enum):
     LOW_BATTERY = "low_battery"
     HARSH_BRAKE = "harsh_brake"
     HARSH_ACCEL = "harsh_accel"
+    UNAUTHORIZED_DRIVER = "unauthorized_driver"
     CUSTOM = "custom"
 
 
