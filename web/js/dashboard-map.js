@@ -3,6 +3,7 @@
  * Map initialization, tile layers, device markers, and WebSocket connection.
  */
 
+// markerState[deviceId] = { lat, lng, heading, animFrame }
 const markerState = {};
 
 const MAP_TILES = {
@@ -50,41 +51,62 @@ const MAP_TILES = {
     }
 };
 
-// Initialize Leaflet Map
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Write the correct rotation directly to the .marker-svg element during animation.
+ * heading = raw GPS course (degrees). The per-type offset is added here.
+ */
+function _applyMarkerRotation(marker, heading, vehicleType) {
+    const el = marker.getElement();
+    if (!el) return;
+    const svg = el.querySelector('.marker-svg');
+    if (!svg) return;
+    const cfg = VEHICLE_ICONS[vehicleType];
+    const offset = (cfg && !cfg.arrow) ? (cfg.offset || 0) : 0;
+    svg.style.transform = `rotate(${heading + offset}deg)`;
+}
+
+/**
+ * Build a L.divIcon with the heading already baked into the HTML string.
+ * Use this whenever creating or restoring a marker so there is no
+ * post-insertion DOM timing dependency.
+ */
+function _makeMarkerIcon(vehicleType, ignitionOn, heading) {
+    return L.divIcon({
+        html: getMarkerHtml(vehicleType, ignitionOn, heading),
+        className: 'custom-marker',
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
+    });
+}
+
+// ── Map initialisation ────────────────────────────────────────────────────────
+
 function initMap() {
-    map = L.map('map', {
-        zoomControl: false,
-    }).setView([20, 0], 2);
+    map = L.map('map').setView([20, 0], 2);
 
     const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap';
     applyTileLayer(savedTile);
     populateMapPicker();
 
-    // Initialize geofences module
-    initGeofences(map);
-    initMapFlyoutDismiss()
-
-    let popupWasOpen = false;
-    map.on('popupopen',  () => { popupWasOpen = true; });
-    map.on('popupclose', () => { popupWasOpen = true; setTimeout(() => { popupWasOpen = false; }, 0); });
+    // Close flyouts on map click; also auto-close sidebar on mobile
     map.on('click', () => {
+        closeAllMapFlyouts();
         if (window.innerWidth <= 1024) {
-            if (popupWasOpen) return;
-            const dashboard = document.querySelector('.dashboard');
-            if (!dashboard.classList.contains('sidebar-hidden')) {
-                dashboard.classList.add('sidebar-hidden');
-                setTimeout(() => map.invalidateSize(), 300);
-            }
+            document.querySelector('.dashboard')?.classList.add('sidebar-hidden');
         }
     });
+
+    initGeofences(map);
 }
+
+// ── Tile layers ───────────────────────────────────────────────────────────────
 
 function applyTileLayer(tileKey) {
     const tile = MAP_TILES[tileKey] || MAP_TILES['openstreetmap'];
 
-    if (currentTileLayer) {
-        map.removeLayer(currentTileLayer);
-    }
+    if (currentTileLayer) map.removeLayer(currentTileLayer);
 
     currentTileLayer = L.tileLayer(tile.url, {
         attribution: tile.attribution,
@@ -93,80 +115,73 @@ function applyTileLayer(tileKey) {
 
     localStorage.setItem('mapTileLayer', tileKey);
 
-    // Update picker UI if open
-    document.querySelectorAll('input[name="map-tile-radio"]').forEach(r => {
-        r.checked = r.value === tileKey;
+    document.querySelectorAll('.map-tile-option').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tile === tileKey);
     });
 }
 
 function populateMapPicker() {
-    const flyout = document.getElementById('mapLayersFlyout');
-    if (!flyout) return;
-    const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap';
-    flyout.innerHTML = Object.entries(MAP_TILES).map(([key, tile]) => `
-        <label>
-            <input type="radio" name="map-tile-radio" value="${key}" ${key === savedTile ? 'checked' : ''}
-                onchange="applyTileLayer('${key}'); closeAllMapFlyouts();">
-            <span>${tile.label}</span>
-        </label>
+    const picker = document.getElementById('mapTilePicker');
+    if (!picker) return;
+    picker.innerHTML = Object.entries(MAP_TILES).map(([key, tile]) => `
+        <button class="map-tile-option" data-tile="${key}"
+            onclick="applyTileLayer('${key}'); closeAllMapFlyouts();"
+            style="display:block;width:100%;text-align:left;background:transparent;border:none;
+                   color:var(--text-primary);padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer;
+                   font-size:0.85rem;transition:background 0.15s;"
+            onmouseover="this.style.background='var(--bg-hover)'"
+            onmouseout="this.style.background='transparent'">
+            ${tile.label}
+        </button>
     `).join('');
 }
 
-function toggleMapPicker() {
-    toggleMapCtrlFlyout('mapLayersFlyout');
-}
+// ── Map control flyouts ───────────────────────────────────────────────────────
 
-function toggleMapCtrlFlyout(id, e) {
-    if (e) e.stopPropagation();
-    const flyout = document.getElementById(id);
-    const isOpen = flyout.classList.contains('open');
+function toggleMapCtrlFlyout(name) {
+    const flyout = document.getElementById(`mapCtrl_${name}`);
+    if (!flyout) return;
+    const isOpen = flyout.style.display !== 'none';
     closeAllMapFlyouts();
-    if (!isOpen) flyout.classList.add('open');
+    if (!isOpen) flyout.style.display = 'block';
 }
 
 function closeAllMapFlyouts() {
-    document.querySelectorAll('.map-ctrl-flyout').forEach(f => f.classList.remove('open'));
+    document.querySelectorAll('.map-ctrl-flyout').forEach(f => f.style.display = 'none');
 }
 
-// Close flyouts when clicking on the map
-// (call this after map is initialized in initMap)
-function initMapFlyoutDismiss() {
-    map.on('click', closeAllMapFlyouts);
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('.map-ctrl-group')) closeAllMapFlyouts();
-    });
-}
+// Legacy shims referenced from HTML
+function toggleMapPicker() { toggleMapCtrlFlyout('layers'); }
 
 function closePicker(e) {
     const picker = document.getElementById('mapTilePicker');
-    const btn = document.getElementById('mapPickerBtn');
-    if (picker && !picker.contains(e.target) && !btn.contains(e.target)) {
+    const btn    = document.getElementById('mapPickerBtn');
+    if (picker && btn && !picker.contains(e.target) && !btn.contains(e.target)) {
         picker.style.display = 'none';
     }
 }
 
-// Traffic & Satellite (placeholder functions)
-function toggleTraffic() {
-    alert('Traffic layer not implemented in demo');
-}
+// ── Device markers ────────────────────────────────────────────────────────────
 
-function toggleSatellite() {
-    alert('Satellite view not implemented in demo');
-}
-
-// Update Device Marker
 function updateDeviceMarker(deviceId, state) {
     if (!state.last_latitude || !state.last_longitude) return;
 
-    const toLat   = state.last_latitude;
-    const toLng   = state.last_longitude;
-    const toHead  = state.last_course || 0;
-    const device  = devices.find(d => d.id === deviceId);
+    const toLat  = state.last_latitude;
+    const toLng  = state.last_longitude;
+    const toHead = state.last_course || 0;
+    const device = devices.find(d => d.id === deviceId);
     const deviceName = device ? device.name : 'Unknown Device';
 
+    // Three-state ignition: true=ON, false=OFF, null/undefined=unknown
+    const ignitionColor = state.ignition_on === true  ? '#10b981'
+                        : state.ignition_on === false ? '#ef4444'
+                        : '#6b7280';
+    const ignitionText  = state.ignition_on === true  ? 'ON'
+                        : state.ignition_on === false ? 'OFF'
+                        : '—';
+
     const vehicle = VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other'];
-    const ignitionColor = state.ignition_on === true ? '#10b981' : state.ignition_on === false ? '#ef4444' : '#6b7280';
-    const ignitionText  = state.ignition_on === true ? 'ON'      : state.ignition_on === false ? 'OFF'     : '—';
+
     const popupContent = `
         <div class="vp-popup">
             <div class="vp-header">
@@ -180,84 +195,83 @@ function updateDeviceMarker(deviceId, state) {
                 <span class="vp-label">Satellites</span> <span class="vp-value">${state.satellites || 0}</span>
                 <span class="vp-label">Lat/Lng</span>    <span class="vp-value">${toLat.toFixed(5)}, ${toLng.toFixed(5)}</span>
                 <span class="vp-label">Altitude</span>   <span class="vp-value">${Math.round(state.last_altitude || 0)} m</span>
-                <span class="vp-label">Odometer</span>   <span class="vp-value">${Math.round((state.total_odometer || 0))} km</span>
+                <span class="vp-label">Odometer</span>   <span class="vp-value">${Math.round(state.total_odometer || 0)} km</span>
                 <span class="vp-label">IMEI</span>       <span class="vp-value vp-mono">${device?.imei || '—'}</span>
             </div>
-        </div>
-    `;
+        </div>`;
+
     if (!markers[deviceId]) {
-        // ── First appearance: create marker, no animation ──
-        const icon = L.divIcon({
-            html: getMarkerHtml(device?.vehicle_type, state.ignition_on),
-            className: 'custom-marker',
-            iconSize: [36, 36],
-            iconAnchor: [18, 18]
-        });
-        markers[deviceId] = L.marker([toLat, toLng], { icon })
+        // ── First appearance ──────────────────────────────────────────────────
+        // Pass toHead into _makeMarkerIcon so the correct rotation is baked
+        // directly into the HTML string — no post-insertion DOM fix-up needed.
+        markers[deviceId] = L.marker([toLat, toLng], {
+            icon: _makeMarkerIcon(device?.vehicle_type, state.ignition_on, toHead)
+        })
             .bindPopup(popupContent)
             .addTo(map);
 
         markers[deviceId].on('click', () => selectDevice(deviceId, { zoom: false }));
 
-        // Set initial rotation immediately
-        const el = markers[deviceId].getElement();
-        if (el) {
-            const svg = el.querySelector('.marker-svg');
-            const vehicle = VEHICLE_ICONS[device?.vehicle_type];
-            const offset  = (!vehicle || device?.vehicle_type === 'arrow') ? 0 : vehicle.offset;
-            if (svg) svg.style.transform = `rotate(${toHead + offset}deg)`;
-        }
-
-        markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead };
+        markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
 
     } else {
-        // ── Subsequent updates: animate, never call setIcon ──
+        // ── Subsequent updates: smooth animation ──────────────────────────────
         markers[deviceId].setPopupContent(popupContent);
 
-        const prev = markerState[deviceId] || { lat: toLat, lng: toLng, heading: toHead };
+        const prev = markerState[deviceId] || { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
 
-        // Cancel any running animation
-        if (prev.animFrame) cancelAnimationFrame(prev.animFrame);
+        if (prev.animFrame) {
+            cancelAnimationFrame(prev.animFrame);
+            prev.animFrame = null;
+        }
 
         const fromLat  = prev.lat;
         const fromLng  = prev.lng;
-        const fromHead = prev.heading;
+        const fromHead = prev.heading; // raw course — markerState is sole source of truth
 
-        // Shortest-arc heading delta
+        // Shortest-arc rotation delta
         const dH = ((toHead - fromHead + 540) % 360) - 180;
 
-        const duration  = 1000; // ms — tune to match your GPS update interval
+        const duration  = 1000;
         const startTime = performance.now();
 
         function step(now) {
+            // Stop animating if the marker left the map (zoom redraw, filter hide, etc.)
+            if (!markers[deviceId] || !map.hasLayer(markers[deviceId])) {
+                markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
+                return;
+            }
+
             const t    = Math.min((now - startTime) / duration, 1);
-            // Ease-out cubic
-            const ease = 1 - Math.pow(1 - t, 3);
+            const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
 
             const lat  = fromLat  + (toLat  - fromLat)  * ease;
             const lng  = fromLng  + (toLng  - fromLng)  * ease;
             const head = fromHead + dH * ease;
 
             markers[deviceId].setLatLng([lat, lng]);
-
-            // Rotate the inner element directly — no setIcon, no DOM rebuild
-            const el = markers[deviceId].getElement();
-            if (el) {
-                const svg = el.querySelector('.marker-svg');
-                if (svg) svg.style.transform = `rotate(${head}deg)`;
-            }
+            _applyMarkerRotation(markers[deviceId], head, device?.vehicle_type);
 
             if (t < 1) {
-                markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: requestAnimationFrame(step) };
+                // Store interpolated heading so next update's fromHead is accurate
+                markerState[deviceId] = {
+                    lat: toLat, lng: toLng,
+                    heading: head,
+                    animFrame: requestAnimationFrame(step)
+                };
             } else {
                 markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
             }
         }
 
-        markerState[deviceId] = { lat: fromLat, lng: fromLng, heading: fromHead, animFrame: requestAnimationFrame(step) };
+        markerState[deviceId] = {
+            lat: fromLat, lng: fromLng,
+            heading: fromHead,
+            animFrame: requestAnimationFrame(step)
+        };
     }
 
-    // Update devices array
+    // Keep devices array in sync
     const deviceIndex = devices.findIndex(d => d.id === deviceId);
     if (deviceIndex !== -1) {
         if (!state.hasOwnProperty('is_online') && state.last_latitude) state.is_online = true;
@@ -265,10 +279,32 @@ function updateDeviceMarker(deviceId, state) {
     }
 }
 
-// Fit map to markers
+/**
+ * Called in dashboard-devices.js immediately after marker.addTo(map) when a
+ * search-filtered marker is made visible again.
+ *
+ * Leaflet rebuilds the marker's DOM element on re-add, resetting any inline
+ * styles we wrote earlier.  We fix this by calling setIcon() with the correct
+ * heading baked into the HTML — exactly the same approach as first creation.
+ */
+function restoreMarkerRotation(deviceId) {
+    const saved  = markerState[deviceId];
+    const marker = markers[deviceId];
+    const device = devices.find(d => d.id === deviceId);
+    if (!saved || !marker) return;
+
+    marker.setIcon(_makeMarkerIcon(
+        device?.vehicle_type,
+        device?.ignition_on,
+        saved.heading
+    ));
+}
+
+// ── Map fit ───────────────────────────────────────────────────────────────────
+
 function fitMapToMarkers() {
     const validMarkers = Object.values(markers).filter(m => m && m.getLatLng);
-    if (validMarkers.length === 0) return;  // no markers, stay at world view
+    if (validMarkers.length === 0) return;
 
     if (validMarkers.length === 1) {
         map.setView(validMarkers[0].getLatLng(), 15);
@@ -278,14 +314,13 @@ function fitMapToMarkers() {
     }
 }
 
-// WebSocket Connection
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+
 function connectWebSocket() {
     const userId = localStorage.getItem('user_id');
     if (!userId) return;
 
-    // Use static config from config.js
     const wsUrl = `${WS_BASE_URL}${userId}`;
-
     console.log('Connecting to WebSocket:', wsUrl);
     ws = new WebSocket(wsUrl);
 
