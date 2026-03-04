@@ -3,6 +3,10 @@
  * Alert loading, dismissal, toast notifications.
  */
 
+let historyVisible = false;
+let historyOffset = 0;
+const HISTORY_PAGE_SIZE = 10;
+
 async function loadAlerts() {
     try {
         const userId = localStorage.getItem('user_id');
@@ -102,6 +106,11 @@ function applyDeviceAlertHighlights() {
 }
 
 function openAlertsModal() {
+    historyVisible = false;
+    historyOffset = 0;
+    document.getElementById('alertsHistorySection').style.display = 'none';
+    document.getElementById('alertHistoryToggleBtn').textContent = '🕘 History';
+    document.getElementById('alertsHistoryList').innerHTML = '';
     loadAlerts();
     document.getElementById('alertsModal').classList.add('active');
 }
@@ -165,4 +174,68 @@ function showAlert(data) {
         toast.style.animation = 'slideInRight 0.3s reverse forwards';
         setTimeout(() => toast.remove(), 300);
     }, 3000);
+}
+
+async function toggleAlertHistory() {
+    historyVisible = !historyVisible;
+    const section = document.getElementById('alertsHistorySection');
+    const btn = document.getElementById('alertHistoryToggleBtn');
+    section.style.display = historyVisible ? 'block' : 'none';
+    btn.textContent = historyVisible ? '✕ Hide History' : '🕘 History';
+    if (historyVisible) {
+        historyOffset = 0;
+        document.getElementById('alertsHistoryList').innerHTML = '';
+        await loadAlertHistory();
+    }
+}
+
+async function loadAlertHistory() {
+    try {
+        const response = await apiFetch(
+            `${API_BASE}/alerts?read_only=true&limit=${HISTORY_PAGE_SIZE + 1}&offset=${historyOffset}`
+        );
+        const alerts = await response.json();
+        const hasMore = alerts.length > HISTORY_PAGE_SIZE;
+        const toShow = alerts.slice(0, HISTORY_PAGE_SIZE);
+
+        const list = document.getElementById('alertsHistoryList');
+        if (historyOffset === 0 && toShow.length === 0) {
+            list.innerHTML = '<div style="text-align:center; padding: 1.5rem; color: var(--text-muted); font-size: 0.875rem;">No cleared alerts yet.</div>';
+        } else {
+            toShow.forEach(alert => {
+                const item = document.createElement('div');
+                item.className = `alert-item ${alert.severity}`;
+                item.style.opacity = '0.6';
+                const icon = { 'speeding': '⚡', 'geofence_enter': '📍', 'geofence_exit': '🚪', 'offline': '📡', 'towing': '🚨' }[alert.alert_type] || '🔔';
+                let title, messageText;
+                if (alert.alert_type === 'custom' && alert.alert_metadata?.rule_name) {
+                    title = alert.alert_metadata.rule_name;
+                    messageText = alert.alert_metadata.rule_condition || alert.message;
+                } else {
+                    title = alert.alert_type.replace(/_/g, ' ').toUpperCase();
+                    messageText = alert.message;
+                }
+                const device = devices.find(d => d.id === alert.device_id);
+                const vehicleTag = device ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.2rem;">${(VEHICLE_ICONS[device.vehicle_type] || VEHICLE_ICONS['other']).emoji} ${device.name}</div>` : '';
+                item.innerHTML = `
+                    <div class="alert-icon">${icon}</div>
+                    <div class="alert-content">
+                        ${vehicleTag}
+                        <div class="alert-title">${title}</div>
+                        <div class="alert-message">${messageText}</div>
+                        <div class="alert-time">${formatDateToLocal(alert.created_at)}</div>
+                    </div>`;
+                list.appendChild(item);
+            });
+        }
+
+        historyOffset += toShow.length;
+        document.getElementById('alertsHistoryLoadMore').style.display = hasMore ? 'block' : 'none';
+    } catch (e) {
+        console.error('Failed to load alert history:', e);
+    }
+}
+
+async function loadMoreAlertHistory() {
+    await loadAlertHistory();
 }
