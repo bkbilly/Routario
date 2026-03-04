@@ -165,8 +165,8 @@ function updateDeviceMarker(deviceId, state) {
     const deviceName = device ? device.name : 'Unknown Device';
 
     const vehicle = VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other'];
-    const ignitionColor = state.ignition_on ? '#10b981' : '#ef4444';
-    const ignitionText  = state.ignition_on ? 'ON' : 'OFF';
+    const ignitionColor = state.ignition_on === true ? '#10b981' : state.ignition_on === false ? '#ef4444' : '#6b7280';
+    const ignitionText  = state.ignition_on === true ? 'ON'      : state.ignition_on === false ? 'OFF'     : '—';
     const popupContent = `
         <div class="vp-popup">
             <div class="vp-header">
