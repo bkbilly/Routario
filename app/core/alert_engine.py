@@ -228,13 +228,6 @@ class AlertEngine:
 
 
 async def periodic_alert_task():
-    """
-    Background task that runs every 60 seconds and checks all time-based alert
-    modules that can't be triggered by incoming positions (e.g. offline detection).
-    
-    Any alert module that implements check_device() will be called here for
-    every active device.
-    """
     engine = get_alert_engine()
     while True:
         try:
@@ -245,26 +238,28 @@ async def periodic_alert_task():
                 for alert_key, alert_cls in ALERT_REGISTRY.items():
                     if not hasattr(alert_cls, 'check_device'):
                         continue
+
+                    alert_rows = device.config.get('alert_rows', [])
+                    row = next(
+                        (r for r in alert_rows
+                         if isinstance(r, dict) and r.get('alertKey') == alert_key),
+                        None,
+                    )
+
+                    # ← Only run if the user has actually configured this alert
+                    if not row:
+                        continue
+
                     if not engine._is_alert_active(alert_key, device):
                         continue
+
                     try:
-                        alert_rows = device.config.get('alert_rows', [])
-                        row = next(
-                            (r for r in alert_rows
-                             if isinstance(r, dict) and r.get('alertKey') == alert_key),
-                            None
-                        )
-                        params = row.get('params', {}) if row else {}
+                        params = row.get('params', {})
 
                         if state.alert_states is None:
                             state.alert_states = {}
 
                         result = await alert_cls().check_device(device, state, params)
-
-                        # Always persist alert_states — check_device() may have mutated
-                        # it (e.g. setting offline_alerted=True or resetting it to False)
-                        # even when no alert is returned. Without this the flag is lost
-                        # on the next tick and the alert fires again every minute.
                         await db.update_device_alert_state(device.id, state.alert_states)
 
                         if result:
@@ -275,7 +270,6 @@ async def periodic_alert_task():
                         logger.error(f"Periodic alert check error ({alert_key}): {e}")
         except Exception as e:
             logger.error(f"Periodic alert task error: {e}")
-
 
 # Global singleton
 _alert_engine: Optional[AlertEngine] = None
