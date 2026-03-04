@@ -262,9 +262,20 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2 class="modal-title">Recent Alerts</h2>
-                <div style="display:flex; gap: 10px;">
-                    <button class="btn btn-secondary" onclick="clearAllAlerts()">Clear All</button>
+                <div style="display:flex; gap: 10px; align-items: center;">
+                    <button class="btn btn-secondary" id="alertHistoryToggleBtn" onclick="toggleAlertHistory()">🕘 History</button>
+                    <button class="btn btn-secondary" id="alertClearAllBtn" onclick="clearAllAlerts()">Clear All</button>
                     <button class="modal-close" onclick="closeAlertsModal()">✕</button>
+                </div>
+            </div>
+            <div class="alerts-list" id="alertsList"></div>
+            <div id="alertsHistorySection" style="display:none; border-top: 1px solid var(--border-color); margin-top: 0.75rem; padding-top: 0.75rem;">
+                <div style="font-size: 0.8rem; color: var(--text-muted); padding: 0 0 0.5rem 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">
+                    Cleared Alerts
+                </div>
+                <div class="alerts-list" id="alertsHistoryList"></div>
+                <div id="alertsHistoryLoadMore" style="display:none; text-align:center; padding-top: 0.75rem;">
+                    <button class="btn btn-secondary" onclick="loadMoreAlertHistory()" style="font-size: 0.82rem;">Load More</button>
                 </div>
             </div>
             <div class="alerts-list" id="alertsList"></div>

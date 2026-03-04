@@ -515,18 +515,12 @@ class DatabaseService:
             await session.flush()
             return alert
 
-    async def delete_alert(self, alert_id: int) -> bool:
-        """Delete an alert from history"""
-        async with self.get_session() as session:
-            result = await session.execute(delete(AlertHistory).where(AlertHistory.id == alert_id))
-            return result.rowcount > 0
-
-    async def get_user_alerts(self, user_id: int, unread_only: bool = False, device_id: Optional[int] = None, limit: int = 50) -> List[AlertHistory]:
+    async def get_user_alerts(self, user_id: int, unread_only: bool = False, device_id: Optional[int] = None, limit: int = 50, offset: int = 0) -> List[AlertHistory]:
         async with self.get_session() as session:
             query = select(AlertHistory).where(AlertHistory.user_id == user_id)
             if unread_only: query = query.where(AlertHistory.is_read == False)
             if device_id: query = query.where(AlertHistory.device_id == device_id)
-            query = query.order_by(AlertHistory.created_at.desc()).limit(limit)
+            query = query.order_by(AlertHistory.created_at.desc()).limit(limit).offset(offset)
             result = await session.execute(query)
             return result.scalars().all()
     
