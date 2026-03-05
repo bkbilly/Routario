@@ -53,10 +53,12 @@ async function loadHistory(deviceId, startTime, endTime) {
     }
     stopPlayback();
 
-    // Hide live marker for this device when history loads
-    if (markers[deviceId]) {
-        markers[deviceId].remove();
-    }
+    // Hide ALL live markers when entering history mode
+    devices.forEach(d => {
+        if (markers[d.id] && map.hasLayer(markers[d.id])) {
+            markers[d.id].remove();
+        }
+    });
 
     try {
         const response = await apiFetch(`${API_BASE}/positions/history`, {
@@ -174,10 +176,12 @@ function exitHistoryMode() {
     currentHistoryTab = 'trips';
     switchHistoryTab('trips');
 
-    // Restore live marker when exiting history mode
-    if (markers[historyDeviceId]) {
-        markers[historyDeviceId].addTo(map);
-    }
+    // Restore ALL live markers when exiting history mode
+    devices.forEach(d => {
+        if (markers[d.id] && !map.hasLayer(markers[d.id])) {
+            markers[d.id].addTo(map);
+        }
+    });
 
     // Hide history footer
     const footer = document.getElementById('historyControls');

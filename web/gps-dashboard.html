@@ -469,6 +469,8 @@
             // Auto-collapse sidebar on mobile/tablet load
             if (window.innerWidth <= 1024) {
                 document.querySelector('.dashboard').classList.add('sidebar-hidden');
+                // Tell Leaflet about the new map size once it has initialised
+                setTimeout(() => { if (map) map.invalidateSize(); }, 200);
             }
             initPWA();
         });
