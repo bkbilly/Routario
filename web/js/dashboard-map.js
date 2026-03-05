@@ -357,8 +357,11 @@ function handleWebSocketMessage(message) {
         const devIdx = devices.findIndex(d => d.id === message.device_id);
         if (devIdx > -1) {
             devices[devIdx] = { ...devices[devIdx], ...message.data };
-            updateDeviceMarker(message.device_id, devices[devIdx]);
-            updateSidebarCard(message.device_id);
+            // Don't update markers or animate anything while in history mode
+            if (!historyDeviceId) {
+                updateDeviceMarker(message.device_id, devices[devIdx]);
+                updateSidebarCard(message.device_id);
+            }
         }
         updateStats();
     } else if (message.type === 'alert') {
