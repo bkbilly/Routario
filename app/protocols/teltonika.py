@@ -177,6 +177,8 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         {'id': 250, 'name': 'trip_event'},
         {'id': 251, 'name': 'idling'},
         {'id': 252, 'name': 'unplug_detection'},
+        {'id': 253, 'name': 'green_driving_type'},
+        {'id': 254, 'name': 'green_driving_value'},
         {'id': 257, 'name': 'crash_trace_data'},
         {'id': 385, 'name': 'beacon_ids'},
         {'id': 636, 'name': 'cell_id_4g'},

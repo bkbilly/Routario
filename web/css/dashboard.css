@@ -406,11 +406,16 @@ body::before {
 .attr-key {
     color: var(--text-secondary);
     font-weight: 500;
+    width: 40%;                 /* add this — pins the key column */
 }
 .attr-val {
     font-family: var(--font-mono);
     text-align: right;
     color: var(--accent-primary);
+    word-break: break-all;      /* add this */
+    overflow-wrap: break-word;  /* add this */
+    max-width: 0;               /* add this — forces the cell to shrink */
+    width: 60%;                 /* add this — gives val column a bounded width */
 }
 
 /* Main Content */
@@ -1534,13 +1539,17 @@ body::before {
         width: 95%;
     }
     .sidebar.history-active .sidebar-section {
-        margin-bottom: 150px;
     }
     .dashboard {
         grid-template-columns: var(--sidebar-width-mobile) 1fr;
     }
     .dashboard.sidebar-hidden {
         grid-template-columns: 0px 1fr;
+    }
+    .trip-badges {
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.2rem;
     }
 
     /* ── Compact device cards ── */
