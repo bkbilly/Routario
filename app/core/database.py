@@ -563,7 +563,48 @@ class DatabaseService:
     async def mark_command_sent(self, command_id: int):
         async with self.get_session() as session:
             await session.execute(update(CommandQueue).where(CommandQueue.id == command_id).values(status='sent', sent_at=datetime.utcnow()))
-            
+
+    async def mark_oldest_sent_command_acked(
+        self,
+        device_id: int,
+        response_text: str = "",
+    ) -> bool:
+        """
+        Mark the oldest 'sent' command for this device as 'acked'.
+
+        Devices typically ACK one command at a time in FIFO order, so we
+        advance the earliest sent-but-not-yet-acked command.
+
+        Returns True if a command was updated, False if none was found.
+        """
+        async with self.get_session() as session:
+            # Find the oldest sent command for this device
+            result = await session.execute(
+                select(CommandQueue)
+                .where(
+                    and_(
+                        CommandQueue.device_id == device_id,
+                        CommandQueue.status == 'sent',
+                    )
+                )
+                .order_by(CommandQueue.sent_at.asc())
+                .limit(1)
+            )
+            command = result.scalar_one_or_none()
+            if not command:
+                return False
+
+            await session.execute(
+                update(CommandQueue)
+                .where(CommandQueue.id == command.id)
+                .values(
+                    status='acked',
+                    acked_at=datetime.utcnow(),
+                    response=response_text or None,
+                )
+            )
+            return True
+
     async def get_command(self, command_id: int) -> Optional[CommandQueue]:
         async with self.get_session() as session:
             result = await session.execute(select(CommandQueue).where(CommandQueue.id == command_id))
