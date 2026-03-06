@@ -239,6 +239,11 @@ body::before {
     overflow: hidden;
 }
 
+.device-card.moving::before  { background: #00e5a0; box-shadow: 0 0 8px rgba(0,229,160,0.4); }
+.device-card.idle::before    { background: #ffa502; }
+.device-card.stopped::before { background: #ff4757; }
+.device-card.offline::before { background: #5a6a85; }
+
 .device-card::before {
     content: '';
     position: absolute;
@@ -289,20 +294,61 @@ body::before {
 }
 
 .device-status {
-    font-size: 0.75rem;
-    padding: 0.25rem 0.625rem;
-    border-radius: 6px;
-    font-weight: 600;
+    font-size: 0.62rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
 }
 
-.device-status.online {
-    background: rgba(16, 185, 129, 0.15);
-    color: var(--accent-success);
+.device-status.moving {
+    background: rgba(0, 229, 160, 0.08);
+    color: #00e5a0;
+    border: 1px solid rgba(0, 229, 160, 0.25);
+}
+
+.device-status.idle {
+    background: rgba(255, 165, 2, 0.08);
+    color: #ffa502;
+    border: 1px solid rgba(255, 165, 2, 0.25);
+}
+
+.device-status.stopped {
+    background: rgba(255, 71, 87, 0.08);
+    color: #ff4757;
+    border: 1px solid rgba(255, 71, 87, 0.25);
 }
 
 .device-status.offline {
-    background: rgba(107, 114, 128, 0.15);
-    color: var(--text-muted);
+    background: rgba(90, 106, 133, 0.08);
+    color: #5a6a85;
+    border: 1px solid rgba(90, 106, 133, 0.25);
+}
+
+.ign-badge {
+    font-size: 0.62rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+}
+
+.ign-badge.on {
+    background: rgba(16, 185, 129, 0.08);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.ign-badge.off {
+    background: rgba(239, 68, 68, 0.08);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
 .ignition-icon {
@@ -1218,6 +1264,25 @@ body::before {
     color: var(--accent-primary);
 }
 
+.history-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.history-slider-row .history-slider {
+    flex: 1;
+}
+
+.history-slider-counter {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    min-width: 52px;
+    text-align: right;
+}
+
 /* Sensor Attribute Chips */
 .sensor-chip {
     padding: 0.3rem 0.65rem;
@@ -1566,12 +1631,26 @@ body::before {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 115px;
+        min-width: 0;
+        flex: 1;
     }
+    .device-meta {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    .ign-badge {
+        font-size: 0.58rem;
+        padding: 0.12rem 0.35rem;
+    }
+
     .device-status {
-        font-size: 0.72rem !important;
-        padding: 0.15rem 0.4rem;
+        font-size: 0.58rem !important;
+        padding: 0.12rem 0.35rem;
     }
+
     .ignition-icon {
         font-size: 0.9rem;
     }
