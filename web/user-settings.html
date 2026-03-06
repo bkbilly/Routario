@@ -93,6 +93,24 @@
                 </div>
             </div>
 
+            <!-- Home Assistant Integration -->
+            <div class="card">
+                <h2 class="card-title">Home Assistant</h2>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem; line-height: 1.5;">
+                    Enter your Home Assistant instance URL to push live vehicle positions directly into HA.
+                    Install the <strong>Routario</strong> custom integration in HA first, then paste your instance URL below.
+                </p>
+                <div class="form-group">
+                    <label class="form-label">Instance URL</label>
+                    <input type="url" id="haInstanceUrl" class="form-input"
+                           placeholder="http://192.168.1.100:8123">
+                    <p class="form-help">Routario will push to <code>{your-url}/api/webhook/routario</code> on every position update.</p>
+                </div>
+                <div style="display: flex; justify-content: flex-end;">
+                    <button type="button" class="btn btn-primary" onclick="saveHaSettings()">Save</button>
+                </div>
+            </div>
+
             <!-- Admin Panel (Hidden by default) -->
             <div class="card" id="adminPanel" style="display: none;">
                 <h2 class="card-title" style="color: var(--accent-warning);">Admin Panel</h2>

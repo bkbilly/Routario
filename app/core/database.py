@@ -352,15 +352,20 @@ class DatabaseService:
         async with self.get_session() as session:
             result = await session.execute(select(User).where(User.id == user_id))
             user = result.scalar_one_or_none()
-            if not user: return None
+            if not user:
+                return None
             
-            if user_data.email: user.email = user_data.email
+            if user_data.email:
+                user.email = user_data.email
             if user_data.password:
                 user.password_hash = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             if user_data.notification_channels is not None:
                 user.notification_channels = user_data.notification_channels
-            if user_data.language: user.language = user_data.language
-            
+            if user_data.language:
+                user.language = user_data.language
+            if user_data.ha_instance_url is not None:
+                user.ha_instance_url = user_data.ha_instance_url
+
             await session.flush()
             await session.refresh(user)
             return user
