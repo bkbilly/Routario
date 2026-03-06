@@ -146,31 +146,80 @@ async def process_position_callback(position: NormalizedPosition):
         logger.debug(f"Position processed: {device.name}")
     except Exception as e:
         logger.error(f"Position processing error: {e}", exc_info=True)                    
-    except Exception as e:
-        logger.error(f"Position processing error: {e}", exc_info=True)
 
 
-async def command_callback(imei: str, writer):
+async def command_callback(imei: str, writer) -> None:
+    """
+    Called after every decoded packet from a known device.
+    Encodes and writes any pending commands, then marks them sent.
+    """
     try:
         db = get_db()
         device = await db.get_device_by_imei(imei)
         if not device:
             return
+
         commands = await db.get_pending_commands(device.id)
+        if not commands:
+            return
+
+        decoder = ProtocolRegistry.get_decoder(device.protocol)
+        if not decoder:
+            return
+
         for command in commands:
-            decoder = ProtocolRegistry.get_decoder(device.protocol)
-            if not decoder:
+            # Build the params dict the decoder actually needs.
+            # command.payload stores either:
+            #   - a raw string (for 'custom')
+            #   - a JSON-encoded dict of named params (for typed commands)
+            params: dict = {}
+            if command.payload:
+                try:
+                    params = json.loads(command.payload)
+                    if not isinstance(params, dict):
+                        params = {"payload": command.payload}
+                except (json.JSONDecodeError, ValueError):
+                    params = {"payload": command.payload}
+
+            command_bytes = await decoder.encode_command(command.command_type, params)
+            if not command_bytes:
+                logger.warning(
+                    f"Command {command.id} ({command.command_type}) encoded to empty bytes "
+                    f"for device {device.name} — skipping"
+                )
                 continue
-            command_bytes = await decoder.encode_command(
-                command.command_type, {"payload": command.payload}
-            )
-            if command_bytes:
+
+            try:
                 writer.write(command_bytes)
                 await writer.drain()
                 await db.mark_command_sent(command.id)
-                logger.info(f"Command sent to {device.name}: {command.command_type}")
+                logger.info(
+                    f"Command sent to {device.name}: {command.command_type} "
+                    f"({len(command_bytes)} bytes)"
+                )
+            except Exception as e:
+                logger.error(f"Failed to write command {command.id} to {device.name}: {e}")
+
     except Exception as e:
         logger.error(f"Command callback error: {e}", exc_info=True)
+
+
+async def ack_callback(imei: str, response_text: str = "") -> None:
+    """
+    Called when the device sends a command-ACK packet (e.g. Teltonika codec 0x0D).
+    Marks the oldest 'sent' command for this device as 'acked'.
+    """
+    try:
+        db = get_db()
+        device = await db.get_device_by_imei(imei)
+        if not device:
+            return
+
+        await db.mark_oldest_sent_command_acked(device.id, response_text)
+        logger.info(f"Command ACKed by {device.name}" + (f": {response_text}" if response_text else ""))
+
+    except Exception as e:
+        logger.error(f"ACK callback error: {e}", exc_info=True)
 
 
 async def handle_new_alert(alert: AlertHistory):
