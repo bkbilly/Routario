@@ -232,20 +232,78 @@ class TeltonikaDecoder(BaseProtocolDecoder):
                 record_count = packet_data[1]
 
                 if codec_id in (0x08, 0x8E):
-                    extended = (codec_id == 0x8E)
+                    # Codec 8 / 8E — standard position records
+                    extended  = (codec_id == 0x8E)
                     positions = self._decode_all_records(
                         packet_data[2:], known_imei, extended
                     )
                     ack = struct.pack('>I', record_count)
-
                     if positions:
                         return {
-                            'position': positions[0],
-                            'response': ack,
+                            'position':        positions[0],
+                            'response':        ack,
                             'extra_positions': positions[1:],
                         }, consumed
                     else:
                         return {'response': ack}, consumed
+
+                elif codec_id in (0x10, 0x1A):
+                    # Codec 16 / 26 — identical to 8 / 8E but each record
+                    # carries an extra 2-byte event ID after the event code.
+                    extended  = (codec_id == 0x1A)
+                    positions = self._decode_all_records(
+                        packet_data[2:], known_imei, extended,
+                        event_id_width=2,
+                    )
+                    ack = struct.pack('>I', record_count)
+                    if positions:
+                        return {
+                            'position':        positions[0],
+                            'response':        ack,
+                            'extra_positions': positions[1:],
+                        }, consumed
+                    else:
+                        return {'response': ack}, consumed
+
+                elif codec_id == 0x0D:
+                    # Codec 13 — text command response (device → server)
+                    # Layout (packet_data indices):
+                    #   [0]      codec_id  (0x0D)
+                    #   [1]      quantity  (always 1)
+                    #   [2]      type      (0x05 = response)
+                    #   [3:7]    response length N (big-endian uint32)
+                    #   [7:7+N]  response text (ASCII)
+                    #   [7+N]    quantity again
+                    response_text = ""
+                    try:
+                        if len(packet_data) >= 7:
+                            resp_len = struct.unpack('>I', packet_data[3:7])[0]
+                            if len(packet_data) >= 7 + resp_len:
+                                response_text = packet_data[7:7 + resp_len].decode(
+                                    'ascii', errors='replace'
+                                ).strip()
+                    except Exception as e:
+                        logger.warning(f"Teltonika: Failed to parse codec 0x0D response: {e}")
+                    logger.debug(
+                        f"Teltonika: Text command response from {known_imei!r}: {response_text!r}"
+                    )
+                    return {'event': 'command_ack', 'response_text': response_text}, consumed
+
+                elif codec_id == 0x0F:
+                    # Codec 15 — binary command response (device → server)
+                    # Same framing as 0x0D; payload is arbitrary binary → hex.
+                    response_hex = ""
+                    try:
+                        if len(packet_data) >= 7:
+                            resp_len = struct.unpack('>I', packet_data[3:7])[0]
+                            if len(packet_data) >= 7 + resp_len:
+                                response_hex = packet_data[7:7 + resp_len].hex()
+                    except Exception as e:
+                        logger.warning(f"Teltonika: Failed to parse codec 0x0F response: {e}")
+                    logger.debug(
+                        f"Teltonika: Binary command response from {known_imei!r}: {response_hex!r}"
+                    )
+                    return {'event': 'command_ack', 'response_text': response_hex}, consumed
 
                 else:
                     logger.warning(f"Teltonika: unsupported codec 0x{codec_id:02X}")
@@ -401,49 +459,77 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         offset: int,
         known_imei: str,
         extended: bool,
+        event_id_width: int = 0,
     ) -> Tuple[Optional[NormalizedPosition], int]:
-        
+
         start = offset
 
-        # --- Timestamp ---------------------------------------------------
+        # --- Timestamp (8 bytes, ms since epoch) -------------------------
         if offset + 8 > len(data):
             return None, 0
         timestamp_ms = struct.unpack('>Q', data[offset:offset + 8])[0]
-        device_time = datetime.fromtimestamp(timestamp_ms / 1000.0, tz=timezone.utc)
+        device_time  = datetime.fromtimestamp(timestamp_ms / 1000.0, tz=timezone.utc)
         offset += 8
 
-        # --- Priority ----------------------------------------------------
+        # --- Priority (1 byte) -------------------------------------------
         if offset + 1 > len(data):
             return None, 0
         priority = data[offset]
-        offset += 1
+        offset  += 1
 
         # --- GPS element (15 bytes) --------------------------------------
         if offset + 15 > len(data):
             return None, 0
-
-        lon = struct.unpack('>i', data[offset:offset + 4])[0] / 10_000_000.0
-        lat = struct.unpack('>i', data[offset + 4:offset + 8])[0] / 10_000_000.0
-        alt = struct.unpack('>h', data[offset + 8:offset + 10])[0]
+        lon   = struct.unpack('>i', data[offset:offset + 4])[0]     / 10_000_000.0
+        lat   = struct.unpack('>i', data[offset + 4:offset + 8])[0] / 10_000_000.0
+        alt   = struct.unpack('>h', data[offset + 8:offset + 10])[0]
         angle = struct.unpack('>H', data[offset + 10:offset + 12])[0]
-        sats = data[offset + 12]
+        sats  = data[offset + 12]
         speed = struct.unpack('>H', data[offset + 13:offset + 15])[0]
         offset += 15
 
         valid_gps = not (lat == 0.0 and lon == 0.0)
 
         # --- IO element header -------------------------------------------
-        header_size = 4 if extended else 2
-        if offset + header_size > len(data):
+        # Codec 8:   1-byte event code  + 1-byte total-count  = 2
+        # Codec 8E:  2-byte event code  + 2-byte total-count  = 4
+        # Codec 16:  1-byte event code  + 2-byte event ID + 1-byte count = 4
+        # Codec 26:  2-byte event code  + 2-byte event ID + 2-byte count = 6
+        #
+        # We read event code explicitly, skip event_id_width, then skip count.
+
+        # Read event code
+        if extended:
+            if offset + 2 > len(data):
+                return None, 0
+            event_code = struct.unpack('>H', data[offset:offset + 2])[0]
+            offset += 2
+        else:
+            if offset + 1 > len(data):
+                return None, 0
+            event_code = data[offset]
+            offset += 1
+
+        # Skip extra event-ID bytes (Codec 16 / 26 only)
+        if event_id_width:
+            if offset + event_id_width > len(data):
+                return None, 0
+            offset += event_id_width
+
+        # Skip total-IO-element count (redundant — we use per-group counts)
+        count_width = 2 if extended else 1
+        if offset + count_width > len(data):
             return None, 0
-        offset += header_size
+        offset += count_width
 
         # --- IO elements -------------------------------------------------
         ignition: Optional[bool] = None
         sensors: Dict[str, Any] = {}
 
+        if event_code:
+            sensors['event_code'] = event_code
+
         id_width = 2 if extended else 1
-        count_width = 2 if extended else 1
 
         def read_count() -> int:
             nonlocal offset
@@ -471,23 +557,18 @@ class TeltonikaDecoder(BaseProtocolDecoder):
             for _ in range(count):
                 if offset + id_width + byte_width > len(data):
                     break
-                io_id = read_id()
+                io_id     = read_id()
                 val_bytes = data[offset:offset + byte_width]
-                raw = unpack_fn(val_bytes)
-                offset += byte_width
+                raw       = unpack_fn(val_bytes)
+                offset   += byte_width
 
-                # Ignition is a special top-level field
+                # IO 239 = ignition (special top-level field)
                 if io_id == 239:
                     ignition = bool(raw)
 
-                # Look up multiplier
                 multiplier = self._io_mult_map.get(io_id)
-                if multiplier is not None:
-                    val = round(float(raw) * multiplier, 3)
-                else:
-                    val = raw
+                val = round(float(raw) * multiplier, 3) if multiplier is not None else raw
 
-                # Look up name
                 key = self._io_name_map.get(io_id, f'io_{io_id}')
                 sensors[key] = val
 
@@ -495,8 +576,8 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         parse_io_group(2, lambda b: struct.unpack('>H', b)[0])
         parse_io_group(4, lambda b: struct.unpack('>I', b)[0])
         parse_io_group(8, lambda b: struct.unpack('>Q', b)[0])
-        # NX group: variable-length elements, extended (8E) only
-        # Each element: ID (2 bytes) + length (2 bytes) + value (length bytes)
+
+        # NX group: variable-length elements — Codec 8E / 26 only
         if extended:
             nx_count = read_count()
             for _ in range(nx_count):
@@ -510,20 +591,22 @@ class TeltonikaDecoder(BaseProtocolDecoder):
                 if offset + val_len > len(data):
                     break
                 val_bytes = data[offset:offset + val_len]
-                offset += val_len
+                offset   += val_len
                 key = self._io_name_map.get(io_id, f'io_{io_id}')
-                
                 if io_id == 385:
                     sensors[key] = self._decode_beacon_list(val_bytes)
                 else:
                     sensors[key] = val_bytes.hex()
 
-        # No per-record footer in codec 8 or 8E.
-        # The packet-level end marker lives outside records_data in decode().
         consumed = offset - start
+
         if not valid_gps:
-            logger.debug(f"Teltonika: dropping record with lat=0, lon=0 (no fix) for {known_imei}")
+            logger.debug(
+                f"Teltonika: dropping record with lat=0, lon=0 (no fix) for {known_imei}"
+            )
             return None, consumed
+
+        codec_label = ('26' if extended else '16') if event_id_width else ('8E' if extended else '8')
 
         position = NormalizedPosition(
             imei=known_imei,
@@ -537,10 +620,12 @@ class TeltonikaDecoder(BaseProtocolDecoder):
             satellites=sats,
             ignition=ignition,
             sensors=sensors,
-            raw_data={'priority': priority, 'codec': '8E' if extended else '8'},
+            raw_data={'priority': priority, 'codec': codec_label},
         )
 
         return position, consumed
+
+
 
     # ================================================================== #
     #  Internal: multi-record decoder                                      #
@@ -551,6 +636,7 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         data: bytes,
         known_imei: Optional[str],
         extended: bool,
+        event_id_width: int = 0,
     ) -> List[NormalizedPosition]:
         if not known_imei:
             return []
@@ -560,7 +646,10 @@ class TeltonikaDecoder(BaseProtocolDecoder):
 
         while offset < len(data):
             try:
-                pos, consumed = self._decode_single_record(data, offset, known_imei, extended)
+                pos, consumed = self._decode_single_record(
+                    data, offset, known_imei, extended,
+                    event_id_width=event_id_width,
+                )
                 if consumed == 0:
                     break
                 offset += consumed
