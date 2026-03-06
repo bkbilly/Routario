@@ -140,6 +140,7 @@ async function loadHistory(deviceId, startTime, endTime) {
 
         const footer = document.getElementById('historyControls');
         if (footer) footer.style.display = 'flex';
+        requestAnimationFrame(applyHistoryControlsPadding);
         document.querySelector('.sidebar').classList.add('history-active');
 
         // Hide regular list
@@ -186,6 +187,8 @@ function exitHistoryMode() {
     // Hide history footer
     const footer = document.getElementById('historyControls');
     if (footer) footer.style.display = 'none';
+    const details = document.getElementById('sidebarHistoryDetails');
+    if (details) details.style.paddingBottom = '';
     document.querySelector('.sidebar').classList.remove('history-active');
 
     historyTrips = [];
@@ -710,3 +713,17 @@ document.addEventListener('keydown', (e) => {
         togglePlayback();
     }
 });
+
+window.addEventListener('resize', () => {
+    if (historyDeviceId) requestAnimationFrame(applyHistoryControlsPadding);
+});
+
+// In loadHistory, after: footer.style.display = 'flex';
+function applyHistoryControlsPadding() {
+    const footer = document.getElementById('historyControls');
+    const details = document.getElementById('sidebarHistoryDetails');
+    if (!footer || !details || window.innerWidth > 1024) return;
+    const height = footer.offsetHeight;
+    const bottomOffset = parseInt(getComputedStyle(footer).bottom) || 16;
+    details.style.paddingBottom = (height + bottomOffset + 8) + 'px';
+}

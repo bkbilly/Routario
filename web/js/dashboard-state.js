@@ -28,7 +28,7 @@ let historyIndex = 0;
 let playbackInterval = null;
 let currentHistoryTab = 'trips';
 let sensorChart = null;
-let selectedSensorAttrs = new Set(['speed']);
+let selectedSensorAttrs = new Set();
 let tripColorMap = {}; // trip_id → color, shared between loadHistory and loadTripsForHistory
 
 // ── Marker animations ─────────────────────────────────────────────────────────
