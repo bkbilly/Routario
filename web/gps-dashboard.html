@@ -252,7 +252,10 @@
                     <button class="btn-icon" onclick="stepHistory(1)" title="Next Event">⏭</button>
                 </div>
                 <!-- Row 3: slider -->
-                <input type="range" class="history-slider" id="historySlider" min="0" max="100" value="0" oninput="seekHistory(this.value)">
+                <div class="history-slider-row">
+                    <input type="range" class="history-slider" id="historySlider" min="0" max="100" value="0" oninput="seekHistory(this.value)">
+                    <span class="history-slider-counter" id="historySliderCounter">0 / 0</span>
+                </div>
             </div>
         </main>
     </div>

@@ -79,6 +79,9 @@ function renderDeviceList() {
         const vehicleIcon = (VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other']).emoji;
 
         card.innerHTML = getDeviceCardContent(device, vehicleIcon);
+        const vs = getVehicleStatus(device);
+        card.classList.remove('moving', 'idle', 'stopped', 'offline');
+        card.classList.add(vs.cls);
 
         list.appendChild(card);
     });
@@ -86,19 +89,22 @@ function renderDeviceList() {
 
 // Helper to generate card content (used for initial render and updates)
 function getDeviceCardContent(device, icon) {
-    const ignIcon = device.ignition_on ? '🔥' : '🅿️';
     const vs = getVehicleStatus(device);
     const lastSeen = timeAgo(device.last_update);
     const mileage = formatDistance(device.total_odometer);
+
+    const ignBadge = device.ignition_on === true
+        ? `<span class="ign-badge on">ON</span>`
+        : device.ignition_on === false
+        ? `<span class="ign-badge off">OFF</span>`
+        : '';
 
     return `
         <div class="device-header">
             <div class="device-name">${icon} ${device.name}</div>
             <div class="device-meta">
-                <span class="ignition-icon" id="ign-icon-${device.id}">${ignIcon}</span>
-                <div class="device-status" id="status-${device.id}" style="font-size:1rem;">
-                    ${vs.emoji} ${vs.label}
-                </div>
+                ${ignBadge}
+                <span class="device-status ${vs.cls}" id="status-${device.id}">${vs.label}</span>
             </div>
         </div>
         <div class="device-info">
@@ -127,13 +133,15 @@ function updateSidebarCard(deviceId) {
         const vehicleIcon = (VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other']).emoji;
         card.innerHTML = getDeviceCardContent(device, vehicleIcon);
 
-        if (selectedDevice === deviceId) {
-            card.classList.add('active');
-        }
+        if (selectedDevice === deviceId) card.classList.add('active');
+
+        // Stamp status class so ::before colour matches vehicle state
+        const vs = getVehicleStatus(device);
+        card.classList.remove('moving', 'idle', 'stopped', 'offline');
+        card.classList.add(vs.cls);
     }
     applyDeviceAlertHighlights();
 }
-
 // Function to update just the times in the sidebar (called every minute)
 function updateSidebarTimes() {
     getSortedDevices().forEach(device => {
@@ -168,10 +176,10 @@ function updateStats() {
 
 // Vehicle sidebar status helper
 function getVehicleStatus(device) {
-    if (!device.is_online) return { emoji: '⚪', label: 'Offline', key: 0 };
-    if (!device.ignition_on) return { emoji: '🔴', label: 'Stopped', key: 1 };
-    if ((device.last_speed || 0) < 3) return { emoji: '🟠', label: 'Idling', key: 2 };
-    return { emoji: '🟢', label: 'Moving', key: 3 };
+    if (!device.is_online)                      return { label: 'Offline', cls: 'offline', key: 0 };
+    if (device.ignition_on === false)           return { label: 'Stopped', cls: 'stopped', key: 1 };
+    if ((device.last_speed || 0) < 3)           return { label: 'Idling',  cls: 'idle',    key: 2 };
+    return                                             { label: 'Moving',  cls: 'moving',  key: 3 };
 }
 
 function setSortMode(mode) {

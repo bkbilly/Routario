@@ -240,6 +240,7 @@ function updatePlaybackUI() {
     updateSensorChartCursor(historyIndex);
     document.getElementById('historySlider').value = historyIndex;
     document.getElementById('historyTimestamp').textContent = time;
+    document.getElementById('historySliderCounter').textContent = `${historyIndex + 1} / ${historyData.length}`;
 
     if (!markers['history_pos']) createHistoryMarker();
 

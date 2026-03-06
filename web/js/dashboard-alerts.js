@@ -122,7 +122,13 @@ function closeAlertsModal() {
 async function dismissAlert(alertId) {
     try {
         const res = await apiFetch(`${API_BASE}/alerts/${alertId}/read`, { method: 'POST' });
-        if (res.ok) loadAlerts();
+        if (res.ok) {
+            await loadAlerts();
+            // Re-render affected card so status class/colour is restored
+            const alert = loadedAlerts.find(a => a.id === alertId) 
+                       || { device_id: null }; // already gone from list, refresh all
+            devices.forEach(d => updateSidebarCard(d.id));
+        }
     } catch (e) {}
 }
 
@@ -138,7 +144,8 @@ async function clearAllAlerts() {
         }
     }
 
-    loadAlerts();
+    await loadAlerts();
+    devices.forEach(d => updateSidebarCard(d.id));  // ← restore all card colours
     showAlert({ title: 'Success', message: 'All alerts cleared', type: 'success' });
 }
 
