@@ -55,6 +55,7 @@ class User(Base):
             "discord": None,   # "discord://webhook_id/webhook_token"
         }
     )
+    ha_instance_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
     # Preferences
     timezone: Mapped[str] = mapped_column(String(50), default='UTC')

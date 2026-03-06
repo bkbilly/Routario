@@ -53,6 +53,24 @@ async function loadSettings() {
     }
 }
 
+async function saveHaSettings() {
+    const url = document.getElementById('haInstanceUrl').value.trim();
+    try {
+        const res = await apiFetch(`${API_BASE}/users/${USER_ID}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ha_instance_url: url }),
+        });
+        if (res.ok) showAlert('Home Assistant settings saved', 'success');
+        else {
+            const err = await res.json();
+            throw new Error(err.detail || 'Failed to save');
+        }
+    } catch (e) {
+        showAlert(e.message, 'error');
+    }
+}
+
 async function loadAllUsers() {
     try {
         const res = await apiFetch(`${API_BASE}/users`);

@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 
+import httpx
 import jwt
 import redis.asyncio as redis
 import uvicorn
@@ -19,13 +20,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-
 from core.config import get_settings
 from core.database import get_db, init_database
 from core.alert_engine import get_alert_engine, periodic_alert_task
 from core.gateway import TCPServer, UDPServer, connection_manager
-from models import Device, AlertHistory
-from models.schemas import NormalizedPosition, WSMessageType
+from models import Device, AlertHistory, User
+from models.schemas import NormalizedPosition, WSMessageType, UserCreate
 from protocols import ProtocolRegistry
 from routes import ROUTE_REGISTRY
 from routes.share import page_router
@@ -128,6 +128,28 @@ class WebSocketManager:
 
 ws_manager = WebSocketManager()
 
+async def _notify_home_assistant(user: User, position: NormalizedPosition, device: Device):
+    """Fire-and-forget POST to the HA webhook if the user has configured an instance URL."""
+    if not user.ha_instance_url:
+        return
+    webhook_url = user.ha_instance_url.rstrip('/') + '/api/webhook/routario'
+    payload = {
+        "device_id":  device.id,
+        "device_name": device.name,
+        "latitude":   position.latitude,
+        "longitude":  position.longitude,
+        "speed":      position.speed,
+        "course":     position.course,
+        "altitude":   position.altitude,
+        "ignition":   position.ignition,
+        "timestamp":  position.device_time.isoformat(),
+    }
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            await client.post(webhook_url, json=payload)
+    except Exception as e:
+        logger.warning(f"HA webhook failed for user {user.id}: {e}")
+
 
 # ==================== Position / Command Callbacks ====================
 
@@ -143,6 +165,9 @@ async def process_position_callback(position: NormalizedPosition):
         alert_engine = get_alert_engine()
         await alert_engine.process_position_alerts(position, device, device.state)
         await ws_manager.broadcast_position_update(position, device)
+        # Notify Home Assistant for each user assigned to this device
+        for user in device.users:
+            await _notify_home_assistant(user, position, device)  # ← ADD
         logger.debug(f"Position processed: {device.name}")
     except Exception as e:
         logger.error(f"Position processing error: {e}", exc_info=True)                    
@@ -244,7 +269,6 @@ async def lifespan(app: FastAPI):
         try:
             existing = await db.get_user_by_username(settings.admin_username)
             if not existing:
-                from models.schemas import UserCreate
                 await db.create_user(UserCreate(
                     username=settings.admin_username,
                     email=settings.admin_email,
