@@ -43,6 +43,7 @@ async function loadSettings() {
         
         document.getElementById('username').value = user.username || '';
         document.getElementById('email').value = user.email || '';
+        document.getElementById('haInstanceUrl').value = user.ha_instance_url || '';  // ← ADD
         
         channels = user.notification_channels || [];
         renderChannels();
