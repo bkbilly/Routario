@@ -1,6 +1,6 @@
 """
 H02 Protocol Decoder
-Supports H02 and compatible Chinese GPS tracker protocol
+Supports H02 and compatible Chinese GPS tracker protocol.
 Used by devices branded as H02, H08, H12, and many OEM clones.
 
 Protocol reference:
@@ -12,7 +12,7 @@ Protocol reference:
 import logging
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from models.schemas import NormalizedPosition
 from . import BaseProtocolDecoder, ProtocolRegistry
@@ -29,9 +29,8 @@ def _parse_coord(value: str, hemi: str) -> Optional[float]:
     if not value:
         return None
     try:
-        dot = value.index('.')
-        # Degrees are all digits before the last two pre-decimal digits
-        deg = float(value[:dot - 2])
+        dot  = value.index('.')
+        deg  = float(value[:dot - 2])
         mins = float(value[dot - 2:])
         result = deg + mins / 60.0
         if hemi.upper() in ('S', 'W'):
@@ -43,10 +42,7 @@ def _parse_coord(value: str, hemi: str) -> Optional[float]:
 
 
 def _parse_time(time_str: str, date_str: str) -> Optional[datetime]:
-    """
-    Parse H02 time (HHMMSS) and date (DDMMYY) into a UTC datetime.
-    Returns None on failure.
-    """
+    """Parse H02 time (HHMMSS) and date (DDMMYY) into a UTC datetime."""
     try:
         hh = int(time_str[0:2])
         mm = int(time_str[2:4])
@@ -63,16 +59,16 @@ def _parse_time(time_str: str, date_str: str) -> Optional[datetime]:
 def _parse_flags(flags_hex: str) -> Dict[str, Any]:
     """
     Parse the H02 status/flags field (hex string).
-    Bit meanings vary slightly by firmware but bit 0 is ACC/ignition on most devices.
+    Bit 0 = ACC/ignition, bit 1 = charging, bit 2 = alarm, bit 3 = GPS signal OK.
     """
     sensors: Dict[str, Any] = {}
     try:
         flags = int(flags_hex, 16)
-        sensors['ignition'] = bool(flags & 0x01)   # ACC / ignition
-        sensors['charging'] = bool(flags & 0x02)
-        sensors['alarm_active'] = bool(flags & 0x04)
+        sensors['ignition']      = bool(flags & 0x01)
+        sensors['charging']      = bool(flags & 0x02)
+        sensors['alarm_active']  = bool(flags & 0x04)
         sensors['gps_signal_ok'] = bool(flags & 0x08)
-        sensors['flags_raw'] = flags_hex
+        sensors['flags_raw']     = flags_hex
     except (ValueError, TypeError):
         pass
     return sensors
@@ -97,8 +93,66 @@ class H02Decoder(BaseProtocolDecoder):
     PORT = 5013
     PROTOCOL_TYPES = ['tcp']
 
-    # Regex to find a complete H02 message: *HQ,...# with optional \r\n
+    # Regex to find a complete H02 message: *HQ,...#
     _MSG_RE = re.compile(r'\*HQ,([^#]+)#', re.ASCII)
+
+    # ================================================================== #
+    #  Command Registry                                                   #
+    # ================================================================== #
+    COMMAND_REGISTRY = {
+        'reboot': {
+            'description': 'Reboot the device',
+            'example': 'reboot',
+            'requires_params': False,
+            '_cmd': 'D1',
+        },
+        'request_position': {
+            'description': 'Request an immediate position update',
+            'example': 'request_position',
+            'requires_params': False,
+            '_cmd': 'R0',
+        },
+        'set_interval': {
+            'description': 'Set GPS reporting interval (seconds)',
+            'example': 'set_interval 30',
+            'requires_params': True,
+            '_cmd': None,   # built dynamically
+        },
+        'set_apn': {
+            'description': 'Set the GPRS APN',
+            'example': 'set_apn internet',
+            'requires_params': True,
+            '_cmd': None,
+        },
+        'arm': {
+            'description': 'Arm the device / enable alarm',
+            'example': 'arm',
+            'requires_params': False,
+            '_cmd': 'SCF,0,1',
+        },
+        'disarm': {
+            'description': 'Disarm the device / disable alarm',
+            'example': 'disarm',
+            'requires_params': False,
+            '_cmd': 'SCF,0,0',
+        },
+        'set_output': {
+            'description': 'Set digital output / relay. params: state=0|1',
+            'example': 'set_output 1',
+            'requires_params': True,
+            '_cmd': None,
+        },
+        'custom': {
+            'description': 'Send a raw H02 command string, e.g. "R1" or "S20,0030"',
+            'example': 'R1',
+            'requires_params': True,
+            '_cmd': None,
+        },
+    }
+
+    # ================================================================== #
+    #  Decode                                                             #
+    # ================================================================== #
 
     async def decode(
         self,
@@ -117,25 +171,23 @@ class H02Decoder(BaseProtocolDecoder):
 
         match = self._MSG_RE.search(text)
         if not match:
-            # No complete message yet — wait if buffer is small, reset if huge
             if len(data) > 2048:
                 logger.warning("H02: Buffer overflow, resetting")
                 return None, len(data)
             return None, 0
 
-        # consumed = everything up to and including the closing '#'
         consumed = match.end()
-        payload = match.group(1)  # everything between *HQ, and #
-        parts = payload.split(',')
+        payload  = match.group(1)
+        parts    = payload.split(',')
 
         if len(parts) < 2:
             logger.warning(f"H02: Too few fields: {payload[:60]}")
             return None, consumed
 
-        imei = parts[0].strip()
+        imei     = parts[0].strip()
         msg_type = parts[1].strip().upper()
 
-        # ── Heartbeat ────────────────────────────────────────────
+        # ── Heartbeat ─────────────────────────────────────────────
         if msg_type == 'HTBT':
             sensors: Dict[str, Any] = {}
             if len(parts) > 2:
@@ -143,55 +195,55 @@ class H02Decoder(BaseProtocolDecoder):
                     sensors['battery_voltage'] = float(parts[2])
                 except ValueError:
                     pass
-            logger.debug(f"H02: Heartbeat from {imei}")
-            # Respond with *HQ,<imei>,R12# to acknowledge
             response = f"*HQ,{imei},R12#\r\n".encode('ascii')
-            return {"imei": imei, "response": response}, consumed
+            return {'imei': imei, 'response': response, 'sensors': sensors}, consumed
 
-        # ── Standard GPS position: V1 / V4 ───────────────────────
+        # ── Standard GPS position: V1 / V4 ────────────────────────
         if msg_type in ('V1', 'V4'):
-            return self._parse_v1(parts, imei, consumed)
+            return self._parse_v1(parts, imei, consumed, msg_type)
 
-        # ── Cell-tower (LBS) position: NBR ───────────────────────
+        # ── Cell-tower (LBS) position: NBR ────────────────────────
         if msg_type == 'NBR':
             return self._parse_nbr(parts, imei, consumed)
 
-        # ── Link / status report ──────────────────────────────────
+        # ── Link / status report ───────────────────────────────────
         if msg_type == 'LINK':
             return self._parse_link(parts, imei, consumed)
 
         logger.debug(f"H02: Unhandled message type '{msg_type}' from {imei}")
         return None, consumed
 
-    # ------------------------------------------------------------------
-    # Message-type parsers
-    # ------------------------------------------------------------------
+    # ================================================================== #
+    #  Message-type parsers                                               #
+    # ================================================================== #
 
     def _parse_v1(
         self,
         parts: list,
         imei: str,
         consumed: int,
+        msg_type: str = 'V1',
     ) -> Tuple[Optional[NormalizedPosition], int]:
         """
         V1 / V4 GPS position report.
 
-        Layout (0-indexed parts after splitting on comma):
+        Field layout (0-indexed after splitting on comma):
           0  IMEI
           1  V1
-          2  HHMMSS       time
-          3  A/V           GPS validity
-          4  DDMM.MMMM    latitude
+          2  HHMMSS        time
+          3  A/V            GPS validity
+          4  DDMM.MMMM     latitude
           5  N/S
-          6  DDDMM.MMMM   longitude
+          6  DDDMM.MMMM    longitude
           7  E/W
           8  speed (knots)
           9  course (degrees)
-          10 DDMMYY        date
+          10 DDMMYY         date
           11 flags (hex)
           12 IO status (hex, optional)
           13 battery voltage (optional)
-          14 signal (optional)
+          14 GSM signal (optional)
+          15 altitude in metres (optional, some firmware variants)
         """
         if len(parts) < 11:
             logger.warning(f"H02 V1: Too few fields ({len(parts)}) for {imei}")
@@ -206,16 +258,15 @@ class H02Decoder(BaseProtocolDecoder):
         date_str  = parts[10].strip()
 
         device_time = _parse_time(time_str, date_str) or datetime.now(timezone.utc)
-
-        latitude  = _parse_coord(lat_str, lat_hemi)
-        longitude = _parse_coord(lon_str, lon_hemi)
+        latitude    = _parse_coord(lat_str,  lat_hemi)
+        longitude   = _parse_coord(lon_str,  lon_hemi)
 
         if latitude is None or longitude is None:
             logger.warning(f"H02 V1: Bad coordinates for {imei}")
             return None, consumed
 
         try:
-            speed_kmh = float(parts[8]) * 1.852  # knots → km/h
+            speed_kmh = float(parts[8]) * 1.852   # knots → km/h
         except (ValueError, IndexError):
             speed_kmh = 0.0
 
@@ -224,31 +275,40 @@ class H02Decoder(BaseProtocolDecoder):
         except (ValueError, IndexError):
             course = 0.0
 
-        # Flags / status
-        sensors: Dict[str, Any] = {}
+        sensors:  Dict[str, Any] = {}
         ignition: Optional[bool] = None
+
+        # Flags / status (field 11)
         if len(parts) > 11 and parts[11].strip():
-            sensors = _parse_flags(parts[11].strip())
+            sensors  = _parse_flags(parts[11].strip())
             ignition = sensors.pop('ignition', None)
 
-        # IO status byte
+        # IO status byte (field 12)
         if len(parts) > 12 and parts[12].strip():
             try:
                 sensors['io_status'] = int(parts[12].strip(), 16)
             except ValueError:
                 pass
 
-        # Battery voltage
+        # Battery voltage (field 13)
         if len(parts) > 13 and parts[13].strip():
             try:
                 sensors['battery_voltage'] = float(parts[13].strip())
             except ValueError:
                 pass
 
-        # Signal
+        # GSM signal (field 14)
         if len(parts) > 14 and parts[14].strip():
             try:
                 sensors['gsm_signal'] = int(parts[14].strip())
+            except ValueError:
+                pass
+
+        # Altitude in metres (field 15 — present in some firmware variants)
+        altitude = 0.0
+        if len(parts) > 15 and parts[15].strip():
+            try:
+                altitude = float(parts[15].strip())
             except ValueError:
                 pass
 
@@ -256,20 +316,20 @@ class H02Decoder(BaseProtocolDecoder):
         if not valid:
             logger.debug(f"H02 V1: Invalid GPS fix (V) for {imei}, storing anyway")
 
-        position = NormalizedPosition(
+        return NormalizedPosition(
             imei=imei,
             device_time=device_time,
             server_time=datetime.now(timezone.utc),
             latitude=latitude,
             longitude=longitude,
+            altitude=altitude,
             speed=speed_kmh,
             course=course,
             valid=valid,
             ignition=ignition,
             sensors=sensors,
-        )
-        logger.debug(f"H02 V1: {imei} @ {latitude},{longitude} valid={valid}")
-        return position, consumed
+            raw_data={'message_type': msg_type},
+        ), consumed
 
     def _parse_nbr(
         self,
@@ -280,30 +340,18 @@ class H02Decoder(BaseProtocolDecoder):
         """
         NBR — network-based (cell tower / LBS) location report.
         No GPS coordinates; stores cell info in sensors only.
-
-        Layout:
-          0  IMEI
-          1  NBR
-          2  HHMMSS
-          3  MCC
-          4  MNC
-          5  (LAC,CID,signal|LAC,CID,signal|...)  — parenthesised group
-          ... battery voltage, signal, DDMMYY may follow
         """
         sensors: Dict[str, Any] = {'message_type': 'NBR'}
 
-        if len(parts) > 2:
-            sensors['mcc'] = parts[2].strip() if len(parts) > 3 else ''
-            sensors['mnc'] = parts[3].strip() if len(parts) > 4 else ''
-
-        # The cell list may be wrapped in parentheses and span several comma-
-        # separated fields; just store it as-is for now.
-        raw_cells = ','.join(parts[5:]).strip().strip('()')
-        sensors['cell_info'] = raw_cells
+        if len(parts) > 3:
+            sensors['mcc'] = parts[3].strip()
+        if len(parts) > 4:
+            sensors['mnc'] = parts[4].strip()
+        if len(parts) > 5:
+            sensors['cell_info'] = ','.join(parts[5:]).strip().strip('()')
 
         logger.debug(f"H02 NBR: Cell location from {imei}")
-        # Return as a plain dict — no GPS position to store
-        return {"imei": imei, "sensors": sensors}, consumed
+        return {'imei': imei, 'sensors': sensors, 'raw_data': {'message_type': 'NBR'}}, consumed
 
     def _parse_link(
         self,
@@ -329,55 +377,90 @@ class H02Decoder(BaseProtocolDecoder):
 
         try:
             if len(parts) > 3:
-                sensors['satellites']   = int(parts[3].strip())
+                sensors['satellites']  = int(parts[3].strip())
             if len(parts) > 4:
-                sensors['gsm_signal']   = int(parts[4].strip())
+                sensors['gsm_signal']  = int(parts[4].strip())
             if len(parts) > 5:
-                sensors['battery_pct']  = int(parts[5].strip())
+                sensors['battery_pct'] = int(parts[5].strip())
             if len(parts) > 6 and parts[6].strip():
-                sensors['steps']        = int(parts[6].strip())
+                sensors['steps']       = int(parts[6].strip())
             if len(parts) > 7 and parts[7].strip():
-                sensors['rolls']        = int(parts[7].strip())
+                sensors['rolls']       = int(parts[7].strip())
         except (ValueError, IndexError):
             pass
 
         logger.debug(f"H02 LINK: Status from {imei}")
-        return {"imei": imei, "sensors": sensors}, consumed
+        return {'imei': imei, 'sensors': sensors, 'raw_data': {'message_type': 'LINK'}}, consumed
 
-    # ------------------------------------------------------------------
-    # Commands
-    # ------------------------------------------------------------------
+    # ================================================================== #
+    #  Command encoding                                                   #
+    # ================================================================== #
 
     async def encode_command(self, command_type: str, params: Dict[str, Any]) -> bytes:
-        imei = params.get('imei', '')
+        if not params:
+            params = {}
+
+        # H02 embeds the IMEI in the command frame itself, so it must be
+        # passed in params by the caller (pulled from the device session).
+        imei = params.get('imei', '').strip()
         if not imei:
-            logger.warning("H02: IMEI required for commands")
+            logger.warning("H02: encode_command called without 'imei' in params")
             return b''
 
-        if command_type == 'reboot':
-            cmd = f"*HQ,{imei},D1#\r\n"
-        elif command_type == 'request_position':
-            cmd = f"*HQ,{imei},R0#\r\n"
-        elif command_type == 'set_interval':
-            interval = int(params.get('interval', 30))
-            cmd = f"*HQ,{imei},S20,{interval:04d}#\r\n"
-        elif command_type == 'set_apn':
-            apn = params.get('apn', 'internet')
-            cmd = f"*HQ,{imei},S1,{apn}#\r\n"
-        else:
-            logger.warning(f"H02: Unknown command '{command_type}'")
-            return b''
+        cmd_key = command_type.lower()
 
-        return cmd.encode('ascii')
+        # ── Custom raw command string ──────────────────────────────
+        if cmd_key == 'custom':
+            raw = params.get('payload', '').strip()
+            if not raw:
+                return b''
+            return self._frame(imei, raw)
 
-    def get_available_commands(self) -> list:
-        return ['reboot', 'request_position', 'set_interval', 'set_apn']
+        # ── set_interval ───────────────────────────────────────────
+        if cmd_key == 'set_interval':
+            try:
+                interval = int(params.get('interval', params.get('payload', 30)))
+            except (ValueError, TypeError):
+                interval = 30
+            return self._frame(imei, f'S20,{interval:04d}')
+
+        # ── set_apn ────────────────────────────────────────────────
+        if cmd_key == 'set_apn':
+            apn = str(params.get('apn', params.get('payload', 'internet'))).strip()
+            return self._frame(imei, f'S1,{apn}')
+
+        # ── set_output (relay control) ─────────────────────────────
+        if cmd_key == 'set_output':
+            try:
+                state = int(params.get('state', params.get('payload', 0)))
+            except (ValueError, TypeError):
+                state = 0
+            # S36 = cut engine/output ON, S37 = restore/output OFF
+            return self._frame(imei, 'S36' if state else 'S37')
+
+        # ── Registry-based static commands ─────────────────────────
+        cmd_info = self.COMMAND_REGISTRY.get(cmd_key)
+        if cmd_info and cmd_info.get('_cmd'):
+            return self._frame(imei, cmd_info['_cmd'])
+
+        logger.warning(f"H02: Unknown or unimplemented command: {command_type!r}")
+        return b''
+
+    def _frame(self, imei: str, cmd: str) -> bytes:
+        """Build a complete *HQ,<imei>,<cmd># message."""
+        return f'*HQ,{imei},{cmd}#\r\n'.encode('ascii')
+
+    # ================================================================== #
+    #  Command metadata                                                   #
+    # ================================================================== #
+
+    def get_available_commands(self) -> List[str]:
+        return list(self.COMMAND_REGISTRY.keys())
 
     def get_command_info(self, command_type: str) -> Dict[str, Any]:
-        info = {
-            'reboot':           {'description': 'Reboot the device',                   'params': {}},
-            'request_position': {'description': 'Request an immediate position update', 'params': {}},
-            'set_interval':     {'description': 'Set reporting interval (seconds)',     'params': {'interval': 'int'}},
-            'set_apn':          {'description': 'Set GPRS APN',                        'params': {'apn': 'str'}},
+        info = self.COMMAND_REGISTRY.get(command_type.lower(), {})
+        return {
+            'description':     info.get('description', 'Unknown command'),
+            'example':         info.get('example', ''),
+            'requires_params': info.get('requires_params', False),
         }
-        return info.get(command_type, {'description': 'Unknown command', 'supported': False})

@@ -1,61 +1,165 @@
+"""
+Meitrack Protocol Decoder
+Supports Meitrack MVT, T1, T3, T333, and other series GPS trackers.
+
+Port: 5020 (TCP)
+Format: ASCII text with $$ delimiters and optional XOR checksum.
+
+Device → Server message structure:
+  $$<flag><length>,<IMEI>,<event_code>,<field_count>,<fields...>*<XOR>\r\n
+
+Server → Device command structure:
+  @@<flag><length>,<IMEI>,<cmd_code>,<args>*<XOR>\r\n
+
+Example (device → server):
+  $$A123,123456789012345,AAA,35,31.234567,121.234567,120101120101,A,10,12,0,0,0,100,200,12.34,3.45,1,2,3|4|5|6|*AB\r\n
+
+Common event codes:
+  AAA — GPS tracking / login
+  CCC — Heartbeat / status
+  DDD — GPS tracking (extended)
+  BPP — SOS alarm
+  BPA — Power cut alarm
+  BPB — Low battery alarm
+  BPC — Speeding alarm
+  BPD — Geo-fence alarm
+  BPE — Towing alarm
+  BPF — Tampering / shock alarm
+
+Field layout (payload after event code + field count):
+  0:  (field count — already consumed by regex group)
+  1:  Latitude  (decimal degrees)
+  2:  Longitude (decimal degrees)
+  3:  Timestamp (YYMMDDHHMMSS)
+  4:  GPS validity (A = valid, V = invalid)
+  5:  Satellites
+  6:  GSM signal strength
+  7:  Speed (km/h)
+  8:  Course (degrees)
+  9:  HDOP
+  10: Altitude (metres)
+  11: Odometer (metres — divide by 1000 for km)
+  12: Runtime (seconds)
+  13: Base station info (MCC|MNC|LAC|CellID)
+  14: Battery voltage (mV — divide by 1000 for V)
+  15: Battery percent
+  16: Digital inputs bitmask (bit 0 = ACC / ignition)
+  17: Digital outputs bitmask
+  18: Analog inputs (pipe-separated, mV)
+"""
 import re
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import logging
+
 from models.schemas import NormalizedPosition
 from . import BaseProtocolDecoder, ProtocolRegistry
 
 logger = logging.getLogger(__name__)
 
+
+# Event code → sensor annotation
+_EVENT_MAP: Dict[str, Dict[str, str]] = {
+    'BPP': {'alert_type': 'sos'},
+    'BPA': {'alert_type': 'power_cut'},
+    'BPB': {'alert_type': 'low_battery'},
+    'BPC': {'alert_type': 'overspeed'},
+    'BPD': {'alert_type': 'geofence'},
+    'BPE': {'alert_type': 'towing'},
+    'BPF': {'alert_type': 'tampering'},
+    'CCC': {'event':      'heartbeat'},
+}
+
+
 @ProtocolRegistry.register("meitrack")
 class MeitrackDecoder(BaseProtocolDecoder):
     """
-    Meitrack Protocol Decoder
-    Supports Meitrack MVT, T, and other series GPS trackers.
-
-    Port: 5020 (TCP)
-    Format: ASCII text with $$ delimiters
-
-    Example:
-      $$A123,123456789012345,AAA,35,31.234567,121.234567,120101120101,A,10,12,0,0,0,100,200,12.34,3.45,1,2,3|4|5|6|*AB<CR><LF>
-
-    Field layout:
-      0:  Field count
-      1:  Latitude
-      2:  Longitude
-      3:  Timestamp (YYMMDDHHMMSS)
-      4:  GPS validity (A/V)
-      5:  Satellites
-      6:  GSM signal
-      7:  Speed (km/h)
-      8:  Course
-      9:  HDOP
-      10: Altitude
-      11: Odometer
-      12: Runtime
-      13: Base station (MCC|MNC|LAC|CellID)
-      14: Battery voltage
-      15: Battery percent
-      16: Digital inputs bitmask (bit 0 = ACC/ignition)
-      17: Digital outputs bitmask
-      18: Analog inputs (pipe-separated)
+    Meitrack Protocol Decoder.
+    Supports MVT100, MVT340, MVT380, T1, T3, T333, and compatible devices.
     """
 
     PORT = 5020
     PROTOCOL_TYPES = ['tcp']
 
+    # ================================================================== #
+    #  Command Registry                                                   #
+    # ================================================================== #
+    COMMAND_REGISTRY = {
+        'request_position': {
+            'description': 'Request an immediate position update',
+            'example': 'request_position',
+            'requires_params': False,
+            '_code': 'A10',
+            '_args': lambda imei, p: imei,
+        },
+        'reboot': {
+            'description': 'Reboot the device',
+            'example': 'reboot',
+            'requires_params': False,
+            '_code': 'A11',
+            '_args': lambda imei, p: imei,
+        },
+        'set_interval': {
+            'description': 'Set GPS reporting interval (seconds)',
+            'example': 'set_interval 30',
+            'requires_params': True,
+            '_code': 'A12',
+            '_args': lambda imei, p: f"{imei},{int(p.get('interval', p.get('payload', 30)))}",
+        },
+        'set_server': {
+            'description': 'Set server IP and port',
+            'example': 'set_server 1.2.3.4 5020',
+            'requires_params': True,
+            '_code': 'A13',
+            '_args': lambda imei, p: f"{imei},{p.get('ip','')},{int(p.get('port',5020))}",
+        },
+        'set_apn': {
+            'description': 'Set GPRS APN (and optional username/password)',
+            'example': 'set_apn internet',
+            'requires_params': True,
+            '_code': 'A14',
+            '_args': lambda imei, p: f"{imei},{p.get('apn','internet')},{p.get('username','')},{p.get('password','')}",
+        },
+        'set_output': {
+            'description': 'Control digital output. params: output=ACC|OUT1|OUT2, state=0|1',
+            'example': 'set_output ACC 1',
+            'requires_params': True,
+            '_code': 'A16',
+            '_args': None,   # built dynamically
+        },
+        'set_timezone': {
+            'description': 'Set timezone offset in minutes (e.g. 120 for UTC+2)',
+            'example': 'set_timezone 120',
+            'requires_params': True,
+            '_code': 'A15',
+            '_args': lambda imei, p: f"{imei},{int(p.get('timezone', p.get('payload', 0)))}",
+        },
+        'custom': {
+            'description': 'Send a raw Meitrack command body, e.g. "A10,<imei>"',
+            'example': 'A10,123456789012345',
+            'requires_params': True,
+            '_code': None,
+            '_args': None,
+        },
+    }
+
     def __init__(self):
         super().__init__()
+        # Matches: $$<flag><len>,<imei>,<event>,<payload>[*<XOR>]\r\n
         self.pattern = re.compile(
             r'\$\$([A-Z]\d+),([^,]+),([^,]+),(.+?)(?:\*([0-9A-F]{2}))?\r?\n',
-            re.DOTALL
+            re.DOTALL,
         )
+
+    # ================================================================== #
+    #  Decode                                                             #
+    # ================================================================== #
 
     async def decode(
         self,
         data: bytes,
         client_info: Dict[str, Any],
-        known_imei: Optional[str] = None
+        known_imei: Optional[str] = None,
     ) -> Tuple[Union[NormalizedPosition, Dict[str, Any], None], int]:
         try:
             if not data:
@@ -94,13 +198,22 @@ class MeitrackDecoder(BaseProtocolDecoder):
 
             fields = payload.split(',')
 
-            if event_code in ('AAA', 'CCC', 'DDD'):
+            # ── Position-bearing event codes ───────────────────────
+            if event_code in (
+                'AAA', 'CCC', 'DDD',
+                'BPP', 'BPA', 'BPB', 'BPC', 'BPD', 'BPE', 'BPF',
+            ):
                 position = self._parse_position(imei, event_code, fields)
                 if position:
+                    # Annotate from event map
+                    for k, v in _EVENT_MAP.get(event_code, {}).items():
+                        position.sensors[k] = v
+
                     if event_code == 'AAA':
-                        # FIX: return login ACK alongside position instead of discarding it
+                        # Login — ACK and return position together
                         response = f"$$B{len(imei) + 3},{imei},AAA\r\n".encode('ascii')
-                        return {"position": position, "imei": imei, "response": response}, consumed
+                        return {'position': position, 'imei': imei, 'response': response}, consumed
+
                     return position, consumed
 
             else:
@@ -112,34 +225,39 @@ class MeitrackDecoder(BaseProtocolDecoder):
             logger.error(f"Meitrack decode error: {e}", exc_info=True)
             return None, len(data) if data else 1
 
+    # ================================================================== #
+    #  Position parser                                                    #
+    # ================================================================== #
+
     def _parse_position(
         self,
         imei: str,
         event_code: str,
-        fields: list,
+        fields: List[str],
     ) -> Optional[NormalizedPosition]:
         try:
             if len(fields) < 10:
-                logger.warning(f"Meitrack: Not enough fields ({len(fields)})")
+                logger.warning(f"Meitrack: Not enough fields ({len(fields)}) for {event_code}")
                 return None
 
-            def _float(idx: int, default: float = 0.0) -> float:
+            def _f(idx: int, default: float = 0.0) -> float:
                 try:
-                    return float(fields[idx]) if len(fields) > idx and fields[idx] else default
+                    return float(fields[idx]) if len(fields) > idx and fields[idx].strip() else default
                 except ValueError:
                     return default
 
-            def _int(idx: int, default: int = 0) -> int:
+            def _i(idx: int, default: int = 0) -> int:
                 try:
-                    return int(fields[idx]) if len(fields) > idx and fields[idx] else default
+                    return int(fields[idx]) if len(fields) > idx and fields[idx].strip() else default
                 except ValueError:
                     return default
 
-            latitude  = _float(1)
-            longitude = _float(2)
+            latitude  = _f(1)
+            longitude = _f(2)
 
-            # Timestamp YYMMDDHHMMSS
-            time_str = fields[3] if len(fields) > 3 else ''
+            # Timestamp: YYMMDDHHMMSS
+            time_str    = fields[3].strip() if len(fields) > 3 else ''
+            device_time = datetime.now(timezone.utc)
             if len(time_str) >= 12:
                 try:
                     device_time = datetime(
@@ -152,17 +270,15 @@ class MeitrackDecoder(BaseProtocolDecoder):
                         tzinfo=timezone.utc,
                     )
                 except ValueError:
-                    device_time = datetime.now(timezone.utc)
-            else:
-                device_time = datetime.now(timezone.utc)
+                    pass
 
-            valid      = fields[4] == 'A' if len(fields) > 4 else False
-            satellites = _int(5)
-            gsm_signal = _int(6)
-            speed      = _float(7)
-            course     = _float(8)
-            hdop       = _float(9)
-            altitude   = _float(10)
+            valid      = fields[4].strip() == 'A' if len(fields) > 4 else False
+            satellites = _i(5)
+            gsm_signal = _i(6)
+            speed      = _f(7)
+            course     = _f(8)
+            hdop       = _f(9)
+            altitude   = _f(10)
 
             sensors: Dict[str, Any] = {
                 'event_code': event_code,
@@ -170,24 +286,24 @@ class MeitrackDecoder(BaseProtocolDecoder):
                 'hdop':       hdop,
             }
 
-            # Odometer
-            if len(fields) > 11 and fields[11]:
+            # Odometer — stored in metres, expose as km
+            if len(fields) > 11 and fields[11].strip():
                 try:
-                    sensors['odometer'] = float(fields[11])
+                    sensors['odometer'] = round(float(fields[11]) / 1000.0, 3)
                 except ValueError:
                     pass
 
-            # Runtime
-            if len(fields) > 12 and fields[12]:
+            # Runtime (seconds)
+            if len(fields) > 12 and fields[12].strip():
                 try:
                     sensors['runtime'] = int(fields[12])
                 except ValueError:
                     pass
 
-            # Base station info
-            if len(fields) > 13 and fields[13]:
+            # Base station: MCC|MNC|LAC|CellID
+            if len(fields) > 13 and fields[13].strip():
                 try:
-                    bs = fields[13].split('|')
+                    bs = fields[13].strip().split('|')
                     if len(bs) >= 4:
                         sensors['mcc']     = bs[0]
                         sensors['mnc']     = bs[1]
@@ -196,50 +312,50 @@ class MeitrackDecoder(BaseProtocolDecoder):
                 except Exception:
                     pass
 
-            # Battery voltage
-            if len(fields) > 14 and fields[14]:
+            # Battery voltage — stored in mV, expose as V
+            if len(fields) > 14 and fields[14].strip():
                 try:
-                    sensors['battery_voltage'] = float(fields[14])
+                    sensors['battery_voltage'] = round(float(fields[14]) / 1000.0, 3)
                 except ValueError:
                     pass
 
             # Battery percent
-            if len(fields) > 15 and fields[15]:
+            if len(fields) > 15 and fields[15].strip():
                 try:
                     sensors['battery_percent'] = int(fields[15])
                 except ValueError:
                     pass
 
-            # FIX: extract ignition from digital inputs bitmask (bit 0 = ACC)
+            # Digital inputs — bit 0 = ACC / ignition
             ignition: Optional[bool] = None
-            if len(fields) > 16 and fields[16]:
+            if len(fields) > 16 and fields[16].strip():
                 try:
-                    digital_inputs = int(fields[16])
-                    sensors['digital_inputs'] = digital_inputs
-                    ignition = bool(digital_inputs & 0x01)
+                    din = int(fields[16])
+                    sensors['digital_inputs'] = din
+                    ignition = bool(din & 0x01)
                 except ValueError:
                     pass
 
             # Digital outputs
-            if len(fields) > 17 and fields[17]:
+            if len(fields) > 17 and fields[17].strip():
                 try:
                     sensors['digital_outputs'] = int(fields[17])
                 except ValueError:
                     pass
 
-            # Analog inputs (pipe-separated)
-            if len(fields) > 18 and fields[18]:
+            # Analog inputs (pipe-separated, in mV — expose as V)
+            if len(fields) > 18 and fields[18].strip():
                 try:
-                    for i, val in enumerate(fields[18].split('|')):
+                    for i, val in enumerate(fields[18].strip().split('|')):
                         if val:
-                            sensors[f'analog_{i + 1}'] = float(val)
+                            sensors[f'analog_{i + 1}'] = round(float(val) / 1000.0, 3)
                 except Exception:
                     pass
 
             return NormalizedPosition(
                 imei=imei,
                 device_time=device_time,
-                server_time=datetime.now(timezone.utc),  # FIX: was missing
+                server_time=datetime.now(timezone.utc),
                 latitude=latitude,
                 longitude=longitude,
                 altitude=altitude,
@@ -249,80 +365,100 @@ class MeitrackDecoder(BaseProtocolDecoder):
                 valid=valid,
                 ignition=ignition,
                 sensors=sensors,
+                raw_data={'event_code': event_code},
             )
 
         except Exception as e:
             logger.error(f"Meitrack position parse error: {e}", exc_info=True)
             return None
 
-    # ── Commands ─────────────────────────────────────────────────────────────
+    # ================================================================== #
+    #  Command encoding                                                   #
+    # ================================================================== #
 
     async def encode_command(self, command_type: str, params: Dict[str, Any]) -> bytes:
-        try:
-            imei = params.get('imei', '')
-            if not imei:
-                logger.warning("Meitrack: IMEI required for commands")
-                return b''
+        if not params:
+            params = {}
 
-            if command_type == 'request_position':
-                cmd_str = f"A10,{imei}"
-            elif command_type == 'reboot':
-                cmd_str = f"A11,{imei}"
-            elif command_type == 'set_interval':
-                interval = params.get('interval', 30)
-                cmd_str = f"A12,{imei},{interval}"
-            elif command_type == 'set_server':
-                ip   = params.get('ip', '')
-                port = params.get('port', 5020)
-                cmd_str = f"A13,{imei},{ip},{port}"
-            elif command_type == 'set_apn':
-                apn      = params.get('apn', 'internet')
-                username = params.get('username', '')
-                password = params.get('password', '')
-                cmd_str = f"A14,{imei},{apn},{username},{password}"
-            elif command_type == 'set_timezone':
-                tz_offset = params.get('timezone', 0)
-                cmd_str = f"A15,{imei},{tz_offset}"
-            elif command_type == 'enable_output':
-                output_type = params.get('output_type', 'ACC')
-                cmd_str = f"A16,{imei},{output_type},1"
-            elif command_type == 'disable_output':
-                output_type = params.get('output_type', 'ACC')
-                cmd_str = f"A16,{imei},{output_type},0"
-            elif command_type == 'custom':
-                cmd_str = params.get('payload', '')
-            else:
-                logger.warning(f"Meitrack: Unknown command '{command_type}'")
-                return b''
-
-            length  = len(cmd_str)
-            command = f"@@A{length:02d},{cmd_str}"
-            checksum = 0
-            for byte in command.encode('ascii'):
-                checksum ^= byte
-            command += f"*{checksum:02X}\r\n"
-            return command.encode('ascii')
-
-        except Exception as e:
-            logger.error(f"Meitrack command encode error: {e}")
+        imei = params.get('imei', '').strip()
+        if not imei:
+            logger.warning("Meitrack: encode_command called without 'imei' in params")
             return b''
 
-    def get_available_commands(self) -> list:
-        return [
-            'request_position', 'reboot', 'set_interval', 'set_server',
-            'set_apn', 'set_timezone', 'enable_output', 'disable_output', 'custom',
-        ]
+        cmd_key = command_type.lower()
+
+        # ── custom: raw command body ───────────────────────────────
+        if cmd_key == 'custom':
+            raw = params.get('payload', '').strip()
+            if not raw:
+                return b''
+            return self._frame(raw)
+
+        # ── set_output: A16,<imei>,<output_type>,<state> ──────────
+        if cmd_key == 'set_output':
+            output = str(params.get('output', params.get('output_type', 'ACC'))).strip()
+            try:
+                state = int(params.get('state', params.get('payload', 0)))
+            except (ValueError, TypeError):
+                state = 0
+            return self._frame(f'A16,{imei},{output},{state}')
+
+        # ── Registry-based commands with lambda args ───────────────
+        cmd_info = self.COMMAND_REGISTRY.get(cmd_key)
+        if cmd_info and cmd_info.get('_code') and cmd_info.get('_args'):
+            try:
+                args = cmd_info['_args'](imei, params)
+                return self._frame(f"{cmd_info['_code']},{args}")
+            except Exception as e:
+                logger.error(f"Meitrack: Failed to build command {cmd_key!r}: {e}")
+                return b''
+
+        logger.warning(f"Meitrack: Unknown or unimplemented command: {command_type!r}")
+        return b''
+
+    def _frame(self, body: str) -> bytes:
+        """
+        Wrap a command body in the Meitrack server→device frame.
+
+        Format: @@<flag><length>,<body>*<XOR>\r\n
+
+        The length field counts everything from the flag char to the end of
+        body (inclusive), i.e. len("A" + str(length_field) + "," + body).
+        Meitrack uses a fixed single-character flag 'A' for most commands.
+        The XOR checksum covers the entire message including '@@'.
+        """
+        # First pass: estimate length (flag + len_digits + comma + body)
+        # length field = number of bytes from flag through end of body
+        flag    = 'A'
+        # The length digits themselves are part of the counted region, so we
+        # need to solve: len(flag + str(L) + "," + body) == L
+        # Typically body is short enough that len(str(L)) == 3 (100-999).
+        for digits in (2, 3, 4):
+            candidate = len(flag) + digits + 1 + len(body)   # flag + digits + comma + body
+            if len(str(candidate)) == digits:
+                length = candidate
+                break
+        else:
+            length = len(flag) + 3 + 1 + len(body)
+
+        msg_body   = f'@@{flag}{length},{body}'
+        xor        = 0
+        for ch in msg_body.encode('ascii'):
+            xor ^= ch
+        packet = f'{msg_body}*{xor:02X}\r\n'
+        return packet.encode('ascii')
+
+    # ================================================================== #
+    #  Command metadata                                                   #
+    # ================================================================== #
+
+    def get_available_commands(self) -> List[str]:
+        return list(self.COMMAND_REGISTRY.keys())
 
     def get_command_info(self, command_type: str) -> Dict[str, Any]:
-        info = {
-            'request_position': {'description': 'Request current position',          'params': {'imei': 'str'}},
-            'reboot':           {'description': 'Reboot the device',                 'params': {'imei': 'str'}},
-            'set_interval':     {'description': 'Set reporting interval (seconds)',   'params': {'imei': 'str', 'interval': 'int'}},
-            'set_server':       {'description': 'Set server IP and port',            'params': {'imei': 'str', 'ip': 'str', 'port': 'int'}},
-            'set_apn':          {'description': 'Set GPRS APN',                      'params': {'imei': 'str', 'apn': 'str'}},
-            'set_timezone':     {'description': 'Set timezone offset',               'params': {'imei': 'str', 'timezone': 'int'}},
-            'enable_output':    {'description': 'Enable output (ACC, etc.)',          'params': {'imei': 'str', 'output_type': 'str'}},
-            'disable_output':   {'description': 'Disable output (ACC, etc.)',         'params': {'imei': 'str', 'output_type': 'str'}},
-            'custom':           {'description': 'Send a raw custom command string',  'params': {'imei': 'str', 'payload': 'str'}},
+        info = self.COMMAND_REGISTRY.get(command_type.lower(), {})
+        return {
+            'description':     info.get('description', 'Unknown command'),
+            'example':         info.get('example', ''),
+            'requires_params': info.get('requires_params', False),
         }
-        return info.get(command_type, {'description': 'Unknown command', 'supported': False})

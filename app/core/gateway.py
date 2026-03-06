@@ -174,7 +174,7 @@ class TCPServer:
     
     async def start(self):
         self.server = await asyncio.start_server(self._handle_client, self.host, self.port)
-        logger.info(f"{self.protocol.upper()} TCP Server started on {self.host}:{self.port}")
+        # logger.info(f"{self.protocol.upper()} TCP Server started on {self.host}:{self.port}")
         async with self.server: await self.server.serve_forever()
 
 
@@ -205,7 +205,7 @@ class UDPServer:
             lambda: UDPProtocol(self.protocol, self.position_callback),
             local_addr=(self.host, self.port)
         )
-        logger.info(f"{self.protocol.upper()} UDP Server started on {self.host}:{self.port}")
+        # logger.info(f"{self.protocol.upper()} UDP Server started on {self.host}:{self.port}")
 
 async def send_command_to_device(imei: str, command_data: bytes) -> bool:
     writer = connection_manager.get_connection(imei)
