@@ -1,50 +1,80 @@
+"""
+Queclink Protocol Decoder
+Supports Queclink GV, GL, and GB series GPS trackers.
+
+Port: 5026 (TCP)
+Format: ASCII text-based. Messages start with '+' and end with '$'.
+
+Message structure:
+  +<PREFIX>:<MSG_TYPE>,<fields...>$
+
+  PREFIX   — RESP (unsolicited report), ACK (command acknowledgement),
+             BUFF (buffered report)
+  MSG_TYPE — GTFRI, GTSOS, GTIGN, etc.
+
+Fixed field layout for GTFRI-style position messages:
+  0:  Protocol version
+  1:  IMEI
+  2:  Device name
+  3:  State bitmap (hex) — bit 0 = ignition/ACC
+  4:  Report ID
+  5:  Report type
+  6:  Number
+  7:  HDOP
+  8:  Speed (km/h)
+  9:  Course (degrees)
+  10: Altitude (metres)
+  11: Longitude
+  12: Latitude
+  13: Timestamp (YYYYMMDDHHMMSS)
+  14: MCC
+  15: MNC
+  16: LAC
+  17: Cell ID
+  18: Reserved
+  19: Send time
+  20: Count / sequence
+
+Outbound command format (server → device):
+  AT+<CMD>=<password>,<params>$
+"""
 import re
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import logging
+
 from models.schemas import NormalizedPosition
 from . import BaseProtocolDecoder, ProtocolRegistry
 
 logger = logging.getLogger(__name__)
 
+# Map message types to alert_type / event sensor values
+_EVENT_MAP: Dict[str, Dict[str, str]] = {
+    'GTIGN': {'event':      'ignition_on'},
+    'GTIGF': {'event':      'ignition_off'},
+    'GTSOS': {'alert_type': 'sos'},
+    'GTSPD': {'alert_type': 'overspeed'},
+    'GTPNA': {'event':      'power_on'},
+    'GTPFA': {'event':      'power_off'},
+    'GTTOW': {'alert_type': 'towing'},
+    'GTDOG': {'alert_type': 'heartbeat'},
+}
+
+
 @ProtocolRegistry.register("queclink")
 class QueclinkDecoder(BaseProtocolDecoder):
     """
-    Queclink Protocol Decoder
-    Supports Queclink GV, GL, and GB series GPS trackers.
-
-    Port: 5026 (TCP)
-    Format: ASCII text-based with + delimiters
-
-    Fixed field layout for GTFRI and similar:
-      0:  Protocol version
-      1:  IMEI
-      2:  Device name
-      3:  State bitmap (hex) — bit 0 = ignition
-      4:  Report ID
-      5:  Report type
-      6:  Number
-      7:  GPS accuracy / HDOP
-      8:  Speed (km/h)
-      9:  Azimuth / course
-      10: Altitude
-      11: Longitude
-      12: Latitude
-      13: Timestamp (YYYYMMDDHHMMSS)
-      14: MCC
-      15: MNC
-      16: LAC
-      17: Cell ID
-      18: Reserved
-      19: Send time
-      20: Count
+    Queclink Protocol Decoder.
+    Supports Queclink GV55, GV65, GV300, GL300, GL500, and compatible devices.
     """
 
     PORT = 5026
     PROTOCOL_TYPES = ['tcp']
 
-    # Fixed field indices for GTFRI-style messages
+    # ── Fixed field indices for GTFRI-style messages ──────────────────────
+    _F_VER       = 0
     _F_IMEI      = 1
+    _F_NAME      = 2
     _F_STATE     = 3   # hex bitmap, bit 0 = ignition/ACC
     _F_HDOP      = 7
     _F_SPEED     = 8
@@ -58,15 +88,79 @@ class QueclinkDecoder(BaseProtocolDecoder):
     _F_LAC       = 16
     _F_CELL_ID   = 17
 
+    # ================================================================== #
+    #  Command Registry                                                   #
+    # ================================================================== #
+    COMMAND_REGISTRY = {
+        'reboot': {
+            'description': 'Reboot the device',
+            'example': 'reboot',
+            'requires_params': False,
+            '_at': 'GTRTO',
+            '_args': lambda p: f"{p.get('password','000000')},,,,",
+        },
+        'get_version': {
+            'description': 'Request firmware version',
+            'example': 'get_version',
+            'requires_params': False,
+            '_at': 'GTVER',
+            '_args': lambda p: f"{p.get('password','000000')},",
+        },
+        'request_position': {
+            'description': 'Request an immediate GPS position update',
+            'example': 'request_position',
+            'requires_params': False,
+            '_at': 'GTQSS',
+            '_args': lambda p: f"{p.get('password','000000')},",
+        },
+        'set_interval': {
+            'description': 'Set the periodic reporting interval (seconds)',
+            'example': 'set_interval 30',
+            'requires_params': True,
+            '_at': None,   # built dynamically
+        },
+        'set_output': {
+            'description': 'Control digital output / relay. params: output=1, state=0|1',
+            'example': 'set_output 1 1',
+            'requires_params': True,
+            '_at': None,
+        },
+        'set_apn': {
+            'description': 'Configure GPRS APN',
+            'example': 'set_apn internet',
+            'requires_params': True,
+            '_at': None,
+        },
+        'set_server': {
+            'description': 'Configure server address. params: ip, port',
+            'example': 'set_server 1.2.3.4 5026',
+            'requires_params': True,
+            '_at': None,
+        },
+        'custom': {
+            'description': 'Send a raw AT+ command string, e.g. "AT+GTQSS=000000,$"',
+            'example': 'AT+GTQSS=000000,$',
+            'requires_params': True,
+            '_at': None,
+        },
+    }
+
+    # Running sequence counter for outbound AT commands (0000–FFFF)
+    _seq: int = 0
+
     def __init__(self):
         super().__init__()
         self.pattern = re.compile(r'\+(\w+):(\w+),(.*?)\$', re.DOTALL)
+
+    # ================================================================== #
+    #  Decode                                                             #
+    # ================================================================== #
 
     async def decode(
         self,
         data: bytes,
         client_info: Dict[str, Any],
-        known_imei: Optional[str] = None
+        known_imei: Optional[str] = None,
     ) -> Tuple[Union[NormalizedPosition, Dict[str, Any], None], int]:
         try:
             if not data:
@@ -90,7 +184,6 @@ class QueclinkDecoder(BaseProtocolDecoder):
                 return None, 0
 
             message  = text[start:end + 1]
-            # FIX: consumed accounts for position of start in original buffer
             consumed = len(text[:end + 1].encode('ascii'))
 
             match = self.pattern.match(message)
@@ -106,43 +199,48 @@ class QueclinkDecoder(BaseProtocolDecoder):
 
             fields = payload.split(',')
 
-            # ── Position message types ───────────────────────────────────────
-            if msg_type in ('GTFRI', 'GTGEO', 'GTRTL', 'GTDOG', 'GTIDN',
-                            'GTSOS', 'GTSPD', 'GTPNA', 'GTPFA', 'GTIGN', 'GTIGF'):
-
+            # ── Position message types ─────────────────────────────
+            if msg_type in (
+                'GTFRI', 'GTGEO', 'GTRTL', 'GTDOG', 'GTIDN',
+                'GTSOS', 'GTSPD', 'GTPNA', 'GTPFA', 'GTIGN', 'GTIGF',
+                'GTTOW',
+            ):
                 position = self._parse_position(fields, msg_type, known_imei)
                 if not position:
                     return None, consumed
 
-                # Ignition events — override ignition field directly from msg type
+                # Apply event/alert annotations from the message type
+                annotations = _EVENT_MAP.get(msg_type, {})
+                for k, v in annotations.items():
+                    position.sensors[k] = v
+
+                # Ignition events — also set the top-level ignition field
                 if msg_type == 'GTIGN':
                     position.ignition = True
-                    position.sensors['event'] = 'ignition_on'
                 elif msg_type == 'GTIGF':
                     position.ignition = False
-                    position.sensors['event'] = 'ignition_off'
-                elif msg_type == 'GTSOS':
-                    position.sensors['alert_type'] = 'SOS'
-                elif msg_type == 'GTSPD':
-                    position.sensors['alert_type'] = 'speed'
-                elif msg_type == 'GTPNA':
-                    position.sensors['event'] = 'power_on'
-                elif msg_type == 'GTPFA':
-                    position.sensors['event'] = 'power_off'
 
                 return position, consumed
 
-            else:
-                logger.debug(f"Queclink: Unhandled message type: {msg_type}")
-                return None, consumed
+            # ── ACK packets ───────────────────────────────────────
+            if prefix == 'ACK':
+                logger.debug(f"Queclink: Command ACK for {msg_type}")
+                return {'event': 'command_ack', 'msg_type': msg_type}, consumed
+
+            logger.debug(f"Queclink: Unhandled message type: {msg_type}")
+            return None, consumed
 
         except Exception as e:
             logger.error(f"Queclink decode error: {e}", exc_info=True)
             return None, len(data) if data else 1
 
+    # ================================================================== #
+    #  Position parser                                                    #
+    # ================================================================== #
+
     def _parse_position(
         self,
-        fields: list,
+        fields: List[str],
         msg_type: str,
         known_imei: Optional[str],
     ) -> Optional[NormalizedPosition]:
@@ -151,24 +249,24 @@ class QueclinkDecoder(BaseProtocolDecoder):
                 logger.warning(f"Queclink: Not enough fields ({len(fields)}) for {msg_type}")
                 return None
 
-            # ── IMEI ────────────────────────────────────────────────────────
-            imei = known_imei or (fields[self._F_IMEI].strip() if len(fields) > self._F_IMEI else None)
+            # ── IMEI ──────────────────────────────────────────────
+            imei = known_imei
+            if not imei and len(fields) > self._F_IMEI:
+                imei = fields[self._F_IMEI].strip() or None
             if not imei:
                 logger.warning("Queclink: No IMEI")
                 return None
 
-            # ── Ignition from state bitmap (bit 0 = ACC) ────────────────────
-            # FIX: parse from fixed field index instead of heuristic search
+            # ── Ignition from state bitmap (bit 0 = ACC) ──────────
             ignition: Optional[bool] = None
             if len(fields) > self._F_STATE and fields[self._F_STATE].strip():
                 try:
-                    state = int(fields[self._F_STATE].strip(), 16)
+                    state    = int(fields[self._F_STATE].strip(), 16)
                     ignition = bool(state & 0x01)
                 except (ValueError, TypeError):
                     pass
 
-            # ── Coordinates — fixed indices ──────────────────────────────────
-            # FIX: use fixed field positions, not heuristic float-range search
+            # ── Coordinates ───────────────────────────────────────
             try:
                 latitude  = float(fields[self._F_LAT].strip())
                 longitude = float(fields[self._F_LON].strip())
@@ -176,56 +274,54 @@ class QueclinkDecoder(BaseProtocolDecoder):
                 logger.warning(f"Queclink: Invalid coordinates in {msg_type}")
                 return None
 
-            # ── Speed / course / altitude ───────────────────────────────────
+            # ── Speed / course / altitude ─────────────────────────
             def _f(idx: int, default: float = 0.0) -> float:
                 try:
-                    return float(fields[idx].strip()) if len(fields) > idx and fields[idx].strip() else default
+                    v = fields[idx].strip() if len(fields) > idx else ''
+                    return float(v) if v else default
                 except ValueError:
                     return default
 
             speed    = _f(self._F_SPEED)
             course   = _f(self._F_COURSE)
             altitude = _f(self._F_ALTITUDE)
+            hdop     = _f(self._F_HDOP)
 
-            # ── HDOP / satellites ───────────────────────────────────────────
-            hdop = _f(self._F_HDOP)
-            # Queclink uses HDOP in field 7; no satellite count in standard layout
-            satellites = None
-
-            # ── Timestamp ───────────────────────────────────────────────────
+            # ── Timestamp ─────────────────────────────────────────
             device_time = datetime.now(timezone.utc)
-            if len(fields) > self._F_TIMESTAMP and len(fields[self._F_TIMESTAMP].strip()) >= 14:
+            if len(fields) > self._F_TIMESTAMP:
                 ts = fields[self._F_TIMESTAMP].strip()
-                try:
-                    device_time = datetime(
-                        int(ts[0:4]), int(ts[4:6]),  int(ts[6:8]),
-                        int(ts[8:10]), int(ts[10:12]), int(ts[12:14]),
-                        tzinfo=timezone.utc
-                    )
-                except ValueError:
-                    pass
+                if len(ts) >= 14:
+                    try:
+                        device_time = datetime(
+                            int(ts[0:4]),  int(ts[4:6]),  int(ts[6:8]),
+                            int(ts[8:10]), int(ts[10:12]), int(ts[12:14]),
+                            tzinfo=timezone.utc,
+                        )
+                    except ValueError:
+                        pass
 
-            # ── Sensors ─────────────────────────────────────────────────────
+            # ── Sensors ───────────────────────────────────────────
             sensors: Dict[str, Any] = {'message_type': msg_type}
 
             if hdop:
                 sensors['hdop'] = hdop
 
-            if len(fields) > self._F_MCC and fields[self._F_MCC].strip():
-                sensors['mcc'] = fields[self._F_MCC].strip()
-            if len(fields) > self._F_MNC and fields[self._F_MNC].strip():
-                sensors['mnc'] = fields[self._F_MNC].strip()
-            if len(fields) > self._F_LAC and fields[self._F_LAC].strip():
-                sensors['lac'] = fields[self._F_LAC].strip()
-            if len(fields) > self._F_CELL_ID and fields[self._F_CELL_ID].strip():
-                sensors['cell_id'] = fields[self._F_CELL_ID].strip()
+            for attr, idx in (
+                ('mcc',      self._F_MCC),
+                ('mnc',      self._F_MNC),
+                ('lac',      self._F_LAC),
+                ('cell_id',  self._F_CELL_ID),
+            ):
+                if len(fields) > idx and fields[idx].strip():
+                    sensors[attr] = fields[idx].strip()
 
-            if len(fields) > 0 and fields[0].strip():
-                sensors['protocol_version'] = fields[0].strip()
-            if len(fields) > 2 and fields[2].strip():
-                sensors['device_name'] = fields[2].strip()
+            if len(fields) > self._F_VER  and fields[self._F_VER].strip():
+                sensors['protocol_version'] = fields[self._F_VER].strip()
+            if len(fields) > self._F_NAME and fields[self._F_NAME].strip():
+                sensors['device_name'] = fields[self._F_NAME].strip()
 
-            position = NormalizedPosition(
+            return NormalizedPosition(
                 imei=imei,
                 device_time=device_time,
                 server_time=datetime.now(timezone.utc),
@@ -234,79 +330,95 @@ class QueclinkDecoder(BaseProtocolDecoder):
                 altitude=altitude,
                 speed=speed,
                 course=course,
-                satellites=satellites,
-                valid=True,   # Queclink only sends when GPS is valid
+                satellites=None,    # Queclink uses HDOP instead of satellite count
+                valid=True,         # Queclink only reports when GPS is valid
                 ignition=ignition,
                 sensors=sensors,
+                raw_data={'message_type': msg_type, 'prefix': 'RESP'},
             )
-
-            logger.debug(f"Queclink decoded: {imei} @ {latitude},{longitude}")
-            return position
 
         except Exception as e:
             logger.error(f"Queclink position parse error: {e}", exc_info=True)
             return None
 
-    # ── Commands ─────────────────────────────────────────────────────────────
+    # ================================================================== #
+    #  Command encoding                                                   #
+    # ================================================================== #
 
     async def encode_command(self, command_type: str, params: Dict[str, Any]) -> bytes:
-        try:
-            password = params.get('password', '000000')
+        if not params:
+            params = {}
 
-            if command_type == 'reboot':
-                command = f"AT+GTRTO={password},,,,0002$"
-            elif command_type == 'get_version':
-                command = f"AT+GTVER={password},,0003$"
-            elif command_type == 'set_interval':
-                interval = params.get('interval', 30)
-                command = f"AT+GTFRI={password},{interval},,,,0004$"
-            elif command_type == 'request_position':
-                command = f"AT+GTQSS={password},,0005$"
-            elif command_type == 'set_server':
-                ip   = params.get('ip', '')
-                port = params.get('port', 5026)
-                command = f"AT+GTBSI={password},{ip},{port},0,0,,,0006$"
-            elif command_type == 'set_apn':
-                apn = params.get('apn', 'internet')
-                command = f"AT+GTBSI={password},,,,0,{apn},,,0007$"
-            elif command_type == 'enable_output':
-                output_type = params.get('output_type', 'GTFRI')
-                command = f"AT+GTTOW={password},{output_type},1,,0008$"
-            elif command_type == 'disable_output':
-                output_type = params.get('output_type', 'GTFRI')
-                command = f"AT+GTTOW={password},{output_type},0,,0009$"
-            elif command_type == 'custom':
-                command = params.get('payload', '')
-                if not command.startswith('AT+'):
-                    command = f"AT+{command}"
-                if not command.endswith('$'):
-                    command += '$'
-            else:
-                logger.warning(f"Queclink: Unknown command '{command_type}'")
+        cmd_key  = command_type.lower()
+        password = params.get('password', '000000')
+
+        # ── custom: pass through verbatim ─────────────────────────
+        if cmd_key == 'custom':
+            raw = params.get('payload', '').strip()
+            if not raw:
                 return b''
+            if not raw.upper().startswith('AT+'):
+                raw = f'AT+{raw}'
+            if not raw.endswith('$'):
+                raw += '$'
+            return raw.encode('ascii')
 
-            return command.encode('ascii')
+        # ── set_interval: AT+GTFRI ────────────────────────────────
+        if cmd_key == 'set_interval':
+            try:
+                interval = int(params.get('interval', params.get('payload', 30)))
+            except (ValueError, TypeError):
+                interval = 30
+            return self._at('GTFRI', f'{password},{interval},,,,')
 
-        except Exception as e:
-            logger.error(f"Queclink command encode error: {e}")
-            return b''
+        # ── set_output: AT+GTOUT ──────────────────────────────────
+        if cmd_key == 'set_output':
+            try:
+                output = int(params.get('output', 1))
+                state  = int(params.get('state', params.get('payload', 0)))
+            except (ValueError, TypeError):
+                output, state = 1, 0
+            return self._at('GTOUT', f'{password},{output},{state},')
 
-    def get_available_commands(self) -> list:
-        return [
-            'reboot', 'get_version', 'set_interval', 'request_position',
-            'set_server', 'set_apn', 'enable_output', 'disable_output', 'custom',
-        ]
+        # ── set_apn: AT+GTBSI (APN field only) ───────────────────
+        if cmd_key == 'set_apn':
+            apn = str(params.get('apn', params.get('payload', 'internet'))).strip()
+            return self._at('GTBSI', f'{password},,,,0,{apn},,,')
+
+        # ── set_server: AT+GTBSI (IP+port fields) ────────────────
+        if cmd_key == 'set_server':
+            ip   = str(params.get('ip',   '')).strip()
+            port = int(params.get('port', 5026))
+            return self._at('GTBSI', f'{password},{ip},{port},0,0,,,')
+
+        # ── Registry-based lambda-args commands ───────────────────
+        cmd_info = self.COMMAND_REGISTRY.get(cmd_key)
+        if cmd_info and cmd_info.get('_at') and cmd_info.get('_args'):
+            return self._at(cmd_info['_at'], cmd_info['_args'](params))
+
+        logger.warning(f"Queclink: Unknown or unimplemented command: {command_type!r}")
+        return b''
+
+    def _at(self, cmd: str, args: str) -> bytes:
+        """
+        Build a Queclink AT command with an auto-incrementing sequence counter.
+        Format: AT+<CMD>=<args><seq:04X>$
+        """
+        QueclinkDecoder._seq = (QueclinkDecoder._seq + 1) & 0xFFFF
+        seq = f'{QueclinkDecoder._seq:04X}'
+        return f'AT+{cmd}={args}{seq}$'.encode('ascii')
+
+    # ================================================================== #
+    #  Command metadata                                                   #
+    # ================================================================== #
+
+    def get_available_commands(self) -> List[str]:
+        return list(self.COMMAND_REGISTRY.keys())
 
     def get_command_info(self, command_type: str) -> Dict[str, Any]:
-        info = {
-            'reboot':           {'description': 'Reboot the device',                    'params': {'password': 'str'}},
-            'get_version':      {'description': 'Get firmware version',                 'params': {'password': 'str'}},
-            'set_interval':     {'description': 'Set reporting interval (seconds)',      'params': {'interval': 'int', 'password': 'str'}},
-            'request_position': {'description': 'Request immediate GPS position',       'params': {'password': 'str'}},
-            'set_server':       {'description': 'Configure server IP and port',         'params': {'ip': 'str', 'port': 'int', 'password': 'str'}},
-            'set_apn':          {'description': 'Configure APN for GPRS',              'params': {'apn': 'str', 'password': 'str'}},
-            'enable_output':    {'description': 'Enable message output type',           'params': {'output_type': 'str', 'password': 'str'}},
-            'disable_output':   {'description': 'Disable message output type',          'params': {'output_type': 'str', 'password': 'str'}},
-            'custom':           {'description': 'Send custom AT command',               'params': {'payload': 'str'}},
+        info = self.COMMAND_REGISTRY.get(command_type.lower(), {})
+        return {
+            'description':     info.get('description', 'Unknown command'),
+            'example':         info.get('example', ''),
+            'requires_params': info.get('requires_params', False),
         }
-        return info.get(command_type, {'description': 'Unknown command', 'supported': False})
