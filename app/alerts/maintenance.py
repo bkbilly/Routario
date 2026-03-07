@@ -21,11 +21,12 @@ class MaintenanceAlert(BaseAlert):
                     key        = "maintenance_type",
                     label      = "Maintenance Type",
                     field_type = "select",
-                    default    = "oil_change",
+                    default    = "service",
                     required   = True,
                     options    = [
+                        {"value": "service",       "label": "🔧 Service"},
                         {"value": "oil_change",    "label": "🛢️ Oil Change"},
-                        {"value": "tire_rotation", "label": "🔄 Tire Rotation"},
+                        {"value": "tire_change",   "label": "🔄 Tire Change"},
                         {"value": "brake_service", "label": "🛑 Brake Service"},
                         {"value": "air_filter",    "label": "💨 Air Filter"},
                         {"value": "custom",        "label": "⚙️ Custom"},
@@ -33,11 +34,29 @@ class MaintenanceAlert(BaseAlert):
                     help_text  = "Which maintenance interval to track.",
                 ),
                 AlertField(
+                    key        = "custom_label",
+                    label      = "Custom Label",
+                    field_type = "text",          # plain text input
+                    default    = "",
+                    required   = False,
+                    help_text  = "Used as the alert name when type is 'Custom'.",
+                ),
+                AlertField(
+                    key       = "first_service_km",
+                    label     = "First Service At",
+                    unit      = "km",
+                    default   = 0,
+                    min_value = 0,
+                    max_value = 999999,
+                    required  = True,
+                    help_text = "Odometer reading of the first service.",
+                ),
+                AlertField(
                     key       = "interval_km",
                     label     = "Service Interval",
                     unit      = "km",
-                    default   = 10000,
-                    min_value = 100,
+                    default   = 5000,
+                    min_value = 10,
                     max_value = 100000,
                     help_text = "How often (in km) this service is due.",
                 ),
@@ -51,14 +70,6 @@ class MaintenanceAlert(BaseAlert):
                     required   = False,
                     help_text  = "Start alerting when this many km remain before the service is due.",
                 ),
-                AlertField(
-                    key        = "custom_label",
-                    label      = "Custom Label",
-                    field_type = "text",          # plain text input
-                    default    = "",
-                    required   = False,
-                    help_text  = "Used as the alert name when type is 'Custom'.",
-                ),
             ],
         )
 
@@ -69,7 +80,10 @@ class MaintenanceAlert(BaseAlert):
         label      = params.get("custom_label") or mtype.replace("_", " ").title()
 
         odometer  = state.total_odometer or 0
-        remaining = interval - (odometer % interval)
+        first_service = params.get("first_service_km", 0)
+        offset = first_service % interval if first_service else 0
+        remaining = interval - ((odometer - offset) % interval)
+
 
         alerted_key = f"maint_{mtype}_alerted"
 
