@@ -135,15 +135,20 @@ async def _notify_webhooks(user: User, position: NormalizedPosition, device: Dev
     if not urls:
         return
     payload = {
-        "device_id":   device.id,
-        "device_name": device.name,
-        "latitude":    position.latitude,
-        "longitude":   position.longitude,
-        "speed":       position.speed,
-        "course":      position.course,
-        "altitude":    position.altitude,
-        "ignition":    position.ignition,
-        "timestamp":   position.device_time.isoformat(),
+        "device_id":     device.id,
+        "device_name":   device.name,
+        "imei":          device.imei,
+        "vehicle_type":  device.vehicle_type,
+        "license_plate": device.license_plate,
+        "latitude":      position.latitude,
+        "longitude":     position.longitude,
+        "speed":         position.speed,
+        "course":        position.course,
+        "altitude":      position.altitude,
+        "satellites":    position.satellites,
+        "ignition":      position.ignition,
+        "timestamp":     position.device_time.isoformat(),
+        "sensors":       position.sensors,
     }
     async with httpx.AsyncClient(timeout=5) as client:
         for url in urls:
