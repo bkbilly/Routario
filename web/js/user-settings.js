@@ -1,6 +1,7 @@
 // API_BASE is defined in config.js
 const USER_ID = parseInt(localStorage.getItem('user_id') || 1);
 let channels = [];
+let webhooks = [];
 let allDevices = [];
 let currentUserDevices = new Set();
 let currentAssignUserId = null;
@@ -43,7 +44,8 @@ async function loadSettings() {
         
         document.getElementById('username').value = user.username || '';
         document.getElementById('email').value = user.email || '';
-        document.getElementById('haInstanceUrl').value = user.ha_instance_url || '';  // ← ADD
+        webhooks = user.webhook_urls || [];
+        renderWebhooks();
         
         channels = user.notification_channels || [];
         renderChannels();
@@ -54,19 +56,49 @@ async function loadSettings() {
     }
 }
 
-async function saveHaSettings() {
-    const url = document.getElementById('haInstanceUrl').value.trim();
+function renderWebhooks() {
+    const tbody = document.getElementById('webhookListBody');
+    if (!webhooks.length) {
+        tbody.innerHTML = `<tr><td colspan="2" style="color:var(--text-muted);padding:1rem 0;">No webhooks configured.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = webhooks.map((url, i) => `
+        <tr>
+            <td style="font-family:monospace;font-size:0.8rem;word-break:break-all;">${url}</td>
+            <td style="text-align:right;">
+                <button class="btn btn-secondary" style="font-size:0.75rem;padding:0.2rem 0.6rem;"
+                        onclick="removeWebhook(${i})">Remove</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function addWebhook() {
+    const url = document.getElementById('newWebhookUrl').value.trim();
+    if (!url) return;
+    try { new URL(url); } catch { showAlert('Invalid URL', 'error'); return; }
+    if (webhooks.includes(url)) { showAlert('Already added', 'warning'); return; }
+    webhooks.push(url);
+    document.getElementById('newWebhookUrl').value = '';
+    renderWebhooks();
+    saveWebhooks();
+}
+
+function removeWebhook(index) {
+    webhooks.splice(index, 1);
+    renderWebhooks();
+    saveWebhooks();
+}
+
+async function saveWebhooks() {
     try {
         const res = await apiFetch(`${API_BASE}/users/${USER_ID}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ha_instance_url: url }),
+            body: JSON.stringify({ webhook_urls: webhooks }),
         });
-        if (res.ok) showAlert('Home Assistant settings saved', 'success');
-        else {
-            const err = await res.json();
-            throw new Error(err.detail || 'Failed to save');
-        }
+        if (res.ok) showAlert('Webhooks saved', 'success');
+        else { const err = await res.json(); throw new Error(err.detail || 'Failed to save'); }
     } catch (e) {
         showAlert(e.message, 'error');
     }

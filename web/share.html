@@ -7,6 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/js/vehicle-icons.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -98,7 +99,24 @@
     </div>
 </div>
 
-<div id="map"></div>
+<div style="position:relative;flex:1;display:flex;flex-direction:column;">
+    <div id="map"></div>
+    <button id="openMapsBtn" onclick="openInMaps()"
+            style="position:absolute;bottom:24px;right:12px;z-index:1000;
+                   background:rgba(19,24,37,0.9);color:#e5e7eb;
+                   border:1px solid rgba(255,255,255,0.12);
+                   border-radius:999px;padding:0.5rem 1rem;
+                   font-size:0.8rem;font-family:'Outfit',sans-serif;font-weight:600;
+                   cursor:pointer;display:flex;align-items:center;gap:0.5rem;
+                   backdrop-filter:blur(8px);box-shadow:0 2px 12px rgba(0,0,0,0.4);
+                   transition:background 0.15s;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+            <circle cx="12" cy="9" r="2.5"/>
+        </svg>
+        Open in Maps
+    </button>
+</div>
 
 <div id="footer">
     <div class="stat">
@@ -116,19 +134,14 @@
 </div>
 
 <script>
-    const VEHICLE_EMOJIS = {
-        car: '🚗', truck: '🚛', motorcycle: '🏍️', bus: '🚌',
-        van: '🚐', bicycle: '🚲', boat: '⛵', other: '📍'
-    };
-
     const token = window.location.pathname.split('/share/')[1];
     const API_URL = `/api/share/${token}/position`;
 
-    let map, marker;
+    let map, marker, currentPosition = null;
 
     function initMap() {
         map = L.map('map', { zoomControl: true, attributionControl: false });
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
             maxZoom: 19
         }).addTo(map);
         map.setView([0, 0], 2);
@@ -166,9 +179,9 @@
     }
 
     function updateUI(data) {
-        // Header
-        const emoji = VEHICLE_EMOJIS[data.vehicle_type] || '📍';
-        document.getElementById('vehicleIcon').textContent = emoji;
+        // Header — use vehicle-icons.js for the correct emoji
+        const cfg = VEHICLE_ICONS[data.vehicle_type] || VEHICLE_ICONS['other'];
+        document.getElementById('vehicleIcon').textContent = cfg.emoji;
         document.getElementById('nameText').textContent = data.device_name;
 
         const badge = document.getElementById('statusBadge');
@@ -189,12 +202,13 @@
         document.getElementById('ignitionVal').textContent =
             data.ignition_on ? '🟢 On' : '🔴 Off';
 
-        // Map marker
+        // Map marker — use getMarkerHtml() from vehicle-icons.js
         if (data.latitude && data.longitude) {
             const latlng = [data.latitude, data.longitude];
-            const iconHtml = `<div style="font-size:28px;transform:rotate(${data.course||0}deg)">${emoji}</div>`;
+            const iconHtml = getMarkerHtml(data.vehicle_type, data.ignition_on, data.course || 0);
             const icon = L.divIcon({ html: iconHtml, className: '', iconSize: [32,32], iconAnchor: [16,16] });
 
+            currentPosition = { lat: data.latitude, lng: data.longitude };
             if (!marker) {
                 marker = L.marker(latlng, { icon }).addTo(map);
                 map.setView(latlng, 15);
@@ -214,6 +228,17 @@
                 <p style="color:#9ca3af">Ask the sender to generate a new share link.</p>
             </div>`;
     }
+
+    function openInMaps() {
+        if (!currentPosition) return;
+        const { lat, lng } = currentPosition;
+        const isApple = /iPad|iPhone|iPod|Mac/.test(navigator.userAgent);
+        const url = isApple
+            ? `maps://maps.apple.com/?ll=${lat},${lng}&q=Live+Location`
+            : `https://www.google.com/maps?q=${lat},${lng}`;
+        window.open(url, '_blank');
+    }
+
 
     initMap();
     fetchPosition();

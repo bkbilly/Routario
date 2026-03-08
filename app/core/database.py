@@ -363,8 +363,8 @@ class DatabaseService:
                 user.notification_channels = user_data.notification_channels
             if user_data.language:
                 user.language = user_data.language
-            if user_data.ha_instance_url is not None:
-                user.ha_instance_url = user_data.ha_instance_url
+            if user_data.webhook_urls is not None:
+                user.webhook_urls = user_data.webhook_urls
 
             await session.flush()
             await session.refresh(user)
