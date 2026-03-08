@@ -73,24 +73,40 @@ class MaintenanceAlert(BaseAlert):
             ],
         )
 
-    async def check(self, position, device, state, params: dict) -> Optional[dict]:
-        mtype      = params.get("maintenance_type", "oil_change")
+    async def check_many(self, position, device, state, params: dict) -> list:
+        mtype      = params.get("maintenance_type", "service")
         interval   = params.get("interval_km", 10000)
         warning_km = params.get("warning_km", 500)
         label      = params.get("custom_label") or mtype.replace("_", " ").title()
 
         odometer  = state.total_odometer or 0
-        first_service = params.get("first_service_km", 0)
-        offset = first_service % interval if first_service else 0
-        remaining = interval - ((odometer - offset) % interval)
+        remaining = interval - (odometer % interval)
 
+        warning_key = f"maint_{mtype}_warning_alerted"
+        due_key     = f"maint_{mtype}_due_alerted"
 
-        alerted_key = f"maint_{mtype}_alerted"
+        alerts = []
 
-        if 0 < remaining <= warning_km:
-            if not state.alert_states.get(alerted_key):
-                state.alert_states[alerted_key] = True
-                return {
+        # ── Due alert: remaining is 0 or crossed (remaining == interval means just reset) ──
+        if remaining <= 0 or (interval > 0 and (odometer % interval) == 0 and odometer > 0):
+            if not state.alert_states.get(due_key):
+                state.alert_states[due_key]     = True
+                state.alert_states[warning_key] = True  # suppress warning if due fires too
+                alerts.append({
+                    "type":           AlertType.MAINTENANCE,
+                    "severity":       Severity.WARNING,
+                    "message":        f"Maintenance: {label} is due now!",
+                    "alert_metadata": {
+                        "maintenance_type": mtype,
+                        "remaining_km":     0,
+                    },
+                })
+
+        # ── Warning alert: within warning window but not yet due ──
+        elif 0 < remaining <= warning_km:
+            if not state.alert_states.get(warning_key):
+                state.alert_states[warning_key] = True
+                alerts.append({
                     "type":           AlertType.MAINTENANCE,
                     "severity":       Severity.INFO,
                     "message":        f"Maintenance: {label} due in {int(remaining)} km.",
@@ -98,8 +114,15 @@ class MaintenanceAlert(BaseAlert):
                         "maintenance_type": mtype,
                         "remaining_km":     int(remaining),
                     },
-                }
-        elif remaining > warning_km:
-            state.alert_states[alerted_key] = False
+                })
 
+        # ── Reset both flags when well outside the warning window ──
+        elif remaining > warning_km:
+            state.alert_states[warning_key] = False
+            state.alert_states[due_key]     = False
+
+        return alerts
+
+    # Keep check() to satisfy the abstract requirement
+    async def check(self, position, device, state, params: dict) -> Optional[dict]:
         return None

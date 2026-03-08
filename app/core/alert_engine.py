@@ -183,10 +183,9 @@ class AlertEngine:
             if selected_names is not None:
                 active_channels = [c for c in user_ch if c['name'] in selected_names and c.get('url')]
             else:
-                active_channels = [c for c in user_ch if c.get('url')]
+                active_channels = []
 
             if not active_channels:
-                # Still send push notification even with no channels
                 push = get_push_service()
                 await push.notify_user(
                     db_service=get_db(),
