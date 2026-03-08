@@ -298,7 +298,7 @@ async def lifespan(app: FastAPI):
                 asyncio.create_task(server.start())
                 logger.info(f"Started UDP Server for {name} on port {port}")
             else:
-                server = TCPServer(settings.tcp_host, port, name, process_position_callback, command_callback)
+                server = TCPServer(settings.tcp_host, port, name, process_position_callback, command_callback, ack_callback)
                 asyncio.create_task(server.start())
                 logger.info(f"Started TCP Server for {name} on port {port}")
 

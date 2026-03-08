@@ -354,10 +354,16 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         if not cmd_str:
             return b''
 
-        if params:
-            # Simple space concatenation for parameters
-            param_str = ' '.join(str(v) for v in params.values())
-            cmd_str = f'{cmd_str} {param_str}'
+        if cmd_info.get('requires_params'):
+            # Only append real params — exclude the generic 'payload' key
+            # that the preview endpoint injects for all commands
+            extra = {k: v for k, v in params.items() if k != 'payload' and v}
+            if extra:
+                param_str = ' '.join(str(v) for v in extra.values())
+                cmd_str = f'{cmd_str} {param_str}'
+            elif params.get('payload'):
+                # Fall back to payload string for commands like setparam/getparam
+                cmd_str = f'{cmd_str} {params["payload"]}'
 
         return self._encode_text_command(cmd_str)
 

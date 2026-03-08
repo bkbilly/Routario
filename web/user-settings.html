@@ -113,14 +113,16 @@
                     </table>
                 </div>
 
-                <div class="add-channel-form">
-                    <div class="form-group" style="margin-bottom: 0;">
+                <div class="add-channel-form" style="display:flex; align-items:flex-end; gap:0.5rem;">
+                    <div class="form-group" style="margin-bottom:0; flex:1;">
                         <label class="form-label">Webhook URL</label>
                         <input type="url" id="newWebhookUrl" class="form-input"
                                placeholder="https://your-server.com/webhook">
                     </div>
-                    <button type="button" class="btn btn-secondary" onclick="addWebhook()">Add</button>
+                    <button type="button" class="btn btn-secondary" onclick="addWebhook()"
+                            style="width:fit-content; flex-shrink:0;">Add</button>
                 </div>
+
             </div>
 
             <!-- Admin Panel (Hidden by default) -->
