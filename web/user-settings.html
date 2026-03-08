@@ -93,21 +93,33 @@
                 </div>
             </div>
 
-            <!-- Home Assistant Integration -->
+            <!-- Webhooks -->
             <div class="card">
-                <h2 class="card-title">Home Assistant</h2>
+                <h2 class="card-title">Webhooks</h2>
                 <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem; line-height: 1.5;">
-                    Enter your Home Assistant instance URL to push live vehicle positions directly into HA.
-                    Install the <strong>Routario</strong> custom integration in HA first, then paste your instance URL below.
+                    POST live position data to one or more URLs on every device update.
+                    Works with Home Assistant, Zapier, n8n, or any HTTP endpoint.
                 </p>
-                <div class="form-group">
-                    <label class="form-label">Instance URL</label>
-                    <input type="url" id="haInstanceUrl" class="form-input"
-                           placeholder="http://192.168.1.100:8123">
-                    <p class="form-help">Routario will push to <code>{your-url}/api/webhook/routario</code> on every position update.</p>
+
+                <div style="overflow-x: auto;">
+                    <table class="channel-table">
+                        <thead>
+                            <tr>
+                                <th>URL</th>
+                                <th style="text-align: right;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="webhookListBody"></tbody>
+                    </table>
                 </div>
-                <div style="display: flex; justify-content: flex-end;">
-                    <button type="button" class="btn btn-primary" onclick="saveHaSettings()">Save</button>
+
+                <div class="add-channel-form">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label">Webhook URL</label>
+                        <input type="url" id="newWebhookUrl" class="form-input"
+                               placeholder="https://your-server.com/webhook">
+                    </div>
+                    <button type="button" class="btn btn-secondary" onclick="addWebhook()">Add</button>
                 </div>
             </div>
 

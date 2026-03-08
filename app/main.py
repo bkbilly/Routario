@@ -128,28 +128,29 @@ class WebSocketManager:
 
 ws_manager = WebSocketManager()
 
-async def _notify_home_assistant(user: User, position: NormalizedPosition, device: Device):
-    """Fire-and-forget POST to the HA webhook if the user has configured an instance URL."""
-    if not user.ha_instance_url:
+# ====================== Webhook Notifications ====================
+async def _notify_webhooks(user: User, position: NormalizedPosition, device: Device):
+    """Fire-and-forget POST to all configured webhook URLs for this user."""
+    urls = user.webhook_urls or []
+    if not urls:
         return
-    webhook_url = user.ha_instance_url.rstrip('/') + '/api/webhook/routario'
     payload = {
-        "device_id":  device.id,
+        "device_id":   device.id,
         "device_name": device.name,
-        "latitude":   position.latitude,
-        "longitude":  position.longitude,
-        "speed":      position.speed,
-        "course":     position.course,
-        "altitude":   position.altitude,
-        "ignition":   position.ignition,
-        "timestamp":  position.device_time.isoformat(),
+        "latitude":    position.latitude,
+        "longitude":   position.longitude,
+        "speed":       position.speed,
+        "course":      position.course,
+        "altitude":    position.altitude,
+        "ignition":    position.ignition,
+        "timestamp":   position.device_time.isoformat(),
     }
-    try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            await client.post(webhook_url, json=payload)
-    except Exception as e:
-        logger.warning(f"HA webhook failed for user {user.id}: {e}")
-
+    async with httpx.AsyncClient(timeout=5) as client:
+        for url in urls:
+            try:
+                await client.post(url, json=payload)
+            except Exception as e:
+                logger.warning(f"Webhook failed for user {user.id} → {url}: {e}")
 
 # ==================== Position / Command Callbacks ====================
 
@@ -167,7 +168,7 @@ async def process_position_callback(position: NormalizedPosition):
         await ws_manager.broadcast_position_update(position, device)
         # Notify Home Assistant for each user assigned to this device
         for user in device.users:
-            await _notify_home_assistant(user, position, device)  # ← ADD
+            await _notify_webhooks(user, position, device)
         logger.debug(f"Position processed: {device.name}")
     except Exception as e:
         logger.error(f"Position processing error: {e}", exc_info=True)                    

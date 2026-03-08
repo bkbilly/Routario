@@ -182,7 +182,7 @@ class UserUpdate(BaseModel):
     notification_channels: Optional[List[Dict[str, str]]] = None
     language: Optional[str] = None
     is_admin: Optional[bool] = None
-    ha_instance_url: Optional[str] = None
+    webhook_urls: Optional[List[str]] = None
 
 
 class UserLogin(BaseModel):
@@ -208,7 +208,7 @@ class UserResponse(BaseModel):
     language: Optional[str] = "en"
     notification_channels: List[Dict[str, str]] = Field(default_factory=list)
     created_at: datetime
-    ha_instance_url: Optional[str] = None
+    webhook_urls: List[str] = Field(default_factory=list)
 
     @field_validator('notification_channels', mode='before')
     @classmethod
