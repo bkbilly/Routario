@@ -31,6 +31,7 @@ Routario connects directly to your GPS hardware over TCP/UDP and gives you a liv
 | 🔗 | **Live sharing** — send a time-limited link; recipients see the live map with no login required | |
 | 📣 | **Notifications** — Telegram, Discord, Email, Slack, browser push, and SIP voice calls | |
 | 📡 | **8 protocols** — plug in Teltonika, GT06, Queclink, H02, TK103, Meitrack, Flespi, or OsmAnd | |
+| 🔗 | **Webhooks** — push live position data to any HTTP endpoint on every update | |
 | ⚙️ | **Remote commands** — reboot, request position, set interval, and more from the dashboard | |
 | 👥 | **Multi-user** — admin and standard roles, per-user device access and notification channels | |
 | 📱 | **PWA** — installs on Android and iOS, push notifications even when the tab is closed | |
