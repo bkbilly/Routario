@@ -543,11 +543,28 @@ body::before {
 
 .user-profile {
     display: flex;
+    gap: 0.5rem;
     align-items: center;
-    justify-content: space-between;
-    padding-top: 0.5rem;
-    margin-top: 0.5rem;
-    border-top: 1px solid var(--border-color);
+}
+
+.user-settings-btn {
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    padding: 0.275rem 1rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    transition: all 0.2s;
+}
+
+.user-settings-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    transform: translateX(2px);
 }
 
 .user-info {
@@ -1309,6 +1326,14 @@ body::before {
     color: var(--chip-color, var(--accent-primary));
 }
 
+.user-info:hover .user-name {
+    color: var(--accent-primary);
+}
+
+.user-info:hover .user-role {
+    color: var(--text-secondary);
+}
+
 /* Sensor chart canvas container */
 #sensorChart {
     display: block;
@@ -1697,7 +1722,6 @@ body::before {
     }
     .user-profile {
         padding-top: 0.4rem;
-        margin-top: 0.25rem;
     }
     .user-name {
         font-size: 0.8rem;

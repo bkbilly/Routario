@@ -42,8 +42,11 @@
                 </div>
             </div>
             
-            <div class="header-actions">
-                <span id="connectionStatus" style="font-size: 0.8rem; color: var(--accent-success); display: none;">● Connected</span>
+            <div class="sidebar-row">
+                <a href="device-management.html" class="sidebar-action-btn" title="Manage Devices">
+                    <span class="sidebar-action-icon">⚙️</span>
+                    <span>Devices</span>
+                </a>
             </div>
         </header>
         
@@ -125,22 +128,14 @@
             
             <!-- Sidebar Footer for App Navigation -->
             <div class="sidebar-footer" id="sidebarNavRow">
-                <div class="sidebar-row">
-                    <a href="device-management.html" class="sidebar-action-btn" title="Manage Devices">
-                        <span class="sidebar-action-icon">⚙️</span>
-                        <span>Devices</span>
-                    </a>
-                    <a href="user-settings.html" class="sidebar-action-btn" title="User Settings">
-                        <span class="sidebar-action-icon">🔧</span>
-                        <span>Settings</span>
-                    </a>
-                </div>
-                
                 <div class="user-profile" id="sidebarUserProfile">
-                    <div class="user-info">
-                        <span class="user-name" id="userNameDisplay">User</span>
-                        <span class="user-role" id="userRoleDisplay">User</span>
-                    </div>
+                    <a href="user-settings.html" class="user-settings-btn" title="User Settings">
+                        <span style="font-size:1.2rem;">🔧</span>
+                        <div class="user-info">
+                            <span class="user-name" id="userNameDisplay">User</span>
+                            <span class="user-role" id="userRoleDisplay">User</span>
+                        </div>
+                    </a>
                     <button class="logout-btn" onclick="handleLogout()">Logout</button>
                 </div>
             </div>
