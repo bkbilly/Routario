@@ -118,6 +118,7 @@ function getDeviceCardContent(device, icon) {
             </div>
         </div>
         <div class="device-actions">
+            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openLogbookModal(${device.id})" title="Service logbook">📋 Logbook</button>
             <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openHistoryModal(${device.id})">🕒 History</button>
             <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openShareModal(${device.id})" title="Share live location">🔗 Share</button>
         </div>
