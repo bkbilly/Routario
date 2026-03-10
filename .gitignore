@@ -43,3 +43,4 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+web/uploads

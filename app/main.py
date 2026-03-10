@@ -3,6 +3,7 @@ FastAPI Application - Routario Platform
 Thin entrypoint: app setup, lifespan, WebSocket, and internal callbacks.
 All REST routes live in app/routes/.
 """
+import os
 import asyncio
 import json
 import logging
@@ -423,7 +424,9 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
 
 
 # Static mount MUST be last — after all routes and websockets
+os.makedirs("web/uploads", exist_ok=True)
 app.mount("/", StaticFiles(directory="web"), name="static")
+app.mount("/uploads", StaticFiles(directory="web/uploads"), name="uploads")
 
 
 def run_server():

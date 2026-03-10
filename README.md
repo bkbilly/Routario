@@ -27,13 +27,15 @@ Routario connects directly to your GPS hardware over TCP/UDP and gives you a liv
 |---|---|---|
 | 🗺️ | **Live map** — real-time positions with smooth movement and heading rotation | |
 | 🔔 | **Smart alerts** — speeding, geofence, idling, towing, low battery, maintenance, and custom rules | |
+| 📣 | **Notifications** — Telegram, Discord, Email, Slack, browser push, and SIP voice calls. Route each alert to specific channels, schedule alerts by day and hour | |
 | 🕒 | **History & playback** — scrub through routes, replay trips, graph any sensor over time | |
 | 🔗 | **Live sharing** — send a time-limited link; recipients see the live map with no login required | |
-| 📣 | **Notifications** — Telegram, Discord, Email, Slack, browser push, and SIP voice calls | |
+| 📋 | **Logbook** — per-vehicle service records with odometer, cost, date, and file attachments | |
 | 📡 | **8 protocols** — plug in Teltonika, GT06, Queclink, H02, TK103, Meitrack, Flespi, or OsmAnd | |
-| 🔗 | **Webhooks** — push live position data to any HTTP endpoint on every update | |
+| 🪝 | **Webhooks** — push live position data to any HTTP endpoint on every update | |
 | ⚙️ | **Remote commands** — reboot, request position, set interval, and more from the dashboard | |
 | 👥 | **Multi-user** — admin and standard roles, per-user device access and notification channels | |
+| 📥 | **CSV export** — download full position history with all sensor columns included | |
 | 📱 | **PWA** — installs on Android and iOS, push notifications even when the tab is closed | |
 
 ---
@@ -50,40 +52,6 @@ Routario connects directly to your GPS hardware over TCP/UDP and gives you a liv
 | **Meitrack** | 5020 (TCP) | MVT/T series |
 | **Flespi** | 5149 (TCP) | JSON-based |
 | **OsmAnd** | 5055 (TCP) | HTTP, mobile app |
-
----
-
-## Alert Types
-
-| Alert | Trigger |
-|---|---|
-| **Speeding** | Speed exceeds threshold (with noise buffer) |
-| **Idling** | Ignition on, zero speed beyond timeout |
-| **Geofence** | Enter and/or exit any polygon zone |
-| **Towing** | Movement detected with ignition off |
-| **Offline** | No data received within configurable hours |
-| **Low Battery** | Battery voltage drops below threshold |
-| **Maintenance** | Odometer reaches a service interval |
-| **Custom Rule** | Any expression: `fuel_level < 10 and ignition` |
-
-Every alert supports a custom schedule (specific days and hours) and can be routed to any notification channel. Multiple instances of the same alert type can be stacked on one device.
-
----
-
-## Custom Rule Syntax
-
-Custom rules are evaluated against the live position context. Any sensor key reported by the device is available.
-
-```
-speed > 120
-fuel_level < 10 and ignition
-battery_voltage < 3.6 and not ignition
-speed > 80 and satellites < 4
-```
-
-**Common attributes:** `speed`, `ignition`, `satellites`, `altitude`, `battery_voltage`, `fuel_level`, `temperature`, `door_open` — plus any device-specific sensor key.
-
-**Operators:** `>` `<` `==` `!=` `>=` `<=` `and` `or` `not`
 
 ---
 

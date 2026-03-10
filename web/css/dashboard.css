@@ -1620,6 +1620,45 @@ body::before {
     display: none;
 }
 
+/* Logbook table rows */
+#logbookTableBody tr {
+    border-bottom: 1px solid var(--border-color);
+    transition: background 0.15s;
+}
+#logbookTableBody tr:hover { background: var(--bg-tertiary); }
+#logbookTableBody td { padding: 0.65rem 0.75rem; vertical-align: middle; }
+
+/* Document badge pills */
+.lb-doc-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--accent-primary);
+    font-size: 0.75rem;
+    text-decoration: none;
+    white-space: nowrap;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 0.1rem 0.2rem 0.1rem 0;
+    transition: background 0.15s;
+}
+.lb-doc-badge:hover { background: var(--bg-hover, var(--bg-secondary)); }
+
+/* Docs cell wraps badges */
+.lb-docs-cell { max-width: 180px; }
+
+/* Responsive: stack date grid on small screens */
+@media (max-width: 600px) {
+    #logbookFormPanel > div[style*="grid-template-columns"] {
+        grid-template-columns: 1fr !important;
+    }
+}
+
 /* ── Mobile ──────────────────────────────────────────────────── */
 @media (max-width: 1024px) {
     .history-controls {

@@ -10,3 +10,4 @@ from .schemas import (
     WSMessage, WSMessageType,
     DeviceStatistics
 )
+from .logbook import LogbookEntry
