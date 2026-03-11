@@ -69,22 +69,37 @@ body {
 }
 
 .back-btn {
-    padding: 0.75rem;
+    width: 40px;
+    height: 40px;
+    padding: 0;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: 10px;
-    color: var(--text-primary);
+    color: var(--text-secondary);
     cursor: pointer;
     transition: all var(--transition-base);
     text-decoration: none;
     display: inline-flex;
     align-items: center;
-    font-size: 1.25rem;
+    justify-content: center;
+    flex-shrink: 0;
 }
+
 .back-btn:hover {
-    background: var(--accent-primary);
+    background: var(--bg-hover);
     border-color: var(--accent-primary);
-    transform: translateX(-4px);
+    color: var(--accent-primary);
+    transform: translateX(-2px);
+}
+
+.back-btn svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 h1 {

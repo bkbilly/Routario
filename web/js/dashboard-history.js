@@ -69,7 +69,16 @@ async function loadHistory(deviceId, startTime, endTime) {
         const data = await response.json();
         historyData = data.features;
         historyIndex = 0;
-        if (historyData.length === 0) { showAlert({ title: 'History', message: 'No data found.', type: 'warning' }); return; }
+        if (historyData.length === 0) {
+            showAlert({ title: 'History', message: 'No data found.', type: 'warning' });
+            // Restore live markers since we're not entering history mode
+            devices.forEach(d => {
+                if (markers[d.id] && !map.hasLayer(markers[d.id])) {
+                    markers[d.id].addTo(map);
+                }
+            });
+            return;
+        }
         document.getElementById('historySlider').max = historyData.length - 1;
         document.getElementById('historySlider').value = 0;
 
@@ -158,6 +167,12 @@ async function loadHistory(deviceId, startTime, endTime) {
     } catch (error) {
         console.log(error);
         showAlert({ title: 'Error', message: 'Failed to load history.', type: 'error' });
+        // Restore live markers since history mode was not entered
+        devices.forEach(d => {
+            if (markers[d.id] && !map.hasLayer(markers[d.id])) {
+                markers[d.id].addTo(map);
+            }
+        });
     }
 }
 
