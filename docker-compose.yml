@@ -15,6 +15,7 @@ services:
       GEOCODING_ENABLED: false
       VAPID_PUBLIC_KEY: BGQ3prURPQf1PZSGKySh1Mnr1QQW5pVBGZujTApG_zhqKxGnCz30umqOg5Mh_Q6U-5nNbAtO7XVmz0G-3RR_84g
       VAPID_PRIVATE_KEY: Qk1wdfPJGQ4nLYN2SKLNGR5Z3FrD-e_LfByMTUyJ3Hc
+      VALHALLA_URL: http://valhalla:8002
     ports:
       # Web UI + API + WebSocket
       - "8000:8000"
@@ -64,9 +65,38 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Valhalla (road speed limit lookups) ──────────────────────────
+  # On first start, Valhalla downloads the configured OSM extract and
+  # builds routing tiles — this can take several minutes depending on
+  # the region size. Subsequent restarts reuse the cached tiles and
+  # start in seconds.
+  #
+  # Change tile_urls to the Geofabrik extract for your region:
+  #   https://download.geofabrik.de
+  valhalla:
+    image: ghcr.io/valhalla/valhalla-scripted:latest
+    restart: unless-stopped
+    volumes:
+      - valhalla-data:/custom_files
+    environment:
+      - tile_urls=https://download.geofabrik.de/europe/greece-latest.osm.pbf
+      - build_admins=True
+      - build_time_zones=True
+    ports:
+      - "8002:8002"
+    networks:
+      - routario-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8002/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s   # allow up to 5 min for tile build on first run
+
 volumes:
   postgres-data:
   redis-data:
+  valhalla-data:
 
 networks:
   routario-net:

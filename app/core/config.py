@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     admin_email: str = "admin@example.com"
     admin_password: str = "admin_password"
 
+    # Valhalla (road speed limit lookups)
+    # Set VALHALLA_URL in .env to point at your Docker container, e.g.:
+    #   VALHALLA_URL=http://valhalla:8002
+    valhalla_url: str = "http://localhost:8002"
+    # Set to false in .env to disable Valhalla entirely without removing config.
+    valhalla_enabled: bool = True
 
     class Config:
         env_file = ".env"

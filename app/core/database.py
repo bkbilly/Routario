@@ -1,4 +1,6 @@
 # ... existing imports ...
+import json
+import logging
 import asyncio
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta, timezone
@@ -18,10 +20,10 @@ import bcrypt
 
 from models import (
     Base, User, Device, DeviceState, PositionRecord, 
-    Trip, Geofence, AlertHistory, CommandQueue
+    Trip, Geofence, AlertHistory, CommandQueue, 
+    user_device_association
 )
 from models.schemas import NormalizedPosition, AlertCreate, CommandCreate, DeviceCreate, GeofenceCreate, UserCreate, UserUpdate
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -235,6 +237,35 @@ class DatabaseService:
             )
             return result.scalars().all()
 
+    async def get_recent_positions(
+        self, device_id: int, seconds: int = 15, max_points: int = 20
+    ):
+        """
+        Return the most recent `max_points` PositionRecords recorded within
+        the last `seconds` seconds for `device_id`, ordered oldest-first.
+ 
+        Used by the Valhalla speed-limit lookup to build a map-matching trace.
+        Returns an empty list on any error so callers never need to guard.
+        """
+        cutoff = datetime.utcnow() - timedelta(seconds=seconds)
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(
+                    select(PositionRecord)
+                    .where(
+                        and_(
+                            PositionRecord.device_id == device_id,
+                            PositionRecord.device_time >= cutoff,
+                        )
+                    )
+                    .order_by(PositionRecord.device_time.asc())
+                    .limit(max_points)
+                )
+                return result.scalars().all()
+        except Exception as exc:
+            logger.debug(f"get_recent_positions error: {exc}")
+            return []
+
     async def check_geofence_violations(self, device_id: int, latitude: float, longitude: float) -> List[Dict[str, Any]]:
         async with self.get_session() as session:
             result = await session.execute(
@@ -422,7 +453,6 @@ class DatabaseService:
 
     async def add_device_to_user(self, user_id: int, device_id: int, access_level: str = "admin"):
         async with self.get_session() as session:
-            from models import user_device_association
             await session.execute(user_device_association.insert().values(user_id=user_id, device_id=device_id, access_level=access_level))
 
     async def get_device_state(self, device_id: int) -> Optional[DeviceState]:
@@ -472,10 +502,9 @@ class DatabaseService:
 
             geofences = []
             for row in rows:
-                import json as _json
                 coords = []
                 if row['geojson']:
-                    geojson = _json.loads(row['geojson'])
+                    geojson = json.loads(row['geojson'])
                     # GeoJSON polygon: coordinates[0] is the outer ring [[lng,lat],...]
                     if geojson.get('type') == 'Polygon':
                         coords = geojson['coordinates'][0]
