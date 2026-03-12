@@ -25,6 +25,7 @@ from core.config import get_settings
 from core.database import get_db, init_database
 from core.alert_engine import get_alert_engine, periodic_alert_task
 from core.gateway import TCPServer, UDPServer, connection_manager
+from core.valhalla import set_valhalla_url, check_valhalla_health
 from models import Device, AlertHistory, User
 from models.schemas import NormalizedPosition, WSMessageType, UserCreate
 from protocols import ProtocolRegistry
@@ -267,9 +268,9 @@ async def handle_new_alert(alert: AlertHistory):
 async def lifespan(app: FastAPI):
     logger.info("Starting Routario Platform...")
     settings = get_settings()
-
+ 
     await init_database(settings.database_url)
-
+ 
     # Create default admin on first run
     if settings.admin_password:
         db = get_db()
@@ -287,14 +288,27 @@ async def lifespan(app: FastAPI):
                 logger.info(f"Admin '{settings.admin_username}' already exists, skipping.")
         except Exception as e:
             logger.warning(f"Could not create default admin: {e}")
-
-
+ 
     redis_pubsub.redis_url = settings.redis_url
     await redis_pubsub.connect()
-
+ 
     alert_engine = get_alert_engine()
     alert_engine.set_alert_callback(handle_new_alert)
-
+ 
+    # ── Valhalla health check ─────────────────────────────────────────────
+    # Determines whether speed limit alerts are available for this session.
+    if settings.valhalla_enabled:
+        set_valhalla_url(settings.valhalla_url)
+        available = await check_valhalla_health()
+        if not available:
+            logger.warning(
+                "Valhalla is not available — speed limit alerts will be skipped. "
+                "Start the Valhalla Docker container and restart Routario to enable them."
+            )
+    else:
+        logger.info("Valhalla disabled in config — speed limit alerts will be skipped.")
+    # ─────────────────────────────────────────────────────────────────────
+ 
     protocols = ProtocolRegistry.get_all()
     for name, decoder in protocols.items():
         port = decoder.PORT
@@ -307,12 +321,12 @@ async def lifespan(app: FastAPI):
                 server = TCPServer(settings.tcp_host, port, name, process_position_callback, command_callback, ack_callback)
                 asyncio.create_task(server.start())
                 logger.info(f"Started TCP Server for {name} on port {port}")
-
+ 
     asyncio.create_task(periodic_alert_task())
     logger.info("Routario Platform started successfully")
-
+ 
     yield
-
+ 
     logger.info("Shutting down Routario Platform...")
     db = get_db()
     await db.close()

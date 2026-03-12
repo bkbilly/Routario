@@ -14,9 +14,10 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 
 from core.database import get_db
 from core.auth import get_current_user
-from models import User
+from models import AlertHistory, User
 from models.schemas import AlertResponse
 from alerts import ALERT_DEFINITIONS_PUBLIC
+from sqlalchemy import select
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"])
 
@@ -65,8 +66,6 @@ async def get_alerts(
 
 async def _get_alert_owned(alert_id: int, current_user: User):
     """Fetch alert and verify ownership. Raises 404/403 as appropriate."""
-    from sqlalchemy import select
-    from models import AlertHistory
     db = get_db()
     async with db.get_session() as session:
         result = await session.execute(
