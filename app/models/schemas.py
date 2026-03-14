@@ -47,6 +47,7 @@ class NormalizedPosition(BaseModel):
     
     imei: str
     device_time: datetime
+    server_time: Optional[datetime] = None
     
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
@@ -110,6 +111,7 @@ class DeviceConfig(BaseModel):
     custom_rules: List[Union[CustomRule, str]] = Field(default_factory=list)
     sensors:     Dict[str, str] = Field(default_factory=dict)
     maintenance: Dict[str, int] = Field(default_factory=dict)
+    integration: Optional[Dict[str, Any]] = Field(None)
 
 
 class DeviceCreate(BaseModel):
@@ -129,7 +131,8 @@ class DeviceCreate(BaseModel):
             alert_channels={},
             custom_rules=[],
             sensors={},
-            maintenance={}
+            maintenance={},
+            integration=None,
         )
     )
 

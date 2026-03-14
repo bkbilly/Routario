@@ -12,9 +12,12 @@ List units:
   GET /Units/Unit/List?UserIdGuid=<guid>&SessionId=<session>
   → { Status: {Result:"ok"}, Result: [ { Uid, Name, IMEI, Status, ... } ] }
 
-Position (per unit):
-  GET /Units/Unit/LastPosition?UserIdGuid=<guid>&SessionId=<session>&UnitUid=<uid>
-  → { Status: {Result:"ok"}, Result: { Latitude, Longitude, Speed, ... } }
+Historical positions (used for polling):
+  GET /Data/PositionsList?UserIdGuid=<guid>&SessionId=<session>&IncludeInputOutputs=True&StartId=<id>
+  StartId=0      → start from 7 days ago
+  StartId=<omit> → start from 24 hours ago
+  StartId=<N>    → continue from last seen record
+  → { Status: {Result:"ok"}, Result: { Position: [...], StartId: <next> } }
 """
 from __future__ import annotations
 
@@ -31,6 +34,10 @@ from models.schemas import NormalizedPosition
 logger = logging.getLogger(__name__)
 
 _DEFAULT_BASE = "https://api.3dtracking.net/api/v1.0"
+
+# In-memory StartId store: keyed by (user_guid, account_label)
+# Persists across poll cycles for the lifetime of the process.
+_start_id_store: dict[tuple, int] = {}
 
 
 @IntegrationRegistry.register("3dtracking")
@@ -108,7 +115,7 @@ class ThreeDTrackingIntegration(BaseIntegration):
             token_expires_at=expires_at,
         )
 
-    # ── List remote units ─────────────────────────────────────────────────────
+    # ── List remote devices ───────────────────────────────────────────────────
 
     async def list_remote_devices(self, auth_ctx: AuthContext) -> list[RemoteDevice]:
         session_id = auth_ctx.data["session_id"]
@@ -128,36 +135,19 @@ class ThreeDTrackingIntegration(BaseIntegration):
                 data = resp.json()
 
             if data.get("Status", {}).get("Result", "").lower() != "ok":
-                logger.warning(
-                    f"3DTracking: Unit/List failed: "
-                    f"{data.get('Status', {}).get('Message')}"
-                )
+                logger.warning(f"3DTracking: Unit/List failed: {data.get('Status', {}).get('Message')}")
                 return []
 
-            units = data.get("Result") or []
-            if not isinstance(units, list):
-                units = [units]
-
-            result = []
-            for u in units:
-                uid   = str(u.get("Uid") or "")
-                name  = str(u.get("Name") or uid)
-                imei  = str(u.get("IMEI") or "")
-                plate = u.get("LicensePlate") or u.get("RegistrationNumber") or name
-
-                result.append(RemoteDevice(
-                    remote_id=uid,
-                    name=name,
-                    imei=imei if imei else None,
-                    license_plate=plate,
-                    extra={
-                        "status":       u.get("Status"),
-                        "group":        u.get("GroupName"),
-                        "company":      u.get("CompanyName"),
-                        "phone":        u.get("PhoneNumber"),
-                    },
-                ))
-            return result
+            units = data.get("Result", []) or []
+            return [
+                RemoteDevice(
+                    remote_id=u["Uid"],
+                    name=u.get("Name", u["Uid"]),
+                    imei=u.get("IMEI") or u.get("Imei") or None,
+                )
+                for u in units
+                if u.get("Uid")
+            ]
 
         except Exception as e:
             logger.error(f"3DTracking: list_remote_devices error: {e}", exc_info=True)
@@ -170,122 +160,150 @@ class ThreeDTrackingIntegration(BaseIntegration):
         auth_ctx: AuthContext,
         devices: list[dict],
     ) -> AsyncIterator[NormalizedPosition]:
-        session_id = auth_ctx.data["session_id"]
-        user_guid  = auth_ctx.data["user_guid"]
-        base       = auth_ctx.data["base_url"]
+        session_id    = auth_ctx.data["session_id"]
+        user_guid     = auth_ctx.data["user_guid"]
+        base          = auth_ctx.data["base_url"]
+        account_label = auth_ctx.data.get("account_label", "default")
 
-        async with httpx.AsyncClient(timeout=15) as client:
-            for device in devices:
-                unit_uid = device["remote_id"]
-                imei     = device["imei"]
+        store_key = (user_guid, account_label)
+
+        # Determine StartId for this call:
+        #   - First ever call → omit StartId (defaults to last 24 h on the API side)
+        #   - Subsequent calls → pass the StartId saved from the previous response
+        current_start_id = _start_id_store.get(store_key)  # None on first call
+
+        params: dict = {
+            "UserIdGuid":         user_guid,
+            "SessionId":          session_id,
+            "IncludeInputOutputs": "True",
+        }
+        if current_start_id is not None:
+            params["StartId"] = current_start_id
+            logger.debug(f"3DTracking: fetching PositionsList from StartId={current_start_id}")
+        else:
+            logger.info("3DTracking: first poll — fetching last 24 h of positions (no StartId)")
+
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.get(
+                    f"{base}/Data/PositionsList",
+                    params=params,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+        except Exception as e:
+            logger.error(f"3DTracking: PositionsList request failed: {e}")
+            return
+
+        status = data.get("Status", {})
+        if status.get("Result", "").lower() != "ok":
+            error_code = status.get("ErrorCode", "")
+            message    = status.get("Message", "")
+            if error_code == "429":
+                # Rate limited — do NOT advance StartId so the next poll retries
+                # the same window from scratch.
+                logger.warning("3DTracking: rate limited (429), will retry next cycle without advancing StartId")
+            else:
+                logger.warning(f"3DTracking: PositionsList failed [{error_code}]: {message}")
+            return
+
+        result = data.get("Result", {}) or {}
+
+        # Save the new StartId immediately so the next poll continues from here
+        new_start_id = result.get("StartId")
+        if new_start_id is not None:
+            _start_id_store[store_key] = new_start_id
+            logger.debug(f"3DTracking: saved next StartId={new_start_id}")
+
+        positions = result.get("Position") or []
+        if not positions:
+            logger.debug("3DTracking: no new positions in this poll cycle")
+            return
+
+        # Build a lookup of remote_id → device config so we can match IMEI
+        device_by_uid: dict[str, dict] = {d["remote_id"]: d for d in devices}
+
+        # Deduplicate: keep only the latest record per unit
+        # (the API may return multiple rows per unit in one batch)
+        latest_by_uid: dict[str, dict] = {}
+        for pos_data in positions:
+            uid = pos_data.get("Unit", {}).get("Uid", "")
+            if not uid:
+                continue
+            # Prefer the record with the most recent GPS time
+            existing = latest_by_uid.get(uid)
+            if existing is None:
+                latest_by_uid[uid] = pos_data
+            else:
                 try:
-                    resp = await client.get(
-                        f"{base}/Units/Unit/LastPosition",
-                        params={
-                            "UserIdGuid": user_guid,
-                            "SessionId":  session_id,
-                            "UnitUid":    unit_uid,
-                        },
-                    )
-                    resp.raise_for_status()
-                    data = resp.json()
+                    existing_ts = datetime.fromisoformat(existing.get("GPSTimeUtc", "1970-01-01"))
+                    new_ts      = datetime.fromisoformat(pos_data.get("GPSTimeUtc",  "1970-01-01"))
+                    if new_ts > existing_ts:
+                        latest_by_uid[uid] = pos_data
+                except ValueError:
+                    pass  # keep existing on parse error
 
-                    if data.get("Status", {}).get("Result", "").lower() != "ok":
-                        logger.warning(
-                            f"3DTracking: LastPosition failed for unit {unit_uid}: "
-                            f"{data.get('Status', {}).get('Message')}"
-                        )
-                        continue
+        for uid, pos_data in latest_by_uid.items():
+            device = device_by_uid.get(uid)
+            if not device:
+                # Position for a unit not in our managed device list — skip
+                continue
 
-                    pos_data = data.get("Result")
-                    if not pos_data:
-                        continue
+            pos = self._parse_position(device["imei"], pos_data)
+            if pos:
+                yield pos
 
-                    pos = self._parse_position(imei, pos_data)
-                    if pos:
-                        yield pos
-
-                except Exception as e:
-                    logger.error(f"3DTracking: error fetching unit {unit_uid}: {e}")
+    # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _parse_position(self, imei: str, p: dict) -> NormalizedPosition | None:
         """
-        Parse a 3DTracking LastPosition record.
+        Parse a 3DTracking PositionsList record into a NormalizedPosition.
         Field names are PascalCase — handle common variants defensively.
         """
         try:
-            def _get(*keys):
-                for k in keys:
-                    v = p.get(k) or p.get(k.lower()) or p.get(k.upper())
-                    if v is not None:
-                        return v
+            lat = p.get("Latitude")
+            lng = p.get("Longitude")
+            if lat is None or lng is None:
                 return None
 
-            lat = float(_get("Latitude",  "Lat") or 0)
-            lng = float(_get("Longitude", "Lon", "Lng") or 0)
-
-            if lat == 0.0 and lng == 0.0:
-                return None
-
-            # Timestamp — try common field names, handle /Date(ms)/ format
-            ts_raw = _get("GpsTime", "DeviceTime", "Timestamp", "Time", "RecordTime", "PositionTime")
-            if ts_raw:
+            def _parse_dt(raw: str | None) -> datetime | None:
+                if not raw:
+                    return None
                 try:
-                    if str(ts_raw).startswith("/Date("):
-                        ms = int(str(ts_raw)[6:].split(")")[0].split("+")[0].split("-")[0])
-                        device_time = datetime.fromtimestamp(ms / 1000, tz=timezone.utc).replace(tzinfo=None)
-                    else:
-                        device_time = datetime.fromisoformat(
-                            str(ts_raw).replace("Z", "+00:00")
-                        ).astimezone(timezone.utc).replace(tzinfo=None)
-                except (ValueError, OverflowError):
-                    device_time = datetime.utcnow()
-            else:
-                device_time = datetime.utcnow()
+                    dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+                except ValueError:
+                    return None
 
-            # Ignition
-            ignition = _get("Ignition", "IgnitionStatus", "EngineOn", "Engine")
-            if ignition is not None:
-                ignition = bool(ignition) if isinstance(ignition, bool) \
-                    else str(ignition).lower() in ("1", "true", "on")
+            # device_time — when the GPS fix was taken (UTC)
+            device_time = (
+                _parse_dt(p.get("GPSTimeUtc"))
+                or _parse_dt(p.get("GPSTimeLocal"))
+                or datetime.now(timezone.utc)
+            )
 
-            speed  = float(_get("Speed",   "GpsSpeed",  "SpeedKmh") or 0)
-            course = float(_get("Heading", "Course",    "Direction", "Bearing") or 0)
-            alt    = float(_get("Altitude", "Alt") or 0)
-            sats   = int(  _get("Satellites", "GpsSatellites", "Sat") or 0)
+            # server_time — when the 3DTracking server received the record
+            server_time = _parse_dt(p.get("ServerTimeUTC")) or datetime.now(timezone.utc)
 
-            sensors: dict = {}
-            for src, dst in [
-                ("BatteryVoltage",  "battery_voltage"),
-                ("ExternalVoltage", "external_voltage"),
-                ("FuelLevel",       "fuel_level"),
-                ("Odometer",        "odometer"),
-                ("Temperature",     "temperature"),
-                ("GsmSignal",       "gsm_signal"),
-                ("Rpm",             "rpm"),
-            ]:
-                v = _get(src)
-                if v is not None:
-                    try:
-                        sensors[dst] = float(v)
-                    except (ValueError, TypeError):
-                        sensors[dst] = v
+            speed   = float(p.get("Speed", 0) or 0)
+            heading = float(p.get("Heading", 0) or 0)
+
+            ignition_raw = str(p.get("Ignition", "")).lower()
+            ignition     = ignition_raw == "on"
 
             return NormalizedPosition(
                 imei=imei,
                 device_time=device_time,
-                server_time=datetime.now(timezone.utc),
-                latitude=lat,
-                longitude=lng,
-                altitude=alt,
+                server_time=server_time,
+                latitude=float(lat),
+                longitude=float(lng),
                 speed=speed,
-                course=course,
-                satellites=sats,
+                course=heading,
                 ignition=ignition,
-                sensors=sensors,
-                raw_data={"source": "3dtracking"},
+                raw_data=p,
             )
 
         except Exception as e:
-            logger.error(f"3DTracking: parse error for {imei}: {e}", exc_info=True)
+            logger.error(f"3DTracking: _parse_position error: {e}", exc_info=True)
             return None

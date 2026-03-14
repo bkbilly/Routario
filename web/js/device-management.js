@@ -300,8 +300,8 @@ function openDeviceModal(deviceId, startTab = 'general') {
 
     // Restore integration fields if this is an integration device
     restoreIntegrationFields(d);
+    if (!d.config?.integration?.provider) onProtocolChange();
 
-    onProtocolChange();
     loadAlertsFromConfig(d.config || {});
     switchModalTab(startTab);
     document.getElementById('deviceModal').classList.add('active');
@@ -844,8 +844,8 @@ function renderRawDataPage() {
             })
             .join(' | ');
 
-        const gpsTime    = p.time        ? new Date(p.time).toLocaleString()        : 'N/A';
-        const serverTime = p.server_time ? new Date(p.server_time).toLocaleString() : '—';
+        const gpsTime    = formatDateToLocal(p.time);
+        const serverTime = p.server_time ? formatDateToLocal(p.server_time) : '—';
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
