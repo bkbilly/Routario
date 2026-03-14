@@ -122,6 +122,8 @@ async function loadDevices() {
             } catch { device.supports_commands = false; }
         }));
 
+        devices.sort((a, b) => a.name.localeCompare(b.name));
+        allDevices = devices;
         renderDeviceTable(devices);
     } catch (e) {
         showAlert('Failed to load devices', 'error');
@@ -148,7 +150,7 @@ function filterDevices() {
             (d.protocol      || '').toLowerCase().includes(q) ||
             (d.vehicle_type  || '').toLowerCase().includes(q))
         : allDevices;
-    renderDeviceTable(filtered);
+    renderDeviceTable([...filtered].sort((a, b) => a.name.localeCompare(b.name)));
 }
 
 function renderDeviceTable(list) {
@@ -158,7 +160,7 @@ function renderDeviceTable(list) {
 
     if (!list.length) {
         tbody.innerHTML = `
-            <tr><td colspan="10" style="text-align:center;padding:3rem;color:var(--text-muted);">
+            <tr><td colspan="8" style="text-align:center;padding:3rem;color:var(--text-muted);">
                 <div style="font-size:2.5rem;margin-bottom:0.75rem;">📡</div>
                 No devices found
             </td></tr>`;
@@ -168,7 +170,6 @@ function renderDeviceTable(list) {
     tbody.innerHTML = list.map(d => {
         // Use VEHICLE_ICONS from vehicle-icons.js
         const icon     = (VEHICLE_ICONS[d.vehicle_type] || VEHICLE_ICONS['other']).emoji;
-        const isOnline = d.state?.is_online;
         const lastSeen = d.state?.last_update ? formatDateToLocal(d.state.last_update) : '—';
         const odometer = d.state?.total_odometer != null ? `${d.state.total_odometer.toFixed(0)} km` : '—';
         const plate    = d.license_plate || '—';
@@ -184,10 +185,6 @@ function renderDeviceTable(list) {
             </td>
             <td><span class="proto-badge">${proto}</span></td>
             <td>${plate}</td>
-            <td>
-                <span class="status-dot ${d.is_active ? (isOnline ? 'online' : 'active') : 'inactive'}"></span>
-                ${d.is_active ? (isOnline ? 'Online' : 'Active') : 'Inactive'}
-            </td>
             <td style="font-size:0.85rem;color:var(--text-secondary);">${lastSeen}</td>
             <td style="font-family:var(--font-mono);font-size:0.85rem;">${odometer}</td>
             <td style="text-align:right;white-space:nowrap;">
@@ -791,7 +788,7 @@ async function loadRawDataForModal(deviceId) {
     currentRawDeviceId = deviceId;
     currentPage        = 1;
     const tbody = document.getElementById('rawDataBody');
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:2rem;">Loading…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2rem;">Loading…</td></tr>';
 
     const end = new Date();
 
@@ -832,7 +829,7 @@ async function loadRawDataForModal(deviceId) {
 
         renderRawDataPage();
     } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--accent-danger);">Failed to load: ${e.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--accent-danger);">Failed to load: ${e.message}</td></tr>`;
     }
 }
 
@@ -848,7 +845,7 @@ function renderRawDataPage() {
     tbody.innerHTML = '';
 
     if (!slice.length) {
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--text-muted);">No data available.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">No data available.</td></tr>';
         return;
     }
 
