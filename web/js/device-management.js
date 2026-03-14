@@ -158,7 +158,7 @@ function renderDeviceTable(list) {
 
     if (!list.length) {
         tbody.innerHTML = `
-            <tr><td colspan="9" style="text-align:center;padding:3rem;color:var(--text-muted);">
+            <tr><td colspan="10" style="text-align:center;padding:3rem;color:var(--text-muted);">
                 <div style="font-size:2.5rem;margin-bottom:0.75rem;">📡</div>
                 No devices found
             </td></tr>`;
@@ -791,7 +791,7 @@ async function loadRawDataForModal(deviceId) {
     currentRawDeviceId = deviceId;
     currentPage        = 1;
     const tbody = document.getElementById('rawDataBody');
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:2rem;">Loading…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:2rem;">Loading…</td></tr>';
 
     const end = new Date();
 
@@ -832,7 +832,7 @@ async function loadRawDataForModal(deviceId) {
 
         renderRawDataPage();
     } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--accent-danger);">Failed to load: ${e.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--accent-danger);">Failed to load: ${e.message}</td></tr>`;
     }
 }
 
@@ -848,7 +848,7 @@ function renderRawDataPage() {
     tbody.innerHTML = '';
 
     if (!slice.length) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted);">No data available.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--text-muted);">No data available.</td></tr>';
         return;
     }
 
@@ -870,9 +870,13 @@ function renderRawDataPage() {
             })
             .join(' | ');
 
+        const gpsTime    = p.time        ? new Date(p.time).toLocaleString()        : 'N/A';
+        const serverTime = p.server_time ? new Date(p.server_time).toLocaleString() : '—';
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${p.time ? new Date(p.time).toLocaleString() : 'N/A'}</td>
+            <td>${gpsTime}</td>
+            <td style="color:var(--text-muted);font-size:0.8em;">${serverTime}</td>
             <td>${coords[1].toFixed(5)}</td>
             <td>${coords[0].toFixed(5)}</td>
             <td>${(p.speed  || 0).toFixed(1)} km/h</td>
@@ -886,9 +890,9 @@ function renderRawDataPage() {
     });
 
     const max = Math.ceil(rawData.length / itemsPerPage) || 1;
-    document.getElementById('pageInfo').textContent     = `Page ${currentPage} of ${max}`;
-    document.getElementById('prevPageBtn').disabled     = currentPage === 1;
-    document.getElementById('nextPageBtn').disabled     = currentPage === max;
+    document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${max}`;
+    document.getElementById('prevPageBtn').disabled = currentPage === 1;
+    document.getElementById('nextPageBtn').disabled = currentPage === max;
 }
 
 // ================================================================

@@ -440,62 +440,64 @@
                 <button class="modal-close" onclick="closeLogbookModal()">✕</button>
             </div>
 
-            <!-- ── Fixed toolbar: "New Entry" toggle button ───────── -->
-            <div style="flex-shrink:0; padding:0.75rem 1.25rem 0; display:flex; justify-content:flex-end;">
-                <button id="lbToggleFormBtn" class="btn btn-primary" onclick="toggleLogbookForm()">➕ New Entry</button>
-            </div>
-
-            <!-- ── Collapsible add/edit form ──────────────────────── -->
-            <div id="logbookFormPanel" style="display:none; flex-shrink:0;
-                 margin:0.75rem 1.25rem 0;
-                 background:var(--bg-tertiary); border-radius:12px;
-                 padding:1.25rem; border:1px solid var(--border-color);">
-
-                <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.06em;
-                            color:var(--text-muted);margin-bottom:1rem;" id="lbFormTitle">New Entry</div>
-
-                <!-- Description -->
-                <div class="form-group" style="margin-bottom:0.75rem;">
-                    <label class="form-label">Description <span style="color:var(--accent-danger)">*</span></label>
-                    <input type="text" id="lbDescription" class="form-input"
-                           placeholder="e.g. Tire change — front axle, Oil change 5W-40…">
-                </div>
-
-                <!-- Date + Odometer + Price -->
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label class="form-label">Date <span style="color:var(--accent-danger)">*</span></label>
-                        <input type="datetime-local" id="lbDate" class="form-input">
-                    </div>
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label class="form-label">Odometer (km)</label>
-                        <input type="number" id="lbOdometer" class="form-input" min="0" step="0.1" placeholder="Auto-filled">
-                    </div>
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label class="form-label">Price (€) <span style="color:var(--text-muted);font-weight:400;">optional</span></label>
-                        <input type="number" id="lbPrice" class="form-input" min="0" step="0.01" placeholder="0.00">
-                    </div>
-                </div>
-
-                <!-- File upload -->
-                <div class="form-group" style="margin-bottom:0.75rem;">
-                    <label class="form-label">Documents <span style="color:var(--text-muted);font-weight:400;">optional</span></label>
-                    <input type="file" id="lbFiles" class="form-input" multiple
-                           accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
-                           style="padding:0.4rem 0.75rem;cursor:pointer;">
-                </div>
-
-                <!-- Error + Actions -->
-                <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;margin-top:0.25rem;">
-                    <span id="lbFormError" style="color:var(--accent-danger);font-size:0.85rem;flex:1;"></span>
-                    <button id="lbCancelEditBtn" class="btn btn-secondary"
-                            onclick="cancelEditLogbookEntry()" style="display:none;">✕ Cancel edit</button>
-                    <button id="lbSubmitBtn" class="btn btn-primary" onclick="submitLogbookEntry()">➕ Add Entry</button>
-                </div>
-            </div>
-
-            <!-- ── Scrollable table area — fills remaining height ─── -->
+            <!-- ── Scrollable area — toolbar + form + table ───────── -->
             <div style="flex:1; overflow-y:auto; padding:0.75rem 1.25rem 1.25rem; min-height:0;">
+
+                <!-- "New Entry" toggle button -->
+                <div style="display:flex; justify-content:flex-end; margin-bottom:0.75rem;">
+                    <button id="lbToggleFormBtn" class="btn btn-primary" onclick="toggleLogbookForm()">➕ New Entry</button>
+                </div>
+
+                <!-- Collapsible add/edit form -->
+                <div id="logbookFormPanel" style="display:none;
+                     background:var(--bg-tertiary); border-radius:12px;
+                     padding:1.25rem; border:1px solid var(--border-color);
+                     margin-bottom:1rem;">
+
+                    <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.06em;
+                                color:var(--text-muted);margin-bottom:1rem;" id="lbFormTitle">New Entry</div>
+
+                    <!-- Description -->
+                    <div class="form-group" style="margin-bottom:0.75rem;">
+                        <label class="form-label">Description <span style="color:var(--accent-danger)">*</span></label>
+                        <input type="text" id="lbDescription" class="form-input"
+                               placeholder="e.g. Tire change — front axle, Oil change 5W-40…">
+                    </div>
+
+                    <!-- Date + Odometer + Price -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label">Date <span style="color:var(--accent-danger)">*</span></label>
+                            <input type="datetime-local" id="lbDate" class="form-input">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label">Odometer (km)</label>
+                            <input type="number" id="lbOdometer" class="form-input" min="0" step="0.1" placeholder="Auto-filled">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label">Price (€) <span style="color:var(--text-muted);font-weight:400;">optional</span></label>
+                            <input type="number" id="lbPrice" class="form-input" min="0" step="0.01" placeholder="0.00">
+                        </div>
+                    </div>
+
+                    <!-- File upload -->
+                    <div class="form-group" style="margin-bottom:0.75rem;">
+                        <label class="form-label">Documents <span style="color:var(--text-muted);font-weight:400;">optional</span></label>
+                        <input type="file" id="lbFiles" class="form-input" multiple
+                               accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                               style="padding:0.4rem 0.75rem;cursor:pointer;">
+                    </div>
+
+                    <!-- Error + Actions -->
+                    <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;margin-top:0.25rem;">
+                        <span id="lbFormError" style="color:var(--accent-danger);font-size:0.85rem;flex:1;"></span>
+                        <button id="lbCancelEditBtn" class="btn btn-secondary"
+                                onclick="cancelEditLogbookEntry()" style="display:none;">✕ Cancel edit</button>
+                        <button id="lbSubmitBtn" class="btn btn-primary" onclick="submitLogbookEntry()">➕ Add Entry</button>
+                    </div>
+                </div>
+
+                <!-- Table -->
                 <table style="width:100%;border-collapse:collapse;font-size:0.875rem;">
                     <thead style="position:sticky;top:0;z-index:1;background:var(--bg-secondary);">
                         <tr style="border-bottom:2px solid var(--border-color);
@@ -513,7 +515,8 @@
                         <tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading…</td></tr>
                     </tbody>
                 </table>
-            </div>
+
+            </div><!-- /scrollable -->
 
         </div>
     </div>
@@ -532,8 +535,8 @@
     <script src="js/dashboard-auth.js"></script>
     <script src="js/dashboard-map.js"></script>
     <script src="js/dashboard-devices.js"></script>
-    <script src="js/dashboard-alerts.js"></script>
     <script src="js/dashboard-history.js"></script>
+    <script src="js/dashboard-alerts.js"></script>
     <script src="js/dashboard-logbook.js"></script>
 
     <script src="js/dashboard-geofences.js"></script>
