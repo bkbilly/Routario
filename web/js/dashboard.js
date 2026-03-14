@@ -65,3 +65,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 document.addEventListener('click', closePicker);
+
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    
+    const modalIds = [
+        'alertsModal',
+        'historyModal', 
+        'shareModal',
+        'logbookModal',
+        'geofenceModal',
+    ];
+
+    for (const id of modalIds) {
+        const modal = document.getElementById(id);
+        if (modal?.classList.contains('active')) {
+            modal.classList.remove('active');
+            return;
+        }
+    }
+});

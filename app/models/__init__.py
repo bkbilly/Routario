@@ -11,3 +11,4 @@ from .schemas import (
     DeviceStatistics
 )
 from .logbook import LogbookEntry
+from integrations.integration_model import IntegrationAccount

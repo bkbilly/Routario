@@ -1,16 +1,21 @@
 // ================================================================
 //  device-management.js
-//  Depends on: vehicle-icons.js (loaded before this file)
+//  Core: state, loaders, device table, modal, form submit,
+//        alerts system, raw data tab.
+//  Depends on: config.js, vehicle-icons.js,
+//              device-management-integrations.js (loaded after this)
 // ================================================================
 
 // ── State ────────────────────────────────────────────────────────
-let availableProtocols = [];
-let devices            = [];
-let allDevices         = [];
-let userChannels       = [];
-let editingDeviceId    = null;
+let availableProtocols   = [];
+let integrationProviders = [];
+let integrationAccounts  = [];
+let devices              = [];
+let allDevices           = [];
+let userChannels         = [];
+let editingDeviceId      = null;
 
-// Alerts
+// Alerts tab
 let alertRows       = [];
 let editingAlertUid = null;
 let uidCounter      = 0;
@@ -41,6 +46,12 @@ function formatDateToLocal(str) {
     return new Date(str).toLocaleString();
 }
 
+function _esc(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 // ── Boot ─────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
     checkLogin();
@@ -49,10 +60,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (addBtn) addBtn.style.display = isAdmin ? '' : 'none';
 
     await loadAlertTypes();
-    await loadAvailableProtocols();
+    await loadAvailableProtocols();   // also loads integration providers + accounts
     await loadUserChannels();
     await loadDevices();
     populateAddAlertDropdown();
+
+    // Escape key closes any open modal
+    document.addEventListener('keydown', e => {
+        if (e.key !== 'Escape') return;
+        ['deviceModal', 'alertEditorModal', 'commandModal'].forEach(id => {
+            document.getElementById(id)?.classList.remove('active');
+        });
+    });
 });
 
 // ── API Loaders ───────────────────────────────────────────────────
@@ -68,25 +87,52 @@ async function loadAlertTypes() {
 
 async function loadAvailableProtocols() {
     try {
-        const res = await apiFetch(`${API_BASE}/protocols`);
-        if (!res.ok) throw new Error(`Server returned ${res.status}`);
-        const data         = await res.json();
-        availableProtocols = data.protocols || [];
+        const [protoRes, intgRes, accountsRes] = await Promise.all([
+            apiFetch(`${API_BASE}/protocols`),
+            apiFetch(`${API_BASE}/integrations/providers`),
+            apiFetch(`${API_BASE}/integrations/accounts`),
+        ]);
+
+        const data           = protoRes.ok    ? await protoRes.json()    : { protocols: [] };
+        integrationProviders = intgRes.ok      ? await intgRes.json()     : [];
+        integrationAccounts  = accountsRes.ok  ? await accountsRes.json() : [];
+        availableProtocols   = data.protocols || [];
 
         const sel = document.getElementById('deviceProtocol');
         if (!sel) return;
         sel.innerHTML = '<option value="">-- Select Protocol --</option>';
 
-        const names = {
+        // Native protocols
+        const nativeNames = {
             teltonika: 'Teltonika', gt06: 'GT06 / Concox', osmand: 'OsmAnd',
             flespi: 'Flespi', totem: 'Totem', tk103: 'TK103', gps103: 'GPS103', h02: 'H02',
         };
+        const nativeGroup = document.createElement('optgroup');
+        nativeGroup.label = 'Native (direct connection)';
         [...availableProtocols].sort().forEach(p => {
-            const opt = document.createElement('option');
+            const opt       = document.createElement('option');
             opt.value       = p;
-            opt.textContent = names[p] || (p.charAt(0).toUpperCase() + p.slice(1));
-            sel.appendChild(opt);
+            opt.textContent = nativeNames[p] || (p.charAt(0).toUpperCase() + p.slice(1));
+            nativeGroup.appendChild(opt);
         });
+        sel.appendChild(nativeGroup);
+
+        // External integrations
+        if (integrationProviders.length) {
+            const intgGroup = document.createElement('optgroup');
+            intgGroup.label = 'External Integrations';
+            integrationProviders.forEach(p => {
+                const opt               = document.createElement('option');
+                opt.value               = p.provider_id;
+                opt.textContent         = p.display_name;
+                opt.dataset.integration = 'true';
+                intgGroup.appendChild(opt);
+            });
+            sel.appendChild(intgGroup);
+        }
+
+        sel.addEventListener('change', onProtocolChange);
+
     } catch (e) {
         console.error('Error loading protocols:', e);
         showAlert('Failed to load protocols from server', 'error');
@@ -109,7 +155,7 @@ async function loadDevices() {
         const res    = await apiFetch(`${API_BASE}/devices?user_id=${userId}&_t=${Date.now()}`);
         if (!res.ok) throw new Error(`Server returned ${res.status}`);
         devices    = await res.json();
-        allDevices = devices;
+        allDevices = [...devices];
 
         await Promise.all(devices.map(async device => {
             try {
@@ -123,7 +169,7 @@ async function loadDevices() {
         }));
 
         devices.sort((a, b) => a.name.localeCompare(b.name));
-        allDevices = devices;
+        allDevices = [...devices];
         renderDeviceTable(devices);
     } catch (e) {
         showAlert('Failed to load devices', 'error');
@@ -160,7 +206,7 @@ function renderDeviceTable(list) {
 
     if (!list.length) {
         tbody.innerHTML = `
-            <tr><td colspan="8" style="text-align:center;padding:3rem;color:var(--text-muted);">
+            <tr><td colspan="7" style="text-align:center;padding:3rem;color:var(--text-muted);">
                 <div style="font-size:2.5rem;margin-bottom:0.75rem;">📡</div>
                 No devices found
             </td></tr>`;
@@ -168,7 +214,6 @@ function renderDeviceTable(list) {
     }
 
     tbody.innerHTML = list.map(d => {
-        // Use VEHICLE_ICONS from vehicle-icons.js
         const icon     = (VEHICLE_ICONS[d.vehicle_type] || VEHICLE_ICONS['other']).emoji;
         const lastSeen = d.state?.last_update ? formatDateToLocal(d.state.last_update) : '—';
         const odometer = d.state?.total_odometer != null ? `${d.state.total_odometer.toFixed(0)} km` : '—';
@@ -180,11 +225,11 @@ function renderDeviceTable(list) {
         <tr class="device-row" ondblclick="openDeviceModal(${d.id},'general')">
             <td style="text-align:center;font-size:1.25rem;">${icon}</td>
             <td>
-                <span class="device-row-name">${d.name}</span>
-                <div class="device-row-imei">${d.imei}</div>
+                <span class="device-row-name">${_esc(d.name)}</span>
+                <div class="device-row-imei">${_esc(d.imei)}</div>
             </td>
-            <td><span class="proto-badge">${proto}</span></td>
-            <td>${plate}</td>
+            <td><span class="proto-badge">${_esc(proto)}</span></td>
+            <td>${_esc(plate)}</td>
             <td style="font-size:0.85rem;color:var(--text-secondary);">${lastSeen}</td>
             <td style="font-family:var(--font-mono);font-size:0.85rem;">${odometer}</td>
             <td style="text-align:right;white-space:nowrap;">
@@ -209,16 +254,21 @@ function openAddDeviceModal() {
     if (!isAdmin) return;
     editingDeviceId = null;
 
-    document.getElementById('modalTitle').textContent           = 'Add New Device';
-    document.getElementById('submitText').textContent           = 'Add Device';
-    document.getElementById('deleteDeviceBtn').style.display    = 'none';
+    document.getElementById('modalTitle').textContent        = 'Add New Device';
+    document.getElementById('submitText').textContent        = 'Add Device';
+    document.getElementById('deleteDeviceBtn').style.display = 'none';
     document.getElementById('deviceForm').reset();
-    document.getElementById('deviceProtocol').value             = DEFAULT_PROTOCOL;
-    document.getElementById('currentOdometer').value            = '0.0';
-    document.getElementById('offlineTimeoutHours').value        = '24';
+    document.getElementById('deviceProtocol').value          = DEFAULT_PROTOCOL;
+    document.getElementById('currentOdometer').value         = '0.0';
+    document.getElementById('offlineTimeoutHours').value     = '24';
 
-    // Populate vehicle type from shared vehicle-icons.js
     populateVehicleTypeSelect(document.getElementById('vehicleType'), DEFAULT_TYPE);
+
+    // Reset integration panel
+    const panel = document.getElementById('integrationFieldsPanel');
+    if (panel) { panel.style.display = 'none'; panel.innerHTML = ''; }
+    const imeiInput = document.getElementById('deviceImei');
+    if (imeiInput) { imeiInput.required = true; imeiInput.closest('.form-group').style.display = ''; }
 
     alertRows = [];
     renderAlertsTable();
@@ -232,23 +282,26 @@ function openDeviceModal(deviceId, startTab = 'general') {
     if (!d) return;
     editingDeviceId = d.id;
 
-    document.getElementById('modalTitle').textContent           = 'Edit Device';
-    document.getElementById('submitText').textContent           = 'Save Changes';
-    document.getElementById('deleteDeviceBtn').style.display    = isAdmin ? 'block' : 'none';
+    document.getElementById('modalTitle').textContent        = 'Edit Device';
+    document.getElementById('submitText').textContent        = 'Save Changes';
+    document.getElementById('deleteDeviceBtn').style.display = isAdmin ? 'inline-flex' : 'none';
 
-    document.getElementById('deviceName').value                 = d.name;
-    document.getElementById('deviceImei').value                 = d.imei;
-    document.getElementById('deviceProtocol').value             = d.protocol || DEFAULT_PROTOCOL;
-    document.getElementById('licensePlate').value               = d.license_plate || '';
-    document.getElementById('vin').value                        = d.vin || '';
-    document.getElementById('currentOdometer').value            =
+    document.getElementById('deviceName').value          = d.name;
+    document.getElementById('deviceImei').value          = d.imei;
+    document.getElementById('deviceProtocol').value      = d.protocol || DEFAULT_PROTOCOL;
+    document.getElementById('licensePlate').value        = d.license_plate || '';
+    document.getElementById('vin').value                 = d.vin || '';
+    document.getElementById('currentOdometer').value     =
         d.state?.total_odometer != null ? d.state.total_odometer.toFixed(1) : '0.0';
-    document.getElementById('offlineTimeoutHours').value        =
+    document.getElementById('offlineTimeoutHours').value =
         d.config?.offline_timeout_hours ?? 24;
 
-    // Populate vehicle type from shared vehicle-icons.js
     populateVehicleTypeSelect(document.getElementById('vehicleType'), d.vehicle_type || DEFAULT_TYPE);
 
+    // Restore integration fields if this is an integration device
+    restoreIntegrationFields(d);
+
+    onProtocolChange();
     loadAlertsFromConfig(d.config || {});
     switchModalTab(startTab);
     document.getElementById('deviceModal').classList.add('active');
@@ -258,12 +311,10 @@ function closeDeviceModal() {
     document.getElementById('deviceModal').classList.remove('active');
 }
 
-// Backward-compat shims
 function editDevice(id)       { openDeviceModal(id, 'general'); }
 function openRawDataModal(id) { openDeviceModal(id, 'rawdata'); }
 
 // ── Commands Modal ────────────────────────────────────────────────
-// currentCommandDeviceId / currentCommandDevice declared in device-commands.js
 function openCommandModal(deviceId) {
     currentCommandDeviceId = deviceId;
     currentCommandDevice   = devices.find(d => d.id == deviceId);
@@ -280,7 +331,7 @@ async function handleSubmit(event) {
     const submitBtn  = document.getElementById('submitBtn');
     const submitText = document.getElementById('submitText');
     const submitLoad = document.getElementById('submitLoading');
-    submitBtn.disabled = true;
+    submitBtn.disabled       = true;
     submitText.style.display = 'none';
     submitLoad.style.display = 'inline-block';
 
@@ -295,10 +346,41 @@ async function handleSubmit(event) {
         newConfig.speed_duration_seconds = existingConfig.speed_duration_seconds || 30;
         newConfig.offline_timeout_hours  = parseInt(document.getElementById('offlineTimeoutHours').value) || 24;
 
+        // ── Integration config ────────────────────────────────────
+        const isIntg     = _isIntegrationSelected();
+        const providerId = document.getElementById('deviceProtocol').value;
+        const provider   = isIntg ? integrationProviders.find(p => p.provider_id === providerId) : null;
+
+        if (isIntg && provider) {
+            const existingSel  = document.getElementById('intgAccountSelect');
+            const accountId    = existingSel?.value ? parseInt(existingSel.value) : null;
+            const account      = accountId ? integrationAccounts.find(a => a.id === accountId) : null;
+            const accountLabel = account?.account_label
+                ?? document.getElementById('intgAccountLabel')?.value?.trim() ?? '';
+            const remoteId     = document.getElementById('intgRemoteId')?.value?.trim() ?? '';
+
+            if (!accountId && accountLabel) {
+                await _ensureAccount(provider);
+            }
+
+            newConfig.integration = {
+                provider:      providerId,
+                account_label: accountLabel,
+                remote_id:     remoteId,
+            };
+        }
+
+        // Auto-generate IMEI for integrations
+        let imei = document.getElementById('deviceImei').value.trim();
+        if (isIntg && !imei) {
+            const remoteId = newConfig.integration?.remote_id || Date.now();
+            imei = `EXT-${providerId}-${remoteId}`.slice(0, 20);
+        }
+
         const payload = {
             name:          document.getElementById('deviceName').value.trim(),
-            imei:          document.getElementById('deviceImei').value.trim(),
-            protocol:      document.getElementById('deviceProtocol').value || DEFAULT_PROTOCOL,
+            imei,
+            protocol:      providerId || DEFAULT_PROTOCOL,
             vehicle_type:  document.getElementById('vehicleType').value    || DEFAULT_TYPE,
             license_plate: document.getElementById('licensePlate').value   || null,
             vin:           document.getElementById('vin').value            || null,
@@ -309,16 +391,16 @@ async function handleSubmit(event) {
         if (editingDeviceId) {
             const odo = parseFloat(document.getElementById('currentOdometer').value) || null;
             const url = `${API_BASE}/devices/${editingDeviceId}${odo !== null ? `?new_odometer=${odo}` : ''}`;
-            response = await apiFetch(url, {
-                method: 'PUT',
+            response  = await apiFetch(url, {
+                method:  'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                body:    JSON.stringify(payload),
             });
         } else {
             response = await apiFetch(`${API_BASE}/devices`, {
-                method: 'POST',
+                method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                body:    JSON.stringify(payload),
             });
         }
 
@@ -334,7 +416,7 @@ async function handleSubmit(event) {
         showAlert('Failed to save device', 'error');
         console.error(e);
     } finally {
-        submitBtn.disabled   = false;
+        submitBtn.disabled       = false;
         submitText.style.display = 'inline';
         submitLoad.style.display = 'none';
     }
@@ -364,23 +446,19 @@ async function deleteCurrentDevice() {
 
 function loadAlertsFromConfig(config) {
     alertRows = [];
-
     if (Array.isArray(config.alert_rows)) {
         config.alert_rows.forEach(r => alertRows.push({ ...r, uid: nextUid() }));
     } else {
-        // Legacy flat config migration
         const ch = config.alert_channels || {};
         for (const [key] of Object.entries(ALERT_TYPES)) {
-            if (config[key] != null) {
+            if (config[key] != null)
                 alertRows.push({ uid: nextUid(), alertKey: key, value: config[key], channels: ch[key] || [], schedule: null });
-            }
         }
         (config.custom_rules || []).forEach(r => {
             const obj = typeof r === 'string' ? { name: 'Custom Alert', rule: r, channels: [] } : r;
             alertRows.push({ uid: nextUid(), alertKey: '__custom__', name: obj.name, rule: obj.rule, channels: obj.channels || [], schedule: null });
         });
     }
-
     renderAlertsTable();
     populateAddAlertDropdown();
 }
@@ -389,10 +467,10 @@ function populateAddAlertDropdown() {
     const sel = document.getElementById('addAlertSelect');
     if (!sel) return;
     sel.innerHTML = '<option value="">Select a system alert…</option>';
-    const grp = document.createElement('optgroup');
-    grp.label = 'System Alerts';
+    const grp   = document.createElement('optgroup');
+    grp.label   = 'System Alerts';
     for (const [key, def] of Object.entries(ALERT_TYPES)) {
-        const opt = document.createElement('option');
+        const opt       = document.createElement('option');
         opt.value       = key;
         opt.textContent = def.label;
         grp.appendChild(opt);
@@ -406,10 +484,8 @@ function addSelectedAlert() {
     if (!val) return;
     const def = ALERT_TYPES[val];
     if (!def) return;
-
     const params = {};
     (def.fields || []).forEach(f => { params[f.key] = f.default; });
-
     alertRows.push({ uid: nextUid(), alertKey: val, params, channels: [], schedule: null });
     renderAlertsTable();
     sel.value = '';
@@ -436,13 +512,8 @@ function renderAlertsTable() {
     const tbody    = document.getElementById('alertsTableBody');
     const emptyRow = document.getElementById('alertsEmptyRow');
     if (!tbody) return;
-
     tbody.querySelectorAll('tr.alert-data-row').forEach(r => r.remove());
-
-    if (!alertRows.length) {
-        if (emptyRow) emptyRow.style.display = '';
-        return;
-    }
+    if (!alertRows.length) { if (emptyRow) emptyRow.style.display = ''; return; }
     if (emptyRow) emptyRow.style.display = 'none';
 
     alertRows.forEach((row, idx) => {
@@ -450,58 +521,36 @@ function renderAlertsTable() {
         const def      = isCustom ? null : ALERT_TYPES[row.alertKey];
 
         const label = isCustom
-            ? `<span class="custom-alert-module">
-                   <span class="custom-alert-module-title">⚡ ${row.name}</span>
-               </span>`
-            : (def?.icon ? `${def.icon} ` : '') + (def?.label || row.alertKey);
+            ? `<span class="custom-alert-module"><span class="custom-alert-module-title">⚡ ${_esc(row.name)}</span></span>`
+            : (def?.icon ? `${def.icon} ` : '') + _esc(def?.label || row.alertKey);
 
-        // Threshold summary
         let thresh;
         if (isCustom) {
-                const durBadge = row.duration
-                    ? `<span class="alert-threshold-badge" style="margin-left:0.3rem;">
-                           <small style="color:var(--text-muted);margin-right:0.2rem;">for:</small>
-                           ${row.duration}s
-                       </span>`
-                    : '';
-                thresh = `<span class="alert-threshold-badge">
-                    <small style="color:var(--text-muted);margin-right:0.2rem;">condition:</small>
-                    ${row.rule}
-                </span>${durBadge}`;
-            } else {
-            const visibleFields = (def?.fields || []).filter(f => f.field_type !== 'checkbox');
-            const badges = visibleFields.map(f => {
-                const val = row.params?.[f.key];
-                if (val == null || val === '') return null;
-                let display = val;
-                if (f.field_type === 'select' && f.options?.length) {
-                    const opt = f.options.find(o => String(o.value) === String(val));
-                    if (opt) display = opt.label;
-                }
-                return `<span class="alert-threshold-badge">
-                    <small style="color:var(--text-muted);margin-right:0.2rem;">${f.label}:</small>
-                    ${display}${f.unit ? ` <small>${f.unit}</small>` : ''}
-                </span>`;
-            }).filter(Boolean);
-            thresh = badges.length
-                ? badges.join(' ')
+            const durBadge = row.duration
+                ? `<span class="thresh-badge">⏱ ${row.duration}s</span>`
+                : '';
+            thresh = `<code style="font-size:0.75rem;color:var(--text-muted);">${_esc(row.rule || '')}</code>${durBadge}`;
+        } else {
+            const pf = def?.primary_field;
+            thresh = pf && row.params?.[pf.key] != null
+                ? `<span class="thresh-badge">${row.params[pf.key]} ${_esc(pf.unit || '')}</span>`
                 : `<span style="color:var(--text-muted);font-size:0.8rem;">—</span>`;
         }
 
-        const chHtml = row.channels?.length
-            ? row.channels.map(c => `<span class="channel-pill active" style="pointer-events:none;">${c}</span>`).join('')
+        const chHtml = (row.channels || []).length
+            ? row.channels.map(c => `<span class="thresh-badge" style="background:rgba(16,185,129,0.12);color:var(--accent-success);">${_esc(c)}</span>`).join('')
             : `<span style="color:var(--text-muted);font-size:0.8rem;">None</span>`;
 
-        const sched = row.schedule;
+        const sched    = row.schedule;
         const schedHtml = sched?.days?.length
             ? `<span class="schedule-badge">${sched.days.map(d => DAYS[d]).join(', ')}<br>
                <small>${pad(sched.hourStart ?? 0)}:00–${pad(sched.hourEnd ?? 23)}:59</small></span>`
             : `<span style="color:var(--text-muted);font-size:0.8rem;">Always</span>`;
 
-        const tr = document.createElement('tr');
+        const tr       = document.createElement('tr');
         tr.className   = 'alert-data-row';
         tr.dataset.uid = row.uid;
-        tr.innerHTML = `
+        tr.innerHTML   = `
             <td style="color:var(--text-muted);font-size:0.82rem;">${idx + 1}</td>
             <td><span class="alert-type-label ${isCustom ? 'custom' : 'system'}">${label}</span></td>
             <td><div style="display:flex;flex-wrap:wrap;gap:0.3rem;">${thresh}</div></td>
@@ -527,145 +576,116 @@ async function openAlertEditor(uid) {
     document.getElementById('alertEditorTitle').textContent =
         isCustom ? `Edit Custom Rule — ${row.name}` : `Edit ${def?.label || row.alertKey}`;
 
-    // ── Build fields HTML ────────────────────────────────────
     let fieldsHtml = '';
 
     if (!isCustom && def?.fields?.length) {
         for (const f of def.fields) {
-            const currentVal = row.params?.[f.key] ?? f.default;
-            let inputHtml    = '';
+            const v = row.params?.[f.key] ?? f.default;
+            let inputHtml = '';
 
             if (f.field_type === 'number') {
-                inputHtml = `
-                    <div style="display:flex;align-items:center;gap:0.75rem;">
-                        <input type="number" class="form-input alert-param-input"
-                               data-param-key="${f.key}"
-                               value="${currentVal ?? ''}"
-                               ${f.min_value != null ? `min="${f.min_value}"` : ''}
-                               ${f.max_value != null ? `max="${f.max_value}"` : ''}
-                               style="max-width:140px;">
-                        ${f.unit ? `<span style="color:var(--text-muted);">${f.unit}</span>` : ''}
-                    </div>`;
-
+                inputHtml = `<div style="display:flex;align-items:center;gap:0.75rem;">
+                    <input type="number" class="form-input alert-param-input" data-param-key="${f.key}"
+                           value="${v ?? ''}"
+                           ${f.min_value != null ? `min="${f.min_value}"` : ''}
+                           ${f.max_value != null ? `max="${f.max_value}"` : ''}
+                           style="max-width:140px;">
+                    ${f.unit ? `<span style="color:var(--text-muted);">${_esc(f.unit)}</span>` : ''}
+                </div>`;
             } else if (f.field_type === 'text') {
-                inputHtml = `
-                    <input type="text" class="form-input alert-param-input"
-                           data-param-key="${f.key}"
-                           value="${currentVal ?? ''}"
-                           placeholder="${f.help_text || ''}"
-                           style="max-width:280px;">`;
-
+                inputHtml = `<input type="text" class="form-input alert-param-input"
+                    data-param-key="${f.key}" value="${_esc(v ?? '')}">`;
             } else if (f.field_type === 'checkbox') {
-                inputHtml = `
-                    <label class="toggle-label" style="display:inline-flex;align-items:center;gap:0.6rem;cursor:pointer;">
-                        <input type="checkbox" class="alert-param-input"
-                               data-param-key="${f.key}"
-                               ${currentVal ? 'checked' : ''}>
-                        <span style="font-size:0.875rem;color:var(--text-secondary);">${f.label}</span>
-                    </label>`;
-
+                inputHtml = `<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+                    <input type="checkbox" class="alert-param-input" data-param-key="${f.key}"
+                           ${v ? 'checked' : ''} style="width:auto;">
+                    <span style="font-size:0.875rem;">${_esc(f.label)}</span>
+                </label>`;
             } else if (f.field_type === 'select') {
-                let options = f.options || [];
-                if (f.key === 'geofence_id' && editingDeviceId) {
-                    options = await loadGeofencesForDevice(editingDeviceId);
-                }
-                const optHtml = options.map(o =>
-                    `<option value="${o.value}" ${String(currentVal) === String(o.value) ? 'selected' : ''}>${o.label}</option>`
+                const opts = (f.options || []).map(o =>
+                    `<option value="${_esc(o.value)}"${o.value == v ? ' selected' : ''}>${_esc(o.label)}</option>`
                 ).join('');
-                inputHtml = `
-                    <select class="form-input alert-param-input" data-param-key="${f.key}" style="max-width:280px;">
-                        <option value="">— Select —</option>
-                        ${optHtml}
-                    </select>`;
+                inputHtml = `<select class="form-input alert-param-input" data-param-key="${f.key}">${opts}</select>`;
             }
 
-            if (f.field_type === 'checkbox') {
-                fieldsHtml += `
-                    <div class="form-group">
-                        ${inputHtml}
-                        ${f.help_text ? `<div class="form-help">${f.help_text}</div>` : ''}
-                    </div>`;
+            if (f.field_type !== 'checkbox') {
+                fieldsHtml += `<div class="form-group" style="margin-bottom:1rem;">
+                    <label class="form-label">${_esc(f.label)}</label>
+                    ${inputHtml}
+                    ${f.help_text ? `<div class="form-help">${_esc(f.help_text)}</div>` : ''}
+                </div>`;
             } else {
-                fieldsHtml += `
-                    <div class="form-group">
-                        <label class="form-label">${f.label}</label>
-                        ${inputHtml}
-                        ${f.help_text ? `<div class="form-help">${f.help_text}</div>` : ''}
-                    </div>`;
+                fieldsHtml += `<div class="form-group" style="margin-bottom:1rem;">${inputHtml}</div>`;
             }
         }
-    } else if (isCustom) {
-        const durEnabled = row.duration != null;
-        fieldsHtml = `
-            <div class="form-group">
-                <label class="form-label">Rule Name</label>
-                <input type="text" class="form-input" id="editor-custom-name" value="${row.name || ''}">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Condition</label>
-                <input type="text" class="form-input" id="editor-custom-rule" value="${row.rule || ''}">
-            </div>
-            <div class="form-group">
-                <label class="form-label" style="display:flex;align-items:center;gap:0.6rem;">
-                    Duration
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="editor-duration-enabled" ${durEnabled ? 'checked' : ''}
-                               onchange="document.getElementById('editor-duration-input').disabled=!this.checked">
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <span style="font-weight:400;color:var(--text-muted);font-size:0.8rem;">(alert fires only after condition holds for this long)</span>
-                </label>
-                <div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.5rem;">
-                    <input type="number" class="form-input" id="editor-duration-input"
-                           min="1" max="3600" value="${row.duration ?? 30}"
-                           ${!durEnabled ? 'disabled' : ''}
-                           style="max-width:120px;">
-                    <span style="color:var(--text-muted);">seconds</span>
-                </div>
-            </div>`;
     }
 
+    if (isCustom) {
+        const durEnabled = row.duration != null;
+        const durVal     = row.duration ?? 60;
+        fieldsHtml = `
+        <div class="form-group" style="margin-bottom:1rem;">
+            <label class="form-label">Rule Name</label>
+            <input type="text" class="form-input" id="editor-custom-name" value="${_esc(row.name || '')}">
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+            <label class="form-label">Condition</label>
+            <input type="text" class="form-input" id="editor-custom-rule" value="${_esc(row.rule || '')}">
+            <div class="form-help">e.g. <code>speed &gt; 90 and ignition</code></div>
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+            <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-bottom:0.5rem;">
+                <input type="checkbox" id="editor-duration-enabled" ${durEnabled ? 'checked' : ''} style="width:auto;">
+                <span class="form-label" style="margin:0;">Require sustained condition</span>
+            </label>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+                <input type="number" class="form-input" id="editor-duration-input"
+                       value="${durVal}" min="1" style="max-width:100px;" ${durEnabled ? '' : 'disabled'}>
+                <span style="color:var(--text-muted);">seconds</span>
+            </div>
+        </div>`;
+        // Wire the checkbox
+        setTimeout(() => {
+            const cb = document.getElementById('editor-duration-enabled');
+            const in_ = document.getElementById('editor-duration-input');
+            if (cb && in_) cb.addEventListener('change', () => { in_.disabled = !cb.checked; });
+        }, 0);
+    }
 
-    // ── Schedule section ─────────────────────────────────────
-    const sched      = row.schedule || {};
-    const activeDays = sched.days   || [];
-    const hourStart  = sched.hourStart ?? 0;
-    const hourEnd    = sched.hourEnd   ?? 23;
+    const activeDays = row.schedule?.days || [];
+    const hourStart  = row.schedule?.hourStart ?? 0;
+    const hourEnd    = row.schedule?.hourEnd   ?? 23;
 
     const dayPickerHtml = DAYS.map((day, i) => `
         <label class="day-pill${activeDays.includes(i) ? ' active' : ''}">
             <input type="checkbox" value="${i}"${activeDays.includes(i) ? ' checked' : ''}> ${day}
         </label>`).join('');
 
-    const hourOpts    = (sel) => Array.from({ length: 24 }, (_, h) =>
+    const hourOpts    = sel => Array.from({ length: 24 }, (_, h) =>
         `<option value="${h}"${h === sel ? ' selected' : ''}>${pad(h)}:00</option>`).join('');
     const hourEndOpts = Array.from({ length: 24 }, (_, h) =>
         `<option value="${h}"${h === hourEnd ? ' selected' : ''}>${pad(h)}:59</option>`).join('');
 
-    // ── Notification channels ────────────────────────────────
     const chHtml = userChannels.length
         ? userChannels.map(c => `
             <label class="channel-pill${(row.channels || []).includes(c.name) ? ' active' : ''}">
-                <input type="checkbox" class="editor-channel-cb" value="${c.name}"${(row.channels || []).includes(c.name) ? ' checked' : ''}>
-                ${c.name}
+                <input type="checkbox" class="editor-channel-cb" value="${_esc(c.name)}"${(row.channels || []).includes(c.name) ? ' checked' : ''}>
+                ${_esc(c.name)}
             </label>`).join('')
         : '<span style="color:var(--text-muted);font-size:0.875rem;">No notification channels configured.</span>';
 
     document.getElementById('alertEditorBody').innerHTML = `
         <div style="display:flex;flex-direction:column;gap:0.25rem;">
-            ${def?.description ? `<p style="color:var(--text-muted);font-size:0.85rem;margin:0 0 1rem;">${def.description}</p>` : ''}
+            ${def?.description ? `<p style="color:var(--text-muted);font-size:0.85rem;margin:0 0 1rem;">${_esc(def.description)}</p>` : ''}
             ${fieldsHtml}
         </div>
-
         <div class="form-group" style="margin-top:1.25rem;">
             <label class="form-label">Notify Via</label>
             <div style="display:flex;flex-wrap:wrap;gap:0.4rem;">${chHtml}</div>
         </div>
-
         <div class="form-group">
-            <label class="form-label">
-                Schedule
-                <span style="font-weight:400;color:var(--text-muted);"> (no days selected = always active)</span>
+            <label class="form-label">Schedule
+                <span style="font-weight:400;color:var(--text-muted);"> (no days = always active)</span>
             </label>
             <div style="margin-bottom:0.75rem;">
                 <div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:0.5rem;font-weight:600;">Active Days</div>
@@ -678,28 +698,21 @@ async function openAlertEditor(uid) {
                 </div>
                 <div>
                     <label class="form-label" style="font-size:0.78rem;">Until</label>
-                    <select class="form-input" id="editor-hour-end" style="width:100px;">${hourEndOpts}</select>
+                    <select class="form-input" id="editor-hour-end"   style="width:100px;">${hourEndOpts}</select>
                 </div>
             </div>
         </div>`;
 
-    // Wire up interactive pills
     document.querySelectorAll('#editor-day-picker .day-pill').forEach(pill => {
         const cb = pill.querySelector('input');
         if (!cb) return;
         pill.classList.toggle('active', cb.checked);
-        pill.addEventListener('click', () => {
-            cb.checked = !cb.checked;
-            pill.classList.toggle('active', cb.checked);
-        });
+        pill.addEventListener('click', () => { cb.checked = !cb.checked; pill.classList.toggle('active', cb.checked); });
     });
     document.querySelectorAll('#alertEditorBody .channel-pill').forEach(pill => {
         const cb = pill.querySelector('input');
         if (!cb) return;
-        pill.addEventListener('click', () => {
-            cb.checked = !cb.checked;
-            pill.classList.toggle('active', cb.checked);
-        });
+        pill.addEventListener('click', () => { cb.checked = !cb.checked; pill.classList.toggle('active', cb.checked); });
     });
 
     document.getElementById('alertEditorModal').classList.add('active');
@@ -717,26 +730,21 @@ function saveAlertFromEditor() {
     const isCustom = row.alertKey === '__custom__';
 
     if (isCustom) {
-        const n = document.getElementById('editor-custom-name')?.value.trim();
-        const r = document.getElementById('editor-custom-rule')?.value.trim();
+        const n   = document.getElementById('editor-custom-name')?.value.trim();
+        const r   = document.getElementById('editor-custom-rule')?.value.trim();
         if (n) row.name = n;
         if (r) row.rule = r;
         const durEnabled = document.getElementById('editor-duration-enabled')?.checked;
         const durVal     = parseInt(document.getElementById('editor-duration-input')?.value);
-        row.duration = durEnabled && !isNaN(durVal) && durVal > 0 ? durVal : null;
+        row.duration     = durEnabled && !isNaN(durVal) && durVal > 0 ? durVal : null;
     } else {
         if (!row.params) row.params = {};
         document.querySelectorAll('#alertEditorBody .alert-param-input').forEach(input => {
             const key = input.dataset.paramKey;
             if (!key) return;
-            if (input.type === 'checkbox') {
-                row.params[key] = input.checked;
-            } else if (input.type === 'number') {
-                const v = parseFloat(input.value);
-                if (!isNaN(v)) row.params[key] = v;
-            } else {
-                row.params[key] = input.value;
-            }
+            if (input.type === 'checkbox')     row.params[key] = input.checked;
+            else if (input.type === 'number')  { const v = parseFloat(input.value); if (!isNaN(v)) row.params[key] = v; }
+            else                               row.params[key] = input.value;
         });
     }
 
@@ -745,38 +753,25 @@ function saveAlertFromEditor() {
 
     const activeDays = [];
     document.querySelectorAll('#editor-day-picker input:checked').forEach(cb => activeDays.push(parseInt(cb.value)));
-    const hs = parseInt(document.getElementById('editor-hour-start').value);
-    const he = parseInt(document.getElementById('editor-hour-end').value);
-    row.schedule = activeDays.length
-        ? { days: activeDays.sort((a, b) => a - b), hourStart: hs, hourEnd: he }
-        : null;
+    const hs   = parseInt(document.getElementById('editor-hour-start').value);
+    const he   = parseInt(document.getElementById('editor-hour-end').value);
+    row.schedule = activeDays.length ? { days: activeDays.sort((a, b) => a - b), hourStart: hs, hourEnd: he } : null;
 
     closeAlertEditor();
     renderAlertsTable();
 }
 
-// ── Build config from alertRows ───────────────────────────────────
 function buildConfigFromAlertRows(existing = {}) {
-    const config = {
-        ...existing,
-        alert_rows:     [],
-        alert_channels: {},
-        custom_rules:   [],
-    };
-
-    // Remove legacy flat keys
+    const config = { ...existing, alert_rows: [], alert_channels: {}, custom_rules: [] };
     ['speed_tolerance', 'idle_timeout_minutes', 'offline_timeout_hours',
      'towing_threshold_meters', 'speed_duration_seconds'].forEach(k => delete config[k]);
-
     alertRows.forEach(row => {
         config.alert_rows.push({ ...row });
-        if (row.alertKey === '__custom__') {
+        if (row.alertKey === '__custom__')
             config.custom_rules.push({ name: row.name, rule: row.rule, channels: row.channels || [] });
-        } else {
+        else
             config.alert_channels[row.alertKey] = row.channels || [];
-        }
     });
-
     return config;
 }
 
@@ -787,71 +782,55 @@ function buildConfigFromAlertRows(existing = {}) {
 async function loadRawDataForModal(deviceId) {
     currentRawDeviceId = deviceId;
     currentPage        = 1;
-    const tbody = document.getElementById('rawDataBody');
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2rem;">Loading…</td></tr>';
+    const tbody        = document.getElementById('rawDataBody');
+    tbody.innerHTML    = '<tr><td colspan="10" style="text-align:center;padding:2rem;">Loading…</td></tr>';
 
     const end = new Date();
-
     try {
-        // Try last 24 h first
         const start24h = new Date(end - 86_400_000);
         const res24h   = await apiFetch(`${API_BASE}/positions/history`, {
-            method: 'POST',
+            method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                device_id: deviceId,
-                start_time: start24h.toISOString(),
-                end_time:   end.toISOString(),
-                max_points: 5000,
-                order:      'desc',
-            }),
+            body:    JSON.stringify({ device_id: deviceId, start_time: start24h.toISOString(), end_time: end.toISOString(), max_points: 5000, order: 'desc' }),
         });
         if (!res24h.ok) throw new Error(`${res24h.status}`);
         rawData = (await res24h.json()).features || [];
 
-        // Fall back to last 30 days / 150 points if 24 h is empty
         if (!rawData.length) {
             const start30d = new Date(end - 86_400_000 * 30);
             const res30d   = await apiFetch(`${API_BASE}/positions/history`, {
-                method: 'POST',
+                method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    device_id: deviceId,
-                    start_time: start30d.toISOString(),
-                    end_time:   end.toISOString(),
-                    max_points: 150,
-                    order:      'desc',
-                }),
+                body:    JSON.stringify({ device_id: deviceId, start_time: start30d.toISOString(), end_time: end.toISOString(), max_points: 150, order: 'desc' }),
             });
             if (!res30d.ok) throw new Error(`${res30d.status}`);
             rawData = (await res30d.json()).features || [];
         }
-
         renderRawDataPage();
     } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--accent-danger);">Failed to load: ${e.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--accent-danger);">Failed to load: ${e.message}</td></tr>`;
     }
 }
 
 function changeRawDataPage(delta) {
-    const max = Math.ceil(rawData.length / itemsPerPage) || 1;
+    const max   = Math.ceil(rawData.length / itemsPerPage) || 1;
     currentPage = Math.max(1, Math.min(max, currentPage + delta));
     renderRawDataPage();
 }
 
 function renderRawDataPage() {
-    const tbody  = document.getElementById('rawDataBody');
-    const slice  = rawData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const tbody = document.getElementById('rawDataBody');
+    const slice = rawData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
     tbody.innerHTML = '';
 
     if (!slice.length) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">No data available.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--text-muted);">No data available.</td></tr>';
         return;
     }
 
     slice.forEach(feat => {
-        const p      = feat.properties || feat;
-        const coords = feat.geometry?.coordinates || [p.longitude, p.latitude];
+        const p       = feat.properties || feat;
+        const coords  = feat.geometry?.coordinates || [p.longitude, p.latitude];
         const sensors = { ...(p.sensors || {}) };
         delete sensors.raw;
         const attrStr = Object.entries(sensors)
@@ -860,9 +839,7 @@ function renderRawDataPage() {
                     const summary = v.map(b => `${b.id}${b.rssi !== undefined ? ` (${b.rssi}dBm)` : ''}`).join(', ');
                     return `${k}: [${summary}]`;
                 }
-                if (Array.isArray(v) || (v !== null && typeof v === 'object')) {
-                    return `${k}:${JSON.stringify(v)}`;
-                }
+                if (Array.isArray(v) || (v !== null && typeof v === 'object')) return `${k}:${JSON.stringify(v)}`;
                 return `${k}:${v}`;
             })
             .join(' | ');
@@ -872,8 +849,8 @@ function renderRawDataPage() {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${gpsTime}</td>
-            <td style="color:var(--text-muted);font-size:0.8em;">${serverTime}</td>
+            <td style="white-space:nowrap;">${gpsTime}</td>
+            <td style="white-space:nowrap;color:var(--text-muted);font-size:0.8em;">${serverTime}</td>
             <td>${coords[1].toFixed(5)}</td>
             <td>${coords[0].toFixed(5)}</td>
             <td>${(p.speed  || 0).toFixed(1)} km/h</td>
@@ -882,7 +859,7 @@ function renderRawDataPage() {
             <td>${(p.altitude  || 0).toFixed(0)} m</td>
             <td>${p.ignition ? 'ON' : 'OFF'}</td>
             <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:0.72rem;"
-                title="${attrStr}">${attrStr}</td>`;
+                title="${_esc(attrStr)}">${_esc(attrStr)}</td>`;
         tbody.appendChild(tr);
     });
 
@@ -893,7 +870,7 @@ function renderRawDataPage() {
 }
 
 // ================================================================
-//  ALERTS MODAL SHIMS (dashboard compatibility)
+//  ALERTS MODAL SHIMS (device-management page compatibility)
 // ================================================================
 let loadedAlerts = [];
 
@@ -941,7 +918,6 @@ async function clearAllAlerts() {
     showAlert('All alerts cleared', 'success');
 }
 
-// ── Toast ─────────────────────────────────────────────────────────
 function showAlert(message, type) {
     const el = document.createElement('div');
     el.className = `alert alert-${type}`;
