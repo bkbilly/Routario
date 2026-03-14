@@ -136,6 +136,7 @@ class PositionRecord(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     device_id: Mapped[int] = mapped_column(Integer, ForeignKey('devices.id', ondelete='CASCADE'), index=True)
     device_time: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    server_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # ← ADD THIS
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
     altitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

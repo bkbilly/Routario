@@ -178,6 +178,7 @@ async function loadHistory(deviceId, startTime, endTime) {
 
 function exitHistoryMode() {
     stopPlayback();
+    _clearAlertHighlight();
     if (polylines['history']) {
         polylines['history'].eachLayer(l => map.removeLayer(l));
         delete polylines['history'];

@@ -155,6 +155,7 @@ class DatabaseService:
                 ignition=position.ignition,
                 sensors=position.sensors,
                 device_time=device_time,
+                server_time=position.server_time.replace(tzinfo=None) if position.server_time else datetime.utcnow(),
             )
 
             

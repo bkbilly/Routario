@@ -79,6 +79,7 @@ async def get_position_history(
                 "course":    pos.course,
                 "ignition":  pos.ignition,
                 "time":      pos.device_time.isoformat(),
+                "server_time": pos.server_time.isoformat() if pos.server_time else None,
                 "altitude":  pos.altitude,
                 "satellites": pos.satellites,
                 "sensors":   pos.sensors,
