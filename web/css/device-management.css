@@ -954,8 +954,8 @@ h1 {
     .devices-table td:nth-child(3),
     .devices-table th:nth-child(4),   /* Plate */
     .devices-table td:nth-child(4),
-    .devices-table th:nth-child(7),   /* Odometer */
-    .devices-table td:nth-child(7) {
+    .devices-table th:nth-child(6),   /* Odometer */
+    .devices-table td:nth-child(6) {
         display: none;
     }
 

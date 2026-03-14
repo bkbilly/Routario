@@ -342,10 +342,13 @@
     <div class="modal" id="historyModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 class="modal-title">View History</h2>
+                <div>
+                    <h2 style="font-size:1.1rem; margin:0;">🕒 View History</h2>
+                    <div id="historyModalDeviceName" style="font-size:1rem; color:var(--text-muted); margin-top:0.2rem;"></div>
+                </div>
                 <button class="modal-close" onclick="closeHistoryModal()">✕</button>
             </div>
-            <form onsubmit="handleHistorySubmit(event)">
+            <form onsubmit="handleHistorySubmit(event)" style="padding-top:1rem;">
                 <div class="form-group">
                     <label class="form-label">Quick Select</label>
                     <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
@@ -436,7 +439,10 @@
 
             <!-- ── Fixed header ───────────────────────────────────── -->
             <div class="modal-header" style="flex-shrink:0;">
-                <h2 id="logbookModalTitle" style="font-size:1.1rem;margin:0;">📋 Logbook</h2>
+                <div>
+                    <h2 style="font-size:1.1rem; margin:0;">📋 Logbook</h2>
+                    <div id="logbookModalTitle" style="font-size:1rem; color:var(--text-muted); margin-top:0.2rem;"></div>
+                </div>
                 <button class="modal-close" onclick="closeLogbookModal()">✕</button>
             </div>
 

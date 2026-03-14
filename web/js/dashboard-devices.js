@@ -150,6 +150,19 @@ function updateSidebarTimes() {
         if (el && device.last_update) {
             el.textContent = timeAgo(device.last_update);
         }
+
+        // Re-evaluate offline status every minute
+        const statusEl = document.getElementById(`status-${device.id}`);
+        if (statusEl) {
+            const vs = getVehicleStatus(device);
+            statusEl.textContent  = vs.label;
+            statusEl.className    = `device-status ${vs.cls}`;
+            const card = document.getElementById(`device-card-${device.id}`);
+            if (card) {
+                card.classList.remove('moving', 'idle', 'stopped', 'offline');
+                card.classList.add(vs.cls);
+            }
+        }
     });
 }
 
@@ -177,10 +190,19 @@ function updateStats() {
 
 // Vehicle sidebar status helper
 function getVehicleStatus(device) {
-    if (!device.is_online)                      return { label: 'Offline', cls: 'offline', key: 0 };
-    if (device.ignition_on === false)           return { label: 'Stopped', cls: 'stopped', key: 1 };
-    if ((device.last_speed || 0) < 3)           return { label: 'Idling',  cls: 'idle',    key: 2 };
-    return                                             { label: 'Moving',  cls: 'moving',  key: 3 };
+    // Treat as offline if last_update exceeds the configured timeout
+    const timeoutHours = device.config?.offline_timeout_hours ?? 24;
+    if (device.last_update) {
+        const lastSeen = new Date(device.last_update.endsWith('Z') ? device.last_update : device.last_update + 'Z');
+        const elapsedHours = (Date.now() - lastSeen.getTime()) / 3600000;
+        if (elapsedHours >= timeoutHours) return { label: 'Offline', cls: 'offline', key: 0 };
+    } else if (!device.is_online) {
+        return { label: 'Offline', cls: 'offline', key: 0 };
+    }
+
+    if (device.ignition_on === false) return { label: 'Stopped', cls: 'stopped', key: 1 };
+    if ((device.last_speed || 0) < 3)  return { label: 'Idling',  cls: 'idle',    key: 2 };
+    return                                     { label: 'Moving',  cls: 'moving',  key: 3 };
 }
 
 function setSortMode(mode) {
@@ -270,10 +292,10 @@ function openShareModal(deviceId) {
     if (!device) return;
 
     const modal = document.getElementById('shareModal');
-    document.getElementById('shareDeviceName').textContent = device.name;
+    const icon = (VEHICLE_ICONS[device.vehicle_type] || VEHICLE_ICONS['other']).emoji;
+    document.getElementById('shareDeviceName').textContent = `${icon} ${device.name}`;  // ← add icon
     modal.dataset.deviceId = deviceId;
 
-    // Reset duration picker
     document.querySelectorAll('.share-duration-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('shareCustomMinutes').value = '';
 

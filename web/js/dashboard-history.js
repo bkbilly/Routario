@@ -14,6 +14,12 @@ const tripColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b
 function openHistoryModal(deviceId) {
     historyDeviceId = deviceId;
     setHistoryRange(24);
+
+    const device = devices.find(d => d.id === deviceId);
+    const icon = device ? (VEHICLE_ICONS[device.vehicle_type] || VEHICLE_ICONS['other']).emoji : '🚗';
+    const name = device ? device.name : `Device ${deviceId}`;
+    document.getElementById('historyModalDeviceName').textContent = `${icon} ${name}`;
+
     document.getElementById('historyModal').classList.add('active');
 }
 
