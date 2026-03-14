@@ -25,6 +25,14 @@ from models.schemas import NormalizedPosition
 
 logger = logging.getLogger(__name__)
 
+_KNOTS_TO_KPH = 1.852
+
+# In-memory cache of the last seen device_time per (base_url, remote_device_id).
+# Prevents re-processing the same position on every poll cycle, since Traccar's
+# /api/positions always returns the latest known position regardless of whether
+# it has changed.
+_last_seen: dict[tuple, datetime] = {}
+
 
 @IntegrationRegistry.register("traccar")
 class TraccarIntegration(BaseIntegration):
@@ -74,15 +82,14 @@ class TraccarIntegration(BaseIntegration):
             )
             resp.raise_for_status()
             user = resp.json()
-            # Extract the session cookie
             cookies = dict(resp.cookies)
 
         return AuthContext(
             data={
-                "base_url":   base,
-                "auth":       auth,          # (username, password) tuple
-                "cookies":    cookies,       # JSESSIONID etc.
-                "user_id":    user.get("id"),
+                "base_url": base,
+                "auth":     auth,     # (username, password) tuple
+                "cookies":  cookies,  # JSESSIONID etc.
+                "user_id":  user.get("id"),
             },
             token_expires_at=None,  # Traccar sessions don't have a fixed expiry
         )
@@ -98,7 +105,6 @@ class TraccarIntegration(BaseIntegration):
         auth    = auth_ctx.data["auth"]
         cookies = auth_ctx.data["cookies"]
 
-        # Build comma-separated list of device IDs for a single bulk request
         id_map = {str(d["remote_id"]): d["imei"] for d in devices}
         if not id_map:
             return
@@ -126,8 +132,19 @@ class TraccarIntegration(BaseIntegration):
                 continue
 
             pos = self._parse_position(imei, pos_data)
-            if pos:
-                yield pos
+            if not pos:
+                continue
+
+            # Skip if this is the same position we already processed last cycle
+            cache_key = (base, device_id)
+            last = _last_seen.get(cache_key)
+            if last is not None and last >= pos.device_time:
+                continue
+
+            _last_seen[cache_key] = pos.device_time
+            yield pos
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _parse_position(self, imei: str, p: dict) -> NormalizedPosition | None:
         try:
@@ -136,21 +153,33 @@ class TraccarIntegration(BaseIntegration):
             if lat == 0 and lng == 0:
                 return None
 
-            fix_time = p.get("fixTime") or p.get("deviceTime") or p.get("serverTime")
-            if fix_time:
+            def _parse_dt(raw) -> datetime | None:
+                if not raw:
+                    return None
                 try:
-                    device_time = datetime.fromisoformat(
-                        str(fix_time).replace("Z", "+00:00")
-                    ).astimezone(timezone.utc).replace(tzinfo=None)
+                    dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+                    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
                 except ValueError:
-                    device_time = datetime.utcnow()
-            else:
-                device_time = datetime.utcnow()
+                    return None
+
+            device_time = (
+                _parse_dt(p.get("fixTime"))
+                or _parse_dt(p.get("deviceTime"))
+                or datetime.now(timezone.utc)
+            )
+            server_time = _parse_dt(p.get("serverTime")) or datetime.now(timezone.utc)
 
             attrs    = p.get("attributes") or {}
             ignition = attrs.get("ignition")
             if ignition is not None:
                 ignition = bool(ignition)
+
+            # Traccar reports speed in knots — convert to km/h
+            speed_knots = p.get("speed")
+            speed_kph   = round(float(speed_knots) * _KNOTS_TO_KPH, 2) if speed_knots is not None else None
+
+            sat_raw    = attrs.get("sat") or attrs.get("satellites")
+            satellites = int(sat_raw) if sat_raw is not None else None
 
             sensors: dict = {}
             for src_key, dst_key in [
@@ -168,13 +197,13 @@ class TraccarIntegration(BaseIntegration):
             return NormalizedPosition(
                 imei=imei,
                 device_time=device_time,
-                server_time=datetime.now(timezone.utc),
+                server_time=server_time,
                 latitude=lat,
                 longitude=lng,
                 altitude=float(p.get("altitude") or 0),
-                speed=float(p.get("speed") or 0),    # Traccar returns knots
+                speed=speed_kph,
                 course=float(p.get("course") or 0),
-                satellites=int(attrs.get("sat") or attrs.get("satellites") or 0),
+                satellites=satellites,
                 ignition=ignition,
                 sensors=sensors,
                 raw_data={"source": "traccar"},
@@ -196,16 +225,17 @@ class TraccarIntegration(BaseIntegration):
                 resp.raise_for_status()
                 raw = resp.json()
 
-            result = []
-            for d in raw:
-                result.append(RemoteDevice(
+            return [
+                RemoteDevice(
                     remote_id=str(d.get("id") or ""),
                     name=str(d.get("name") or d.get("id")),
                     imei=str(d.get("uniqueId") or ""),
                     license_plate=None,
                     extra={"status": d.get("status")},
-                ))
-            return result
+                )
+                for d in raw
+                if d.get("id")
+            ]
         except Exception as e:
             logger.error(f"Traccar: list_remote_devices error: {e}")
             return []

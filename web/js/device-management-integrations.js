@@ -10,7 +10,7 @@
 
 // ── Protocol change handler ───────────────────────────────────────
 
-function onProtocolChange() {
+function onProtocolChange(existingIntg = null) {
     const sel      = document.getElementById('deviceProtocol');
     const selected = sel.value;
     const isIntg   = integrationProviders.some(p => p.provider_id === selected);
@@ -36,7 +36,7 @@ function onProtocolChange() {
     if (!provider) return;
 
     panel.style.display = 'block';
-    panel.innerHTML     = _renderIntegrationFields(provider);
+    panel.innerHTML     = _renderIntegrationFields(provider, existingIntg);
 }
 
 // ── Returns true if the selected protocol is an integration ───────
@@ -130,37 +130,20 @@ function _renderIntegrationFields(provider, existingIntg = null) {
 
 function restoreIntegrationFields(device) {
     const intg = device.config?.integration;
-    if (!intg?.provider) return;   // onProtocolChange already hid the panel for native devices
+    if (!intg?.provider) return;
 
     const provider = integrationProviders.find(p => p.provider_id === intg.provider);
     if (!provider) return;
 
-    const account = integrationAccounts.find(
-        a => a.provider_id === intg.provider && a.account_label === intg.account_label
-    );
+    // Re-render the panel with existingIntg so the matching account <option>
+    // is stamped `selected` in the HTML from the start — fixes the bug where
+    // onProtocolChange() rendered the panel without existingIntg first, then
+    // restoreIntegrationFields() tried to set .value on a select whose options
+    // were already rendered without a selection.
+    onProtocolChange(intg);
 
-    // Panel is already rendered by onProtocolChange — just populate the values
-    const labelEl = document.getElementById('intgAccountLabel');
-    if (labelEl) labelEl.value = intg.account_label || '';
-
-    const remoteEl = document.getElementById('intgRemoteId');
-    if (remoteEl) remoteEl.value = intg.remote_id || '';
-
-    // Pre-fill credential fields from the saved account
-    if (account) {
-        provider.fields.forEach(f => {
-            const el = document.getElementById(`intgField_${f.key}`);
-            if (el && account.credentials?.[f.key] != null)
-                el.value = account.credentials[f.key];
-        });
-
-        // Select the existing account in the dropdown and dim the fields
-        const accountSel = document.getElementById('intgAccountSelect');
-        if (accountSel) {
-            accountSel.value = account.id;
-            onIntgAccountSelect();
-        }
-    }
+    // Dim the credential fields now that an existing account is selected.
+    onIntgAccountSelect();
 }
 
 // ── Existing account selected — dim/restore credential fields ─────
@@ -170,13 +153,30 @@ function onIntgAccountSelect() {
     const fields    = document.getElementById('intgCredentialFields');
     const accountId = sel?.value;
     if (!fields) return;
-    if (accountId) {
-        fields.style.opacity       = '0.4';
-        fields.style.pointerEvents = 'none';
-    } else {
-        fields.style.opacity       = '';
-        fields.style.pointerEvents = '';
-    }
+ 
+    const usingExisting = !!accountId;
+ 
+    // Dim/restore visual state
+    fields.style.opacity       = usingExisting ? '0.4' : '';
+    fields.style.pointerEvents = usingExisting ? 'none' : '';
+ 
+    // Remove/restore `required` so the browser won't block form submission
+    // when the credential fields are hidden behind an existing account selection.
+    const labelInput = document.getElementById('intgAccountLabel');
+    if (labelInput) labelInput.required = !usingExisting;
+ 
+    fields.querySelectorAll('input[id^="intgField_"]').forEach(input => {
+        if (usingExisting) {
+            input.removeAttribute('required');
+        } else {
+            // Restore required only for fields the provider marked as required.
+            // We derive this from the presence of ' *' in the sibling label text.
+            const label = input.closest('.form-group')?.querySelector('.form-label');
+            if (label?.textContent.includes(' *')) {
+                input.setAttribute('required', '');
+            }
+        }
+    });
 }
 
 // ── Test connection ───────────────────────────────────────────────
