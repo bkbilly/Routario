@@ -31,7 +31,12 @@ from models.schemas import NormalizedPosition, WSMessageType, UserCreate
 from protocols import ProtocolRegistry
 from routes import ROUTE_REGISTRY
 from routes.share import page_router
+from routes.integrations import router as integrations_router
 from core.push_notifications import get_push_service
+import integrations  # triggers autodiscover()
+from integrations.engine import integration_poll_task
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -323,6 +328,8 @@ async def lifespan(app: FastAPI):
                 logger.info(f"Started TCP Server for {name} on port {port}")
  
     asyncio.create_task(periodic_alert_task())
+    asyncio.create_task(integration_poll_task(process_position_callback))
+    logger.info("Integration polling task started")
     logger.info("Routario Platform started successfully")
  
     yield
@@ -356,6 +363,7 @@ app.add_middleware(
 for router in ROUTE_REGISTRY:
     app.include_router(router)
 app.include_router(page_router)
+app.include_router(integrations_router)
 
 @app.get("/api/protocols")
 async def get_protocols():
