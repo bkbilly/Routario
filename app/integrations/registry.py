@@ -6,7 +6,7 @@ Auto-discovering registry for integration providers.
 Usage:
     from integrations.registry import IntegrationRegistry
 
-    # Register a provider (done via decorator in each provider.py)
+    # Register a provider (done via decorator in each provider file)
     @IntegrationRegistry.register("3dtracking")
     class ThreeDTrackingIntegration(BaseIntegration): ...
 
@@ -34,6 +34,9 @@ _REGISTRY: dict[str, type["BaseIntegration"]] = {}
 # provider_ids that are recognised as "integration" protocols
 # (i.e. not native TCP/serial protocols like teltonika, gt06, …)
 INTEGRATION_PROTOCOL_IDS: set[str] = set()
+
+# Files in the integrations/ folder that are not provider modules
+_NON_PROVIDER_MODULES = {"__init__", "registry", "base", "engine"}
 
 
 class IntegrationRegistry:
@@ -89,16 +92,27 @@ class IntegrationRegistry:
 
 def autodiscover():
     """
-    Walk app/integrations/<provider_id>/provider.py and import each one.
-    Called once at startup from app/integrations/__init__.py.
+    Import every *.py file directly inside app/integrations/ that is not a
+    known infrastructure module (registry, base, engine, __init__).
+
+    Provider files are expected to live flat in the integrations/ folder:
+        app/integrations/3dtracking.py
+        app/integrations/traccar.py
+        ...
+
+    Each file must contain a class decorated with
+    @IntegrationRegistry.register("<provider_id>").
     """
     integrations_dir = os.path.dirname(__file__)
-    for entry in sorted(os.listdir(integrations_dir)):
-        provider_module = os.path.join(integrations_dir, entry, "provider.py")
-        if os.path.isfile(provider_module):
-            module_path = f"integrations.{entry}.provider"
-            try:
-                importlib.import_module(module_path)
-                logger.info(f"Integration loaded: {entry}")
-            except Exception as e:
-                logger.error(f"Failed to load integration '{entry}': {e}", exc_info=True)
+    for filename in sorted(os.listdir(integrations_dir)):
+        if not filename.endswith(".py"):
+            continue
+        module_name = filename[:-3]  # strip .py
+        if module_name in _NON_PROVIDER_MODULES:
+            continue
+        module_path = f"integrations.{module_name}"
+        try:
+            importlib.import_module(module_path)
+            logger.info(f"Integration loaded: {module_name}")
+        except Exception as e:
+            logger.error(f"Failed to load integration '{module_name}': {e}", exc_info=True)

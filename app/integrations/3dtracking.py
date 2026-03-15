@@ -1,5 +1,5 @@
 """
-app/integrations/3dtracking/provider.py
+app/integrations/3dtracking.py
 
 3D Tracking integration.
 API base: https://api.3dtracking.net/api/v1.0/
@@ -33,7 +33,7 @@ from models.schemas import NormalizedPosition
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_BASE = "https://api.3dtracking.net/api/v1.0"
+_BASE_URL = "https://api.3dtracking.net/api/v1.0"
 
 # In-memory StartId store: keyed by (user_guid, account_label)
 # Persists across poll cycles for the lifetime of the process.
@@ -48,15 +48,6 @@ class ThreeDTrackingIntegration(BaseIntegration):
     POLL_INTERVAL_SECONDS = 30
 
     FIELDS = [
-        IntegrationField(
-            key="base_url",
-            label="API Base URL",
-            field_type="url",
-            required=False,
-            placeholder=_DEFAULT_BASE,
-            help_text="Leave blank to use the default 3D Tracking API endpoint.",
-            default=_DEFAULT_BASE,
-        ),
         IntegrationField(
             key="username",
             label="Username",
@@ -75,11 +66,9 @@ class ThreeDTrackingIntegration(BaseIntegration):
     # ── Auth ──────────────────────────────────────────────────────────────────
 
     async def authenticate(self, credentials: dict) -> AuthContext:
-        base = (credentials.get("base_url") or _DEFAULT_BASE).rstrip("/")
-
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(
-                f"{base}/Authentication/UserAuthenticate",
+                f"{_BASE_URL}/Authentication/UserAuthenticate",
                 params={
                     "UserName": credentials["username"],
                     "Password": credentials["password"],
@@ -110,7 +99,6 @@ class ThreeDTrackingIntegration(BaseIntegration):
             data={
                 "session_id": session_id,
                 "user_guid":  user_guid,
-                "base_url":   base,
             },
             token_expires_at=expires_at,
         )
@@ -120,12 +108,11 @@ class ThreeDTrackingIntegration(BaseIntegration):
     async def list_remote_devices(self, auth_ctx: AuthContext) -> list[RemoteDevice]:
         session_id = auth_ctx.data["session_id"]
         user_guid  = auth_ctx.data["user_guid"]
-        base       = auth_ctx.data["base_url"]
 
         try:
             async with httpx.AsyncClient(timeout=15) as client:
                 resp = await client.get(
-                    f"{base}/Units/Unit/List",
+                    f"{_BASE_URL}/Units/Unit/List",
                     params={
                         "UserIdGuid": user_guid,
                         "SessionId":  session_id,
@@ -162,7 +149,6 @@ class ThreeDTrackingIntegration(BaseIntegration):
     ) -> AsyncIterator[NormalizedPosition]:
         session_id    = auth_ctx.data["session_id"]
         user_guid     = auth_ctx.data["user_guid"]
-        base          = auth_ctx.data["base_url"]
         account_label = auth_ctx.data.get("account_label", "default")
 
         store_key = (user_guid, account_label)
@@ -173,8 +159,8 @@ class ThreeDTrackingIntegration(BaseIntegration):
         current_start_id = _start_id_store.get(store_key)  # None on first call
 
         params: dict = {
-            "UserIdGuid":         user_guid,
-            "SessionId":          session_id,
+            "UserIdGuid":          user_guid,
+            "SessionId":           session_id,
             "IncludeInputOutputs": "True",
         }
         if current_start_id is not None:
@@ -186,7 +172,7 @@ class ThreeDTrackingIntegration(BaseIntegration):
         try:
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.get(
-                    f"{base}/Data/PositionsList",
+                    f"{_BASE_URL}/Data/PositionsList",
                     params=params,
                 )
                 resp.raise_for_status()
@@ -224,27 +210,14 @@ class ThreeDTrackingIntegration(BaseIntegration):
         # Build a lookup of remote_id → device config so we can match IMEI
         device_by_uid: dict[str, dict] = {d["remote_id"]: d for d in devices}
 
-        # Deduplicate: keep only the latest record per unit
-        # (the API may return multiple rows per unit in one batch)
-        latest_by_uid: dict[str, dict] = {}
+        # Yield every record for each unit (in API order, oldest → newest).
+        # The StartId cursor guarantees we never re-process records from a
+        # previous poll cycle, so all records in this batch are new.
         for pos_data in positions:
             uid = pos_data.get("Unit", {}).get("Uid", "")
             if not uid:
                 continue
-            # Prefer the record with the most recent GPS time
-            existing = latest_by_uid.get(uid)
-            if existing is None:
-                latest_by_uid[uid] = pos_data
-            else:
-                try:
-                    existing_ts = datetime.fromisoformat(existing.get("GPSTimeUtc", "1970-01-01"))
-                    new_ts      = datetime.fromisoformat(pos_data.get("GPSTimeUtc",  "1970-01-01"))
-                    if new_ts > existing_ts:
-                        latest_by_uid[uid] = pos_data
-                except ValueError:
-                    pass  # keep existing on parse error
 
-        for uid, pos_data in latest_by_uid.items():
             device = device_by_uid.get(uid)
             if not device:
                 # Position for a unit not in our managed device list — skip
@@ -259,51 +232,134 @@ class ThreeDTrackingIntegration(BaseIntegration):
     def _parse_position(self, imei: str, p: dict) -> NormalizedPosition | None:
         """
         Parse a 3DTracking PositionsList record into a NormalizedPosition.
-        Field names are PascalCase — handle common variants defensively.
+
+        Top-level fields of interest (PascalCase):
+          Latitude, Longitude, Speed, SpeedMeasure, Heading, Ignition,
+          Odometer, EngineTime, EngineStatus, Address,
+          ServerTimeUTC, GPSTimeUtc, GPSTimeLocal,
+          Driver  { Uid, FirstName, LastName, Code }
+          InputOutputs  [ { SystemName, Description, UserDescription, Active } ]
         """
         try:
             lat = p.get("Latitude")
             lng = p.get("Longitude")
             if lat is None or lng is None:
                 return None
+            lat = float(lat)
+            lng = float(lng)
+            if lat == 0.0 and lng == 0.0:
+                return None
 
-            def _parse_dt(raw: str | None) -> datetime | None:
+            # ── Timestamps ────────────────────────────────────────────────────
+
+            def _parse_dt(raw) -> datetime | None:
                 if not raw:
                     return None
                 try:
-                    dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                    dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
                     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
                 except ValueError:
                     return None
 
-            # device_time — when the GPS fix was taken (UTC)
             device_time = (
                 _parse_dt(p.get("GPSTimeUtc"))
                 or _parse_dt(p.get("GPSTimeLocal"))
                 or datetime.now(timezone.utc)
             )
+            # server_time = when we received and saved the record, not the
+            # timestamp reported by the 3DTracking API.
+            server_time = datetime.now(timezone.utc)
 
-            # server_time — when the 3DTracking server received the record
-            server_time = _parse_dt(p.get("ServerTimeUTC")) or datetime.now(timezone.utc)
+            # ── Motion fields ─────────────────────────────────────────────────
 
-            speed   = float(p.get("Speed", 0) or 0)
-            heading = float(p.get("Heading", 0) or 0)
+            speed_raw    = p.get("Speed")
+            speed_kph    = float(speed_raw) if speed_raw is not None else None
+            # API returns SpeedMeasure; if it ever comes back as "mph" convert it
+            if speed_kph is not None:
+                measure = str(p.get("SpeedMeasure") or "kph").lower()
+                if measure == "mph":
+                    speed_kph = round(speed_kph * 1.60934, 2)
 
-            ignition_raw = str(p.get("Ignition", "")).lower()
-            ignition     = ignition_raw == "on"
+            course   = float(p.get("Heading") or 0)
+            altitude = float(p.get("Altitude") or 0)
+
+            # ── Ignition ──────────────────────────────────────────────────────
+            # The API sends "on" / "off" as a string
+            ignition_raw = str(p.get("Ignition") or "").lower()
+            ignition: bool | None = None
+            if ignition_raw in ("on", "true", "1"):
+                ignition = True
+            elif ignition_raw in ("off", "false", "0"):
+                ignition = False
+
+            # ── Sensors dict ──────────────────────────────────────────────────
+            sensors: dict = {}
+
+            # Odometer (km)
+            odometer = p.get("Odometer")
+            if odometer is not None:
+                sensors["odometer"] = float(odometer)
+
+            # Engine running time in seconds
+            engine_time = p.get("EngineTime")
+            if engine_time is not None:
+                sensors["engine_time"] = int(engine_time)
+
+            # Engine status string: "idling", "running", "off", …
+            engine_status = p.get("EngineStatus")
+            if engine_status:
+                sensors["engine_status"] = str(engine_status)
+
+            # Human-readable address from reverse-geocoding (if present)
+            address = p.get("Address")
+            if address:
+                sensors["address"] = str(address)
+
+            # Driver info — only populate if at least a UID is present
+            driver = p.get("Driver") or {}
+            driver_uid = driver.get("Uid") or ""
+            if driver_uid:
+                sensors["driver_uid"]        = driver_uid
+                sensors["driver_first_name"] = driver.get("FirstName") or ""
+                sensors["driver_last_name"]  = driver.get("LastName") or ""
+                sensors["driver_code"]       = driver.get("Code") or ""
+
+            # InputOutputs — expand each I/O into individual sensor keys.
+            # Key format: io_<system_name>  (e.g. "io_aux2", "io_externalpowerfailure")
+            # Value: True/False (the Active flag).
+            # The UserDescription is stored alongside for human context.
+            io_list = p.get("InputOutputs") or []
+            io_labels: dict[str, str] = {}   # system_name → user description
+            for io in io_list:
+                sys_name = str(io.get("SystemName") or "").lower().replace(" ", "_")
+                if not sys_name:
+                    continue
+                active = bool(io.get("Active", False))
+                sensors[f"io_{sys_name}"] = active
+
+                # Prefer UserDescription; fall back to Description
+                label = (io.get("UserDescription") or io.get("Description") or "").strip()
+                if label:
+                    io_labels[sys_name] = label
+
+            # Store the label map so downstream consumers can display friendly names
+            if io_labels:
+                sensors["io_labels"] = io_labels
 
             return NormalizedPosition(
                 imei=imei,
                 device_time=device_time,
                 server_time=server_time,
-                latitude=float(lat),
-                longitude=float(lng),
-                speed=speed,
-                course=heading,
+                latitude=lat,
+                longitude=lng,
+                altitude=altitude,
+                speed=speed_kph,
+                course=course,
+                satellites=None,   # 3DTracking API does not expose satellite count
                 ignition=ignition,
-                raw_data=p,
+                sensors=sensors,
+                raw_data={"source": "3dtracking"},
             )
-
         except Exception as e:
-            logger.error(f"3DTracking: _parse_position error: {e}", exc_info=True)
+            logger.error(f"3DTracking: parse error for {imei}: {e}", exc_info=True)
             return None

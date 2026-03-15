@@ -1,5 +1,5 @@
 """
-app/integrations/traccar/provider.py
+app/integrations/traccar.py
 
 Traccar integration.
 Traccar is self-hosted — the user provides their own server URL.
@@ -9,12 +9,16 @@ Auth:   Basic auth (username + password) on every request.
         Traccar also supports session tokens — we use the session endpoint
         to get a JSESSIONID cookie for the lifetime of the poll session.
 
-Poll:   GET /api/positions?deviceId=<id>  (latest position per device)
+Poll:   GET /api/positions?deviceId=<id>&from=<ISO>&to=<ISO>
+        Returns ALL position records in the given time window, not just the
+        latest one.  On the first poll we request the last 24 hours; on every
+        subsequent poll we request from the last-seen timestamp to now, so no
+        records are missed or re-processed.
 """
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import AsyncIterator
 
 import httpx
@@ -27,10 +31,9 @@ logger = logging.getLogger(__name__)
 
 _KNOTS_TO_KPH = 1.852
 
-# In-memory cache of the last seen device_time per (base_url, remote_device_id).
-# Prevents re-processing the same position on every poll cycle, since Traccar's
-# /api/positions always returns the latest known position regardless of whether
-# it has changed.
+# In-memory store of the latest device_time successfully processed, keyed by
+# (base_url, remote_device_id).  Used as the `from` parameter on the next poll
+# so we fetch every new record rather than just the current snapshot.
 _last_seen: dict[tuple, datetime] = {}
 
 
@@ -109,11 +112,41 @@ class TraccarIntegration(BaseIntegration):
         if not id_map:
             return
 
-        params = [("deviceId", rid) for rid in id_map]
+        now = datetime.now(timezone.utc)
+
+        # Collect per-device time windows and issue one request per device so
+        # each `from` can be individualised.  Traccar supports multiple
+        # deviceId params in a single call but the `from`/`to` window is
+        # global — we therefore batch devices that share the same window and
+        # fall back to individual calls for those with different last-seen times.
+        #
+        # Simpler approach used here: one bulk call using the earliest last-seen
+        # time across all devices.  Any extra (already-processed) records that
+        # come back for devices whose cursor is ahead are filtered out by the
+        # per-device _last_seen check below.
+        earliest_from: datetime | None = None
+        for rid in id_map:
+            cache_key = (base, rid)
+            last = _last_seen.get(cache_key)
+            if last is None:
+                # First poll for this device — go back 24 hours
+                candidate = now - timedelta(hours=24)
+            else:
+                candidate = last
+            if earliest_from is None or candidate < earliest_from:
+                earliest_from = candidate
+
+        # `from` is exclusive on some Traccar versions — subtract one second to
+        # make sure we don't miss the record at exactly `earliest_from`.
+        from_dt = (earliest_from - timedelta(seconds=1)).astimezone(timezone.utc)
+
+        params: list[tuple] = [("deviceId", rid) for rid in id_map]
+        params.append(("from", from_dt.strftime("%Y-%m-%dT%H:%M:%SZ")))
+        params.append(("to",   now.strftime("%Y-%m-%dT%H:%M:%SZ")))
 
         try:
             async with httpx.AsyncClient(
-                timeout=15,
+                timeout=30,
                 auth=auth,
                 cookies=cookies,
             ) as client:
@@ -125,6 +158,16 @@ class TraccarIntegration(BaseIntegration):
             logger.error(f"Traccar: bulk fetch error: {e}")
             return
 
+        if not positions:
+            logger.debug("Traccar: no new positions in this poll cycle")
+            return
+
+        # Sort ascending by fixTime so we process and store records in order
+        def _sort_key(p: dict) -> str:
+            return p.get("fixTime") or p.get("deviceTime") or ""
+
+        positions.sort(key=_sort_key)
+
         for pos_data in positions:
             device_id = str(pos_data.get("deviceId", ""))
             imei      = id_map.get(device_id)
@@ -135,12 +178,14 @@ class TraccarIntegration(BaseIntegration):
             if not pos:
                 continue
 
-            # Skip if this is the same position we already processed last cycle
+            # Skip records we have already processed (can happen when the bulk
+            # `from` window is earlier than this device's individual cursor).
             cache_key = (base, device_id)
             last = _last_seen.get(cache_key)
-            if last is not None and last >= pos.device_time:
+            if last is not None and pos.device_time <= last:
                 continue
 
+            # Advance the cursor for this device
             _last_seen[cache_key] = pos.device_time
             yield pos
 
@@ -167,7 +212,7 @@ class TraccarIntegration(BaseIntegration):
                 or _parse_dt(p.get("deviceTime"))
                 or datetime.now(timezone.utc)
             )
-            server_time = _parse_dt(p.get("serverTime")) or datetime.now(timezone.utc)
+            server_time = datetime.now(timezone.utc)
 
             attrs    = p.get("attributes") or {}
             ignition = attrs.get("ignition")
