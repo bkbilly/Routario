@@ -323,12 +323,9 @@ h1 {
 .proto-badge {
     display: inline-block;
     padding: 0.2rem 0.55rem;
-    background: rgba(139, 92, 246, 0.12);
-    border: 1px solid rgba(139, 92, 246, 0.25);
     border-radius: 6px;
     font-size: 0.75rem;
     font-weight: 600;
-    color: var(--accent-secondary);
 }
 
 .status-dot {
