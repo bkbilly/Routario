@@ -52,6 +52,16 @@ function _esc(str) {
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function protoBadgeHtml(protocol) {
+    const hue = [...protocol].reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
+    const style = [
+        `color: hsl(${hue}, 70%, 65%)`,
+        `background: hsl(${hue}, 70%, 65%, 0.12)`,
+        `border: 1px solid hsl(${hue}, 70%, 65%, 0.30)`,
+    ].join(';');
+    return `<span class="proto-badge" style="${style}">${_esc(protocol)}</span>`;
+}
+
 // ── Boot ─────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
     checkLogin();
@@ -218,7 +228,6 @@ function renderDeviceTable(list) {
         const lastSeen = d.state?.last_update ? formatDateToLocal(d.state.last_update) : '—';
         const odometer = d.state?.total_odometer != null ? `${d.state.total_odometer.toFixed(0)} km` : '—';
         const plate    = d.license_plate || '—';
-        const proto    = d.protocol ? (d.protocol.charAt(0).toUpperCase() + d.protocol.slice(1)) : '—';
         const cmds     = d.supports_commands !== false;
 
         return `
@@ -228,7 +237,7 @@ function renderDeviceTable(list) {
                 <span class="device-row-name">${_esc(d.name)}</span>
                 <div class="device-row-imei">${_esc(d.imei)}</div>
             </td>
-            <td><span class="proto-badge">${_esc(proto)}</span></td>
+            <td>${protoBadgeHtml(d.protocol)}</td>
             <td>${_esc(plate)}</td>
             <td style="font-size:0.85rem;color:var(--text-secondary);">${lastSeen}</td>
             <td style="font-family:var(--font-mono);font-size:0.85rem;">${odometer}</td>

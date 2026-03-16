@@ -103,7 +103,7 @@ async def _run_poll_cycle(
         all_devices = result.scalars().all()
 
         for device in all_devices:
-            intg = (device.config or {}).get("integration", {})
+            intg = (device.config or {}).get("integration") or {}
             provider_id   = intg.get("provider", "")
             account_label = intg.get("account_label", "")
             remote_id     = intg.get("remote_id", "")
