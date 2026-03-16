@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from typing import Callable, Coroutine, Any
 
 from integrations.registry import IntegrationRegistry
-from integrations.base import AuthContext
+from integrations.base import AuthContext, AuthExpiredError
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +175,7 @@ async def _run_poll_cycle(
 
             fetched = 0
             errors  = 0
+            cache_key = (user_id, provider_id, account_label)
             try:
                 async for position in provider.fetch_positions(auth_ctx, devices):
                     try:
@@ -183,6 +184,20 @@ async def _run_poll_cycle(
                     except Exception as e:
                         logger.error(f"Integration: position callback error: {e}")
                         errors += 1
+            except AuthExpiredError as e:
+                # The provider detected that the remote API rejected the current
+                # session (e.g. 3DTracking session expired before our timer).
+                # Evict the cache so _get_auth re-authenticates next cycle.
+                _auth_cache.pop(cache_key, None)
+                logger.warning(
+                    f"Integration: session expired mid-cycle for "
+                    f"{provider_id}/{account_label} — will re-authenticate next poll. ({e})"
+                )
+                await session.execute(
+                    update(IntegrationAccount)
+                    .where(IntegrationAccount.id == account.id)
+                    .values(last_error=f"Session expired at {datetime.utcnow().isoformat()}, re-authenticating")
+                )
             except Exception as e:
                 logger.error(
                     f"Integration fetch error {provider_id}/{account_label}: {e}"
