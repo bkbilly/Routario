@@ -25,6 +25,19 @@ from models.schemas import NormalizedPosition
 logger = logging.getLogger(__name__)
 
 
+# ── Exceptions ────────────────────────────────────────────────────────────────
+
+class AuthExpiredError(Exception):
+    """
+    Raised by fetch_positions() when the provider rejects the current session
+    mid-cycle (e.g. the remote server expired the session token earlier than
+    expected, or a forced logout occurred).
+
+    The integration engine catches this, evicts the cached AuthContext, and
+    re-authenticates on the next poll cycle.
+    """
+
+
 # ── Field definition (drives the UI form) ────────────────────────────────────
 
 @dataclass
@@ -114,6 +127,10 @@ class BaseIntegration(ABC):
 
         devices: list of dicts with at least "remote_id" and "imei" keys,
                  built from the Device.config["integration"] sub-dict.
+
+        Raise AuthExpiredError if the remote API rejects the session mid-cycle.
+        The engine will evict the cached AuthContext and re-authenticate on the
+        next poll cycle.
         """
 
     # ── Optional: list remote devices ────────────────────────────────────────

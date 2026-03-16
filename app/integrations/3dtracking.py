@@ -1,5 +1,5 @@
 """
-app/integrations/3dtracking.py
+app/integrations/3dtracking/provider.py
 
 3D Tracking integration.
 API base: https://api.3dtracking.net/api/v1.0/
@@ -27,7 +27,7 @@ from typing import AsyncIterator
 
 import httpx
 
-from integrations.base import BaseIntegration, AuthContext, IntegrationField, RemoteDevice
+from integrations.base import BaseIntegration, AuthContext, AuthExpiredError, IntegrationField, RemoteDevice
 from integrations.registry import IntegrationRegistry
 from models.schemas import NormalizedPosition
 
@@ -184,12 +184,22 @@ class ThreeDTrackingIntegration(BaseIntegration):
 
         status = data.get("Status", {})
         if status.get("Result", "").lower() != "ok":
-            error_code = status.get("ErrorCode", "")
+            error_code = str(status.get("ErrorCode", ""))
             message    = status.get("Message", "")
             if error_code == "429":
                 # Rate limited — do NOT advance StartId so the next poll retries
                 # the same window from scratch.
                 logger.warning("3DTracking: rate limited (429), will retry next cycle without advancing StartId")
+            elif error_code in ("401", "403") or "session" in message.lower() or "auth" in message.lower():
+                # Session expired or invalidated server-side before our timer fired.
+                # Clear the stale StartId so the next session starts from scratch
+                # rather than resuming from a cursor that may no longer be valid.
+                _start_id_store.pop(store_key, None)
+                logger.warning(
+                    f"3DTracking: session rejected by API [{error_code}]: {message} — "
+                    "evicting auth cache so next poll re-authenticates"
+                )
+                raise AuthExpiredError(f"3DTracking session invalid: {message}")
             else:
                 logger.warning(f"3DTracking: PositionsList failed [{error_code}]: {message}")
             return

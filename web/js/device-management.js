@@ -527,18 +527,37 @@ function renderAlertsTable() {
         let thresh;
         if (isCustom) {
             const durBadge = row.duration
-                ? `<span class="thresh-badge">⏱ ${row.duration}s</span>`
+                ? `<span class="alert-threshold-badge" style="margin-left:0.3rem;">
+                       <small style="color:var(--text-muted);margin-right:0.2rem;">for:</small>
+                       ${row.duration}s
+                   </span>`
                 : '';
-            thresh = `<code style="font-size:0.75rem;color:var(--text-muted);">${_esc(row.rule || '')}</code>${durBadge}`;
+            thresh = `<span class="alert-threshold-badge">
+                <small style="color:var(--text-muted);margin-right:0.2rem;">condition:</small>
+                ${row.rule}
+            </span>${durBadge}`;
         } else {
-            const pf = def?.primary_field;
-            thresh = pf && row.params?.[pf.key] != null
-                ? `<span class="thresh-badge">${row.params[pf.key]} ${_esc(pf.unit || '')}</span>`
+            const visibleFields = (def?.fields || []).filter(f => f.field_type !== 'checkbox');
+            const badges = visibleFields.map(f => {
+                const val = row.params?.[f.key];
+                if (val == null || val === '') return null;
+                let display = val;
+                if (f.field_type === 'select' && f.options?.length) {
+                    const opt = f.options.find(o => String(o.value) === String(val));
+                    if (opt) display = opt.label;
+                }
+                return `<span class="alert-threshold-badge">
+                    <small style="color:var(--text-muted);margin-right:0.2rem;">${f.label}:</small>
+                    ${display}${f.unit ? ` <small>${f.unit}</small>` : ''}
+                </span>`;
+            }).filter(Boolean);
+            thresh = badges.length
+                ? badges.join(' ')
                 : `<span style="color:var(--text-muted);font-size:0.8rem;">—</span>`;
         }
 
         const chHtml = (row.channels || []).length
-            ? row.channels.map(c => `<span class="thresh-badge" style="background:rgba(16,185,129,0.12);color:var(--accent-success);">${_esc(c)}</span>`).join('')
+            ? row.channels.map(c => `<span class="channel-pill active" style="pointer-events:none;">${_esc(c)}</span>`).join('')
             : `<span style="color:var(--text-muted);font-size:0.8rem;">None</span>`;
 
         const sched    = row.schedule;
