@@ -1,5 +1,5 @@
 """
-app/integrations/flespi.py
+app/integrations/flespi_cloud.py
 
 Flespi cloud integration.
 API base: https://flespi.io
@@ -66,7 +66,7 @@ _POSITION_KEYS = frozenset({
 })
 
 
-@IntegrationRegistry.register("flespi")
+@IntegrationRegistry.register("flespi_cloud")
 class FlespiIntegration(BaseIntegration):
 
     PROVIDER_ID           = "flespi_cloud"
