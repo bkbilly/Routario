@@ -191,6 +191,19 @@ class DatabaseService:
         if position.ignition is None: return
         
         if position.ignition and not state.active_trip_id:
+            # Debounce: ignore ignition-on if a trip was closed within the last 30 seconds.
+            # This prevents orphan points between two back-to-back trips from spawning
+            # a phantom duplicate trip in the sidebar.
+            if state.last_ignition_off:
+                off_time = state.last_ignition_off
+                if off_time.tzinfo and not device_time.tzinfo:
+                    off_time = off_time.replace(tzinfo=None)
+                elif not off_time.tzinfo and device_time.tzinfo:
+                    off_time = off_time.replace(tzinfo=None)
+                seconds_since_off = (device_time - off_time).total_seconds()
+                if 0 < seconds_since_off < 30:
+                    return  # too soon after last trip ended — skip trip creation
+
             trip = Trip(
                 device_id=device.id,
                 start_time=device_time,
@@ -216,7 +229,6 @@ class DatabaseService:
                     start_time = start_time.replace(tzinfo=None)
                 elif not start_time.tzinfo and device_time.tzinfo:
                     device_time = device_time.replace(tzinfo=None)
-                    
                 trip.duration_minutes = int((device_time - start_time).total_seconds() / 60)
                 if trip.duration_minutes > 0:
                     trip.avg_speed = (trip.distance_km / trip.duration_minutes) * 60

@@ -376,7 +376,20 @@ async function loadTripsForHistory(deviceId, startTime, endTime) {
             `${API_BASE}/devices/${deviceId}/trips?start_date=${startTime.toISOString()}&end_date=${endTime.toISOString()}`
         );
         if (!res.ok) throw new Error('Failed to fetch trips');
-        const trips = await res.json();
+        let trips = await res.json();
+
+        // Deduplicate by id (guards against DB-level duplicates)
+        const seen = new Set();
+        trips = trips.filter(t => {
+            if (seen.has(t.id)) return false;
+            seen.add(t.id);
+            return true;
+        });
+
+        // Drop phantom trips: no end time and zero distance (device sent ignition-on
+        // then immediately off before accumulating any movement)
+        trips = trips.filter(t => t.end_time || (t.distance_km != null && t.distance_km > 0.05));
+
         historyTrips = trips;
 
         if (!trips.length) {
