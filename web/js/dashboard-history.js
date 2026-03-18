@@ -378,16 +378,26 @@ async function loadTripsForHistory(deviceId, startTime, endTime) {
         if (!res.ok) throw new Error('Failed to fetch trips');
         let trips = await res.json();
 
-        // Deduplicate by id (guards against DB-level duplicates)
-        const seen = new Set();
+        // Deduplicate by id — guards against DB rows with different IDs
+        // but identical start_time/distance (rapid ignition toggle artifacts)
+        const seenIds = new Set();
         trips = trips.filter(t => {
-            if (seen.has(t.id)) return false;
-            seen.add(t.id);
+            if (seenIds.has(t.id)) return false;
+            seenIds.add(t.id);
             return true;
         });
 
-        // Drop phantom trips: no end time and zero distance (device sent ignition-on
-        // then immediately off before accumulating any movement)
+        // Also deduplicate by start_time — two trips starting at the exact same
+        // second are always duplicates regardless of their DB ids
+        const seenTimes = new Set();
+        trips = trips.filter(t => {
+            const key = t.start_time;
+            if (seenTimes.has(key)) return false;
+            seenTimes.add(key);
+            return true;
+        });
+
+        // Drop phantom trips: closed immediately with no meaningful movement
         trips = trips.filter(t => t.end_time || (t.distance_km != null && t.distance_km > 0.05));
 
         historyTrips = trips;
