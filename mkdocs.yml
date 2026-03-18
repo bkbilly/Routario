@@ -1,0 +1,72 @@
+site_name: Routario Docs
+site_description: High-performance self-hosted GPS tracking and fleet management platform
+site_url: https://bkbilly.github.io/routario
+repo_url: https://github.com/bkbilly/routario
+repo_name: bkbilly/routario
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: deep purple
+    accent: indigo
+  font:
+    text: Outfit
+    code: JetBrains Mono
+  logo: assets/logo.png
+  favicon: assets/logo.png
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.footer
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: installation.md
+    - Configuration: configuration.md
+  - Core Features:
+    - Features: features.md
+    - Supported Devices: devices.md
+    - Alerts: alerts.md
+  - Integrations:
+    - Cloud Integrations: integrations.md
+    - Notifications: notifications.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/bkbilly/routario
+
+copyright: Copyright &copy; Routario Contributors
