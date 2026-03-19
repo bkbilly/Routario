@@ -92,6 +92,7 @@ class H02Decoder(BaseProtocolDecoder):
 
     PORT = 5013
     PROTOCOL_TYPES = ['tcp']
+    NATIVE_EVENTS = []
 
     # Regex to find a complete H02 message: *HQ,...#
     _MSG_RE = re.compile(r'\*HQ,([^#]+)#', re.ASCII)

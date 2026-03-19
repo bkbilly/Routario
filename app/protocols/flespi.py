@@ -65,6 +65,22 @@ class FlespiDecoder(BaseProtocolDecoder):
 
     PORT = 5149
     PROTOCOL_TYPES = ['tcp']
+    NATIVE_EVENTS = [
+        {"key": "alarm.event.trigger",           "label": "🔔 General Alarm",       "severity": "warning",  "trigger_value": ""},
+        {"key": "towing.event.trigger",          "label": "🚗 Towing",              "severity": "critical", "trigger_value": ""},
+        {"key": "towing.alarm.status",           "label": "🚗 Towing (Status)",     "severity": "critical", "trigger_value": ""},
+        {"key": "geofence.event.enter",          "label": "📍 Geofence Enter",      "severity": "warning",  "trigger_value": ""},
+        {"key": "geofence.event.exit",           "label": "🚪 Geofence Exit",       "severity": "warning",  "trigger_value": ""},
+        {"key": "shock.event.trigger",           "label": "📳 Shock / Vibration",   "severity": "warning",  "trigger_value": ""},
+        {"key": "overspeeding.event.trigger",    "label": "⚡ Overspeed",           "severity": "warning",  "trigger_value": ""},
+        {"key": "harsh.acceleration.event.trigger", "label": "🌿 Harsh Acceleration","severity": "warning", "trigger_value": ""},
+        {"key": "harsh.braking.event.trigger",   "label": "🌿 Harsh Braking",       "severity": "warning",  "trigger_value": ""},
+        {"key": "harsh.cornering.event.trigger", "label": "🌿 Harsh Cornering",     "severity": "warning",  "trigger_value": ""},
+        {"key": "gnss.antenna.cut.status",       "label": "📡 GPS Antenna Cut",     "severity": "critical", "trigger_value": ""},
+        {"key": "gsm.jamming.event.trigger",     "label": "📵 GSM Jamming",         "severity": "warning",  "trigger_value": ""},
+        {"key": "hood.open.status",              "label": "🚗 Hood/Bonnet Open",    "severity": "warning",  "trigger_value": ""},
+        {"key": "external.powersource.status",   "label": "🔌 Power Cut",           "severity": "critical", "trigger_value": ""},
+    ]
 
     # ================================================================== #
     #  Command Registry                                                   #

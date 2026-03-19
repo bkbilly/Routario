@@ -143,6 +143,16 @@ class MeitrackDecoder(BaseProtocolDecoder):
         },
     }
 
+    NATIVE_EVENTS = [
+        {"key": "alert_type", "label": "🆘 SOS",          "severity": "critical", "trigger_value": "sos"},
+        {"key": "alert_type", "label": "⚡ Power Cut",     "severity": "critical", "trigger_value": "power_cut"},
+        {"key": "alert_type", "label": "🪫 Low Battery",  "severity": "warning",  "trigger_value": "low_battery"},
+        {"key": "alert_type", "label": "🚨 Towing",       "severity": "critical", "trigger_value": "towing"},
+        {"key": "alert_type", "label": "⚠️ Tampering",    "severity": "warning",  "trigger_value": "tampering"},
+        {"key": "alert_type", "label": "⚡ Overspeed",    "severity": "warning",  "trigger_value": "overspeed"},
+        {"key": "alert_type", "label": "📍 Geofence",     "severity": "warning",  "trigger_value": "geofence"},
+    ]
+
     def __init__(self):
         super().__init__()
         # Matches: $$<flag><len>,<imei>,<event>,<payload>[*<XOR>]\r\n

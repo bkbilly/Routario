@@ -367,9 +367,15 @@ app.include_router(integrations_router)
 
 @app.get("/api/protocols")
 async def get_protocols():
+    protocols_info = {}
+    for name, decoder in ProtocolRegistry.get_all().items():
+        protocols_info[name] = {
+            "native_events": getattr(decoder, "NATIVE_EVENTS", [])
+        }
     return {
         "protocols": ProtocolRegistry.list_protocols(),
         "online_devices": len(connection_manager.connections),
+        "protocol_info": protocols_info,
     }
 
 
