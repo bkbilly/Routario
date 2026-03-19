@@ -616,6 +616,10 @@ function renderAlertsTable() {
                    </span>`
                 : '';
             thresh = `<span class="alert-threshold-badge">
+                <small style="color:var(--text-muted);margin-right:0.2rem;">key:</small>
+                ${_esc(row.params?.sensor_key || '')}
+            </span>
+            <span class="alert-threshold-badge" style="margin-left:0.3rem;">
                 <small style="color:var(--text-muted);margin-right:0.2rem;">trigger:</small>
                 ${_esc(String(tv))}
             </span>${durBadge}`;
