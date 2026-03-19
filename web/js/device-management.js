@@ -20,6 +20,7 @@ let alertRows       = [];
 let editingAlertUid = null;
 let uidCounter      = 0;
 let ALERT_TYPES     = {};
+let protocolInfo = {};
 
 // Raw data tab
 let rawData            = [];
@@ -103,7 +104,8 @@ async function loadAvailableProtocols() {
             apiFetch(`${API_BASE}/integrations/accounts`),
         ]);
 
-        const data           = protoRes.ok    ? await protoRes.json()    : { protocols: [] };
+        const data           = protoRes.ok    ? await protoRes.json()    : { protocols: [], protocol_info: {} };
+        protocolInfo         = data.protocol_info || {};
         integrationProviders = intgRes.ok      ? await intgRes.json()     : [];
         integrationAccounts  = accountsRes.ok  ? await accountsRes.json() : [];
         availableProtocols   = data.protocols || [];
@@ -141,7 +143,11 @@ async function loadAvailableProtocols() {
             sel.appendChild(intgGroup);
         }
 
-        sel.addEventListener('change', onProtocolChange);
+        sel.addEventListener('change', () => {
+            onProtocolChange();
+            refreshNativeEventAlerts();
+        });
+
 
     } catch (e) {
         console.error('Error loading protocols:', e);
@@ -313,6 +319,7 @@ function openDeviceModal(deviceId, startTab = 'general') {
 
     loadAlertsFromConfig(d.config || {});
     switchModalTab(startTab);
+    refreshNativeEventAlerts();
     document.getElementById('deviceModal').classList.add('active');
 }
 
@@ -481,16 +488,65 @@ function populateAddAlertDropdown() {
     for (const [key, def] of Object.entries(ALERT_TYPES)) {
         const opt       = document.createElement('option');
         opt.value       = key;
-        opt.textContent = def.label;
+        opt.textContent = `${def.icon || '🔔'} ${def.label}`;
         grp.appendChild(opt);
     }
     sel.appendChild(grp);
+}
+
+function refreshNativeEventAlerts() {
+    const protocol = document.getElementById('deviceProtocol').value;
+    const events   = protocolInfo[protocol]?.native_events || [];
+
+    const existing = document.getElementById('nativeEventsOptgroup');
+    if (existing) existing.remove();
+    if (!events.length) return;
+
+    const addSel = document.getElementById('addAlertSelect');
+    const grp    = document.createElement('optgroup');
+    grp.id       = 'nativeEventsOptgroup';
+    grp.label    = 'Device Native Events';
+
+    events.forEach(ev => {
+        const opt       = document.createElement('option');
+        opt.value       = `__native__:${JSON.stringify(ev)}`;
+        opt.textContent = ev.label;
+        grp.appendChild(opt);
+    });
+
+    addSel.appendChild(grp);
 }
 
 function addSelectedAlert() {
     const sel = document.getElementById('addAlertSelect');
     const val = sel.value;
     if (!val) return;
+
+    if (val.startsWith('__native__:')) {
+        try {
+            const eventDef = JSON.parse(val.slice('__native__:'.length));
+            alertRows.push({
+                uid:      nextUid(),
+                alertKey: 'device_event',
+                params: {
+                    sensor_key:     eventDef.key,
+                    trigger_value:  eventDef.trigger_value  ?? '',
+                    trigger_values: eventDef.trigger_values ?? [],
+                    event_label:    eventDef.label.replace(/^[\p{Emoji}\s]+/u, '').trim(),
+                    event_icon:     (eventDef.label.match(/^\p{Emoji}/u) || ['📡'])[0],
+                    severity:       eventDef.severity,
+                },
+                channels: [],
+                schedule: null,
+            });
+        } catch(e) {
+            console.error('Failed to parse native event def', e);
+        }
+        renderAlertsTable();
+        sel.value = '';
+        return;
+    }
+
     const def = ALERT_TYPES[val];
     if (!def) return;
     const params = {};
@@ -529,8 +585,12 @@ function renderAlertsTable() {
         const isCustom = row.alertKey === '__custom__';
         const def      = isCustom ? null : ALERT_TYPES[row.alertKey];
 
+        const isDeviceEvent = row.alertKey === 'device_event';
+
         const label = isCustom
             ? `<span class="custom-alert-module"><span class="custom-alert-module-title">⚡ ${_esc(row.name)}</span></span>`
+            : isDeviceEvent
+            ? `<span class="alert-type-label system">${_esc(row.params?.event_icon || '📡')} ${_esc(row.params?.event_label || row.params?.sensor_key || 'Device Event')}</span>`
             : (def?.icon ? `${def.icon} ` : '') + _esc(def?.label || row.alertKey);
 
         let thresh;
@@ -544,6 +604,20 @@ function renderAlertsTable() {
             thresh = `<span class="alert-threshold-badge">
                 <small style="color:var(--text-muted);margin-right:0.2rem;">condition:</small>
                 ${row.rule}
+            </span>${durBadge}`;
+        } else if (isDeviceEvent) {
+            const tv = row.params?.trigger_values?.length
+                ? row.params.trigger_values.join(', ')
+                : row.params?.trigger_value || 'any';
+            const durBadge = row.duration
+                ? `<span class="alert-threshold-badge" style="margin-left:0.3rem;">
+                       <small style="color:var(--text-muted);margin-right:0.2rem;">for:</small>
+                       ${row.duration}s
+                   </span>`
+                : '';
+            thresh = `<span class="alert-threshold-badge">
+                <small style="color:var(--text-muted);margin-right:0.2rem;">trigger:</small>
+                ${_esc(String(tv))}
             </span>${durBadge}`;
         } else {
             const visibleFields = (def?.fields || []).filter(f => f.field_type !== 'checkbox');
@@ -599,6 +673,7 @@ async function openAlertEditor(uid) {
     editingAlertUid = uid;
 
     const isCustom = row.alertKey === '__custom__';
+    const isDeviceEvent = row.alertKey === 'device_event';
     const def      = isCustom ? null : ALERT_TYPES[row.alertKey];
 
     document.getElementById('alertEditorTitle').textContent =
@@ -678,6 +753,30 @@ async function openAlertEditor(uid) {
             const in_ = document.getElementById('editor-duration-input');
             if (cb && in_) cb.addEventListener('change', () => { in_.disabled = !cb.checked; });
         }, 0);
+    } else if (isDeviceEvent) {
+        const durEnabled = row.duration != null;
+        const durVal     = row.duration ?? 30;
+        fieldsHtml = `
+        <div class="form-group" style="margin-bottom:1rem;">
+            <label class="form-label">Event</label>
+            <input type="text" class="form-input" value="${_esc(row.params?.event_label || row.params?.sensor_key || '')}" disabled style="opacity:0.6;">
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+            <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-bottom:0.5rem;">
+                <input type="checkbox" id="editor-duration-enabled" ${durEnabled ? 'checked' : ''} style="width:auto;">
+                <span class="form-label" style="margin:0;">Require sustained condition</span>
+            </label>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+                <input type="number" class="form-input" id="editor-duration-input"
+                       value="${durVal}" min="1" style="max-width:100px;" ${durEnabled ? '' : 'disabled'}>
+                <span style="color:var(--text-muted);">seconds</span>
+            </div>
+        </div>`;
+        setTimeout(() => {
+            const cb  = document.getElementById('editor-duration-enabled');
+            const inp = document.getElementById('editor-duration-input');
+            if (cb && inp) cb.addEventListener('change', () => { inp.disabled = !cb.checked; });
+        }, 0);
     }
 
     const activeDays = row.schedule?.days || [];
@@ -756,12 +855,17 @@ function saveAlertFromEditor() {
     if (!row) return;
 
     const isCustom = row.alertKey === '__custom__';
+    const isDeviceEvent = row.alertKey === 'device_event';
 
     if (isCustom) {
         const n   = document.getElementById('editor-custom-name')?.value.trim();
         const r   = document.getElementById('editor-custom-rule')?.value.trim();
         if (n) row.name = n;
         if (r) row.rule = r;
+        const durEnabled = document.getElementById('editor-duration-enabled')?.checked;
+        const durVal     = parseInt(document.getElementById('editor-duration-input')?.value);
+        row.duration     = durEnabled && !isNaN(durVal) && durVal > 0 ? durVal : null;
+    } else if (isDeviceEvent) {
         const durEnabled = document.getElementById('editor-duration-enabled')?.checked;
         const durVal     = parseInt(document.getElementById('editor-duration-input')?.value);
         row.duration     = durEnabled && !isNaN(durVal) && durVal > 0 ? durVal : null;

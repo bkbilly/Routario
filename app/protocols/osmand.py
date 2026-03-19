@@ -56,6 +56,7 @@ class OsmAndDecoder(BaseProtocolDecoder):
 
     PORT = 5055
     PROTOCOL_TYPES = ['tcp']
+    NATIVE_EVENTS = []
 
     async def decode(
         self,

@@ -72,6 +72,15 @@ class GT06Decoder(BaseProtocolDecoder):
         },
     }
 
+    NATIVE_EVENTS = [
+        {"key": "alarm_type", "label": "🆘 SOS",          "severity": "critical", "trigger_value": "sos"},
+        {"key": "alarm_type", "label": "⚡ Power Cut",     "severity": "critical", "trigger_value": "power_cut"},
+        {"key": "alarm_type", "label": "📳 Vibration",     "severity": "warning",  "trigger_value": "vibration"},
+        {"key": "alarm_type", "label": "🚧 Fence In",      "severity": "warning",  "trigger_value": "fence_in"},
+        {"key": "alarm_type", "label": "🚧 Fence Out",     "severity": "warning",  "trigger_value": "fence_out"},
+        {"key": "alarm_type", "label": "⚡ Overspeed",     "severity": "warning",  "trigger_value": "overspeed"},
+    ]
+
     # ================================================================== #
     #  Decode                                                             #
     # ================================================================== #

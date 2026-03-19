@@ -60,6 +60,7 @@ class TK103Decoder(BaseProtocolDecoder):
 
     PORT = 5001
     PROTOCOL_TYPES = ['tcp']
+    NATIVE_EVENTS = []
 
     # ================================================================== #
     #  Command Registry                                                   #

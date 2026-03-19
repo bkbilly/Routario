@@ -145,6 +145,15 @@ class QueclinkDecoder(BaseProtocolDecoder):
         },
     }
 
+    NATIVE_EVENTS = [
+        {"key": "alert_type", "label": "🆘 SOS",           "severity": "critical", "trigger_value": "sos"},
+        {"key": "alert_type", "label": "⚡ Power Off",      "severity": "critical", "trigger_value": "power_off"},
+        {"key": "alert_type", "label": "🚨 Towing",        "severity": "critical", "trigger_value": "towing"},
+        {"key": "event",      "label": "🔑 Ignition On",   "severity": "info",     "trigger_value": "ignition_on"},
+        {"key": "event",      "label": "🔑 Ignition Off",  "severity": "info",     "trigger_value": "ignition_off"},
+        {"key": "alert_type", "label": "⚡ Overspeed",     "severity": "warning",  "trigger_value": "overspeed"},
+    ]
+
     # Running sequence counter for outbound AT commands (0000–FFFF)
     _seq: int = 0
 

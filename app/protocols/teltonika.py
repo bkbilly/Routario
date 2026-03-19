@@ -99,6 +99,25 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         },
     }
 
+    NATIVE_EVENTS = [
+        # Binary sensors
+        {"key": "alarm",            "label": "🔔 Alarm",              "severity": "critical", "trigger_value": "1"},
+        {"key": "towing",           "label": "🚗 Towing",             "severity": "critical", "trigger_value": "1"},
+        {"key": "jamming",          "label": "📵 GPS Jamming",         "severity": "warning",  "trigger_value": "1"},
+        {"key": "crash_detection",  "label": "💥 Crash Detected (Real)",   "severity": "critical", "trigger_values": [1, 6]},
+        {"key": "crash_detection",  "label": "💥 Crash Trace (Limited)",   "severity": "warning",  "trigger_values": [2, 3]},
+        {"key": "crash_detection",  "label": "💥 Crash Trace (Full)",      "severity": "critical", "trigger_values": [4, 5]},
+        {"key": "unplug",           "label": "🔌 Unplug",              "severity": "warning",  "trigger_value": "1"},
+        {"key": "idling",           "label": "🅿️ Device Idling",       "severity": "info",     "trigger_value": "1"},
+        {"key": "movement",         "label": "📍 Movement Started",    "severity": "info",     "trigger_value": "1"},
+        {"key": "immobilizer", "label": "🔒 Immobilizer Disconnected",  "severity": "warning", "trigger_value": "0"},
+        {"key": "green_driving_type", "label": "🌿 Harsh Acceleration", "severity": "warning", "trigger_value": "1"},
+        {"key": "green_driving_type", "label": "🌿 Harsh Braking",      "severity": "warning", "trigger_value": "2"},
+        {"key": "green_driving_type", "label": "🌿 Harsh Cornering",    "severity": "warning", "trigger_value": "3"},
+        {"key": "auto_geofence", "label": "📍 Auto-Geofence Exit",     "severity": "critical",  "trigger_value": "0"},
+        {"key": "auto_geofence", "label": "📍 Auto-Geofence Enter",    "severity": "warning",  "trigger_value": "1"},
+    ]
+
     # ================================================================== #
     #  IO Definitions (List of Dictionaries)                             #
     # ================================================================== #
