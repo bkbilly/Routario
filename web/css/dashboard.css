@@ -94,7 +94,7 @@ body::before {
     justify-content: space-between;
     padding: 0 2rem;
     position: relative;
-    z-index: 100;
+    z-index: 1001;
 }
 
 .logo {
@@ -1149,6 +1149,88 @@ body::before {
     text-overflow: ellipsis;
 }
 
+/* ── Header gear menu ────────────────────────────────────────────── */
+.header-menu-wrap {
+    position: relative;
+}
+
+.header-gear-btn {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-base);
+}
+
+.header-gear-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.header-menu-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 0.4rem;
+    min-width: 180px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    z-index: 1002;
+    flex-direction: column;
+    gap: 0.15rem;
+    animation: slideUp 0.15s ease-out;
+}
+
+.header-menu-dropdown.open {
+    display: flex;
+}
+
+.header-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.6rem 0.85rem;
+    border-radius: 8px;
+    font-family: var(--font-display);
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    text-decoration: none;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    width: 100%;
+    text-align: left;
+}
+
+.header-menu-item:hover {
+    background: var(--bg-hover);
+}
+
+.header-menu-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 0.25rem 0.5rem;
+}
+
+.header-menu-danger {
+    color: var(--accent-danger);
+}
+
+.header-menu-danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
 
 /* ── Trip Cards ──────────────────────────────────────────────── */
 
