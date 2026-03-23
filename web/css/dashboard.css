@@ -452,16 +452,19 @@ body::before {
 .attr-key {
     color: var(--text-secondary);
     font-weight: 500;
-    width: 40%;                 /* add this — pins the key column */
+    width: 55%;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 .attr-val {
     font-family: var(--font-mono);
+    font-size: 0.8rem;
     text-align: right;
     color: var(--accent-primary);
-    word-break: break-all;      /* add this */
-    overflow-wrap: break-word;  /* add this */
-    max-width: 0;               /* add this — forces the cell to shrink */
-    width: 60%;                 /* add this — gives val column a bounded width */
+    word-break: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+    width: 45%;
 }
 
 /* Main Content */
