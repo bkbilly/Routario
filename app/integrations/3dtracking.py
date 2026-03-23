@@ -39,6 +39,10 @@ _BASE_URL = "https://api.3dtracking.net/api/v1.0"
 # Persists across poll cycles for the lifetime of the process.
 _start_id_store: dict[tuple, int] = {}
 
+# Per-device last-seen timestamp: keyed by (user_guid, account_label, unit_uid)
+# Used to deduplicate positions returned by the bulk PositionsList endpoint.
+_last_seen: dict[tuple, datetime] = {}
+
 
 @IntegrationRegistry.register("3dtracking")
 class ThreeDTrackingIntegration(BaseIntegration):
@@ -151,12 +155,9 @@ class ThreeDTrackingIntegration(BaseIntegration):
         user_guid     = auth_ctx.data["user_guid"]
         account_label = auth_ctx.data.get("account_label", "default")
 
-        store_key = (user_guid, account_label)
-
-        # Determine StartId for this call:
-        #   - First ever call → omit StartId (defaults to last 24 h on the API side)
-        #   - Subsequent calls → pass the StartId saved from the previous response
-        current_start_id = _start_id_store.get(store_key)  # None on first call
+        # StartId is per-account (API constraint), but last_seen is per-device
+        account_key = (user_guid, account_label)
+        current_start_id = _start_id_store.get(account_key)
 
         params: dict = {
             "UserIdGuid":          user_guid,
@@ -165,7 +166,6 @@ class ThreeDTrackingIntegration(BaseIntegration):
         }
         if current_start_id is not None:
             params["StartId"] = current_start_id
-            logger.debug(f"3DTracking: fetching PositionsList from StartId={current_start_id}")
         else:
             logger.info("3DTracking: first poll — fetching last 24 h of positions (no StartId)")
 
@@ -187,17 +187,11 @@ class ThreeDTrackingIntegration(BaseIntegration):
             error_code = str(status.get("ErrorCode", ""))
             message    = status.get("Message", "")
             if error_code == "429":
-                # Rate limited — do NOT advance StartId so the next poll retries
-                # the same window from scratch.
-                logger.warning("3DTracking: rate limited (429), will retry next cycle without advancing StartId")
+                logger.warning("3DTracking: rate limited (429), will retry next cycle")
             elif error_code in ("401", "403") or "session" in message.lower() or "auth" in message.lower():
-                # Session expired or invalidated server-side before our timer fired.
-                # Clear the stale StartId so the next session starts from scratch
-                # rather than resuming from a cursor that may no longer be valid.
-                _start_id_store.pop(store_key, None)
+                _start_id_store.pop(account_key, None)
                 logger.warning(
-                    f"3DTracking: session rejected by API [{error_code}]: {message} — "
-                    "evicting auth cache so next poll re-authenticates"
+                    f"3DTracking: session rejected [{error_code}]: {message} — evicting auth cache"
                 )
                 raise AuthExpiredError(f"3DTracking session invalid: {message}")
             else:
@@ -206,23 +200,17 @@ class ThreeDTrackingIntegration(BaseIntegration):
 
         result = data.get("Result", {}) or {}
 
-        # Save the new StartId immediately so the next poll continues from here
         new_start_id = result.get("StartId")
         if new_start_id is not None:
-            _start_id_store[store_key] = new_start_id
-            logger.debug(f"3DTracking: saved next StartId={new_start_id}")
+            _start_id_store[account_key] = new_start_id
 
         positions = result.get("Position") or []
         if not positions:
             logger.debug("3DTracking: no new positions in this poll cycle")
             return
 
-        # Build a lookup of remote_id → device config so we can match IMEI
         device_by_uid: dict[str, dict] = {d["remote_id"]: d for d in devices}
 
-        # Yield every record for each unit (in API order, oldest → newest).
-        # The StartId cursor guarantees we never re-process records from a
-        # previous poll cycle, so all records in this batch are new.
         for pos_data in positions:
             uid = pos_data.get("Unit", {}).get("Uid", "")
             if not uid:
@@ -230,12 +218,21 @@ class ThreeDTrackingIntegration(BaseIntegration):
 
             device = device_by_uid.get(uid)
             if not device:
-                # Position for a unit not in our managed device list — skip
                 continue
 
             pos = self._parse_position(device["imei"], pos_data)
-            if pos:
-                yield pos
+            if not pos:
+                continue
+
+            # Per-device deduplication using device_time
+            device_key = (user_guid, account_label, uid)
+            last_seen  = _last_seen.get(device_key)
+            if last_seen is not None and pos.device_time <= last_seen:
+                logger.debug(f"3DTracking: skipping duplicate for {uid} at {pos.device_time}")
+                continue
+
+            _last_seen[device_key] = pos.device_time
+            yield pos
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
