@@ -13,6 +13,12 @@ const MAP_TILES = {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19
     },
+    stadia_dark: {
+        label: '🌒 Stadia Dark',
+        url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
+        attribution: '© <a href="https://stadiamaps.com/">Stadia Maps</a>',
+        maxZoom: 20
+    },
     google_streets: {
         label: '🛣️ Google Streets',
         url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
@@ -32,13 +38,13 @@ const MAP_TILES = {
         maxZoom: 21
     },
     carto_dark: {
-        label: '🌑 Dark Mode',
+        label: '🌑 Carto Dark',
         url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
         attribution: '© <a href="https://carto.com/">CARTO</a>',
         maxZoom: 19
     },
     carto_light: {
-        label: '☀️ Light Mode',
+        label: '☀️ Carto Light',
         url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
         attribution: '© <a href="https://carto.com/">CARTO</a>',
         maxZoom: 19
@@ -48,7 +54,7 @@ const MAP_TILES = {
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         attribution: '© Esri, Maxar, Earthstar Geographics',
         maxZoom: 19
-    }
+    },
 };
 
 // ── Internal helpers ──────────────────────────────────────────────────────────

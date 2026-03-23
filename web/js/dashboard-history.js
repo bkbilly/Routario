@@ -330,7 +330,7 @@ function updatePointDetails(feature) {
     `;
     if (p.sensors && Object.keys(p.sensors).length > 0) {
         html += '<h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem;">Attributes</h4>';
-        html += '<table class="attr-table"><tbody>';
+        html += '<table class="attr-table" style="table-layout:fixed;"><tbody>';
         Object.keys(p.sensors).sort().forEach(key => {
             const v = p.sensors[key];
             let display;

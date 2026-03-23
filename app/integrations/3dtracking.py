@@ -334,27 +334,33 @@ class ThreeDTrackingIntegration(BaseIntegration):
                 sensors["driver_last_name"]  = driver.get("LastName") or ""
                 sensors["driver_code"]       = driver.get("Code") or ""
 
-            # InputOutputs — expand each I/O into individual sensor keys.
-            # Key format: io_<system_name>  (e.g. "io_aux2", "io_externalpowerfailure")
-            # Value: True/False (the Active flag).
-            # The UserDescription is stored alongside for human context.
+            # InputOutputs — these are the various digital/analog inputs and outputs
             io_list = p.get("InputOutputs") or []
-            io_labels: dict[str, str] = {}   # system_name → user description
+            io_key_counts: dict[str, int] = {}  # track duplicates to avoid collisions
             for io in io_list:
-                sys_name = str(io.get("SystemName") or "").lower().replace(" ", "_")
+                sys_name = str(io.get("SystemName") or "").strip()
                 if not sys_name:
                     continue
                 active = bool(io.get("Active", False))
-                sensors[f"io_{sys_name}"] = active
 
-                # Prefer UserDescription; fall back to Description
-                label = (io.get("UserDescription") or io.get("Description") or "").strip()
-                if label:
-                    io_labels[sys_name] = label
+                # Resolve label: UserDescription → Description → SystemName
+                label = (
+                    str(io.get("UserDescription") or "").strip()
+                    or str(io.get("Description") or "").strip()
+                    or sys_name
+                )
 
-            # Store the label map so downstream consumers can display friendly names
-            if io_labels:
-                sensors["io_labels"] = io_labels
+                # Normalise to a safe sensor key
+                key = label.lower().replace(" ", "_").replace("/", "_").replace("-", "_")
+
+                # Deduplicate: if this key was already used, append a counter
+                if key in io_key_counts:
+                    io_key_counts[key] += 1
+                    key = f"{key}_{io_key_counts[key]}"
+                else:
+                    io_key_counts[key] = 0
+
+                sensors[key] = active
 
             return NormalizedPosition(
                 imei=imei,
