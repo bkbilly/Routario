@@ -160,8 +160,6 @@ async function loadHistory(deviceId, startTime, endTime) {
 
         // Hide regular list
         document.getElementById('sidebarDeviceList').style.display = 'none';
-        document.getElementById('sidebarNavRow').style.display = 'none';
-        document.getElementById('sidebarUserProfile').style.display = 'none';
 
         // Show History Details section
         document.getElementById('sidebarHistoryDetails').style.display = 'block';
@@ -219,8 +217,6 @@ function exitHistoryMode() {
     const tripList = document.getElementById('tripListContent');
     if (tripList) tripList.innerHTML = '';
     document.getElementById('sidebarDeviceList').style.display = 'block';
-    document.getElementById('sidebarNavRow').style.display = 'flex';
-    document.getElementById('sidebarUserProfile').style.display = 'flex';
     document.getElementById('sidebarHistoryDetails').style.display = 'none';
 }
 
