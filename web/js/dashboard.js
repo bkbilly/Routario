@@ -27,19 +27,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadAlerts(); // Load alerts immediately on startup
     startPeriodicUpdate();
 
-    // Set Username in sidebar
-    const username = localStorage.getItem('username');
-    const userId = parseInt(localStorage.getItem('user_id'));
-    if (username) {
-        const userDisplay = document.getElementById('userNameDisplay');
-        if (userDisplay) userDisplay.textContent = username;
-    }
-    if (localStorage.getItem('is_admin') === 'true') {
-        document.getElementById('userRoleDisplay').textContent = 'Administrator';
-    } else {
-        document.getElementById('userRoleDisplay').textContent = 'User';
-    }
-
     // Mutation Observer for Alert Button
     const observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {

@@ -383,3 +383,229 @@ function handleWebSocketMessage(message) {
         loadAlerts();
     }
 }
+
+// ── User Location ─────────────────────────────────────────────────────────────
+
+let _locating          = false;
+let _locationMarker    = null;
+let _accuracyCircle    = null;
+let _headingMarker     = null;
+let _locationWatchId   = null;
+let _compassAvailable  = false;
+let _lastHeading       = null;
+
+function toggleUserLocation() {
+    if (_locating) {
+        _stopUserLocation();
+    } else {
+        _startUserLocation();
+    }
+}
+
+function _startUserLocation() {
+    if (!navigator.geolocation) {
+        _flashLocateBtn('error');
+        return;
+    }
+
+    _locating = true;
+    document.getElementById('locateUserBtn').classList.add('locate-active');
+
+    // Request compass on mobile if available
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+        // iOS 13+ requires explicit permission
+        DeviceOrientationEvent.requestPermission()
+            .then(state => {
+                if (state === 'granted') _listenCompass();
+            })
+            .catch(() => {});
+    } else if (window.DeviceOrientationEvent) {
+        _listenCompass();
+    }
+
+    // Start watching position
+    _locationWatchId = navigator.geolocation.watchPosition(
+        _onLocationSuccess,
+        _onLocationError,
+        { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+    );
+}
+
+function _stopUserLocation() {
+    _locating = false;
+    document.getElementById('locateUserBtn').classList.remove('locate-active');
+
+    if (_locationWatchId !== null) {
+        navigator.geolocation.clearWatch(_locationWatchId);
+        _locationWatchId = null;
+    }
+
+    window.removeEventListener('deviceorientation',        _onCompass);
+    window.removeEventListener('deviceorientationabsolute', _onCompass);
+
+    if (_locationMarker)  { map.removeLayer(_locationMarker);  _locationMarker  = null; }
+    if (_accuracyCircle)  { map.removeLayer(_accuracyCircle);  _accuracyCircle  = null; }
+    if (_headingMarker)   { map.removeLayer(_headingMarker);   _headingMarker   = null; }
+
+    _compassAvailable = false;
+    _lastHeading      = null;
+}
+
+function _onLocationSuccess(pos) {
+    const { latitude: lat, longitude: lng, accuracy, heading } = pos.coords;
+
+    const firstFix = !_locationMarker;
+
+    // ── Accuracy circle ───────────────────────────────────────────────────────
+    if (_accuracyCircle) {
+        _accuracyCircle.setLatLng([lat, lng]);
+        _accuracyCircle.setRadius(accuracy);
+    } else {
+        _accuracyCircle = L.circle([lat, lng], {
+            radius:    accuracy,
+            className: 'user-accuracy-circle',
+        }).addTo(map);
+    }
+
+    // ── Blue dot marker ───────────────────────────────────────────────────────
+    const icon = L.divIcon({
+        className: '',
+        html: `<div class="user-location-marker">
+                   <div class="user-location-pulse"></div>
+                   <div class="user-location-dot"></div>
+               </div>`,
+        iconSize:   [22, 22],
+        iconAnchor: [11, 11],
+    });
+
+    if (_locationMarker) {
+        _locationMarker.setLatLng([lat, lng]);
+        _locationMarker.setIcon(icon);
+    } else {
+        _locationMarker = L.marker([lat, lng], { icon, zIndexOffset: 500 }).addTo(map);
+    }
+
+    // Use geolocation heading if compass not available
+    if (!_compassAvailable && heading !== null && !isNaN(heading)) {
+        _renderHeadingCone(lat, lng, heading);
+    }
+
+    // ── Smooth zoom based on accuracy ─────────────────────────────────────────
+    if (firstFix) {
+        const targetZoom = _accuracyToZoom(accuracy);
+        // Fly smoothly — easeLinearity close to 1 = more linear/smooth, 
+        // duration scales with how far we need to zoom
+        const currentZoom = map.getZoom();
+        const zoomDelta   = Math.abs(targetZoom - currentZoom);
+        map.flyTo([lat, lng], targetZoom, {
+            animate:         true,
+            duration:        0.5 + zoomDelta * 0.15,
+            easeLinearity:   0.25,
+        });
+    }
+}
+
+function _onLocationError(err) {
+    console.warn('Geolocation error:', err.message);
+    _flashLocateBtn('error');
+    _stopUserLocation();
+}
+
+// Map accuracy (metres) to an appropriate zoom level
+function _accuracyToZoom(accuracy) {
+    // Find the zoom level where the accuracy circle fills ~80% of the map viewport
+    const mapSize   = map.getSize();
+    const minDim    = Math.min(mapSize.x, mapSize.y);
+    const targetPx  = minDim * 0.8;
+
+    // At zoom Z, 1 metre = (256 * 2^Z) / (2π * 6378137 * cos(lat)) pixels
+    // Rearranged: Z = log2( targetPx * 2π * R * cos(lat) / (256 * 2 * accuracy) )
+    const lat     = map.getCenter().lat;
+    const R       = 6378137;
+    const latRad  = lat * Math.PI / 180;
+    const zoom    = Math.log2(
+        (targetPx * 2 * Math.PI * R * Math.cos(latRad)) /
+        (256 * 2 * accuracy)
+    );
+
+    return Math.min(19, Math.max(11, Math.round(zoom)));
+}
+
+// ── Compass ───────────────────────────────────────────────────────────────────
+
+function _listenCompass() {
+    // 'deviceorientationabsolute' gives true north; fall back to 'deviceorientation'
+    const evtName = 'ondeviceorientationabsolute' in window
+        ? 'deviceorientationabsolute'
+        : 'deviceorientation';
+
+    window.addEventListener(evtName, _onCompass, { passive: true });
+}
+
+function _onCompass(e) {
+    // alpha = rotation around Z axis; webkitCompassHeading = iOS true-north heading
+    let heading = null;
+
+    if (e.webkitCompassHeading != null) {
+        // iOS — already true north, 0° = north
+        heading = e.webkitCompassHeading;
+    } else if (e.alpha != null) {
+        // Android absolute — convert from screen rotation
+        heading = (360 - e.alpha) % 360;
+    } else {
+        return; // relative orientation only — not reliable for compass
+    }
+
+    _compassAvailable = true;
+    _lastHeading      = heading;
+
+    if (_locationMarker) {
+        const ll = _locationMarker.getLatLng();
+        _renderHeadingCone(ll.lat, ll.lng, heading);
+    }
+}
+
+function _renderHeadingCone(lat, lng, heading) {
+    // Draw a small SVG cone above the dot to indicate facing direction
+    const coneIcon = L.divIcon({
+        className: '',
+        html: `<div style="
+                   position:relative;
+                   width:48px; height:48px;
+                   display:flex; align-items:center; justify-content:center;
+               ">
+                   <svg width="48" height="48" viewBox="0 0 48 48"
+                        style="position:absolute;top:0;left:0;transform:rotate(${heading}deg);transform-origin:24px 24px;">
+                       <path d="M24 4 L29 24 L24 21 L19 24 Z"
+                             fill="rgba(66,133,244,0.85)" stroke="white" stroke-width="1.2"/>
+                   </svg>
+               </div>`,
+        iconSize:   [48, 48],
+        iconAnchor: [24, 24],
+    });
+
+    if (_headingMarker) {
+        _headingMarker.setLatLng([lat, lng]);
+        _headingMarker.setIcon(coneIcon);
+    } else {
+        _headingMarker = L.marker([lat, lng], {
+            icon: coneIcon,
+            zIndexOffset: 499,
+            interactive: false,
+        }).addTo(map);
+    }
+}
+
+// ── Button feedback ───────────────────────────────────────────────────────────
+
+function _flashLocateBtn(type) {
+    const btn = document.getElementById('locateUserBtn');
+    const color = type === 'error' ? 'var(--accent-danger)' : '#4285f4';
+    btn.style.color       = color;
+    btn.style.borderColor = color;
+    setTimeout(() => {
+        btn.style.color       = '';
+        btn.style.borderColor = '';
+    }, 1000);
+}
