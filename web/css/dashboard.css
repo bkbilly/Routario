@@ -480,6 +480,7 @@ body::before {
 }
 
 #map {
+    background: var(--bg-tertiary);
     width: 100%;
     height: 100%;
 }
@@ -1155,8 +1156,8 @@ body::before {
 }
 
 .header-gear-btn {
-    width: 40px;
-    height: 40px;
+    width: 38px;
+    height: 38px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1168,60 +1169,161 @@ body::before {
     transition: all var(--transition-base);
 }
 
-.header-gear-btn:hover {
+.header-gear-btn:hover,
+.header-gear-btn.active {
     background: var(--bg-hover);
     border-color: var(--accent-primary);
     color: var(--accent-primary);
 }
 
+.header-gear-btn.active svg {
+    animation: spin-slow 3s linear infinite;
+}
+
+@keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
 .header-menu-dropdown {
     display: none;
     position: absolute;
-    top: calc(100% + 8px);
+    top: calc(100% + 10px);
     right: 0;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 0.4rem;
-    min-width: 180px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    min-width: 220px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.04);
     z-index: 1002;
     flex-direction: column;
-    gap: 0.15rem;
-    animation: slideUp 0.15s ease-out;
+    gap: 0.1rem;
+    /* Entry animation */
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+    transform-origin: top right;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    pointer-events: none;
 }
 
 .header-menu-dropdown.open {
     display: flex;
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+    animation: menuIn 0.15s ease forwards;
 }
 
-.header-menu-item {
+@keyframes menuIn {
+    from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+
+/* User info block at top of dropdown */
+.header-menu-user {
     display: flex;
     align-items: center;
     gap: 0.65rem;
-    padding: 0.6rem 0.85rem;
-    border-radius: 8px;
+    padding: 0.6rem 0.75rem 0.7rem;
+}
+
+.header-menu-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: white;
+}
+
+.header-menu-user-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+.header-menu-username {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.header-menu-role {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* Nav items */
+.header-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.575rem 0.75rem;
+    border-radius: 9px;
     font-family: var(--font-display);
-    font-size: 0.9rem;
+    font-size: 0.875rem;
     font-weight: 500;
     color: var(--text-primary);
     text-decoration: none;
     background: transparent;
     border: none;
     cursor: pointer;
-    transition: background var(--transition-fast);
+    transition: background var(--transition-fast), color var(--transition-fast);
     width: 100%;
     text-align: left;
 }
 
 .header-menu-item:hover {
     background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.header-menu-item-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.header-menu-item:hover .header-menu-item-icon {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: var(--accent-primary);
+}
+
+.header-menu-chevron {
+    margin-left: auto;
+    color: var(--text-muted);
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+.header-menu-item:hover .header-menu-chevron {
+    opacity: 1;
+    transform: translateX(0);
 }
 
 .header-menu-divider {
     height: 1px;
     background: var(--border-color);
-    margin: 0.25rem 0.5rem;
+    margin: 0.3rem 0.5rem;
 }
 
 .header-menu-danger {
@@ -1230,6 +1332,13 @@ body::before {
 
 .header-menu-danger:hover {
     background: rgba(239, 68, 68, 0.1);
+    color: var(--accent-danger);
+}
+
+.header-menu-danger:hover .header-menu-item-icon {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: var(--accent-danger);
 }
 
 /* ── Trip Cards ──────────────────────────────────────────────── */
@@ -1749,6 +1858,71 @@ body::before {
     transform: translateY(-1px);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
     transition: transform 0.15s, box-shadow 0.15s;
+}
+
+/* ── User location marker ────────────────────────────────────── */
+.user-location-marker {
+    position: relative;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.user-location-dot {
+    width: 14px;
+    height: 14px;
+    background: #4285f4;
+    border: 2.5px solid white;
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    position: relative;
+    z-index: 2;
+    flex-shrink: 0;
+}
+
+.user-location-pulse {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: rgba(66, 133, 244, 0.35);
+    border-radius: 50%;
+    animation: locationPulse 2s ease-out infinite;
+    z-index: 1;
+}
+
+@keyframes locationPulse {
+    0%   { transform: scale(1);   opacity: 0.8; }
+    100% { transform: scale(3.5); opacity: 0;   }
+}
+
+/* Accuracy circle (drawn by Leaflet) */
+.user-accuracy-circle {
+    stroke: #4285f4;
+    stroke-width: 1.5;
+    stroke-opacity: 0.4;
+    fill: #4285f4;
+    fill-opacity: 0.2;
+}
+
+/* Active state for locate button */
+.map-ctrl-btn.locate-active {
+    color: #4285f4 !important;
+    background: rgba(66, 133, 244, 0.12) !important;
+    border-color: rgba(66, 133, 244, 0.5) !important;
+}
+
+/* Heading cone (shown when compass available) */
+.user-heading-cone {
+    position: absolute;
+    width: 0;
+    height: 0;
+    top: 50%;
+    left: 50%;
+    transform-origin: center bottom;
+    pointer-events: none;
+    z-index: 1;
 }
 
 /* ── Mobile ──────────────────────────────────────────────────── */

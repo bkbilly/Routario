@@ -403,13 +403,43 @@ async function loadTripsForHistory(deviceId, startTime, endTime) {
             return;
         }
 
-        container.innerHTML = trips.map((trip, i) => {
+        // ── Summary calculations ──────────────────────────────────────────
+        const totalDistKm   = trips.reduce((sum, t) => sum + (t.distance_km || 0), 0);
+        const totalMinutes  = trips.reduce((sum, t) => sum + (t.duration_minutes || 0), 0);
+
+        // Period distance from historyData points (includes driving between trips)
+        let periodDistKm = 0;
+        if (historyData.length > 1) {
+            // Already calculated server-side in summary — re-derive from point count heuristic
+            // We use total odometer delta: first vs last point distance approximation
+            // Better: just show total trip distance vs period label
+        }
+
+        const fmtDist = (km) => km >= 1 ? `${km.toFixed(1)} km` : `${Math.round(km * 1000)} m`;
+        const fmtTime = (mins) => {
+            const h = Math.floor(mins / 60);
+            const m = Math.round(mins % 60);
+            if (h === 0) return `${m} min`;
+            if (m === 0) return `${h}h`;
+            return `${h}h ${m}m`;
+        };
+
+        const summaryHtml = `
+        <div class="detail-grid" style="margin-bottom:1rem;">
+            <div class="detail-item">
+                <span class="detail-key">Distance</span>
+                <div class="detail-val">${fmtDist(totalDistKm)}</div>
+            </div>
+            <div class="detail-item">
+                <span class="detail-key">Time</span>
+                <div class="detail-val">${fmtTime(totalMinutes)}</div>
+            </div>
+        </div>`;
+        container.innerHTML = summaryHtml + trips.map((trip, i) => {
             const start = trip.start_time ? formatDateToLocal(trip.start_time) : '—';
             const end   = trip.end_time   ? formatDateToLocal(trip.end_time)   : 'Ongoing';
             const dist  = trip.distance_km != null ? `${trip.distance_km.toFixed(1)} km` : '—';
             const dur   = formatDuration(trip.duration_minutes);
-            const from  = trip.start_address || 'Unknown start';
-            const to    = trip.end_address   || (trip.end_time ? 'Unknown end' : 'In progress');
             const label = trips.length - i;
             const color = tripColorMap[trip.id] || tripColors[i % tripColors.length];
 
