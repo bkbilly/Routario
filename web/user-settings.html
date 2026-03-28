@@ -14,8 +14,6 @@
     <meta name="apple-mobile-web-app-title" content="Routario">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
 
-    
-    <!-- Custom CSS -->
     <link rel="stylesheet" href="css/user-settings.css">
 </head>
 <body>
@@ -30,20 +28,21 @@
         <form onsubmit="saveSettings(event)">
             <!-- Notifications -->
             <div class="card">
-                <h2 class="card-title">
-                    Notification Channels
-                </h2>
-                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem; line-height: 1.5;">
+                <div class="card-header">
+                    <div class="card-icon">📬</div>
+                    <h2 class="card-title">Notification Channels</h2>
+                </div>
+                <p class="card-description">
                     Configure services to receive alerts (e.g., Telegram, Discord, Email).<br>
-                    <span style="display: inline-block; margin-top: 0.5rem;">
+                    <span class="card-help">
                         📚 <strong>How to format URLs:</strong> 
-                        <a href="https://github.com/caronc/apprise/wiki" target="_blank" style="color: var(--accent-primary); text-decoration: none; border-bottom: 1px dotted currentColor;">
+                        <a href="https://appriseit.com/services/" target="_blank">
                             Read Apprise Documentation ↗
                         </a>
                     </span>
                 </p>
                 
-                <div style="overflow-x: auto;">
+                <div class="table-wrapper">
                     <table class="channel-table">
                         <thead>
                             <tr>
@@ -58,28 +57,31 @@
                     </table>
                 </div>
 
-                <div class="add-channel-form">
-                    <div class="form-group" style="margin-bottom: 0;">
+                <div class="add-form-inline">
+                    <div class="form-group">
                         <label class="form-label">Channel Name</label>
                         <input type="text" id="newChannelName" class="form-input" placeholder="e.g. My Phone">
                     </div>
-                    <div class="form-group" style="margin-bottom: 0;">
+                    <div class="form-group">
                         <label class="form-label">Apprise URL</label>
                         <input type="text" id="newChannelUrl" class="form-input" placeholder="tgram://bot_token/chat_id">
                     </div>
-                    <button type="button" class="btn btn-secondary" onclick="addChannel()">Add</button>
+                    <button type="button" class="btn btn-primary btn-small" onclick="addChannel()">Add</button>
                 </div>
             </div>
 
             <!-- Webhooks -->
             <div class="card">
-                <h2 class="card-title">Webhooks</h2>
-                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem; line-height: 1.5;">
+                <div class="card-header">
+                    <div class="card-icon">🔗</div>
+                    <h2 class="card-title">Webhooks</h2>
+                </div>
+                <p class="card-description">
                     POST live position data to one or more URLs on every device update.
                     Works with Home Assistant, Zapier, n8n, or any HTTP endpoint.
                 </p>
 
-                <div style="overflow-x: auto;">
+                <div class="table-wrapper">
                     <table class="channel-table">
                         <thead>
                             <tr>
@@ -91,22 +93,22 @@
                     </table>
                 </div>
 
-                <div class="add-channel-form" style="display:flex; align-items:flex-end; gap:0.5rem;">
-                    <div class="form-group" style="margin-bottom:0; flex:1;">
+                <div class="add-form-inline">
+                    <div class="form-group">
                         <label class="form-label">Webhook URL</label>
-                        <input type="url" id="newWebhookUrl" class="form-input"
-                               placeholder="https://your-server.com/webhook">
+                        <input type="url" id="newWebhookUrl" class="form-input" placeholder="https://your-server.com/webhook">
                     </div>
-                    <button type="button" class="btn btn-secondary" onclick="addWebhook()"
-                            style="width:fit-content; flex-shrink:0;">Add</button>
+                    <button type="button" class="btn btn-primary btn-small" onclick="addWebhook()">Add</button>
                 </div>
-
             </div>
 
             <!-- Account Info -->
             <div class="card">
-                <h2 class="card-title">Account Information</h2>
-                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="card-header">
+                    <div class="card-icon">👤</div>
+                    <h2 class="card-title">Account Information</h2>
+                </div>
+                <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">Username</label>
                         <input type="text" id="username" class="form-input" disabled style="opacity: 0.6;">
@@ -120,7 +122,7 @@
                     <label class="form-label">New Password</label>
                     <input type="password" id="password" class="form-input" placeholder="Leave blank to keep current">
                 </div>
-                <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+                <div class="form-actions">
                     <button type="submit" class="btn btn-primary" id="saveBtn">
                         Save Profile Changes
                     </button>
@@ -129,156 +131,98 @@
 
             <!-- Admin Panel (Hidden by default) -->
             <div class="card" id="adminPanel" style="display: none;">
-
-                <!-- Header -->
-                <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1.75rem;">
-                    <div style="width:36px; height:36px; border-radius:10px;
-                                background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.25);
-                                display:flex; align-items:center; justify-content:center; font-size:1.1rem;">
-                        🛡️
-                    </div>
+                <div class="card-header">
+                    <div class="card-icon card-icon-warning">🛡️</div>
                     <div>
-                        <h2 style="font-size:1.1rem; font-weight:700; color:var(--accent-warning); margin:0;">Admin Panel</h2>
-                        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.1rem;">Manage users, devices and system data</div>
+                        <h2 class="card-title card-title-warning">Admin Panel</h2>
+                        <p class="card-subtitle">Manage users, devices and system data</p>
                     </div>
                 </div>
 
-                <!-- ── Section: Users ─────────────────────────────────────── -->
-                <div style="background:var(--bg-tertiary); border:1px solid var(--border-color);
-                            border-radius:12px; overflow:hidden; margin-bottom:1.75rem;">
-
-                    <!-- Section header -->
-                    <div style="display:flex; align-items:center; justify-content:space-between;
-                                padding:0.9rem 1.25rem; border-bottom:1px solid var(--border-color);">
-                        <div style="display:flex; align-items:center; gap:0.6rem;">
-                            <span style="font-size:1rem;">👥</span>
-                            <div>
-                                <div style="font-size:0.85rem; font-weight:600; color:var(--text-primary);">Users</div>
-                                <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.1rem;">
-                                    Manage accounts and device access
-                                </div>
-                            </div>
+                <!-- Section: Users -->
+                <div class="admin-section">
+                    <div class="admin-section-header">
+                        <span class="admin-section-icon">👥</span>
+                        <div class="admin-section-info">
+                            <div class="admin-section-title">Users</div>
+                            <div class="admin-section-subtitle">Manage accounts and device access</div>
                         </div>
-                        <div style="font-size:0.75rem; color:var(--text-muted);" id="userCountLabel"></div>
+                        <div class="admin-section-count" id="userCountLabel"></div>
                     </div>
 
-                    <!-- User list -->
-                    <div style="padding:0.5rem 0.75rem;" id="userList"></div>
+                    <div class="admin-section-content" id="userList"></div>
 
-                    <!-- Divider -->
-                    <div style="height:1px; background:var(--border-color); margin:0 0.75rem;"></div>
+                    <div class="admin-section-divider"></div>
 
-                    <!-- Add new user form -->
-                    <div style="padding:1rem 1.25rem;">
-                        <div style="font-size:0.7rem; font-weight:700; text-transform:uppercase;
-                                    letter-spacing:0.07em; color:var(--text-muted); margin-bottom:0.875rem;">
-                            Add New User
-                        </div>
+                    <div class="admin-section-form">
+                        <div class="admin-form-label">Add New User</div>
                         <div class="admin-user-form-grid">
-                            <div class="form-group" style="margin-bottom:0;">
+                            <div class="form-group">
                                 <label class="form-label">Username</label>
                                 <input type="text" id="newUserName" class="form-input" placeholder="e.g. john_doe">
                             </div>
-                            <div class="form-group" style="margin-bottom:0;">
+                            <div class="form-group">
                                 <label class="form-label">Email</label>
                                 <input type="email" id="newUserEmail" class="form-input" placeholder="john@example.com">
                             </div>
-                            <div class="form-group" style="margin-bottom:0;">
+                            <div class="form-group">
                                 <label class="form-label">Password</label>
                                 <input type="password" id="newUserPass" class="form-input" placeholder="Min. 8 characters">
                             </div>
-                            <div style="display:flex; align-items:flex-end;">
-                                <button type="button" class="btn btn-primary"
-                                        onclick="addNewUser()" style="width:100%; height:46px; white-space:nowrap;">
-                                    + Add User
-                                </button>
-                            </div>
+                            <button type="button" class="btn btn-primary admin-form-btn" onclick="addNewUser()">
+                                + Add User
+                            </button>
                         </div>
                     </div>
-
                 </div>
 
-                <!-- ── Section: Backup & Restore ─────────────────────────── -->
-                <div style="background:var(--bg-tertiary); border:1px solid var(--border-color);
-                            border-radius:12px; overflow:hidden;">
-
-                    <!-- Section header -->
-                    <div style="display:flex; align-items:center; gap:0.6rem;
-                                padding:0.9rem 1.25rem; border-bottom:1px solid var(--border-color);">
-                        <span style="font-size:1rem;">💾</span>
-                        <div>
-                            <div style="font-size:0.85rem; font-weight:600; color:var(--text-primary);">Backup & Restore</div>
-                            <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.1rem;">
-                                Database and uploaded files
-                            </div>
+                <!-- Section: Backup & Restore -->
+                <div class="admin-section">
+                    <div class="admin-section-header">
+                        <span class="admin-section-icon">💾</span>
+                        <div class="admin-section-info">
+                            <div class="admin-section-title">Backup & Restore</div>
+                            <div class="admin-section-subtitle">Database and uploaded files</div>
                         </div>
                     </div>
 
-                    <div style="padding:1.25rem; display:flex; flex-direction:column; gap:1rem;">
-
+                    <div class="admin-section-content">
                         <!-- Download -->
-                        <div style="display:flex; align-items:center; justify-content:space-between;
-                                    gap:1rem; flex-wrap:wrap;">
+                        <div class="backup-action">
                             <div>
-                                <div style="font-size:0.85rem; font-weight:600; color:var(--text-primary);
-                                            margin-bottom:0.2rem;">Download Backup</div>
-                                <div style="font-size:0.75rem; color:var(--text-muted);">
-                                    Full snapshot — database + uploads
-                                </div>
+                                <div class="backup-action-title">Download Backup</div>
+                                <div class="backup-action-subtitle">Full snapshot — database + uploads</div>
                             </div>
-                            <button class="btn btn-secondary" onclick="downloadBackup()" id="backupDownloadBtn"
-                                    style="white-space:nowrap; flex-shrink:0;">
+                            <button class="btn btn-primary" onclick="downloadBackup()" id="backupDownloadBtn">
                                 ⬇️ Download
                             </button>
                         </div>
 
-                        <div style="height:1px; background:var(--border-color);"></div>
+                        <div class="admin-section-divider"></div>
 
                         <!-- Restore -->
                         <div>
-                            <div style="font-size:0.85rem; font-weight:600; color:var(--text-primary);
-                                        margin-bottom:0.2rem;">Restore from Backup</div>
-                            <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.875rem;">
-                                Accepts a <span style="font-family:var(--font-mono);">.tar.gz</span> backup file.
-                                <span style="color:var(--accent-warning); font-weight:600;">This will overwrite all existing data.</span>
+                            <div class="backup-action-title">Restore from Backup</div>
+                            <div class="backup-action-subtitle">
+                                Accepts a <span class="mono">.tar.gz</span> backup file.
+                                <span class="backup-warning">This will overwrite all existing data.</span>
                             </div>
 
-                            <input type="file" id="restoreFileInput" accept=".tar.gz"
-                                   style="display:none;" onchange="handleRestoreFile(this)">
+                            <input type="file" id="restoreFileInput" accept=".tar.gz" style="display:none;" onchange="handleRestoreFile(this)">
 
-                            <!-- File picker row -->
-                            <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-                                <button class="btn btn-secondary" style="flex-shrink:0;"
-                                        onclick="document.getElementById('restoreFileInput').click()">
+                            <div class="file-picker-row">
+                                <button class="btn btn-secondary" onclick="document.getElementById('restoreFileInput').click()">
                                     📂 Choose file…
                                 </button>
-                                <span id="restoreFileName"
-                                      style="font-size:0.78rem; color:var(--text-muted);
-                                             font-family:var(--font-mono); min-width:0;
-                                             overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                                    No file selected
-                                </span>
+                                <span id="restoreFileName">No file selected</span>
                             </div>
 
-                            <!-- Confirm button — shown after file selected -->
-                            <button id="restoreConfirmBtn" onclick="confirmRestore()"
-                                    style="display:none; margin-top:0.875rem; width:100%;
-                                           background:rgba(239,68,68,0.08);
-                                           border:1px solid rgba(239,68,68,0.4);
-                                           color:var(--accent-danger);
-                                           padding:0.65rem 1rem; border-radius:8px;
-                                           font-family:var(--font-display); font-size:0.875rem;
-                                           font-weight:600; cursor:pointer;
-                                           transition:background var(--transition-base);"
-                                    onmouseover="this.style.background='rgba(239,68,68,0.15)'"
-                                    onmouseout="this.style.background='rgba(239,68,68,0.08)'">
+                            <button id="restoreConfirmBtn" onclick="confirmRestore()" class="btn-restore">
                                 ⚠️ Restore — this will overwrite all data
                             </button>
                         </div>
-
                     </div>
                 </div>
-
             </div>
         </form>
     </div>
@@ -287,8 +231,8 @@
     <div class="modal" id="assignModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 class="modal-title">Manage Devices for <span id="assignUserName" style="color: var(--accent-primary);"></span></h2>
-                <button style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:1.5rem;" onclick="closeAssignModal()">✕</button>
+                <h2 class="modal-title">Manage Devices for <span id="assignUserName" class="modal-highlight"></span></h2>
+                <button class="modal-close" onclick="closeAssignModal()">✕</button>
             </div>
             <div class="form-group">
                 <input type="text" class="form-input" id="deviceSearch" placeholder="Search devices..." onkeyup="filterDeviceList()">

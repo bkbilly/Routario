@@ -66,7 +66,7 @@ function renderWebhooks() {
         <tr>
             <td style="font-family:monospace;font-size:0.8rem;word-break:break-all;">${url}</td>
             <td style="text-align:right;">
-                <button class="btn btn-secondary" style="font-size:0.75rem;padding:0.2rem 0.6rem;"
+                <button class="btn btn-danger"
                         onclick="removeWebhook(${i})">Remove</button>
             </td>
         </tr>
@@ -154,17 +154,14 @@ function renderUserList(users) {
             </div>
             <div class="user-actions">
                 <button type="button" class="btn btn-secondary"
-                        style="padding:0.4rem 0.8rem; font-size:0.75rem;"
                         onclick="openAssignModal(${u.id}, '${u.username}')">
                     Devices
                 </button>
                 <button type="button" class="btn btn-secondary"
-                        style="padding:0.4rem 0.8rem; font-size:0.75rem;"
                         onclick="promptPasswordChange(${u.id})">
                     Password
                 </button>
                 <button type="button" class="btn btn-danger"
-                        style="padding:0.4rem 0.8rem; font-size:0.75rem;"
                         onclick="deleteUser(${u.id})">
                     Delete
                 </button>
@@ -313,7 +310,7 @@ function renderChannels() {
             <td class="channel-name-cell">${channel.name}</td>
             <td class="channel-url-cell">${maskUrl(channel.url)}</td>
             <td style="text-align: right;">
-                <button type="button" class="btn btn-danger" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;" onclick="removeChannel(${index})">
+                <button type="button" class="btn btn-danger" onclick="removeChannel(${index})">
                     Remove
                 </button>
             </td>
