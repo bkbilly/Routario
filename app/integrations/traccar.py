@@ -127,9 +127,17 @@ class TraccarIntegration(BaseIntegration):
         earliest_from: datetime | None = None
         for rid in id_map:
             cache_key = (base, rid)
-            last = _last_seen.get(cache_key)
+            imei = id_map[rid]
+
+            # Use the DB floor if it's newer than the in-memory cursor
+            device_dict = next((d for d in devices if d["remote_id"] == rid), {})
+            floor = device_dict.get("last_seen_floor")
+            last  = _last_seen.get(cache_key)
+
+            if floor and (last is None or floor > last):
+                last = floor
+
             if last is None:
-                # First poll for this device — go back 24 hours
                 candidate = now - timedelta(hours=24)
             else:
                 candidate = last
