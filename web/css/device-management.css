@@ -934,7 +934,9 @@ h1 {
 /* ── Mobile: Device Table ───────────────────────────────────────── */
 
 @media (max-width: 768px) {
-
+    .container {
+        padding: 0.5rem;
+    }
     /* Header: stack buttons below title */
     .header {
         flex-direction: column;
