@@ -47,9 +47,10 @@ _last_seen: dict[tuple, datetime] = {}
 @IntegrationRegistry.register("3dtracking")
 class ThreeDTrackingIntegration(BaseIntegration):
 
-    PROVIDER_ID           = "3dtracking"
-    DISPLAY_NAME          = "3D Tracking"
-    POLL_INTERVAL_SECONDS = 30
+    PROVIDER_ID                  = "3dtracking"
+    DISPLAY_NAME                 = "3D Tracking"
+    POLL_INTERVAL_SECONDS        = 120
+    POLL_INTERVAL_ACTIVE_SECONDS = 30
 
     FIELDS = [
         IntegrationField(

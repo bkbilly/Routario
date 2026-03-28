@@ -90,13 +90,25 @@ class BaseIntegration(ABC):
     Subclasses are auto-discovered by IntegrationRegistry when they live
     inside   app/integrations/<provider_id>/provider.py
     and are decorated with  @IntegrationRegistry.register("<provider_id>")
+
+    Adaptive polling rates
+    ----------------------
+    POLL_INTERVAL_SECONDS        — interval (seconds) when ignition is OFF or unknown.
+    POLL_INTERVAL_ACTIVE_SECONDS — interval (seconds) when ignition is ON.
+
+    The integration engine tracks the last-known ignition state per device and
+    uses the active interval for any device that was last seen with ignition on,
+    falling back to the idle interval for everything else.  This keeps API
+    traffic low while the fleet is parked overnight and maximises position
+    freshness during active trips.
     """
 
     # ── Required class-level attributes ──────────────────────────────────────
-    PROVIDER_ID:             str  = ""      # e.g. "3dtracking"
-    DISPLAY_NAME:            str  = ""      # e.g. "3D Tracking"
-    POLL_INTERVAL_SECONDS:   int  = 30      # how often to poll
-    FIELDS:    list[IntegrationField] = []  # credential fields for the UI
+    PROVIDER_ID:                  str  = ""    # e.g. "3dtracking"
+    DISPLAY_NAME:                 str  = ""    # e.g. "3D Tracking"
+    POLL_INTERVAL_SECONDS:        int  = 120   # idle / unknown interval (seconds)
+    POLL_INTERVAL_ACTIVE_SECONDS: int  = 30    # active (ignition ON) interval (seconds)
+    FIELDS: list[IntegrationField] = []        # credential fields for the UI
 
     # ── Auth ──────────────────────────────────────────────────────────────────
 
