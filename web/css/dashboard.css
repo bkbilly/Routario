@@ -117,6 +117,13 @@ body::before {
     animation: pulseGlow 3s ease-in-out infinite;
 }
 
+.logo-text {
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
 @keyframes pulseGlow {
     0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.4); }
     50% { box-shadow: 0 0 30px rgba(59, 130, 246, 0.6); }
