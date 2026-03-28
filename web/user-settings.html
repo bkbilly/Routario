@@ -28,30 +28,6 @@
         </div>
 
         <form onsubmit="saveSettings(event)">
-            <!-- Account Info -->
-            <div class="card">
-                <h2 class="card-title">Account Information</h2>
-                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                    <div class="form-group">
-                        <label class="form-label">Username</label>
-                        <input type="text" id="username" class="form-input" disabled style="opacity: 0.6;">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Email Address</label>
-                        <input type="email" id="email" class="form-input" required>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">New Password</label>
-                    <input type="password" id="password" class="form-input" placeholder="Leave blank to keep current">
-                </div>
-                <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
-                    <button type="submit" class="btn btn-primary" id="saveBtn">
-                        Save Profile Changes
-                    </button>
-                </div>
-            </div>
-
             <!-- Notifications -->
             <div class="card">
                 <h2 class="card-title">
@@ -127,32 +103,182 @@
 
             </div>
 
+            <!-- Account Info -->
+            <div class="card">
+                <h2 class="card-title">Account Information</h2>
+                <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" id="username" class="form-input" disabled style="opacity: 0.6;">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Email Address</label>
+                        <input type="email" id="email" class="form-input" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">New Password</label>
+                    <input type="password" id="password" class="form-input" placeholder="Leave blank to keep current">
+                </div>
+                <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+                    <button type="submit" class="btn btn-primary" id="saveBtn">
+                        Save Profile Changes
+                    </button>
+                </div>
+            </div>
+
             <!-- Admin Panel (Hidden by default) -->
             <div class="card" id="adminPanel" style="display: none;">
-                <h2 class="card-title" style="color: var(--accent-warning);">Admin Panel</h2>
-                
-                <div class="form-group">
-                    <h3 style="font-size: 1rem; margin-bottom: 1rem;">Manage Users</h3>
-                    <div id="userList">
-                        <!-- User list populated here -->
+
+                <!-- Header -->
+                <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1.75rem;">
+                    <div style="width:36px; height:36px; border-radius:10px;
+                                background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.25);
+                                display:flex; align-items:center; justify-content:center; font-size:1.1rem;">
+                        🛡️
+                    </div>
+                    <div>
+                        <h2 style="font-size:1.1rem; font-weight:700; color:var(--accent-warning); margin:0;">Admin Panel</h2>
+                        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.1rem;">Manage users, devices and system data</div>
                     </div>
                 </div>
 
-                <div class="add-channel-form" style="border-color: var(--border-color);">
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label class="form-label">New Username</label>
-                        <input type="text" id="newUserName" class="form-input">
+                <!-- ── Section: Users ─────────────────────────────────────── -->
+                <div style="background:var(--bg-tertiary); border:1px solid var(--border-color);
+                            border-radius:12px; overflow:hidden; margin-bottom:1.75rem;">
+
+                    <!-- Section header -->
+                    <div style="display:flex; align-items:center; justify-content:space-between;
+                                padding:0.9rem 1.25rem; border-bottom:1px solid var(--border-color);">
+                        <div style="display:flex; align-items:center; gap:0.6rem;">
+                            <span style="font-size:1rem;">👥</span>
+                            <div>
+                                <div style="font-size:0.85rem; font-weight:600; color:var(--text-primary);">Users</div>
+                                <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.1rem;">
+                                    Manage accounts and device access
+                                </div>
+                            </div>
+                        </div>
+                        <div style="font-size:0.75rem; color:var(--text-muted);" id="userCountLabel"></div>
                     </div>
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label class="form-label">New Email</label>
-                        <input type="email" id="newUserEmail" class="form-input">
+
+                    <!-- User list -->
+                    <div style="padding:0.5rem 0.75rem;" id="userList"></div>
+
+                    <!-- Divider -->
+                    <div style="height:1px; background:var(--border-color); margin:0 0.75rem;"></div>
+
+                    <!-- Add new user form -->
+                    <div style="padding:1rem 1.25rem;">
+                        <div style="font-size:0.7rem; font-weight:700; text-transform:uppercase;
+                                    letter-spacing:0.07em; color:var(--text-muted); margin-bottom:0.875rem;">
+                            Add New User
+                        </div>
+                        <div class="admin-user-form-grid">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label">Username</label>
+                                <input type="text" id="newUserName" class="form-input" placeholder="e.g. john_doe">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label">Email</label>
+                                <input type="email" id="newUserEmail" class="form-input" placeholder="john@example.com">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label">Password</label>
+                                <input type="password" id="newUserPass" class="form-input" placeholder="Min. 8 characters">
+                            </div>
+                            <div style="display:flex; align-items:flex-end;">
+                                <button type="button" class="btn btn-primary"
+                                        onclick="addNewUser()" style="width:100%; height:46px; white-space:nowrap;">
+                                    + Add User
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label class="form-label">Password</label>
-                        <input type="password" id="newUserPass" class="form-input">
-                    </div>
-                    <button type="button" class="btn btn-secondary" onclick="addNewUser()">Add User</button>
+
                 </div>
+
+                <!-- ── Section: Backup & Restore ─────────────────────────── -->
+                <div style="background:var(--bg-tertiary); border:1px solid var(--border-color);
+                            border-radius:12px; overflow:hidden;">
+
+                    <!-- Section header -->
+                    <div style="display:flex; align-items:center; gap:0.6rem;
+                                padding:0.9rem 1.25rem; border-bottom:1px solid var(--border-color);">
+                        <span style="font-size:1rem;">💾</span>
+                        <div>
+                            <div style="font-size:0.85rem; font-weight:600; color:var(--text-primary);">Backup & Restore</div>
+                            <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.1rem;">
+                                Database and uploaded files
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="padding:1.25rem; display:flex; flex-direction:column; gap:1rem;">
+
+                        <!-- Download -->
+                        <div style="display:flex; align-items:center; justify-content:space-between;
+                                    gap:1rem; flex-wrap:wrap;">
+                            <div>
+                                <div style="font-size:0.85rem; font-weight:600; color:var(--text-primary);
+                                            margin-bottom:0.2rem;">Download Backup</div>
+                                <div style="font-size:0.75rem; color:var(--text-muted);">
+                                    Full snapshot — database + uploads
+                                </div>
+                            </div>
+                            <button class="btn btn-secondary" onclick="downloadBackup()" id="backupDownloadBtn"
+                                    style="white-space:nowrap; flex-shrink:0;">
+                                ⬇️ Download
+                            </button>
+                        </div>
+
+                        <div style="height:1px; background:var(--border-color);"></div>
+
+                        <!-- Restore -->
+                        <div>
+                            <div style="font-size:0.85rem; font-weight:600; color:var(--text-primary);
+                                        margin-bottom:0.2rem;">Restore from Backup</div>
+                            <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.875rem;">
+                                Accepts a <span style="font-family:var(--font-mono);">.tar.gz</span> backup file.
+                                <span style="color:var(--accent-warning); font-weight:600;">This will overwrite all existing data.</span>
+                            </div>
+
+                            <input type="file" id="restoreFileInput" accept=".tar.gz"
+                                   style="display:none;" onchange="handleRestoreFile(this)">
+
+                            <!-- File picker row -->
+                            <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                                <button class="btn btn-secondary" style="flex-shrink:0;"
+                                        onclick="document.getElementById('restoreFileInput').click()">
+                                    📂 Choose file…
+                                </button>
+                                <span id="restoreFileName"
+                                      style="font-size:0.78rem; color:var(--text-muted);
+                                             font-family:var(--font-mono); min-width:0;
+                                             overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                                    No file selected
+                                </span>
+                            </div>
+
+                            <!-- Confirm button — shown after file selected -->
+                            <button id="restoreConfirmBtn" onclick="confirmRestore()"
+                                    style="display:none; margin-top:0.875rem; width:100%;
+                                           background:rgba(239,68,68,0.08);
+                                           border:1px solid rgba(239,68,68,0.4);
+                                           color:var(--accent-danger);
+                                           padding:0.65rem 1rem; border-radius:8px;
+                                           font-family:var(--font-display); font-size:0.875rem;
+                                           font-weight:600; cursor:pointer;
+                                           transition:background var(--transition-base);"
+                                    onmouseover="this.style.background='rgba(239,68,68,0.15)'"
+                                    onmouseout="this.style.background='rgba(239,68,68,0.08)'">
+                                ⚠️ Restore — this will overwrite all data
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+
             </div>
         </form>
     </div>
