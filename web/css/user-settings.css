@@ -165,51 +165,6 @@ h1 { font-size: 2rem; font-weight: 700; }
 .channel-name-cell { font-weight: 600; }
 .channel-url-cell { font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted); word-break: break-all; }
 
-.add-channel-form {
-    background: var(--bg-tertiary);
-    padding: 1.5rem;
-    border-radius: 12px;
-    border: 1px dashed var(--border-color);
-    display: grid;
-    grid-template-columns: 1fr 2fr auto;
-    gap: 1rem;
-    align-items: end;
-}
-
-/* Admin Panel Styles */
-.user-list-item {
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 1rem;
-    margin-bottom: 0.75rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.user-list-item:last-child { margin-bottom: 0; }
-.user-info { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
-.user-name { font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.user-email { font-size: 0.85rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.user-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
-
-@media (max-width: 600px) {
-    .user-list-item {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.75rem;
-    }
-    .user-actions {
-        width: 100%;
-        justify-content: flex-end;
-    }
-}
-
-@media (max-width: 768px) {
-    .add-channel-form {
-        grid-template-columns: 1fr;
-    }
-}
 
 /* Modal for Device Assignment */
 .modal {
@@ -296,3 +251,88 @@ input:checked + .slider:before { transform: translateX(20px); }
 }
 .toast-icon { font-size: 1.25rem; }
 @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+
+
+/* ── Admin user form grid ─────────────────────────────────── */
+.admin-user-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.75rem;
+    align-items: end;
+}
+
+@media (max-width: 700px) {
+    .admin-user-form-grid {
+        grid-template-columns: 1fr;
+    }
+    .admin-user-form-grid > div:last-child {
+        margin-top: 0.25rem;
+    }
+}
+
+/* ── User list items ──────────────────────────────────────── */
+.user-list-item {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.65rem 0.875rem;
+    margin-bottom: 0.4rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.user-list-item:last-child {
+    margin-bottom: 0;
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+    flex: 1;
+}
+
+.user-name {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.user-email {
+    font-size: 0.775rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.user-actions {
+    display: flow;
+    gap: 0.4rem;
+    flex-shrink: 0;
+    align-items: center;
+}
+
+.user-actions .btn {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.72rem;
+    white-space: nowrap;
+}
+
+@media (max-width: 500px) {
+    .user-list-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .user-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
