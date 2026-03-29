@@ -801,11 +801,6 @@ input:checked + .slider:before {
         flex-shrink: 0;
     }
 
-    .admin-section-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
     .admin-section-count {
         align-self: flex-start;
     }
