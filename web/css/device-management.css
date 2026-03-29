@@ -934,6 +934,9 @@ h1 {
 /* ── Mobile: Device Table ───────────────────────────────────────── */
 
 @media (max-width: 768px) {
+    h1 {
+        font-size: 1.5rem;
+    }
     .container {
         padding: 0.5rem;
     }
@@ -987,8 +990,8 @@ h1 {
 
 @media (max-width: 480px) {
     /* On very small screens, also hide Last Seen */
-    .devices-table th:nth-child(7),
-    .devices-table td:nth-child(7) {
+    .devices-table th:nth-child(5),
+    .devices-table td:nth-child(5) {
         display: none;
     }
 
