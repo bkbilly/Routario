@@ -200,14 +200,16 @@ function updateDeviceMarker(deviceId, state) {
                 <span class="vp-name">${deviceName}</span>
             </div>
             <div class="vp-grid">
-                <span class="vp-label">Plate</span>      <span class="vp-value">${device?.license_plate || '—'}</span>
-                <span class="vp-label">Speed</span>      <span class="vp-value">${Number(state.last_speed || 0).toFixed(1)} km/h</span>
                 <span class="vp-label">Ignition</span>   <span class="vp-value" style="color:${ignitionColor};font-weight:700;">${ignitionText}</span>
+                <span class="vp-label">Speed</span>      <span class="vp-value">${Number(state.last_speed || 0).toFixed(1)} km/h</span>
                 <span class="vp-label">Satellites</span> <span class="vp-value">${state.satellites || 0}</span>
-                <span class="vp-label">Lat/Lng</span>    <span class="vp-value">${toLat.toFixed(5)}, ${toLng.toFixed(5)}</span>
                 <span class="vp-label">Altitude</span>   <span class="vp-value">${Math.round(state.last_altitude || 0)} m</span>
                 <span class="vp-label">Odometer</span>   <span class="vp-value">${Math.round(state.total_odometer || 0)} km</span>
-                <span class="vp-label">IMEI</span>       <span class="vp-value vp-mono">${device?.imei || '—'}</span>
+            </div>
+            <div class="vp-actions">
+                <button class="vp-action-btn" onclick="openLogbookModal(${deviceId}); if(map) map.closePopup();">📋 Logbook</button>
+                <button class="vp-action-btn" onclick="openShareModal(${deviceId}); if(map) map.closePopup();">🔗 Share</button>
+                <button class="vp-action-btn" onclick="openHistoryModal(${deviceId}); if(map) map.closePopup();">🕒 History</button>
             </div>
         </div>`;
 

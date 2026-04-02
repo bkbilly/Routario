@@ -113,14 +113,14 @@ function getDeviceCardContent(device, icon) {
                 <span class="info-value" id="last-seen-${device.id}">${lastSeen}</span>
             </div>
             <div class="device-info-row">
-                <span class="info-label">Mileage</span>
-                <span class="info-value" id="mileage-${device.id}">${mileage}</span>
+                <span class="info-label">IMEI</span>
+                <span class="info-value" id="imei-${device.id}" style="font-family:var(--font-mono);font-size:0.72rem;">${device.imei || '—'}</span>
             </div>
         </div>
         <div class="device-actions">
             <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openLogbookModal(${device.id})" title="Service logbook">📋 Logbook</button>
-            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openHistoryModal(${device.id})">🕒 History</button>
             <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openShareModal(${device.id})" title="Share live location">🔗 Share</button>
+            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openHistoryModal(${device.id})">🕒 History</button>
         </div>
     `;
 }
@@ -178,7 +178,16 @@ function selectDevice(deviceId, { zoom = true } = {}) {
 
     const marker = markers[deviceId];
     if (marker) {
-        if (zoom) map.setView(marker.getLatLng(), 15);
+        if (zoom) {
+            const targetZoom = 15
+            const currentZoom = map.getZoom();
+            const zoomDelta   = Math.abs(targetZoom - currentZoom);
+            map.flyTo(marker.getLatLng(), targetZoom, {
+                animate:         true,
+                duration:        0.5 + zoomDelta * 0.15,
+                easeLinearity:   0.25,
+            });
+        }
         marker.openPopup();
     }
 }

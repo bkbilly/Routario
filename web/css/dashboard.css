@@ -1666,6 +1666,42 @@ body::before {
     color: #9ca3af;
 }
 
+.vp-actions {
+    display: none;
+    padding: 0.6rem 0.75rem 0.75rem;
+    gap: 0.4rem;
+    border-top: 1px solid #374151;
+    flex-wrap: wrap;
+}
+
+.dashboard.sidebar-hidden ~ * .vp-actions,
+.sidebar-hidden .vp-actions {
+    display: flex;
+}
+
+.vp-action-btn {
+    flex: 1 1 auto;
+    min-width: calc(33% - 0.4rem);
+    padding: 0.45rem 0.4rem;
+    background: #1a2035;
+    border: 1px solid #374151;
+    border-radius: 7px;
+    color: #e5e7eb;
+    font-size: 0.72rem;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.vp-action-btn:hover {
+    background: #2a3447;
+    border-color: #3b82f6;
+    color: #3b82f6;
+}
+
 /* ── Geofences ──────────────────────────────────────────────────── */
 .geofence-tooltip {
     background: var(--bg-card, #1e293b);
