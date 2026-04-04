@@ -143,7 +143,14 @@ class DatabaseService:
                 state.ignition_on = position.ignition
             state.is_moving = (position.speed or 0) > 1.0
             state.is_online = True
-            
+
+            # Persist latest sensors to device state
+            if position.sensors:
+                state.sensors = position.sensors
+            if position.satellites is not None:
+                state.sensors = {**(state.sensors or {}), 'last_known_satellites': position.satellites}
+            state.sensors = {**(state.sensors or {}), 'last_gps_time': device_time.isoformat()}
+
             position_record = PositionRecord(
                 device_id=device.id,
                 latitude=position.latitude,

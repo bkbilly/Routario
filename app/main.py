@@ -107,6 +107,7 @@ class WebSocketManager:
                 "last_longitude": position.longitude,
                 "last_altitude": position.altitude,
                 "satellites": position.satellites,
+                "sensors": position.sensors,
                 "last_speed": position.speed,
                 "last_course": position.course,
                 "ignition_on": position.ignition if position.ignition is not None else False,

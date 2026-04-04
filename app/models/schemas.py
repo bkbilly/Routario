@@ -157,6 +157,7 @@ class DeviceStateResponse(BaseModel):
     device_id: int
     last_latitude: Optional[float]
     last_longitude: Optional[float]
+    last_altitude: Optional[float]
     last_speed: Optional[float]
     last_course: Optional[float]
     last_address: Optional[str]
@@ -165,6 +166,7 @@ class DeviceStateResponse(BaseModel):
     is_online: bool
     total_odometer: float
     last_update: Optional[datetime]
+    sensors: Optional[Dict[str, Any]] = None
 
 
 # ==================== User Schemas ====================
