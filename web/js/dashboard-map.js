@@ -193,6 +193,36 @@ function updateDeviceMarker(deviceId, state) {
 
     const vehicle = VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other'];
 
+    const sensors = state.sensors || {};
+    const satellites = state.satellites ?? sensors.last_known_satellites ?? '—';
+    const altitude   = state.last_altitude ?? 0;
+
+    // Format last_update to local time
+    let lastGpsTimeStr = '—';
+    if (sensors.last_gps_time) {
+        const raw = sensors.last_gps_time.endsWith('Z') ? sensors.last_gps_time : sensors.last_gps_time + 'Z';
+        const d = new Date(raw);
+        lastGpsTimeStr = isNaN(d.getTime()) ? sensors.last_gps_time : d.toLocaleString();
+    }
+
+    // Build sensors rows
+    const skipKeys = new Set(['raw', 'event_code']);
+    const sensorRows = Object.entries(sensors)
+        .filter(([k, v]) => !skipKeys.has(k) && v !== null && v !== undefined)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => {
+            const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            let display = Array.isArray(v) || (v !== null && typeof v === 'object')
+                ? JSON.stringify(v)
+                : String(v);
+            return `<div style="display:flex;justify-content:space-between;align-items:baseline;
+                                gap:0.5rem;padding:0.2rem 0;border-bottom:1px solid #1f2937;flex-wrap:wrap;">
+                        <span style="color:#6b7280;font-size:0.75rem;flex-shrink:0;">${label}</span>
+                        <span style="font-family:JetBrains Mono,monospace;font-size:0.72rem;
+                                     color:#e5e7eb;word-break:break-all;text-align:right;">${display}</span>
+                    </div>`;
+        }).join('');
+
     const popupContent = `
         <div class="vp-popup">
             <div class="vp-header">
@@ -201,11 +231,23 @@ function updateDeviceMarker(deviceId, state) {
             </div>
             <div class="vp-grid">
                 <span class="vp-label">Ignition</span>   <span class="vp-value" style="color:${ignitionColor};font-weight:700;">${ignitionText}</span>
+                <span class="vp-label">Last GPS</span>   <span class="vp-value vp-mono" style="font-size:0.72rem;">${lastGpsTimeStr}</span>
                 <span class="vp-label">Speed</span>      <span class="vp-value">${Number(state.last_speed || 0).toFixed(1)} km/h</span>
-                <span class="vp-label">Satellites</span> <span class="vp-value">${state.satellites || 0}</span>
-                <span class="vp-label">Altitude</span>   <span class="vp-value">${Math.round(state.last_altitude || 0)} m</span>
+                <span class="vp-label">Satellites</span> <span class="vp-value">${satellites}</span>
+                <span class="vp-label">Altitude</span>   <span class="vp-value">${Math.round(altitude)} m</span>
                 <span class="vp-label">Odometer</span>   <span class="vp-value">${Math.round(state.total_odometer || 0)} km</span>
             </div>
+            ${sensorRows ? `
+            <div style="border-top:1px solid #374151;">
+                <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'grid':'none';this.textContent=this.textContent.includes('More')?'▲ Less sensors':'▼ More sensors';"
+                    style="width:100%;background:transparent;border:none;color:#6b7280;font-size:0.75rem;
+                           padding:0.4rem 0.75rem;cursor:pointer;text-align:left;font-family:Outfit,sans-serif;">
+                    ▼ More sensors
+                </button>
+                <div style="display:none;padding:0.5rem 0.75rem;max-height:160px;overflow-y:auto;">
+                    ${sensorRows}
+                </div>
+            </div>` : ''}
             <div class="vp-actions">
                 <button class="vp-action-btn" onclick="openLogbookModal(${deviceId}); if(map) map.closePopup();">📋 Logbook</button>
                 <button class="vp-action-btn" onclick="openShareModal(${deviceId}); if(map) map.closePopup();">🔗 Share</button>
