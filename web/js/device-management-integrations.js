@@ -58,6 +58,12 @@ function _renderIntegrationFields(provider, existingIntg = null) {
          </option>`
     ).join('');
 
+    // Determine if an existing account is pre-selected (e.g. when editing a device)
+    const preSelectedAccount = existingIntg?.account_label
+        ? existing.find(a => a.account_label === existingIntg.account_label)
+        : null;
+    const usingExisting = !!preSelectedAccount;
+
     return `
         <div style="background:var(--bg-tertiary); border:1px solid var(--accent-primary);
                     border-radius:10px; padding:1.25rem; margin-top:0.5rem;">
@@ -76,9 +82,7 @@ function _renderIntegrationFields(provider, existingIntg = null) {
                 </select>
             </div>` : ''}
 
-            <div id="intgCredentialFields"
-                 style="${existingIntg && existing.some(a => a.account_label === existingIntg.account_label)
-                         ? 'opacity:0.4;pointer-events:none;' : ''}">
+            <div id="intgCredentialFields" style="${usingExisting ? 'display:none;' : ''}">
 
                 <div class="form-group" style="margin-bottom:0.75rem;">
                     <label class="form-label">Account Label *</label>
@@ -102,7 +106,36 @@ function _renderIntegrationFields(provider, existingIntg = null) {
                 </div>`).join('')}
             </div>
 
-            <div class="form-group" style="margin-bottom:0.75rem;">
+            ${usingExisting ? `
+            <div id="intgExistingActions" style="margin-bottom:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                <button type="button" class="btn btn-secondary" style="flex:1;"
+                        onclick="testIntegrationConnection()">
+                    🔌 Test Connection
+                </button>
+                <button type="button" class="btn btn-danger" style="flex:1;"
+                        onclick="deleteIntegrationAccount()">
+                    🗑️ Delete Credentials
+                </button>
+            </div>` : `
+            <div id="intgExistingActions" style="display:none; margin-bottom:0.75rem; gap:0.5rem; flex-wrap:wrap;">
+                <button type="button" class="btn btn-secondary" style="flex:1;"
+                        onclick="testIntegrationConnection()">
+                    🔌 Test Connection
+                </button>
+                <button type="button" class="btn btn-danger" style="flex:1;"
+                        onclick="deleteIntegrationAccount()">
+                    🗑️ Delete Credentials
+                </button>
+            </div>`}
+
+            <div id="intgNewActions" style="${usingExisting ? 'display:none;' : ''}">
+                <button type="button" class="btn btn-secondary" style="width:100%;"
+                        onclick="testIntegrationConnection()">
+                    🔌 Test Connection
+                </button>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0.75rem; margin-top:0.75rem;">
                 <label class="form-label">Remote Device ID *</label>
                 <div style="display:flex; gap:0.5rem;">
                     <input type="text" class="form-input" id="intgRemoteId"
@@ -117,10 +150,6 @@ function _renderIntegrationFields(provider, existingIntg = null) {
                 <div class="form-help">The identifier used by ${_esc(provider.display_name)} for this vehicle.</div>
             </div>
 
-            <button type="button" class="btn btn-secondary" style="width:100%;"
-                    onclick="testIntegrationConnection()">
-                🔌 Test Connection
-            </button>
             <div id="intgTestResult" style="font-size:0.8rem; margin-top:0.5rem; min-height:1.2em;"></div>
         </div>
     `;
@@ -135,42 +164,41 @@ function restoreIntegrationFields(device) {
     const provider = integrationProviders.find(p => p.provider_id === intg.provider);
     if (!provider) return;
 
-    // Re-render the panel with existingIntg so the matching account <option>
-    // is stamped `selected` in the HTML from the start — fixes the bug where
-    // onProtocolChange() rendered the panel without existingIntg first, then
-    // restoreIntegrationFields() tried to set .value on a select whose options
-    // were already rendered without a selection.
     onProtocolChange(intg);
-
-    // Dim the credential fields now that an existing account is selected.
     onIntgAccountSelect();
 }
 
-// ── Existing account selected — dim/restore credential fields ─────
+// ── Existing account selected — show/hide credential fields ───────
 
 function onIntgAccountSelect() {
     const sel       = document.getElementById('intgAccountSelect');
     const fields    = document.getElementById('intgCredentialFields');
+    const existingActions = document.getElementById('intgExistingActions');
+    const newActions = document.getElementById('intgNewActions');
     const accountId = sel?.value;
     if (!fields) return;
- 
+
     const usingExisting = !!accountId;
- 
-    // Dim/restore visual state
-    fields.style.opacity       = usingExisting ? '0.4' : '';
-    fields.style.pointerEvents = usingExisting ? 'none' : '';
- 
+
+    // Hide credential fields entirely when using an existing account
+    fields.style.display = usingExisting ? 'none' : '';
+
+    // Toggle action buttons
+    if (existingActions) {
+        existingActions.style.display = usingExisting ? 'flex' : 'none';
+    }
+    if (newActions) {
+        newActions.style.display = usingExisting ? 'none' : '';
+    }
+
     // Remove/restore `required` so the browser won't block form submission
-    // when the credential fields are hidden behind an existing account selection.
     const labelInput = document.getElementById('intgAccountLabel');
     if (labelInput) labelInput.required = !usingExisting;
- 
+
     fields.querySelectorAll('input[id^="intgField_"]').forEach(input => {
         if (usingExisting) {
             input.removeAttribute('required');
         } else {
-            // Restore required only for fields the provider marked as required.
-            // We derive this from the presence of ' *' in the sibling label text.
             const label = input.closest('.form-group')?.querySelector('.form-label');
             if (label?.textContent.includes(' *')) {
                 input.setAttribute('required', '');
@@ -191,6 +219,31 @@ async function testIntegrationConnection() {
     resultEl.textContent = '⏳ Testing…';
     resultEl.style.color = 'var(--text-muted)';
 
+    // Fix #1: If an existing account is selected, test via the accounts/{id}/devices
+    // endpoint (which uses stored credentials) instead of sending empty form fields.
+    const existingSel = document.getElementById('intgAccountSelect');
+    const accountId   = existingSel?.value ? parseInt(existingSel.value) : null;
+
+    if (accountId) {
+        try {
+            const res = await apiFetch(`${API_BASE}/integrations/accounts/${accountId}/devices`);
+            if (res.ok) {
+                const devices = await res.json();
+                resultEl.textContent = `✅ Connected — ${devices.length} device(s) visible`;
+                resultEl.style.color = 'var(--accent-success)';
+            } else {
+                const data = await res.json().catch(() => ({}));
+                resultEl.textContent = `❌ ${data.detail || 'Connection failed'}`;
+                resultEl.style.color = 'var(--accent-danger)';
+            }
+        } catch (e) {
+            resultEl.textContent = '❌ Request failed';
+            resultEl.style.color = 'var(--accent-danger)';
+        }
+        return;
+    }
+
+    // New credentials — use the test endpoint with form values
     const credentials = _collectCredentials(provider);
 
     try {
@@ -210,6 +263,42 @@ async function testIntegrationConnection() {
     } catch (e) {
         resultEl.textContent = '❌ Request failed';
         resultEl.style.color = 'var(--accent-danger)';
+    }
+}
+
+// ── Delete integration account credentials ────────────────────────
+
+async function deleteIntegrationAccount() {
+    const existingSel = document.getElementById('intgAccountSelect');
+    const accountId   = existingSel?.value ? parseInt(existingSel.value) : null;
+    if (!accountId) return;
+
+    const account = integrationAccounts.find(a => a.id === accountId);
+    const label   = account?.account_label || 'this account';
+
+    if (!confirm(`Delete credentials for "${label}"?\n\nDevices using these credentials will stop receiving data.`)) return;
+
+    try {
+        const res = await apiFetch(`${API_BASE}/integrations/accounts/${accountId}`, { method: 'DELETE' });
+        if (res.ok || res.status === 204) {
+            // Remove from local cache
+            integrationAccounts = integrationAccounts.filter(a => a.id !== accountId);
+
+            showAlert({ title: 'Deleted', message: `Credentials for "${label}" removed.`, type: 'success' });
+
+            // Re-render the integration panel without the deleted account
+            const sel      = document.getElementById('deviceProtocol');
+            const provider = integrationProviders.find(p => p.provider_id === sel?.value);
+            if (provider) {
+                const panel = document.getElementById('integrationFieldsPanel');
+                panel.innerHTML = _renderIntegrationFields(provider, null);
+            }
+        } else {
+            const data = await res.json().catch(() => ({}));
+            showAlert({ title: 'Error', message: data.detail || 'Failed to delete credentials', type: 'error' });
+        }
+    } catch (e) {
+        showAlert({ title: 'Error', message: e.message || 'Request failed', type: 'error' });
     }
 }
 

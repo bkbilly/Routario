@@ -91,12 +91,31 @@ function renderDeviceList() {
 function getDeviceCardContent(device, icon) {
     const vs = getVehicleStatus(device);
     const lastSeen = timeAgo(device.last_update);
-    const mileage = formatDistance(device.total_odometer);
 
-    const ignBadge = device.ignition_on === true
-        ? `<span class="ign-badge on">ON</span>`
-        : device.ignition_on === false
-        ? `<span class="ign-badge off">OFF</span>`
+    // Full datetime string for tooltip on Last Seen
+    const lastSeenFull = device.last_update ? formatDateToLocal(device.last_update) : 'Never';
+
+    const ignitionOn  = device.ignition_on === true;
+    const ignitionOff = device.ignition_on === false;
+
+    // Tooltip text for ignition badge
+    const ignTooltip = ignitionOn
+        ? 'Ignition is ON — engine running'
+        : 'Ignition is OFF — engine stopped';
+
+    // Tooltip text for status badge
+    const statusTooltipMap = {
+        moving:  'Vehicle is moving',
+        idle:    'Engine on but not moving',
+        stopped: 'Engine off, vehicle parked',
+        offline: `No data received for over ${device.config?.offline_timeout_hours ?? 24}h`,
+    };
+    const statusTooltip = statusTooltipMap[vs.cls] || vs.label;
+
+    const ignBadge = ignitionOn
+        ? `<span class="ign-badge on" title="${ignTooltip}">ON</span>`
+        : ignitionOff
+        ? `<span class="ign-badge off" title="${ignTooltip}">OFF</span>`
         : '';
 
     return `
@@ -104,13 +123,15 @@ function getDeviceCardContent(device, icon) {
             <div class="device-name">${icon} ${device.name}</div>
             <div class="device-meta">
                 ${ignBadge}
-                <span class="device-status ${vs.cls}" id="status-${device.id}">${vs.label}</span>
+                <span class="device-status ${vs.cls}" id="status-${device.id}"
+                      title="${statusTooltip}">${vs.label}</span>
             </div>
         </div>
         <div class="device-info">
             <div class="device-info-row">
                 <span class="info-label">Last Seen</span>
-                <span class="info-value" id="last-seen-${device.id}">${lastSeen}</span>
+                <span class="info-value" id="last-seen-${device.id}"
+                      title="${lastSeenFull}">${lastSeen}</span>
             </div>
             <div class="device-info-row">
                 <span class="info-label">IMEI</span>
@@ -143,12 +164,15 @@ function updateSidebarCard(deviceId) {
     }
     applyDeviceAlertHighlights();
 }
+
 // Function to update just the times in the sidebar (called every minute)
 function updateSidebarTimes() {
     getSortedDevices().forEach(device => {
         const el = document.getElementById(`last-seen-${device.id}`);
         if (el && device.last_update) {
             el.textContent = timeAgo(device.last_update);
+            // Keep tooltip in sync too
+            el.title = formatDateToLocal(device.last_update);
         }
 
         // Re-evaluate offline status every minute
@@ -157,6 +181,15 @@ function updateSidebarTimes() {
             const vs = getVehicleStatus(device);
             statusEl.textContent  = vs.label;
             statusEl.className    = `device-status ${vs.cls}`;
+
+            const statusTooltipMap = {
+                moving:  'Vehicle is moving',
+                idle:    'Engine on but not moving',
+                stopped: 'Engine off, vehicle parked',
+                offline: `No data received for over ${device.config?.offline_timeout_hours ?? 24}h`,
+            };
+            statusEl.title = statusTooltipMap[vs.cls] || vs.label;
+
             const card = document.getElementById(`device-card-${device.id}`);
             if (card) {
                 card.classList.remove('moving', 'idle', 'stopped', 'offline');
