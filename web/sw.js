@@ -4,7 +4,7 @@
  * Place this file at: /web/sw.js  (root of your web directory)
  */
 
-const CACHE_NAME = 'gps-dashboard-v40';
+const CACHE_NAME = 'gps-dashboard-v41';
 const STATIC_ASSETS = [
   '/gps-dashboard.html',
   '/device-management.html',
@@ -79,6 +79,8 @@ self.addEventListener('push', (event) => {
   let data = {
     title: 'GPS Alert',
     body: 'A new alert has been triggered.',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
     tag: 'gps-alert',
     data: {}
   };
@@ -94,26 +96,20 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body,
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    icon: data.icon || '/icons/icon-192.png',
+    badge: data.badge || '/icons/icon-192.png',
     tag: data.tag || 'gps-alert',
     data: data.data || {},
+    requireInteraction: data.severity === 'critical' || data.severity === 'high',
     vibrate: data.severity === 'critical' ? [200, 100, 200, 100, 200] : [200, 100, 200],
-    renotify: true,
-    silent: false,
-    // NO actions — breaks Android
-    // NO requireInteraction — broken on Android
+    actions: [
+      { action: 'open', title: '🗺️ Open Map' },
+      { action: 'dismiss', title: 'Dismiss' }
+    ]
   };
 
   event.waitUntil(
     self.registration.showNotification(data.title, options)
-      .catch(err => {
-        // Minimal fallback if full options fail
-        return self.registration.showNotification(data.title || 'GPS Alert', {
-          body: data.body,
-          icon: '/icons/icon-192.png',
-        });
-      })
   );
 });
 
