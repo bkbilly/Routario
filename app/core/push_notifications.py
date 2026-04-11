@@ -146,7 +146,9 @@ class PushNotificationService:
         except Exception as ex:
             response = getattr(ex, "response", None)
             if response and response.status_code == 410:
-                logger.info("[Push] Subscription expired (410)")
+                logger.info("[Push] Subscription expired (410) — will be cleaned up on next re-registration")
+            elif response and response.status_code == 404:
+                logger.info("[Push] Subscription not found (404) — expired")
             else:
                 logger.error(f"[Push] Send failed: {ex}")
             return False
