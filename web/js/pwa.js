@@ -39,6 +39,12 @@ async function enablePushNotifications() {
     return false;
   }
 
+  const reg = await navigator.serviceWorker.ready;
+  const existing = await reg.pushManager.getSubscription();
+  if (existing && localStorage.getItem('push_enabled') === 'true') {
+    return true;  // Already set up
+  }
+
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') {
     console.warn('[PWA] Notification permission denied');
@@ -62,7 +68,7 @@ async function enablePushNotifications() {
     const res = await apiFetch(`${API_BASE}/users/${userId}/push-subscription`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(subscription)
+      body: JSON.stringify(subscription.toJSON())
     });
 
     if (res.ok) {
