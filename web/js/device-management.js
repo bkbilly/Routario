@@ -122,9 +122,14 @@ async function loadAvailableProtocols() {
         const nativeGroup = document.createElement('optgroup');
         nativeGroup.label = 'Native (direct connection)';
         [...availableProtocols].sort().forEach(p => {
-            const opt       = document.createElement('option');
-            opt.value       = p;
-            opt.textContent = nativeNames[p] || (p.charAt(0).toUpperCase() + p.slice(1));
+            const opt  = document.createElement('option');
+            opt.value  = p;
+            const info = protocolInfo[p] || {};
+            const port = info.port ? ` :${info.port}` : '';
+            const type = info.protocol_types?.includes('udp') && info.protocol_types?.includes('tcp')
+                ? ' TCP/UDP' : info.protocol_types?.[0]?.toUpperCase() || 'TCP';
+            const label = nativeNames[p] || (p.charAt(0).toUpperCase() + p.slice(1));
+            opt.textContent = `${label} — port ${info.port || '?'} ${type}`;
             nativeGroup.appendChild(opt);
         });
         sel.appendChild(nativeGroup);

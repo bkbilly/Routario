@@ -371,7 +371,9 @@ async def get_protocols():
     protocols_info = {}
     for name, decoder in ProtocolRegistry.get_all().items():
         protocols_info[name] = {
-            "native_events": getattr(decoder, "NATIVE_EVENTS", [])
+            "native_events": getattr(decoder, "NATIVE_EVENTS", []),
+            "port": getattr(decoder, "PORT", None),
+            "protocol_types": getattr(decoder, "PROTOCOL_TYPES", ["tcp"]),
         }
     return {
         "protocols": ProtocolRegistry.list_protocols(),
