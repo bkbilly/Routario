@@ -36,23 +36,13 @@ Routario connects directly to your GPS hardware over TCP/UDP and gives you a liv
 | 🪝 | **Webhooks** — push live position data to any HTTP endpoint on every update | |
 | ⚙️ | **Remote commands** — reboot, request position, set interval, and more from the dashboard | |
 | 👥 | **Multi-user** — admin and standard roles, per-user device access and notification channels | |
+| 💾 | **Backup & restore** — one-click database and file backup from the admin UI, no shell access needed | |
 | 📥 | **CSV export** — download full position history with all sensor columns included | |
 | 📱 | **PWA** — installs on Android and iOS, push notifications even when the tab is closed | |
 
 ---
 
-## Supported Devices
-
-| Protocol | Port | Notes |
-|---|---|---|
-| **Teltonika** | 5027 (TCP + UDP) | FMB/FMC series, full I/O map, Codec 8/8E/16/26 |
-| **GT06 / Concox** | 5023 (TCP) | Binary, widely cloned |
-| **Queclink** | 5026 (TCP) | GV/GL/GB series |
-| **H02** | 5013 (TCP) | Common in Chinese trackers |
-| **TK103 / Coban** | 5001 (TCP) | Legacy ASCII |
-| **Meitrack** | 5020 (TCP) | MVT/T series |
-| **Flespi** | 5149 (TCP) | JSON-based |
-| **OsmAnd** | 5055 (TCP) | HTTP, mobile app |
+https://github.com/user-attachments/assets/82189d71-8810-4d81-a055-f0dc463d9480
 
 ---
 
@@ -65,6 +55,7 @@ Routario connects directly to your GPS hardware over TCP/UDP and gives you a liv
 **Infrastructure** — PostgreSQL + PostGIS, Redis, raw TCP/UDP socket servers per protocol, WebSocket gateway
 
 ---
+
 
 <div align="center">
 Built with ❤️ — Routario
