@@ -71,12 +71,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (addBtn) addBtn.style.display = isAdmin ? '' : 'none';
 
     await loadAlertTypes();
-    await loadAvailableProtocols();   // also loads integration providers + accounts
+    await loadAvailableProtocols();
     await loadUserChannels();
     await loadDevices();
     populateAddAlertDropdown();
 
-    // Escape key closes any open modal
     document.addEventListener('keydown', e => {
         if (e.key !== 'Escape') return;
         ['deviceModal', 'alertEditorModal', 'commandModal'].forEach(id => {
@@ -114,7 +113,6 @@ async function loadAvailableProtocols() {
         if (!sel) return;
         sel.innerHTML = '<option value="">-- Select Protocol --</option>';
 
-        // Native protocols
         const nativeNames = {
             teltonika: 'Teltonika', gt06: 'GT06 / Concox', osmand: 'OsmAnd',
             flespi: 'Flespi', totem: 'Totem', tk103: 'TK103', gps103: 'GPS103', h02: 'H02',
@@ -134,7 +132,6 @@ async function loadAvailableProtocols() {
         });
         sel.appendChild(nativeGroup);
 
-        // External integrations
         if (integrationProviders.length) {
             const intgGroup = document.createElement('optgroup');
             intgGroup.label = 'External Integrations';
@@ -152,7 +149,6 @@ async function loadAvailableProtocols() {
             onProtocolChange();
             refreshNativeEventAlerts();
         });
-
 
     } catch (e) {
         console.error('Error loading protocols:', e);
@@ -284,7 +280,6 @@ function openAddDeviceModal() {
 
     populateVehicleTypeSelect(document.getElementById('vehicleType'), DEFAULT_TYPE);
 
-    // Reset integration panel
     const panel = document.getElementById('integrationFieldsPanel');
     if (panel) { panel.style.display = 'none'; panel.innerHTML = ''; }
     const imeiInput = document.getElementById('deviceImei');
@@ -318,7 +313,6 @@ function openDeviceModal(deviceId, startTab = 'general') {
 
     populateVehicleTypeSelect(document.getElementById('vehicleType'), d.vehicle_type || DEFAULT_TYPE);
 
-    // Restore integration fields if this is an integration device
     restoreIntegrationFields(d);
     if (!d.config?.integration?.provider) onProtocolChange();
 
@@ -367,7 +361,6 @@ async function handleSubmit(event) {
         newConfig.speed_duration_seconds = existingConfig.speed_duration_seconds || 30;
         newConfig.offline_timeout_hours  = parseInt(document.getElementById('offlineTimeoutHours').value) || 24;
 
-        // ── Integration config ────────────────────────────────────
         const isIntg     = _isIntegrationSelected();
         const providerId = document.getElementById('deviceProtocol').value;
         const provider   = isIntg ? integrationProviders.find(p => p.provider_id === providerId) : null;
@@ -391,7 +384,6 @@ async function handleSubmit(event) {
             };
         }
 
-        // Auto-generate IMEI for integrations
         let imei = document.getElementById('deviceImei').value.trim();
         if (isIntg && !imei) {
             const remoteId = newConfig.integration?.remote_id || Date.now();
@@ -487,45 +479,56 @@ function loadAlertsFromConfig(config) {
 function populateAddAlertDropdown() {
     const sel = document.getElementById('addAlertSelect');
     if (!sel) return;
-    sel.innerHTML = '<option value="">Select a system alert…</option>';
-    const grp   = document.createElement('optgroup');
-    grp.label   = 'System Alerts';
+    sel.innerHTML = '<option value="">Select an alert to add…</option>';
+
+    // Custom rule option
+    const customGrp = document.createElement('optgroup');
+    customGrp.label = 'Custom';
+    const customOpt = document.createElement('option');
+    customOpt.value       = '__custom__';
+    customOpt.textContent = '⚡ Custom Rule';
+    customGrp.appendChild(customOpt);
+    sel.appendChild(customGrp);
+
+    // System alerts group
+    const sysGrp = document.createElement('optgroup');
+    sysGrp.label = 'System Alerts';
     for (const [key, def] of Object.entries(ALERT_TYPES)) {
         const opt       = document.createElement('option');
         opt.value       = key;
         opt.textContent = `${def.icon || '🔔'} ${def.label}`;
-        grp.appendChild(opt);
+        sysGrp.appendChild(opt);
     }
-    sel.appendChild(grp);
+    sel.appendChild(sysGrp);
+
 }
 
-function refreshNativeEventAlerts() {
-    const protocol = document.getElementById('deviceProtocol').value;
-    const events   = protocolInfo[protocol]?.native_events || [];
+// Called when the add-alert dropdown changes
+function onAddAlertSelectChange() {
+    const sel = document.getElementById('addAlertSelect');
+    const customFields = document.getElementById('customRuleFields');
+    if (!customFields) return;
 
-    const existing = document.getElementById('nativeEventsOptgroup');
-    if (existing) existing.remove();
-    if (!events.length) return;
-
-    const addSel = document.getElementById('addAlertSelect');
-    const grp    = document.createElement('optgroup');
-    grp.id       = 'nativeEventsOptgroup';
-    grp.label    = 'Device Native Events';
-
-    events.forEach(ev => {
-        const opt       = document.createElement('option');
-        opt.value       = `__native__:${JSON.stringify(ev)}`;
-        opt.textContent = ev.label;
-        grp.appendChild(opt);
-    });
-
-    addSel.appendChild(grp);
+    if (sel.value === '__custom__') {
+        customFields.style.display = 'flex';
+        document.getElementById('newRuleName').focus();
+    } else {
+        customFields.style.display = 'none';
+        // Clear the custom fields when switching away
+        document.getElementById('newRuleName').value = '';
+        document.getElementById('newRuleCond').value = '';
+    }
 }
 
 function addSelectedAlert() {
     const sel = document.getElementById('addAlertSelect');
     const val = sel.value;
     if (!val) return;
+
+    if (val === '__custom__') {
+        addCustomRule();
+        return;
+    }
 
     if (val.startsWith('__native__:')) {
         try {
@@ -566,11 +569,49 @@ function addCustomRule() {
     const ruleEl = document.getElementById('newRuleCond');
     const name   = nameEl.value.trim();
     const rule   = ruleEl.value.trim();
-    if (!name || !rule) return;
+    if (!name || !rule) {
+        // Highlight missing fields
+        if (!name) nameEl.style.borderColor = 'var(--accent-danger)';
+        if (!rule) ruleEl.style.borderColor = 'var(--accent-danger)';
+        setTimeout(() => {
+            nameEl.style.borderColor = '';
+            ruleEl.style.borderColor = '';
+        }, 1500);
+        return;
+    }
     alertRows.push({ uid: nextUid(), alertKey: '__custom__', name, rule, channels: [], schedule: null, duration: null });
     nameEl.value = '';
     ruleEl.value = '';
+    // Reset dropdown and hide custom fields
+    const sel = document.getElementById('addAlertSelect');
+    sel.value = '';
+    const customFields = document.getElementById('customRuleFields');
+    if (customFields) customFields.style.display = 'none';
     renderAlertsTable();
+}
+
+function refreshNativeEventAlerts() {
+    const protocol = document.getElementById('deviceProtocol').value;
+    const events   = protocolInfo[protocol]?.native_events || [];
+
+    const existing = document.getElementById('nativeEventsOptgroup');
+    if (existing) existing.remove();
+    if (!events.length) return;
+
+    const addSel = document.getElementById('addAlertSelect');
+    const grp    = document.createElement('optgroup');
+    grp.id       = 'nativeEventsOptgroup';
+    grp.label    = 'Device Native Events';
+
+    events.forEach(ev => {
+        const opt       = document.createElement('option');
+        opt.value       = `__native__:${JSON.stringify(ev)}`;
+        opt.textContent = ev.label;
+        grp.appendChild(opt);
+    });
+
+    // Insert native events
+    addSel.appendChild(grp);
 }
 
 function removeAlertRow(uid) {
@@ -756,7 +797,6 @@ async function openAlertEditor(uid) {
                 <span style="color:var(--text-muted);">seconds</span>
             </div>
         </div>`;
-        // Wire the checkbox
         setTimeout(() => {
             const cb = document.getElementById('editor-duration-enabled');
             const in_ = document.getElementById('editor-duration-input');
@@ -1011,7 +1051,7 @@ function renderRawDataPage() {
 }
 
 // ================================================================
-//  ALERTS MODAL SHIMS (device-management page compatibility)
+//  ALERTS MODAL SHIMS
 // ================================================================
 let loadedAlerts = [];
 
