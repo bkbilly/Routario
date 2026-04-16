@@ -141,32 +141,38 @@
 
                 <!-- TAB: ALERTS -->
                 <div class="modal-tab-content" id="tab-alerts">
-                    <div class="alerts-add-row">
-                        <div class="alerts-add-panel">
-                            <div class="alerts-add-panel-label">&#128226; Add System Alert</div>
-                            <div style="display:flex;gap:0.5rem;">
-                                <select class="form-input" id="addAlertSelect" style="flex:1;"></select>
-                                <button type="button" class="btn btn-primary" onclick="addSelectedAlert()">Add</button>
-                            </div>
+                 
+                    <!-- Unified Add Alert Panel -->
+                    <div style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.25rem;">
+                        <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);font-weight:600;margin-bottom:0.6rem;">&#128226; Add Alert</div>
+                        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                            <select class="form-input" id="addAlertSelect" style="flex:1;min-width:180px;" onchange="onAddAlertSelectChange()"></select>
+                            <button type="button" class="btn btn-primary" onclick="addSelectedAlert()">Add</button>
                         </div>
-                        <div class="alerts-add-divider"></div>
-                        <div class="alerts-add-panel">
-                            <div class="alerts-add-panel-label">&#9889; Add Custom Rule</div>
+                 
+                        <!-- Custom rule inline fields — shown only when "Custom Rule" is selected -->
+                        <div id="customRuleFields" style="display:none;flex-direction:column;gap:0.6rem;margin-top:0.85rem;">
                             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                                <input type="text" id="newRuleName" class="form-input" placeholder="Name" style="flex:1;min-width:100px;">
-                                <input type="text" id="newRuleCond" class="form-input" placeholder="speed &gt; 80 and ignition" style="flex:2;min-width:180px;">
-                                <button type="button" class="btn btn-secondary" onclick="addCustomRule()">Add</button>
+                                <input type="text" id="newRuleName" class="form-input"
+                                    placeholder="Rule name, e.g. High speed alert"
+                                    style="flex:1;min-width:140px;"
+                                    onkeydown="if(event.key==='Enter'){event.preventDefault();addSelectedAlert();}">
+                                <input type="text" id="newRuleCond" class="form-input"
+                                    placeholder="speed &gt; 80 and ignition"
+                                    style="flex:2;min-width:200px;"
+                                    onkeydown="if(event.key==='Enter'){event.preventDefault();addSelectedAlert();}">
                             </div>
-                            <details style="margin-top:0.5rem;">
-                                <summary style="cursor:pointer;color:var(--text-muted);font-size:0.8rem;">&#8505;&#65039; Syntax reference</summary>
-                                <div style="margin-top:0.5rem;padding:0.75rem;background:var(--bg-secondary);border-radius:8px;font-size:0.78rem;line-height:1.8;color:var(--text-muted);">
+                            <details>
+                                <summary style="cursor:pointer;color:var(--text-muted);font-size:0.78rem;">&#8505;&#65039; Syntax reference</summary>
+                                <div style="margin-top:0.4rem;padding:0.65rem 0.85rem;background:var(--bg-secondary);border-radius:8px;font-size:0.76rem;line-height:1.8;color:var(--text-muted);">
                                     <strong style="color:var(--text-secondary);">Attributes:</strong> speed, ignition, satellites, altitude, battery_voltage, fuel_level, temperature, door_open<br>
                                     <strong style="color:var(--text-secondary);">Operators:</strong> &gt; &lt; == != &gt;= &lt;= and or not
                                 </div>
                             </details>
                         </div>
                     </div>
-
+                 
+                    <!-- Alert rows table (unchanged) -->
                     <div class="alerts-table-wrap">
                         <table class="alerts-table">
                             <thead>
@@ -181,7 +187,7 @@
                             </thead>
                             <tbody id="alertsTableBody">
                                 <tr id="alertsEmptyRow">
-                                    <td colspan="6" class="alerts-empty">No alerts configured. Use the controls above to add one.</td>
+                                    <td colspan="6" class="alerts-empty">No alerts configured. Use the dropdown above to add one.</td>
                                 </tr>
                             </tbody>
                         </table>
