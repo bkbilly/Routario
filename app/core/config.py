@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     """Application settings"""
     
     # Database
-    database_url: str = "postgresql+asyncpg://gps_user:gps_password@localhost/gps_platform"
+    database_url: str = "sqlite://./routario.db"
     db_pool_size: int = 20
     db_max_overflow: int = 40
     
