@@ -161,7 +161,7 @@ class DeviceStateResponse(BaseModel):
     last_speed: Optional[float]
     last_course: Optional[float]
     last_address: Optional[str]
-    ignition_on: bool
+    ignition_on: Optional[bool] = None
     is_moving: bool
     is_online: bool
     total_odometer: float

@@ -156,6 +156,7 @@ class WebSocketManager:
                 "is_moving":      device.state.is_moving,
                 "is_online":      device.state.is_online,
             }
+        position.sensors = {**(position.sensors or {}), "last_gps_time": position.device_time.strftime("%Y-%m-%dT%H:%M:%S")}
         message = {
             "type":      WSMessageType.POSITION_UPDATE.value,
             "device_id": device.id,
@@ -168,7 +169,7 @@ class WebSocketManager:
                 "sensors":        position.sensors,
                 "last_speed":     position.speed,
                 "last_course":    position.course,
-                "ignition_on":    position.ignition if position.ignition is not None else False,
+                "ignition_on":    position.ignition,
                 "last_update":    position.device_time.isoformat(),
                 **state_data,
             },
