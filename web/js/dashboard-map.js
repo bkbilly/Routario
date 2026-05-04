@@ -183,7 +183,6 @@ function updateDeviceMarker(deviceId, state) {
     const device = devices.find(d => d.id === deviceId);
     const deviceName = device ? device.name : 'Unknown Device';
 
-    // Three-state ignition: true=ON, false=OFF, null/undefined=unknown
     const ignitionColor = state.ignition_on === true  ? '#10b981'
                         : state.ignition_on === false ? '#ef4444'
                         : '#6b7280';
@@ -193,16 +192,26 @@ function updateDeviceMarker(deviceId, state) {
 
     const vehicle = VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other'];
 
-    const sensors = state.sensors || {};
-    const satellites = state.satellites ?? sensors.last_known_satellites ?? '—';
+    // ── Strip internal sensor keys that are shown in the main grid ───────────
+    const HIDDEN_SENSOR_KEYS = new Set([
+        'last_gps_time',
+        'last_known_satellites',
+    ]);
+
+    const sensors = Object.fromEntries(
+        Object.entries(state.sensors || {}).filter(([k]) => !HIDDEN_SENSOR_KEYS.has(k))
+    );
+
+    const satellites = state.satellites ?? (state.sensors || {}).last_known_satellites ?? '—';
     const altitude   = state.last_altitude ?? 0;
 
     // Format last_update to local time
     let lastGpsTimeStr = '—';
-    if (sensors.last_gps_time) {
-        const raw = sensors.last_gps_time.endsWith('Z') ? sensors.last_gps_time : sensors.last_gps_time + 'Z';
+    const rawGpsTime = (state.sensors || {}).last_gps_time;
+    if (rawGpsTime) {
+        const raw = rawGpsTime.endsWith('Z') ? rawGpsTime : rawGpsTime + 'Z';
         const d = new Date(raw);
-        lastGpsTimeStr = isNaN(d.getTime()) ? sensors.last_gps_time : d.toLocaleString();
+        lastGpsTimeStr = isNaN(d.getTime()) ? rawGpsTime : d.toLocaleString();
     }
 
     // Build sensors rows
@@ -256,9 +265,6 @@ function updateDeviceMarker(deviceId, state) {
         </div>`;
 
     if (!markers[deviceId]) {
-        // ── First appearance ──────────────────────────────────────────────────
-        // Pass toHead into _makeMarkerIcon so the correct rotation is baked
-        // directly into the HTML string — no post-insertion DOM fix-up needed.
         markers[deviceId] = L.marker([toLat, toLng], {
             icon: _makeMarkerIcon(device?.vehicle_type, state.ignition_on, toHead)
         })
@@ -270,8 +276,27 @@ function updateDeviceMarker(deviceId, state) {
         markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
 
     } else {
-        // ── Subsequent updates: smooth animation ──────────────────────────────
-        markers[deviceId].setPopupContent(popupContent);
+        // ── Preserve the expanded/collapsed state of the sensor panel ─────────
+        let sensorsExpanded = false;
+        const existingPopup = markers[deviceId].getPopup();
+        if (existingPopup) {
+            const el = existingPopup.getElement();
+            if (el) {
+                const panel = el.querySelector('.leaflet-popup-content div[style*="padding:0.5rem"]');
+                if (panel) {
+                    sensorsExpanded = panel.style.display !== 'none';
+                }
+            }
+        }
+
+        // Replace {{SENSORS_DISPLAY}} placeholder based on saved state
+        const finalContent = sensorsExpanded
+            ? popupContent
+                .replace('display:none;padding:0.5rem', 'display:grid;padding:0.5rem')
+                .replace('▼ More sensors', '▲ Less sensors')
+            : popupContent;
+
+        markers[deviceId].setPopupContent(finalContent);
 
         const prev = markerState[deviceId] || { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
 
@@ -282,23 +307,19 @@ function updateDeviceMarker(deviceId, state) {
 
         const fromLat  = prev.lat;
         const fromLng  = prev.lng;
-        const fromHead = prev.heading; // raw course — markerState is sole source of truth
-
-        // Shortest-arc rotation delta
+        const fromHead = prev.heading;
         const dH = ((toHead - fromHead + 540) % 360) - 180;
-
         const duration  = 1000;
         const startTime = performance.now();
 
         function step(now) {
-            // Stop animating if the marker left the map (zoom redraw, filter hide, etc.)
             if (!markers[deviceId] || !map.hasLayer(markers[deviceId])) {
                 markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
                 return;
             }
 
             const t    = Math.min((now - startTime) / duration, 1);
-            const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+            const ease = 1 - Math.pow(1 - t, 3);
 
             const lat  = fromLat  + (toLat  - fromLat)  * ease;
             const lng  = fromLng  + (toLng  - fromLng)  * ease;
@@ -308,7 +329,6 @@ function updateDeviceMarker(deviceId, state) {
             _applyMarkerRotation(markers[deviceId], head, device?.vehicle_type);
 
             if (t < 1) {
-                // Store interpolated heading so next update's fromHead is accurate
                 markerState[deviceId] = {
                     lat: toLat, lng: toLng,
                     heading: head,
@@ -326,7 +346,6 @@ function updateDeviceMarker(deviceId, state) {
         };
     }
 
-    // Keep devices array in sync
     const deviceIndex = devices.findIndex(d => d.id === deviceId);
     if (deviceIndex !== -1) {
         if (!state.hasOwnProperty('is_online') && state.last_latitude) state.is_online = true;

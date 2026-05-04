@@ -85,7 +85,7 @@ class DeviceState(Base):
     last_speed:     Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     last_course:    Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     last_address:   Mapped[Optional[str]]   = mapped_column(String(500), nullable=True)
-    ignition_on:    Mapped[bool]            = mapped_column(Boolean, default=False)
+    ignition_on:    Mapped[Optional[bool]]  = mapped_column(Boolean, default=None)
     is_moving:      Mapped[bool]            = mapped_column(Boolean, default=False)
     is_online:      Mapped[bool]            = mapped_column(Boolean, default=False)
     total_odometer: Mapped[float]           = mapped_column(Float, default=0.0)
