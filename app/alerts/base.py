@@ -27,9 +27,10 @@ class AlertField:
     unit:       str   = ""
     min_value:  float = 0
     max_value:  float = 9999
-    options:    list  = field(default_factory=list)   # [{value, label}, ...]
-    required:   bool  = True
-    help_text:  str   = ""
+    options:      list        = field(default_factory=list)   # [{value, label}, ...]
+    required:     bool        = True
+    help_text:    str         = ""
+    updates_field: str | None = None   # sibling field key to sync when this select changes
 
 
 # ── Alert Definition ───────────────────────────────────────────────────────────

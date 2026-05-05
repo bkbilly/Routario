@@ -34,16 +34,17 @@ async def get_alert_types(current_user: User = Depends(get_current_user)):
             "severity": d.severity.value if hasattr(d.severity, "value") else d.severity,
             "fields": [
                 {
-                    "key":        f.key,
-                    "label":      f.label,
-                    "field_type": f.field_type,
-                    "default":    f.default,
-                    "unit":       f.unit,
-                    "min_value":  f.min_value,
-                    "max_value":  f.max_value,
-                    "options":    f.options,
-                    "required":   f.required,
-                    "help_text":  f.help_text,
+                    "key":          f.key,
+                    "label":        f.label,
+                    "field_type":   f.field_type,
+                    "default":      f.default,
+                    "unit":         f.unit,
+                    "min_value":    f.min_value,
+                    "max_value":    f.max_value,
+                    "options":      f.options,
+                    "required":     f.required,
+                    "help_text":    f.help_text,
+                    "updates_field": f.updates_field,
                 }
                 for f in d.fields
             ],
