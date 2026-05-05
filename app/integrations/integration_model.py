@@ -29,6 +29,7 @@ class IntegrationAccount(Base):
     provider_id:   Mapped[str]            = mapped_column(String(50),  nullable=False)
     account_label: Mapped[str]            = mapped_column(String(200), nullable=False)
     credentials:   Mapped[dict]           = mapped_column(JsonType, nullable=False, default={})
+    state:         Mapped[dict]           = mapped_column(JsonType, nullable=False, default=dict)
     is_active:     Mapped[bool]           = mapped_column(Boolean, default=True)
     last_auth_at:  Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_error:    Mapped[Optional[str]]  = mapped_column(Text, nullable=True)

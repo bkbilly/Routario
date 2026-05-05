@@ -274,7 +274,7 @@ function openAddDeviceModal() {
     document.getElementById('submitText').textContent        = 'Add Device';
     document.getElementById('deleteDeviceBtn').style.display = 'none';
     document.getElementById('deviceForm').reset();
-    document.getElementById('deviceProtocol').value          = DEFAULT_PROTOCOL;
+    document.getElementById('deviceProtocol').value          = '';
     document.getElementById('currentOdometer').value         = '0.0';
     document.getElementById('offlineTimeoutHours').value     = '24';
 
@@ -363,6 +363,12 @@ async function handleSubmit(event) {
 
         const isIntg     = _isIntegrationSelected();
         const providerId = document.getElementById('deviceProtocol').value;
+
+        if (!providerId) {
+            showAlert({ title: 'Protocol required', message: 'Please select a protocol before saving.', type: 'error' });
+            return;
+        }
+
         const provider   = isIntg ? integrationProviders.find(p => p.provider_id === providerId) : null;
 
         if (isIntg && provider) {
@@ -393,7 +399,7 @@ async function handleSubmit(event) {
         const payload = {
             name:          document.getElementById('deviceName').value.trim(),
             imei,
-            protocol:      providerId || DEFAULT_PROTOCOL,
+            protocol:      providerId,
             vehicle_type:  document.getElementById('vehicleType').value    || DEFAULT_TYPE,
             license_plate: document.getElementById('licensePlate').value   || null,
             vin:           document.getElementById('vin').value            || null,
@@ -1038,7 +1044,7 @@ function renderRawDataPage() {
             <td>${(p.course || 0).toFixed(0)}°</td>
             <td>${p.satellites || 0}</td>
             <td>${(p.altitude  || 0).toFixed(0)} m</td>
-            <td>${p.ignition ? 'ON' : 'OFF'}</td>
+            <td>${p.ignition === true ? '<span style="color:var(--accent-success);font-weight:600;">ON</span>' : p.ignition === false ? '<span style="color:var(--accent-danger);font-weight:600;">OFF</span>' : '<span style="color:var(--text-muted);">—</span>'}</td>
             <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:0.72rem;"
                 title="${_esc(attrStr)}">${_esc(attrStr)}</td>`;
         tbody.appendChild(tr);

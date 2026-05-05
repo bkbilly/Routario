@@ -35,10 +35,6 @@ logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://api.3dtracking.net/api/v1.0"
 
-# In-memory StartId store: keyed by (user_guid, account_label)
-# Persists across poll cycles for the lifetime of the process.
-_start_id_store: dict[tuple, int] = {}
-
 # Per-device last-seen timestamp: keyed by (user_guid, account_label, unit_uid)
 # Used to deduplicate positions returned by the bulk PositionsList endpoint.
 _last_seen: dict[tuple, datetime] = {}
@@ -157,8 +153,10 @@ class ThreeDTrackingIntegration(BaseIntegration):
         account_label = auth_ctx.data.get("account_label", "default")
 
         # StartId is per-account (API constraint), but last_seen is per-device
+        # _persisted_state is seeded from DB on first use and saved back by the engine.
+        persisted = auth_ctx.data.setdefault("_persisted_state", {})
+        current_start_id = persisted.get("start_id")
         account_key = (user_guid, account_label)
-        current_start_id = _start_id_store.get(account_key)
 
         params: dict = {
             "UserIdGuid":          user_guid,
@@ -168,7 +166,8 @@ class ThreeDTrackingIntegration(BaseIntegration):
         if current_start_id is not None:
             params["StartId"] = current_start_id
         else:
-            logger.info("3DTracking: first poll — fetching last 24 h of positions (no StartId)")
+            params["timestamp"] = int(datetime.now(timezone.utc).timestamp())
+            logger.info("3DTracking: first poll — fetching positions from now (no StartId)")
 
         try:
             async with httpx.AsyncClient(timeout=30) as client:
@@ -190,7 +189,7 @@ class ThreeDTrackingIntegration(BaseIntegration):
             if error_code == "429":
                 logger.warning("3DTracking: rate limited (429), will retry next cycle")
             elif error_code in ("401", "403") or "session" in message.lower() or "auth" in message.lower():
-                _start_id_store.pop(account_key, None)
+                persisted.pop("start_id", None)
                 logger.warning(
                     f"3DTracking: session rejected [{error_code}]: {message} — evicting auth cache"
                 )
@@ -203,7 +202,7 @@ class ThreeDTrackingIntegration(BaseIntegration):
 
         new_start_id = result.get("StartId")
         if new_start_id is not None:
-            _start_id_store[account_key] = new_start_id
+            persisted["start_id"] = new_start_id
 
         positions = result.get("Position") or []
         if not positions:
@@ -225,9 +224,20 @@ class ThreeDTrackingIntegration(BaseIntegration):
             if not pos:
                 continue
 
-            # Per-device deduplication using device_time
+            # Per-device deduplication using device_time.
+            # Seed from the DB floor (last_seen_floor) on the first poll after a
+            # restart so records already processed don't get replayed.
             device_key = (user_guid, account_label, uid)
             last_seen  = _last_seen.get(device_key)
+
+            if last_seen is None:
+                floor = device.get("last_seen_floor")
+                if floor is not None:
+                    # Ensure timezone-aware for comparison
+                    if floor.tzinfo is None:
+                        floor = floor.replace(tzinfo=timezone.utc)
+                    last_seen = floor
+
             if last_seen is not None and pos.device_time <= last_seen:
                 logger.debug(f"3DTracking: skipping duplicate for {uid} at {pos.device_time}")
                 continue

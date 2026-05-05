@@ -321,7 +321,7 @@ function updatePointDetails(feature) {
             <div class="detail-item"><span class="detail-key">Lat/Lon</span><div class="detail-val">${feature.geometry.coordinates[1].toFixed(5)}, ${feature.geometry.coordinates[0].toFixed(5)}</div></div>
             <div class="detail-item"><span class="detail-key">Altitude</span><div class="detail-val">${(p.altitude || 0).toFixed(0)} m</div></div>
             <div class="detail-item"><span class="detail-key">Satellites</span><div class="detail-val">${p.satellites || 0}</div></div>
-            <div class="detail-item"><span class="detail-key">Ignition</span><div class="detail-val" style="color: ${p.ignition ? 'var(--accent-success)' : 'var(--text-muted)'}">${p.ignition ? 'ON' : 'OFF'}</div></div>
+            <div class="detail-item"><span class="detail-key">Ignition</span><div class="detail-val" style="color: ${p.ignition === true ? 'var(--accent-success)' : p.ignition === false ? 'var(--accent-danger)' : 'var(--text-muted)'}">${p.ignition === true ? 'ON' : p.ignition === false ? 'OFF' : '—'}</div></div>
         </div>
     `;
     if (p.sensors && Object.keys(p.sensors).length > 0) {
