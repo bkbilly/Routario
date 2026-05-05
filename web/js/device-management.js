@@ -730,7 +730,18 @@ async function openAlertEditor(uid) {
 
     const isCustom = row.alertKey === '__custom__';
     const isDeviceEvent = row.alertKey === 'device_event';
-    const def      = isCustom ? null : ALERT_TYPES[row.alertKey];
+    let def        = isCustom ? null : ALERT_TYPES[row.alertKey];
+
+    // Patch geofence options dynamically before rendering
+    if (def?.fields?.some(f => f.key === 'geofence_id') && editingDeviceId) {
+        const geofenceOptions = await loadGeofencesForDevice(editingDeviceId);
+        def = {
+            ...def,
+            fields: def.fields.map(f =>
+                f.key === 'geofence_id' ? { ...f, options: geofenceOptions } : f
+            ),
+        };
+    }
 
     document.getElementById('alertEditorTitle').textContent =
         isCustom ? `Edit Custom Rule — ${row.name}` : `Edit ${def?.label || row.alertKey}`;
@@ -769,14 +780,22 @@ async function openAlertEditor(uid) {
                 inputHtml = `<select class="form-input alert-param-input" data-param-key="${f.key}"${updatesAttr}>${opts}</select>`;
             }
 
+            const showIfAttr = f.show_if
+                ? ` data-show-if-key="${_esc(f.show_if.key)}" data-show-if-val="${_esc(String(f.show_if.value))}"`
+                : '';
+            const showIfHidden = f.show_if
+                ? String(row.params?.[f.show_if.key] ?? def.fields.find(x => x.key === f.show_if.key)?.default) !== String(f.show_if.value)
+                : false;
+            const groupStyle = `margin-bottom:1rem;${showIfHidden ? 'display:none;' : ''}`;
+
             if (f.field_type !== 'checkbox') {
-                fieldsHtml += `<div class="form-group" style="margin-bottom:1rem;">
+                fieldsHtml += `<div class="form-group" style="${groupStyle}"${showIfAttr}>
                     <label class="form-label">${_esc(f.label)}</label>
                     ${inputHtml}
                     ${f.help_text ? `<div class="form-help">${_esc(f.help_text)}</div>` : ''}
                 </div>`;
             } else {
-                fieldsHtml += `<div class="form-group" style="margin-bottom:1rem;">${inputHtml}</div>`;
+                fieldsHtml += `<div class="form-group" style="${groupStyle}"${showIfAttr}>${inputHtml}</div>`;
             }
         }
     }
@@ -907,6 +926,17 @@ async function openAlertEditor(uid) {
             );
             if (target) target.value = preset;
         });
+    });
+    const applyShowIf = () => {
+        document.querySelectorAll('#alertEditorBody .form-group[data-show-if-key]').forEach(group => {
+            const ctrl = document.querySelector(
+                `#alertEditorBody .alert-param-input[data-param-key="${group.dataset.showIfKey}"]`
+            );
+            group.style.display = (ctrl && ctrl.value === group.dataset.showIfVal) ? '' : 'none';
+        });
+    };
+    document.querySelectorAll('#alertEditorBody .alert-param-input').forEach(inp => {
+        inp.addEventListener('change', applyShowIf);
     });
 
     document.getElementById('alertEditorModal').classList.add('active');

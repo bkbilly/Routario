@@ -31,6 +31,7 @@ class AlertField:
     required:     bool        = True
     help_text:    str         = ""
     updates_field: str | None = None   # sibling field key to sync when this select changes
+    show_if: dict | None = None        # e.g. {"key": "maintenance_type", "value": "custom"}
 
 
 # ── Alert Definition ───────────────────────────────────────────────────────────

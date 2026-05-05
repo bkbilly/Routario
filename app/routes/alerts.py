@@ -45,6 +45,7 @@ async def get_alert_types(current_user: User = Depends(get_current_user)):
                     "required":     f.required,
                     "help_text":    f.help_text,
                     "updates_field": f.updates_field,
+                    "show_if":       f.show_if,
                 }
                 for f in d.fields
             ],
