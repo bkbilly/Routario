@@ -28,6 +28,7 @@ is recalculated accordingly.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Callable, Coroutine, Any
@@ -255,7 +256,13 @@ async def _run_poll_cycle(
                 continue
             account_id    = account.id
             credentials   = account.get_decrypted_credentials()
-            account_state = dict(account.state or {})
+            raw_state = account.state or {}
+            if isinstance(raw_state, str):
+                try:
+                    raw_state = json.loads(raw_state)
+                except (ValueError, TypeError):
+                    raw_state = {}
+            account_state = dict(raw_state) if isinstance(raw_state, dict) else {}
         # DB connection released here — authenticate() may do network I/O
 
         # ── Authenticate (network I/O; no DB connection held) ─────────────────
