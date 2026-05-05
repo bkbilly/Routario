@@ -761,10 +761,12 @@ async function openAlertEditor(uid) {
                     <span style="font-size:0.875rem;">${_esc(f.label)}</span>
                 </label>`;
             } else if (f.field_type === 'select') {
-                const opts = (f.options || []).map(o =>
-                    `<option value="${_esc(o.value)}"${o.value == v ? ' selected' : ''}>${_esc(o.label)}</option>`
-                ).join('');
-                inputHtml = `<select class="form-input alert-param-input" data-param-key="${f.key}">${opts}</select>`;
+                const opts = (f.options || []).map(o => {
+                    const preset = o.threshold != null ? ` data-threshold="${o.threshold}"` : '';
+                    return `<option value="${_esc(o.value)}"${o.value == v ? ' selected' : ''}${preset}>${_esc(o.label)}</option>`;
+                }).join('');
+                const updatesAttr = f.updates_field ? ` data-updates-field="${_esc(f.updates_field)}"` : '';
+                inputHtml = `<select class="form-input alert-param-input" data-param-key="${f.key}"${updatesAttr}>${opts}</select>`;
             }
 
             if (f.field_type !== 'checkbox') {
@@ -895,6 +897,16 @@ async function openAlertEditor(uid) {
         const cb = pill.querySelector('input');
         if (!cb) return;
         pill.addEventListener('click', () => { cb.checked = !cb.checked; pill.classList.toggle('active', cb.checked); });
+    });
+    document.querySelectorAll('#alertEditorBody .alert-param-input[data-updates-field]').forEach(sel => {
+        sel.addEventListener('change', () => {
+            const preset = sel.options[sel.selectedIndex]?.dataset?.threshold;
+            if (preset == null) return;
+            const target = document.querySelector(
+                `#alertEditorBody .alert-param-input[data-param-key="${sel.dataset.updatesField}"]`
+            );
+            if (target) target.value = preset;
+        });
     });
 
     document.getElementById('alertEditorModal').classList.add('active');
