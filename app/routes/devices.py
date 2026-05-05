@@ -21,6 +21,8 @@ from sqlalchemy import select, update
 
 from core.database import get_db
 from core.auth import get_current_user, require_admin, verify_device_access
+from integrations.engine import clear_device_state, evict_auth_cache
+from integrations.integration_model import IntegrationAccount
 from models import User, Device, DeviceState
 from models.schemas import DeviceCreate, DeviceResponse, DeviceStateResponse, TripResponse
 
@@ -104,11 +106,51 @@ async def update_device(
 
 @router.delete("/{device_id}")
 async def delete_device(device_id: int, admin: User = Depends(require_admin)):
-    """Delete a device. Admin only."""
+    """Delete a device and all associated data. Admin only."""
     db = get_db()
+
+    # Capture what we need before the CASCADE wipes it
+    device = await db.get_device_by_id(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    imei          = device.imei
+    intg          = (device.config or {}).get("integration") or {}
+    provider_id   = intg.get("provider")
+    account_label = intg.get("account_label", "")
+    owner_ids     = [u.id for u in (device.users or [])]
+
+    # Delete device — FK cascades remove positions, trips, state, alerts, commands, geofences
     success = await db.delete_device(device_id)
     if not success:
         raise HTTPException(status_code=404, detail="Device not found")
+
+    # Clear in-memory polling state for this IMEI
+    clear_device_state(imei)
+
+    # If this was an integration device, clean up the IntegrationAccount when
+    # no other device belonging to the same user still references it.
+    if provider_id:
+        for user_id in owner_ids:
+            remaining = await db.get_user_devices(user_id)
+            still_used = any(
+                ((d.config or {}).get("integration") or {}).get("provider") == provider_id
+                and ((d.config or {}).get("integration") or {}).get("account_label", "") == account_label
+                for d in remaining
+            )
+            if not still_used:
+                async with db.get_session() as session:
+                    await session.execute(
+                        update(IntegrationAccount)
+                        .where(
+                            IntegrationAccount.user_id       == user_id,
+                            IntegrationAccount.provider_id   == provider_id,
+                            IntegrationAccount.account_label == account_label,
+                        )
+                        .values(state={})
+                    )
+                evict_auth_cache(user_id, provider_id, account_label)
+
     return {"status": "deleted"}
 
 

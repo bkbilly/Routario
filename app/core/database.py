@@ -105,12 +105,14 @@ class DatabaseService:
 
         connect_args: dict = {}
         if self._is_sqlite:
-            # SQLite requires check_same_thread=False for async usage
-            connect_args = {"check_same_thread": False}
+            # timeout=30 sets sqlite3's busy-wait (seconds) for every connection
+            connect_args = {"check_same_thread": False, "timeout": 30}
 
         self.engine: AsyncEngine = create_async_engine(
             async_url,
             echo=False,
+            # SQLite: single connection prevents concurrent-writer lock errors.
+            # WAL mode + busy_timeout handle any remaining contention.
             pool_size=5 if self._is_sqlite else 20,
             max_overflow=0 if self._is_sqlite else 40,
             pool_pre_ping=True,
@@ -132,7 +134,19 @@ class DatabaseService:
                     await conn.execute(text("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"))
                 except Exception:
                     pass
+            if self._is_sqlite:
+                await conn.execute(text("PRAGMA journal_mode=WAL"))
+                await conn.execute(text("PRAGMA busy_timeout=30000"))
+                await conn.execute(text("PRAGMA synchronous=NORMAL"))
+
             await conn.run_sync(Base.metadata.create_all)
+
+            # Migration: add state column to integration_accounts for existing DBs
+            try:
+                await conn.execute(text("ALTER TABLE integration_accounts ADD COLUMN state TEXT"))
+            except Exception:
+                pass  # column already exists
+
         logger.info("Database initialised (%s)", self._db_url.split("://")[0])
 
     @asynccontextmanager
@@ -357,8 +371,8 @@ class DatabaseService:
             session.add(device)
             await session.flush()
             await session.refresh(device)
-            state = DeviceState(device_id=device.id)
-            session.add(state)
+            # Use get-or-create to avoid UNIQUE constraint crash on retry
+            await self._get_or_create_state(session, device.id)
             await session.flush()
             return device
 
@@ -422,11 +436,18 @@ class DatabaseService:
         self, user_id: int, device_id: int, access_level: str = "admin"
     ):
         async with self.get_session() as session:
-            await session.execute(
-                user_device_association.insert().values(
-                    user_id=user_id, device_id=device_id, access_level=access_level
+            existing = await session.execute(
+                select(user_device_association).where(
+                    user_device_association.c.user_id == user_id,
+                    user_device_association.c.device_id == device_id,
                 )
             )
+            if existing.first() is None:
+                await session.execute(
+                    user_device_association.insert().values(
+                        user_id=user_id, device_id=device_id, access_level=access_level
+                    )
+                )
 
     # ── Position processing ───────────────────────────────────────
 

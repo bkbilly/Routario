@@ -229,8 +229,15 @@ async def _run_poll_cycle(
         return
 
     # ── Authenticate and fetch for each group ─────────────────────────────────
-    async with db.get_session() as session:
-        for (user_id, provider_id, account_label), devices in groups.items():
+    # Each DB operation uses its own short-lived session so the connection is
+    # never held across network I/O (authenticate / fetch_positions).
+    for (user_id, provider_id, account_label), devices in groups.items():
+
+        # ── Load account (short session, released before any network call) ─────
+        account_id      = None
+        credentials     = None
+        account_state   = {}
+        async with db.get_session() as session:
             result = await session.execute(
                 select(IntegrationAccount).where(
                     IntegrationAccount.user_id       == user_id,
@@ -244,112 +251,134 @@ async def _run_poll_cycle(
                 logger.warning(
                     f"No IntegrationAccount for {user_id}/{provider_id}/{account_label}"
                 )
-                # Still reschedule so we don't hammer the DB every 5 s
                 _reschedule_group(devices, provider_id, ignition=None)
                 continue
+            account_id    = account.id
+            credentials   = account.get_decrypted_credentials()
+            account_state = dict(account.state or {})
+        # DB connection released here — authenticate() may do network I/O
 
-            credentials = account.get_decrypted_credentials()
-            auth_ctx = await _get_auth(user_id, provider_id, account_label, credentials)
-            if not auth_ctx:
+        # ── Authenticate (network I/O; no DB connection held) ─────────────────
+        auth_ctx = await _get_auth(user_id, provider_id, account_label, credentials)
+        if not auth_ctx:
+            async with db.get_session() as session:
                 await session.execute(
                     update(IntegrationAccount)
-                    .where(IntegrationAccount.id == account.id)
+                    .where(IntegrationAccount.id == account_id)
                     .values(last_error=f"Auth failed at {datetime.utcnow().isoformat()}")
                 )
-                _reschedule_group(devices, provider_id, ignition=None)
-                continue
+            _reschedule_group(devices, provider_id, ignition=None)
+            continue
 
+        async with db.get_session() as session:
             await session.execute(
                 update(IntegrationAccount)
-                .where(IntegrationAccount.id == account.id)
+                .where(IntegrationAccount.id == account_id)
                 .values(last_auth_at=datetime.utcnow(), last_error=None)
             )
+        # DB connection released here — fetch_positions() may do network I/O
 
-            provider = IntegrationRegistry.get(provider_id)
-            if not provider:
-                _reschedule_group(devices, provider_id, ignition=None)
-                continue
+        # Seed persisted state from DB the first time this auth context is used
+        if "_persisted_state" not in auth_ctx.data:
+            auth_ctx.data["_persisted_state"] = account_state
 
-            fetched = 0
-            errors  = 0
-            cache_key = (user_id, provider_id, account_label)
+        provider = IntegrationRegistry.get(provider_id)
+        if not provider:
+            _reschedule_group(devices, provider_id, ignition=None)
+            continue
 
-            # Build a lookup so we can update ignition state after each position
-            imei_to_device = {d["imei"]: d for d in devices}
+        fetched   = 0
+        errors    = 0
+        cache_key = (user_id, provider_id, account_label)
 
-            try:
-                async for position in provider.fetch_positions(auth_ctx, devices):
-                    try:
-                        await position_callback(position)
-                        fetched += 1
+        try:
+            # Network I/O — no DB connection held during the fetch
+            async for position in provider.fetch_positions(auth_ctx, devices):
+                try:
+                    await position_callback(position)  # opens its own short session
+                    fetched += 1
 
-                        # Update ignition state and reschedule this specific device
-                        imei = position.imei
-                        new_ignition = position.ignition  # bool | None
-                        old_ignition = _device_ignition.get(imei)
+                    imei         = position.imei
+                    new_ignition = position.ignition
+                    old_ignition = _device_ignition.get(imei)
 
-                        _device_ignition[imei] = new_ignition
-                        _schedule_next(imei, provider, new_ignition)
+                    _device_ignition[imei] = new_ignition
+                    _schedule_next(imei, provider, new_ignition)
 
-                        # Keep DB floor up to date so next restart won't reprocess this
-                        existing_floor = _last_seen_db.get(imei)
-                        pos_time = position.device_time
-                        if pos_time.tzinfo is None:
-                            pos_time = pos_time.replace(tzinfo=timezone.utc)
-                        if existing_floor is None or pos_time > existing_floor:
-                            _last_seen_db[imei] = pos_time
+                    pos_time = position.device_time
+                    if pos_time.tzinfo is None:
+                        pos_time = pos_time.replace(tzinfo=timezone.utc)
+                    existing_floor = _last_seen_db.get(imei)
+                    if existing_floor is None or pos_time > existing_floor:
+                        _last_seen_db[imei] = pos_time
 
-                        if old_ignition != new_ignition:
-                            state_str = (
-                                "ON"  if new_ignition is True  else
-                                "OFF" if new_ignition is False else
-                                "unknown"
-                            )
-                            logger.info(
-                                f"Integration [{provider_id}] {imei}: ignition → {state_str}, "
-                                f"next poll in "
-                                f"{provider.POLL_INTERVAL_ACTIVE_SECONDS if new_ignition else provider.POLL_INTERVAL_SECONDS}s"
-                            )
+                    if old_ignition != new_ignition:
+                        state_str = (
+                            "ON"  if new_ignition is True  else
+                            "OFF" if new_ignition is False else
+                            "unknown"
+                        )
+                        logger.info(
+                            f"Integration [{provider_id}] {imei}: ignition → {state_str}, "
+                            f"next poll in "
+                            f"{provider.POLL_INTERVAL_ACTIVE_SECONDS if new_ignition else provider.POLL_INTERVAL_SECONDS}s"
+                        )
 
-                    except Exception as e:
-                        logger.error(f"Integration: position callback error: {e}")
-                        errors += 1
+                except Exception as e:
+                    logger.error(f"Integration: position callback error: {e}")
+                    errors += 1
 
-            except AuthExpiredError as e:
-                _auth_cache.pop(cache_key, None)
-                logger.warning(
-                    f"Integration: session expired mid-cycle for "
-                    f"{provider_id}/{account_label} — will re-authenticate next poll. ({e})"
-                )
+        except AuthExpiredError as e:
+            _auth_cache.pop(cache_key, None)
+            logger.warning(
+                f"Integration: session expired mid-cycle for "
+                f"{provider_id}/{account_label} — will re-authenticate next poll. ({e})"
+            )
+            async with db.get_session() as session:
                 await session.execute(
                     update(IntegrationAccount)
-                    .where(IntegrationAccount.id == account.id)
+                    .where(IntegrationAccount.id == account_id)
                     .values(last_error=f"Session expired at {datetime.utcnow().isoformat()}, re-authenticating")
                 )
-                # Schedule a quick retry so reconnection is fast
-                _reschedule_group(devices, provider_id, ignition=True)
-                continue
+            _reschedule_group(devices, provider_id, ignition=True)
+            continue
 
-            except Exception as e:
-                logger.error(
-                    f"Integration fetch error {provider_id}/{account_label}: {e}"
+        except Exception as e:
+            logger.error(f"Integration fetch error {provider_id}/{account_label}: {e}")
+            errors += 1
+
+        # ── Persist any state the provider updated (e.g. StartId) ─────────────
+        new_state = auth_ctx.data.get("_persisted_state")
+        if new_state:
+            async with db.get_session() as session:
+                await session.execute(
+                    update(IntegrationAccount)
+                    .where(IntegrationAccount.id == account_id)
+                    .values(state=new_state)
                 )
-                errors += 1
 
-            # For any device in this group that did NOT yield a position this
-            # cycle (e.g. provider returned nothing new), reschedule it based
-            # on its last-known ignition state so it stays on a sensible cadence.
-            for dev in devices:
-                imei = dev["imei"]
-                if _next_poll_at.get(imei) is None or _next_poll_at[imei] <= _now():
-                    # Was not updated inside the async-for loop → reschedule
-                    _schedule_next(imei, provider, _device_ignition.get(imei))
+        for dev in devices:
+            imei = dev["imei"]
+            if _next_poll_at.get(imei) is None or _next_poll_at[imei] <= _now():
+                _schedule_next(imei, provider, _device_ignition.get(imei))
 
-            if fetched or errors:
-                logger.debug(
-                    f"Integration poll {provider_id}/{account_label}: "
-                    f"{fetched} positions, {errors} errors"
-                )
+        if fetched or errors:
+            logger.debug(
+                f"Integration poll {provider_id}/{account_label}: "
+                f"{fetched} positions, {errors} errors"
+            )
+
+
+def clear_device_state(imei: str) -> None:
+    """Remove all in-memory engine state for a device (call after DB deletion)."""
+    _last_seen_db.pop(imei, None)
+    _device_ignition.pop(imei, None)
+    _next_poll_at.pop(imei, None)
+
+
+def evict_auth_cache(user_id: int, provider_id: str, account_label: str) -> None:
+    """Evict cached auth context for an integration account."""
+    _auth_cache.pop((user_id, provider_id, account_label), None)
 
 
 def _reschedule_group(devices: list[dict], provider_id: str, ignition: bool | None) -> None:
