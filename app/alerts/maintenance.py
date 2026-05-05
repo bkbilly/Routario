@@ -1,3 +1,4 @@
+import math
 from typing import Optional
 
 from .base import BaseAlert, AlertDefinition, AlertField
@@ -12,7 +13,7 @@ class MaintenanceAlert(BaseAlert):
             key        = "maintenance_alert",
             alert_type = AlertType.MAINTENANCE,
             label      = "Maintenance Due",
-            description= "Fires when a maintenance interval is approaching.",
+            description= "Fires when a maintenance interval is approaching or due.",
             icon       = "🔧",
             severity   = Severity.INFO,
             state_keys = [],
@@ -36,93 +37,102 @@ class MaintenanceAlert(BaseAlert):
                 AlertField(
                     key        = "custom_label",
                     label      = "Custom Label",
-                    field_type = "text",          # plain text input
+                    field_type = "text",
                     default    = "",
                     required   = False,
                     help_text  = "Used as the alert name when type is 'Custom'.",
+                    show_if    = {"key": "maintenance_type", "value": "custom"},
                 ),
                 AlertField(
-                    key       = "first_service_km",
-                    label     = "First Service At",
+                    key       = "next_service_km",
+                    label     = "Next Service At",
                     unit      = "km",
                     default   = 0,
                     min_value = 0,
-                    max_value = 999999,
+                    max_value = 9999999,
                     required  = True,
-                    help_text = "Odometer reading of the first service.",
+                    help_text = "Odometer reading at which the next service is due.",
                 ),
                 AlertField(
                     key       = "interval_km",
-                    label     = "Service Interval",
+                    label     = "Repeat Every",
                     unit      = "km",
                     default   = 5000,
                     min_value = 10,
                     max_value = 100000,
-                    help_text = "How often (in km) this service is due.",
+                    help_text = "After the first service, how often (in km) to repeat.",
                 ),
                 AlertField(
-                    key        = "warning_km",
-                    label      = "Warn When Within",
-                    unit       = "km",
-                    default    = 500,
-                    min_value  = 50,
-                    max_value  = 2000,
-                    required   = False,
-                    help_text  = "Start alerting when this many km remain before the service is due.",
+                    key       = "warning_km",
+                    label     = "Warn When Within",
+                    unit      = "km",
+                    default   = 500,
+                    min_value = 10,
+                    max_value = 5000,
+                    required  = False,
+                    help_text = "Fire a warning alert this many km before the service is due.",
                 ),
             ],
         )
 
     async def check_many(self, position, device, state, params: dict) -> list:
-        mtype      = params.get("maintenance_type", "service")
-        interval   = params.get("interval_km", 10000)
-        warning_km = params.get("warning_km", 500)
-        label      = params.get("custom_label") or mtype.replace("_", " ").title()
+        mtype        = params.get("maintenance_type", "service")
+        next_service = float(params.get("next_service_km", 0))
+        interval_km  = float(params.get("interval_km", 5000))
+        warning_km   = float(params.get("warning_km", 500))
+        label        = params.get("custom_label") or mtype.replace("_", " ").title()
 
-        odometer  = state.total_odometer or 0
-        remaining = interval - (odometer % interval)
+        if interval_km <= 0:
+            return []
 
-        warning_key = f"maint_{mtype}_warning_alerted"
-        due_key     = f"maint_{mtype}_due_alerted"
+        odometer = float(state.total_odometer or 0)
+
+        # Find the upcoming service km: the first point in the series
+        # {next_service, next_service+interval, ...} that is >= odometer.
+        if odometer <= next_service:
+            due_km = next_service
+        else:
+            n      = math.ceil((odometer - next_service) / interval_km)
+            due_km = next_service + n * interval_km
+
+        warned_key = f"maint_{mtype}_warned_at"
+        due_key    = f"maint_{mtype}_due_at"
+
+        warned_at = state.alert_states.get(warned_key)
+        due_at    = state.alert_states.get(due_key)
 
         alerts = []
 
-        # ── Due alert: remaining is 0 or crossed (remaining == interval means just reset) ──
-        if remaining <= 0 or (interval > 0 and (odometer % interval) == 0 and odometer > 0):
-            if not state.alert_states.get(due_key):
-                state.alert_states[due_key]     = True
-                state.alert_states[warning_key] = True  # suppress warning if due fires too
+        if odometer >= due_km:
+            if due_at != due_km:
+                state.alert_states[due_key]    = due_km
+                state.alert_states[warned_key] = due_km
                 alerts.append({
                     "type":           AlertType.MAINTENANCE,
                     "severity":       Severity.WARNING,
-                    "message":        f"Maintenance: {label} is due now!",
+                    "message":        f"Maintenance: {label} is due now! (at {int(due_km)} km)",
                     "alert_metadata": {
                         "maintenance_type": mtype,
+                        "due_km":           int(due_km),
                         "remaining_km":     0,
                     },
                 })
-
-        # ── Warning alert: within warning window but not yet due ──
-        elif 0 < remaining <= warning_km:
-            if not state.alert_states.get(warning_key):
-                state.alert_states[warning_key] = True
+        elif odometer >= due_km - warning_km:
+            remaining = due_km - odometer
+            if warned_at != due_km:
+                state.alert_states[warned_key] = due_km
                 alerts.append({
                     "type":           AlertType.MAINTENANCE,
                     "severity":       Severity.INFO,
-                    "message":        f"Maintenance: {label} due in {int(remaining)} km.",
+                    "message":        f"Maintenance: {label} due in {int(remaining)} km (at {int(due_km)} km).",
                     "alert_metadata": {
                         "maintenance_type": mtype,
+                        "due_km":           int(due_km),
                         "remaining_km":     int(remaining),
                     },
                 })
 
-        # ── Reset both flags when well outside the warning window ──
-        elif remaining > warning_km:
-            state.alert_states[warning_key] = False
-            state.alert_states[due_key]     = False
-
         return alerts
 
-    # Keep check() to satisfy the abstract requirement
     async def check(self, position, device, state, params: dict) -> Optional[dict]:
         return None
