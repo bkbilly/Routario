@@ -95,13 +95,18 @@ function _renderIntegrationFields(provider, existingIntg = null) {
                 ${provider.fields.map(f => `
                 <div class="form-group" style="margin-bottom:0.75rem;">
                     <label class="form-label">${_esc(f.label)}${f.required ? ' *' : ''}</label>
-                    <input type="${f.field_type === 'password' ? 'password'
-                                 : f.field_type === 'number'   ? 'number' : 'text'}"
-                           class="form-input"
-                           id="intgField_${f.key}"
-                           placeholder="${_esc(f.placeholder || '')}"
-                           value="${_esc(existingIntg?.credentials?.[f.key] ?? f.default ?? '')}"
-                           ${f.required ? 'required' : ''}>
+                    ${f.field_type === 'textarea'
+                      ? `<textarea class="form-input" id="intgField_${f.key}"
+                                   placeholder="${_esc(f.placeholder || '')}"
+                                   rows="6" style="font-family:monospace;font-size:0.8rem;resize:vertical;"
+                                   ${f.required ? 'required' : ''}>${_esc(existingIntg?.credentials?.[f.key] ?? f.default ?? '')}</textarea>`
+                      : `<input type="${f.field_type === 'password' ? 'password'
+                                       : f.field_type === 'number'   ? 'number' : 'text'}"
+                                 class="form-input"
+                                 id="intgField_${f.key}"
+                                 placeholder="${_esc(f.placeholder || '')}"
+                                 value="${_esc(existingIntg?.credentials?.[f.key] ?? f.default ?? '')}"
+                                 ${f.required ? 'required' : ''}>`}
                     ${f.help_text ? `<div class="form-help">${_esc(f.help_text)}</div>` : ''}
                 </div>`).join('')}
             </div>
@@ -195,7 +200,7 @@ function onIntgAccountSelect() {
     const labelInput = document.getElementById('intgAccountLabel');
     if (labelInput) labelInput.required = !usingExisting;
 
-    fields.querySelectorAll('input[id^="intgField_"]').forEach(input => {
+    fields.querySelectorAll('input[id^="intgField_"], textarea[id^="intgField_"]').forEach(input => {
         if (usingExisting) {
             input.removeAttribute('required');
         } else {
