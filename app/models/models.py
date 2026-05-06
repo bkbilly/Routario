@@ -56,7 +56,7 @@ class Device(Base):
     __tablename__ = 'devices'
 
     id:            Mapped[int]           = mapped_column(Integer, primary_key=True)
-    imei:          Mapped[str]           = mapped_column(String(20), unique=True, nullable=False, index=True)
+    imei:          Mapped[str]           = mapped_column(String(64), unique=True, nullable=False, index=True)
     name:          Mapped[str]           = mapped_column(String(100), nullable=False)
     protocol:      Mapped[str]           = mapped_column(String(50),  nullable=False)
     vehicle_type:  Mapped[Optional[str]] = mapped_column(String(50),  nullable=True)

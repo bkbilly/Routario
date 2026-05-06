@@ -369,13 +369,25 @@ async def lifespan(app: FastAPI):
                 asyncio.create_task(server.start())
                 logger.info("Started TCP Server for %s on port %s", name, port)
 
-    asyncio.create_task(periodic_alert_task())
-    asyncio.create_task(integration_poll_task(process_position_callback))
+    alert_task = asyncio.create_task(periodic_alert_task())
+    poll_task  = asyncio.create_task(integration_poll_task(process_position_callback))
     logger.info("Routario Platform started successfully")
 
     yield
 
     logger.info("Shutting down...")
+
+    # Cancel background tasks so their loops exit before we tear down resources
+    alert_task.cancel()
+    poll_task.cancel()
+    await asyncio.gather(alert_task, poll_task, return_exceptions=True)
+
+    # Stop FCM clients — each holds an open TCP connection to Google's MCS
+    # endpoint with its own internal read loop that would otherwise block
+    # the event loop from exiting.
+    from integrations.google_findmy import stop_all_fcm_clients
+    await stop_all_fcm_clients()
+
     db = get_db()
     await db.close()
     await redis_pubsub.close()

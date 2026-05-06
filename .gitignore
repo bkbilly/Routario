@@ -36,6 +36,8 @@ venv/
 # Database
 *.sqlite3
 *.db
+*.db-shm
+*.db-wal
 
 # Logs
 *.log

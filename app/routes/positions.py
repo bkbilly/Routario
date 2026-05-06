@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from core.database import get_db
 from core.auth import get_current_user
+from core.spatial import calculate_distance_km
 from models import User
 from models.schemas import PositionHistoryRequest, PositionHistoryResponse, PositionGeoJSON
 
@@ -62,11 +63,9 @@ async def get_position_history(
     for i, pos in enumerate(positions):
         if i > 0:
             prev = positions[i - 1]
-            async with db.get_session() as session:
-                distance_km = await db._calculate_distance(
-                    session, prev.latitude, prev.longitude, pos.latitude, pos.longitude
-                )
-                total_distance += distance_km
+            total_distance += calculate_distance_km(
+                prev.latitude, prev.longitude, pos.latitude, pos.longitude
+            )
 
         if pos.speed:
             max_speed = max(max_speed, pos.speed)

@@ -393,7 +393,7 @@ async function handleSubmit(event) {
         let imei = document.getElementById('deviceImei').value.trim();
         if (isIntg && !imei) {
             const remoteId = newConfig.integration?.remote_id || Date.now();
-            imei = `EXT-${providerId}-${remoteId}`.slice(0, 20);
+            imei = `EXT-${providerId}-${remoteId}`.slice(0, 64);
         }
 
         const payload = {
