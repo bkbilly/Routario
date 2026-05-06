@@ -385,7 +385,7 @@ async def lifespan(app: FastAPI):
     # Stop FCM clients — each holds an open TCP connection to Google's MCS
     # endpoint with its own internal read loop that would otherwise block
     # the event loop from exiting.
-    from integrations.google_findmy import stop_all_fcm_clients
+    from integrations.google_find_hub import stop_all_fcm_clients
     await stop_all_fcm_clients()
 
     db = get_db()

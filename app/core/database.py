@@ -148,7 +148,7 @@ class DatabaseService:
                 pass  # column already exists
 
             # Migration: widen devices.imei from VARCHAR(20) to VARCHAR(64)
-            # Needed for integration-device synthetic IMEIs (e.g. EXT-google_findmy-<canonic_id>).
+            # Needed for integration-device synthetic IMEIs (e.g. EXT-google_find_hub-<canonic_id>).
             # PostgreSQL enforces VARCHAR width; SQLite ignores it and needs no migration.
             if self._is_postgres:
                 try:
