@@ -51,11 +51,12 @@ bcrypt==5.0.0
 # Geocoding (Optional)
 geopy==2.4.1
 
-# Google Find My integration
+# Google Find Hub integration
 cryptography>=42.0.0
 gpsoauth>=1.1.1
 ecdsa>=0.18.0
 protobuf>=4.25.0
+firebase-messaging==0.4.5
 
 # Testing
 pytest==9.0.2

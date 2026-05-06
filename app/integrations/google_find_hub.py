@@ -33,6 +33,7 @@ from datetime import datetime, timezone, timedelta
 from typing import AsyncIterator, Optional
 
 import httpx
+from firebase_messaging import FcmRegisterConfig, FcmPushClient
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import symbol_database as _symbol_database
@@ -160,7 +161,6 @@ if _descriptor._USE_C_DESCRIPTORS == False:
     globals()['_DEVICECOMPONENTINFORMATION']._serialized_start = 4646
     globals()['_DEVICECOMPONENTINFORMATION']._serialized_end = 4692
 
-from firebase_messaging import FcmRegisterConfig, FcmPushClient
 from integrations.base import (
     BaseIntegration, AuthContext, AuthExpiredError,
     IntegrationField, RemoteDevice,
