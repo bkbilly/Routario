@@ -1,7 +1,7 @@
 """
-app/integrations/google_findmy.py
+app/integrations/google_find_hub.py
 
-Google Find My Device / Find Hub integration.
+Google Find Hub integration.
 
 Authentication:
   Requires the contents of Auth/secrets.json from GoogleFindMyTools:
@@ -176,7 +176,7 @@ _NOVA_BASE     = "https://android.googleapis.com/nova/"
 _MCU_MODEL_ID  = "003200"                    # custom ESP32/Zephyr trackers need bit-flipped EIK
 
 # Static client UUID — identifies this Routario instance to Google
-_FMDN_CLIENT_UUID = "routario-findmy-integration"
+_FMDN_CLIENT_UUID = "routario-find-hub-integration"
 
 # Per-account last-seen dedup
 _last_seen: dict[tuple, datetime] = {}
@@ -214,7 +214,7 @@ def _on_fcm_notification(username: str, obj):
         device_update.ParseFromString(raw)
         request_uuid = device_update.fcmMetadata.requestUuid
     except Exception as e:
-        logger.error("Google Find My: FCM payload parse error: %s", e)
+        logger.error("Google Find Hub: FCM payload parse error: %s", e)
         return
 
     key    = (username, request_uuid)
@@ -244,7 +244,7 @@ async def _start_fcm_client(username: str, fcm_credentials: dict) -> str:
 
     _fcm_clients[username] = client
     _fcm_tokens[username]  = fcm_token
-    logger.info("Google Find My: FCM listener started for %s (token=…%s)", username, fcm_token[-12:])
+    logger.info("Google Find Hub: FCM listener started for %s (token=…%s)", username, fcm_token[-12:])
     return fcm_token
 
 
@@ -254,7 +254,7 @@ async def stop_all_fcm_clients() -> None:
         if hasattr(client, "stop"):
             try:
                 await client.stop()
-                logger.debug("Google Find My: FCM client stopped for %s", username)
+                logger.debug("Google Find Hub: FCM client stopped for %s", username)
             except Exception:
                 pass
     _fcm_clients.clear()
@@ -262,11 +262,11 @@ async def stop_all_fcm_clients() -> None:
     _fcm_no_response_count.clear()
 
 
-@IntegrationRegistry.register("google_findmy")
-class GoogleFindMyIntegration(BaseIntegration):
+@IntegrationRegistry.register("google_find_hub")
+class GoogleFindHubIntegration(BaseIntegration):
 
-    PROVIDER_ID                  = "google_findmy"
-    DISPLAY_NAME                 = "Google Find My"
+    PROVIDER_ID                  = "google_find_hub"
+    DISPLAY_NAME                 = "Google Find Hub"
     POLL_INTERVAL_SECONDS        = 300
     POLL_INTERVAL_ACTIVE_SECONDS = 120
 
@@ -293,10 +293,10 @@ class GoogleFindMyIntegration(BaseIntegration):
         try:
             secrets = json.loads(raw)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Google Find My: secrets_json is not valid JSON: {e}")
+            raise ValueError(f"Google Find Hub: secrets_json is not valid JSON: {e}")
         if not secrets.get("aas_token"):
             raise ValueError(
-                "Google Find My: secrets_json must contain an aas_token. "
+                "Google Find Hub: secrets_json must contain an aas_token. "
                 "Generate it with GoogleFindMyTools (github.com/leonboe1/GoogleFindMyTools)."
             )
         return await self._auth_from_secrets(secrets)
@@ -312,7 +312,7 @@ class GoogleFindMyIntegration(BaseIntegration):
             or ""
         )
         if not android_id:
-            raise ValueError("Google Find My: no android_id found in secrets.json.")
+            raise ValueError("Google Find Hub: no android_id found in secrets.json.")
 
         adm_resp = gpsoauth.perform_oauth(
             username, aas_token, android_id,
@@ -322,7 +322,7 @@ class GoogleFindMyIntegration(BaseIntegration):
         )
         access_token = adm_resp.get("Auth")
         if not access_token:
-            raise AuthExpiredError(f"Google Find My: AAS token exchange failed: {adm_resp}")
+            raise AuthExpiredError(f"Google Find Hub: AAS token exchange failed: {adm_resp}")
 
         owner_key: Optional[bytes] = None
         owner_key_hex = secrets.get("owner_key") or ""
@@ -330,7 +330,7 @@ class GoogleFindMyIntegration(BaseIntegration):
             try:
                 owner_key = bytes.fromhex(owner_key_hex)
             except ValueError:
-                logger.warning("Google Find My: owner_key is not valid hex — ignoring")
+                logger.warning("Google Find Hub: owner_key is not valid hex — ignoring")
 
         # Start FCM listener (needed to receive location push responses)
         fcm_credentials = secrets.get("fcm_credentials")
@@ -339,12 +339,12 @@ class GoogleFindMyIntegration(BaseIntegration):
             try:
                 fcm_token = await _start_fcm_client(username, fcm_credentials)
             except Exception as e:
-                logger.error("Google Find My: FCM listener failed to start: %s", e, exc_info=True)
+                logger.error("Google Find Hub: FCM listener failed to start: %s", e, exc_info=True)
         else:
-            logger.warning("Google Find My: no fcm_credentials in secrets.json — location fetching unavailable")
+            logger.warning("Google Find Hub: no fcm_credentials in secrets.json — location fetching unavailable")
 
         logger.info(
-            "Google Find My: authenticated as %s (owner_key=%s, fcm=%s)",
+            "Google Find Hub: authenticated as %s (owner_key=%s, fcm=%s)",
             username,
             "present" if owner_key else "absent",
             "ok" if fcm_token else "unavailable",
@@ -367,7 +367,7 @@ class GoogleFindMyIntegration(BaseIntegration):
         try:
             metas = await self._nova_list_devices(auth_ctx.data["access_token"])
         except Exception as e:
-            logger.error("Google Find My: list_remote_devices error: %s", e, exc_info=True)
+            logger.error("Google Find Hub: list_remote_devices error: %s", e, exc_info=True)
             return []
 
         result = []
@@ -396,11 +396,11 @@ class GoogleFindMyIntegration(BaseIntegration):
         username     = auth_ctx.data["username"]
 
         if not fcm_token:
-            logger.warning("Google Find My: no FCM token — cannot request locations")
+            logger.warning("Google Find Hub: no FCM token — cannot request locations")
             return
         if not owner_key:
             logger.warning(
-                "Google Find My: no owner_key — run GoogleFindMyTools location flow "
+                "Google Find Hub: no owner_key — run GoogleFindMyTools location flow "
                 "and re-paste the updated secrets.json"
             )
             return
@@ -431,7 +431,7 @@ class GoogleFindMyIntegration(BaseIntegration):
             except AuthExpiredError:
                 raise
             except Exception as e:
-                logger.warning("Google Find My: locate-action failed for %s: %s", canonic_id, e)
+                logger.warning("Google Find Hub: locate-action failed for %s: %s", canonic_id, e)
 
         # Wait for all responses concurrently (each gets its own 30 s + one retry)
         collect_tasks = [
@@ -456,7 +456,7 @@ class GoogleFindMyIntegration(BaseIntegration):
             ts = location["timestamp"]
             dk = (username, canonic_id)
             if _last_seen.get(dk, datetime.min.replace(tzinfo=timezone.utc)) >= ts:
-                logger.debug("Google Find My: duplicate position skipped for %s", canonic_id)
+                logger.debug("Google Find Hub: duplicate position skipped for %s", canonic_id)
                 continue
             _last_seen[dk] = ts
 
@@ -478,7 +478,7 @@ class GoogleFindMyIntegration(BaseIntegration):
                 satellites=None,
                 ignition=None,
                 sensors=sensors,
-                raw_data={"source": "google_findmy", "canonic_id": canonic_id},
+                raw_data={"source": "google_find_hub", "canonic_id": canonic_id},
             )
 
         # Restart FCM client after consecutive empty polls — likely a dead connection
@@ -486,7 +486,7 @@ class GoogleFindMyIntegration(BaseIntegration):
             _fcm_no_response_count[username] = _fcm_no_response_count.get(username, 0) + 1
             if _fcm_no_response_count[username] >= _FCM_RESTART_THRESHOLD:
                 logger.warning(
-                    "Google Find My: restarting FCM client for %s after %d consecutive empty polls",
+                    "Google Find Hub: restarting FCM client for %s after %d consecutive empty polls",
                     username, _FCM_RESTART_THRESHOLD,
                 )
                 old_client = _fcm_clients.pop(username, None)
@@ -503,7 +503,7 @@ class GoogleFindMyIntegration(BaseIntegration):
                         new_token = await _start_fcm_client(username, fcm_creds)
                         auth_ctx.data["fcm_token"] = new_token
                     except Exception as e:
-                        logger.error("Google Find My: FCM restart failed for %s: %s", username, e)
+                        logger.error("Google Find Hub: FCM restart failed for %s: %s", username, e)
         else:
             _fcm_no_response_count[username] = 0
 
@@ -535,9 +535,9 @@ class GoogleFindMyIntegration(BaseIntegration):
             resp = await client.post(_NOVA_BASE + scope, headers=headers, content=payload)
 
         if resp.status_code == 401:
-            raise AuthExpiredError("Google Find My: access token rejected")
+            raise AuthExpiredError("Google Find Hub: access token rejected")
         if resp.status_code != 200:
-            raise RuntimeError(f"Google Find My: {scope} returned {resp.status_code}: {resp.text[:200]}")
+            raise RuntimeError(f"Google Find Hub: {scope} returned {resp.status_code}: {resp.text[:200]}")
         return resp.content
 
     async def _nova_list_devices(self, access_token: str):
@@ -547,7 +547,7 @@ class GoogleFindMyIntegration(BaseIntegration):
         raw = await self._nova_post(access_token, "nbe_list_devices", req.SerializeToString())
         dl  = DevicesList()
         dl.ParseFromString(raw)
-        logger.debug("Google Find My: nbe_list_devices → %d device(s)", len(dl.deviceMetadata))
+        logger.debug("Google Find Hub: nbe_list_devices → %d device(s)", len(dl.deviceMetadata))
         return list(dl.deviceMetadata)
 
     async def _send_locate_action(
@@ -572,7 +572,7 @@ class GoogleFindMyIntegration(BaseIntegration):
         req.action.locateTracker.contributorType = SpotContributorType.Value("FMDN_ALL_LOCATIONS")
 
         await self._nova_post(access_token, "nbe_execute_action", req.SerializeToString())
-        logger.debug("Google Find My: locate-action sent for %s (uuid=%s)", canonic_id, request_uuid)
+        logger.debug("Google Find Hub: locate-action sent for %s (uuid=%s)", canonic_id, request_uuid)
 
     async def _collect_device_update(
         self,
@@ -599,17 +599,17 @@ class GoogleFindMyIntegration(BaseIntegration):
                 await self._send_locate_action(access_token, canonic_id, fcm_token, req_uuid2)
                 device_update = await asyncio.wait_for(asyncio.shield(future2), timeout=20.0)
             except asyncio.TimeoutError:
-                logger.warning("Google Find My: no location response for %s (tried twice)", canonic_id)
+                logger.warning("Google Find Hub: no location response for %s (tried twice)", canonic_id)
             except AuthExpiredError:
                 raise
             except Exception as e:
-                logger.warning("Google Find My: locate retry failed for %s: %s", canonic_id, e)
+                logger.warning("Google Find Hub: locate retry failed for %s: %s", canonic_id, e)
             finally:
                 _pending.pop(key2, None)
         except AuthExpiredError:
             raise
         except Exception as e:
-            logger.warning("Google Find My: location error for %s: %s", canonic_id, e)
+            logger.warning("Google Find Hub: location error for %s: %s", canonic_id, e)
         finally:
             _pending.pop(key, None)
         return canonic_id, device_update
@@ -634,18 +634,18 @@ def _decrypt_device_update(device_update, owner_key: Optional[bytes], canonic_id
     eus  = reg.encryptedUserSecrets
     enc_eik = eus.encryptedIdentityKey
     if not enc_eik:
-        logger.error("Google Find My: no encryptedIdentityKey in DeviceUpdate for %s", canonic_id)
+        logger.error("Google Find Hub: no encryptedIdentityKey in DeviceUpdate for %s", canonic_id)
         return None
 
     # MCU trackers (custom ESP32/Zephyr) have their EIK stored with all bits flipped
     is_mcu = reg.fastPairModelId == _MCU_MODEL_ID
-    logger.debug("Google Find My: EIK len=%d is_mcu=%s model=%r for %s", len(enc_eik), is_mcu, reg.fastPairModelId, canonic_id)
+    logger.debug("Google Find Hub: EIK len=%d is_mcu=%s model=%r for %s", len(enc_eik), is_mcu, reg.fastPairModelId, canonic_id)
     if is_mcu:
         enc_eik = bytes(b ^ 0xFF for b in enc_eik)
 
     identity_key = _decrypt_eik(owner_key, enc_eik, canonic_id)
     if identity_key is None:
-        logger.error("Google Find My: EIK decryption returned None for %s", canonic_id)
+        logger.error("Google Find Hub: EIK decryption returned None for %s", canonic_id)
         return None
 
     reports = meta.information.locationInformation.reports.recentLocationAndNetworkLocations
@@ -656,9 +656,9 @@ def _decrypt_device_update(device_update, owner_key: Optional[bytes], canonic_id
     for loc, ts_msg in zip(reports.networkLocations, reports.networkLocationTimestamps):
         candidates.append((loc, ts_msg))
 
-    logger.debug("Google Find My: %d candidate(s) for %s", len(candidates), canonic_id)
+    logger.debug("Google Find Hub: %d candidate(s) for %s", len(candidates), canonic_id)
     if not candidates:
-        logger.error("Google Find My: DeviceUpdate has no location reports for %s", canonic_id)
+        logger.error("Google Find Hub: DeviceUpdate has no location reports for %s", canonic_id)
         return None
 
     best    = None
@@ -668,23 +668,23 @@ def _decrypt_device_update(device_update, owner_key: Optional[bytes], canonic_id
         ts = datetime.fromtimestamp(ts_msg.seconds, tz=timezone.utc) if ts_msg.seconds else None
         has_geo = loc_report.HasField("geoLocation")
         logger.debug(
-            "Google Find My: candidate[%d] ts_sec=%s has_geo=%s for %s",
+            "Google Find Hub: candidate[%d] ts_sec=%s has_geo=%s for %s",
             i, ts_msg.seconds, has_geo, canonic_id,
         )
         if ts is None:
-            logger.error("Google Find My: candidate[%d] has ts_seconds=0, skipping for %s", i, canonic_id)
+            logger.error("Google Find Hub: candidate[%d] has ts_seconds=0, skipping for %s", i, canonic_id)
             continue
 
         if not has_geo:
             sem_name = loc_report.semanticLocation.locationName if loc_report.HasField("semanticLocation") else "none"
-            logger.error("Google Find My: candidate[%d] has no geoLocation (semanticLocation=%r), skipping for %s", i, sem_name, canonic_id)
+            logger.error("Google Find Hub: candidate[%d] has no geoLocation (semanticLocation=%r), skipping for %s", i, sem_name, canonic_id)
             continue
 
         geo      = loc_report.geoLocation
         enc      = geo.encryptedReport
         accuracy = float(geo.accuracy) if geo.accuracy else None
         logger.info(
-            "Google Find My: candidate[%d] raw geoLocation hex: %s for %s",
+            "Google Find Hub: candidate[%d] raw geoLocation hex: %s for %s",
             i, geo.SerializeToString().hex(), canonic_id,
         )
 
@@ -697,17 +697,17 @@ def _decrypt_device_update(device_update, owner_key: Optional[bytes], canonic_id
         try:
             loc_proto.ParseFromString(plaintext)
         except Exception as e:
-            logger.error("Google Find My: Location proto parse failed for %s: %s", canonic_id, e)
+            logger.error("Google Find Hub: Location proto parse failed for %s: %s", canonic_id, e)
             continue
 
         lat = loc_proto.latitude  / 1e7
         lng = loc_proto.longitude / 1e7
-        logger.debug("Google Find My: candidate[%d] decrypted lat=%.6f lng=%.6f for %s", i, lat, lng, canonic_id)
+        logger.debug("Google Find Hub: candidate[%d] decrypted lat=%.6f lng=%.6f for %s", i, lat, lng, canonic_id)
         if lat == 0.0 and lng == 0.0:
-            logger.error("Google Find My: candidate[%d] decrypted to 0,0 — skipping for %s", i, canonic_id)
+            logger.error("Google Find Hub: candidate[%d] decrypted to 0,0 — skipping for %s", i, canonic_id)
             continue
 
-        source    = "findmy_own" if enc.isOwnReport else "findmy_network"
+        source    = "find_hub_own" if enc.isOwnReport else "find_hub_network"
         candidate = {
             "latitude":  lat,
             "longitude": lng,
@@ -721,7 +721,7 @@ def _decrypt_device_update(device_update, owner_key: Optional[bytes], canonic_id
             best    = candidate
 
     if best is None:
-        logger.error("Google Find My: all %d candidate(s) failed for %s", len(candidates), canonic_id)
+        logger.error("Google Find Hub: all %d candidate(s) failed for %s", len(candidates), canonic_id)
     return best
 
 
@@ -739,10 +739,10 @@ def _decrypt_eik(owner_key: bytes, encrypted_eik: bytes, canonic_id: str) -> Opt
         if len(encrypted_eik) == 60:
             iv, ct = encrypted_eik[:12], encrypted_eik[12:]
             return AESGCM(owner_key).decrypt(iv, ct, None)
-        logger.debug("Google Find My: unexpected EIK length %d for %s", len(encrypted_eik), canonic_id)
+        logger.debug("Google Find Hub: unexpected EIK length %d for %s", len(encrypted_eik), canonic_id)
         return None
     except Exception as e:
-        logger.error("Google Find My: EIK decryption failed for %s: %s", canonic_id, e)
+        logger.error("Google Find Hub: EIK decryption failed for %s: %s", canonic_id, e)
         return None
 
 
@@ -750,7 +750,7 @@ def _decrypt_report(enc, identity_key: bytes, canonic_id: str, device_time_offse
     """Decrypt a single EncryptedReport."""
     if not enc.encryptedLocation:
         logger.error(
-            "Google Find My: encryptedLocation empty — raw EncryptedReport hex: %s (isOwnReport=%s publicKeyRandom=%s) for %s",
+            "Google Find Hub: encryptedLocation empty — raw EncryptedReport hex: %s (isOwnReport=%s publicKeyRandom=%s) for %s",
             enc.SerializeToString().hex(),
             enc.isOwnReport,
             enc.publicKeyRandom.hex() if enc.publicKeyRandom else "empty",
@@ -762,7 +762,7 @@ def _decrypt_report(enc, identity_key: bytes, canonic_id: str, device_time_offse
         try:
             return _decrypt_own_report(identity_key, enc.encryptedLocation)
         except Exception as e:
-            logger.error("Google Find My: own report decryption failed for %s: %s", canonic_id, e)
+            logger.error("Google Find Hub: own report decryption failed for %s: %s", canonic_id, e)
             return None
 
     # Network report: deviceTimeOffset is a uint32 that defaults to 0 when unset.
@@ -788,7 +788,7 @@ def _decrypt_report(enc, identity_key: bytes, canonic_id: str, device_time_offse
             last_err = e
 
     logger.error(
-        "Google Find My: network report decryption failed for %s (tried %d time offsets): %s",
+        "Google Find Hub: network report decryption failed for %s (tried %d time offsets): %s",
         canonic_id, len(seen), last_err,
     )
     return None

@@ -379,6 +379,7 @@ body::before {
 
 .info-label {
     color: var(--text-muted);
+    margin-right: 0.5rem;
 }
 
 .info-value {

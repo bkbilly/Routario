@@ -115,7 +115,7 @@ class DeviceConfig(BaseModel):
 
 
 class DeviceCreate(BaseModel):
-    imei: str = Field(..., min_length=1, max_length=20)
+    imei: str = Field(..., min_length=1, max_length=64)
     name: str = Field(..., min_length=1, max_length=100)
     protocol: str = "teltonika"
     vehicle_type: Optional[str] = "car"
