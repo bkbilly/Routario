@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://flespi.io"
 
-# In-memory cursor: last processed timestamp per (token_prefix, device_id).
+# In-memory cursor: last processed timestamp per (token, device_id).
 # Flespi messages are ordered by `timestamp` (device RTC time).
 # We advance the cursor to the highest timestamp seen each poll so we never
 # re-process records from a previous cycle.
@@ -151,16 +151,15 @@ class FlespiIntegration(BaseIntegration):
         auth_ctx: AuthContext,
         devices: list[dict],
     ) -> AsyncIterator[NormalizedPosition]:
-        token         = auth_ctx.data["token"]
-        token_prefix  = token[:8]   # used as part of the cache key only
-        now           = datetime.now(timezone.utc).timestamp()
+        token = auth_ctx.data["token"]
+        now   = datetime.now(timezone.utc).timestamp()
 
         headers = {"Authorization": f"FlespiToken {token}"}
 
         for device in devices:
             device_id = str(device["remote_id"])
             imei      = device["imei"]
-            cache_key = (token_prefix, device_id)
+            cache_key = (token, device_id)
 
             last_ts = _last_seen.get(cache_key)
             if last_ts is None:

@@ -54,6 +54,8 @@ geopy==2.4.1
 # Google Find My integration
 cryptography>=42.0.0
 gpsoauth>=1.1.1
+ecdsa>=0.18.0
+protobuf>=4.25.0
 
 # Testing
 pytest==9.0.2

@@ -243,8 +243,9 @@ function getVehicleStatus(device) {
     }
 
     if (device.ignition_on === false) return { label: 'Stopped', cls: 'stopped', key: 1 };
-    if ((device.last_speed || 0) < 3)  return { label: 'Idling',  cls: 'idle',    key: 2 };
-    return                                     { label: 'Moving',  cls: 'moving',  key: 3 };
+    if ((device.last_speed || 0) >= 3) return { label: 'Moving',  cls: 'moving',  key: 3 };
+    if (device.ignition_on === true)   return { label: 'Idling',  cls: 'idle',    key: 2 };
+    return                                    { label: 'Stopped', cls: 'stopped', key: 1 };
 }
 
 function setSortMode(mode) {
