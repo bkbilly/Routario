@@ -1082,9 +1082,9 @@ function renderRawDataPage() {
             <td style="white-space:nowrap;color:var(--text-muted);font-size:0.8em;">${serverTime}</td>
             <td>${coords[1].toFixed(5)}</td>
             <td>${coords[0].toFixed(5)}</td>
-            <td>${(p.speed  || 0).toFixed(1)} km/h</td>
-            <td>${(p.course || 0).toFixed(0)}°</td>
-            <td>${p.satellites || 0}</td>
+            <td>${p.speed != null ? p.speed.toFixed(1) + ' km/h' : '—'}</td>
+            <td>${p.course != null ? p.course.toFixed(0) + '°' : '—'}</td>
+            <td>${p.satellites != null ? p.satellites : '—'}</td>
             <td>${(p.altitude  || 0).toFixed(0)} m</td>
             <td>${p.ignition === true ? '<span style="color:var(--accent-success);font-weight:600;">ON</span>' : p.ignition === false ? '<span style="color:var(--accent-danger);font-weight:600;">OFF</span>' : '<span style="color:var(--text-muted);">—</span>'}</td>
             <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:0.72rem;"

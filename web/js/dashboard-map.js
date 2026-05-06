@@ -70,7 +70,7 @@ function _applyMarkerRotation(marker, heading, vehicleType) {
     if (!svg) return;
     const cfg = VEHICLE_ICONS[vehicleType];
     const offset = (cfg && !cfg.arrow) ? (cfg.offset || 0) : 0;
-    svg.style.transform = `rotate(${heading + offset}deg)`;
+    svg.style.transform = heading != null ? `rotate(${heading + offset}deg)` : '';
 }
 
 /**
@@ -179,7 +179,7 @@ function updateDeviceMarker(deviceId, state) {
 
     const toLat  = state.last_latitude;
     const toLng  = state.last_longitude;
-    const toHead = state.last_course || 0;
+    const toHead = state.last_course ?? null;
     const device = devices.find(d => d.id === deviceId);
     const deviceName = device ? device.name : 'Unknown Device';
 
@@ -241,7 +241,7 @@ function updateDeviceMarker(deviceId, state) {
             <div class="vp-grid">
                 <span class="vp-label">Ignition</span>   <span class="vp-value" style="color:${ignitionColor};font-weight:700;">${ignitionText}</span>
                 <span class="vp-label">Last GPS</span>   <span class="vp-value vp-mono" style="font-size:0.72rem;">${lastGpsTimeStr}</span>
-                <span class="vp-label">Speed</span>      <span class="vp-value">${Number(state.last_speed || 0).toFixed(1)} km/h</span>
+                <span class="vp-label">Speed</span>      <span class="vp-value">${state.last_speed != null ? Number(state.last_speed).toFixed(1) + ' km/h' : '—'}</span>
                 <span class="vp-label">Satellites</span> <span class="vp-value">${satellites}</span>
                 <span class="vp-label">Altitude</span>   <span class="vp-value">${Math.round(altitude)} m</span>
                 <span class="vp-label">Odometer</span>   <span class="vp-value">${Math.round(state.total_odometer || 0)} km</span>
