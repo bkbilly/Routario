@@ -94,7 +94,7 @@ def _on_fcm_notification(username: str, obj):
         device_update.ParseFromString(raw)
         request_uuid = device_update.fcmMetadata.requestUuid
     except Exception as e:
-        logger.debug("Google Find My: FCM payload parse error: %s", e)
+        logger.error("Google Find My: FCM payload parse error: %s", e)
         return
 
     key    = (username, request_uuid)
@@ -517,16 +517,18 @@ def _decrypt_device_update(device_update, owner_key: Optional[bytes], canonic_id
     eus  = reg.encryptedUserSecrets
     enc_eik = eus.encryptedIdentityKey
     if not enc_eik:
-        logger.debug("Google Find My: no encryptedIdentityKey in DeviceUpdate for %s", canonic_id)
+        logger.error("Google Find My: no encryptedIdentityKey in DeviceUpdate for %s", canonic_id)
         return None
 
     # MCU trackers (custom ESP32/Zephyr) have their EIK stored with all bits flipped
     is_mcu = reg.fastPairModelId == _MCU_MODEL_ID
+    logger.debug("Google Find My: EIK len=%d is_mcu=%s model=%r for %s", len(enc_eik), is_mcu, reg.fastPairModelId, canonic_id)
     if is_mcu:
         enc_eik = bytes(b ^ 0xFF for b in enc_eik)
 
     identity_key = _decrypt_eik(owner_key, enc_eik, canonic_id)
     if identity_key is None:
+        logger.error("Google Find My: EIK decryption returned None for %s", canonic_id)
         return None
 
     pb      = _pb()
@@ -538,29 +540,40 @@ def _decrypt_device_update(device_update, owner_key: Optional[bytes], canonic_id
     for loc, ts_msg in zip(reports.networkLocations, reports.networkLocationTimestamps):
         candidates.append((loc, ts_msg))
 
+    logger.debug("Google Find My: %d candidate(s) for %s", len(candidates), canonic_id)
     if not candidates:
-        logger.debug("Google Find My: DeviceUpdate has no location reports for %s", canonic_id)
+        logger.error("Google Find My: DeviceUpdate has no location reports for %s", canonic_id)
         return None
 
     best    = None
     best_ts = datetime.min.replace(tzinfo=timezone.utc)
 
-    for loc_report, ts_msg in candidates:
+    for i, (loc_report, ts_msg) in enumerate(candidates):
         ts = datetime.fromtimestamp(ts_msg.seconds, tz=timezone.utc) if ts_msg.seconds else None
+        has_geo = loc_report.HasField("geoLocation")
+        logger.debug(
+            "Google Find My: candidate[%d] ts_sec=%s has_geo=%s for %s",
+            i, ts_msg.seconds, has_geo, canonic_id,
+        )
         if ts is None:
+            logger.error("Google Find My: candidate[%d] has ts_seconds=0, skipping for %s", i, canonic_id)
             continue
 
-        if loc_report.HasField("semanticLocation"):
-            continue
-        if not loc_report.HasField("geoLocation"):
+        if not has_geo:
+            sem_name = loc_report.semanticLocation.locationName if loc_report.HasField("semanticLocation") else "none"
+            logger.error("Google Find My: candidate[%d] has no geoLocation (semanticLocation=%r), skipping for %s", i, sem_name, canonic_id)
             continue
 
         geo      = loc_report.geoLocation
         enc      = geo.encryptedReport
         accuracy = float(geo.accuracy) if geo.accuracy else None
+        logger.info(
+            "Google Find My: candidate[%d] raw geoLocation hex: %s for %s",
+            i, geo.SerializeToString().hex(), canonic_id,
+        )
 
         time_offset = 0 if is_mcu else geo.deviceTimeOffset
-        plaintext = _decrypt_report(enc, identity_key, canonic_id, time_offset)
+        plaintext = _decrypt_report(enc, identity_key, canonic_id, time_offset, ts_msg.seconds)
         if plaintext is None:
             continue
 
@@ -568,12 +581,14 @@ def _decrypt_device_update(device_update, owner_key: Optional[bytes], canonic_id
         try:
             loc_proto.ParseFromString(plaintext)
         except Exception as e:
-            logger.debug("Google Find My: Location proto parse failed for %s: %s", canonic_id, e)
+            logger.error("Google Find My: Location proto parse failed for %s: %s", canonic_id, e)
             continue
 
         lat = loc_proto.latitude  / 1e7
         lng = loc_proto.longitude / 1e7
+        logger.debug("Google Find My: candidate[%d] decrypted lat=%.6f lng=%.6f for %s", i, lat, lng, canonic_id)
         if lat == 0.0 and lng == 0.0:
+            logger.error("Google Find My: candidate[%d] decrypted to 0,0 — skipping for %s", i, canonic_id)
             continue
 
         source    = "findmy_own" if enc.isOwnReport else "findmy_network"
@@ -590,7 +605,7 @@ def _decrypt_device_update(device_update, owner_key: Optional[bytes], canonic_id
             best    = candidate
 
     if best is None:
-        logger.debug("Google Find My: all %d location candidate(s) failed decryption for %s", len(candidates), canonic_id)
+        logger.error("Google Find My: all %d candidate(s) failed for %s", len(candidates), canonic_id)
     return best
 
 
@@ -611,21 +626,56 @@ def _decrypt_eik(owner_key: bytes, encrypted_eik: bytes, canonic_id: str) -> Opt
         logger.debug("Google Find My: unexpected EIK length %d for %s", len(encrypted_eik), canonic_id)
         return None
     except Exception as e:
-        logger.debug("Google Find My: EIK decryption failed for %s: %s", canonic_id, e)
+        logger.error("Google Find My: EIK decryption failed for %s: %s", canonic_id, e)
         return None
 
 
-def _decrypt_report(enc, identity_key: bytes, canonic_id: str, device_time_offset: int) -> Optional[bytes]:
+def _decrypt_report(enc, identity_key: bytes, canonic_id: str, device_time_offset: int, report_ts: int = 0) -> Optional[bytes]:
     """Decrypt a single EncryptedReport."""
     if not enc.encryptedLocation:
+        logger.error(
+            "Google Find My: encryptedLocation empty — raw EncryptedReport hex: %s (isOwnReport=%s publicKeyRandom=%s) for %s",
+            enc.SerializeToString().hex(),
+            enc.isOwnReport,
+            enc.publicKeyRandom.hex() if enc.publicKeyRandom else "empty",
+            canonic_id,
+        )
         return None
-    try:
-        if enc.publicKeyRandom == b"":
+
+    if enc.isOwnReport or enc.publicKeyRandom == b"":
+        try:
             return _decrypt_own_report(identity_key, enc.encryptedLocation)
-        return _decrypt_network_report(identity_key, enc.encryptedLocation, enc.publicKeyRandom, device_time_offset)
-    except Exception as e:
-        logger.debug("Google Find My: report decryption failed for %s: %s", canonic_id, e)
-        return None
+        except Exception as e:
+            logger.error("Google Find My: own report decryption failed for %s: %s", canonic_id, e)
+            return None
+
+    # Network report: deviceTimeOffset is a uint32 that defaults to 0 when unset.
+    # When 0, fall back to the report timestamp, and also try ±1 adjacent 1024-second
+    # buckets to handle clock drift at bucket boundaries.
+    K = 10
+    bucket = 1 << K  # 1024 s
+    offsets: list[int] = [device_time_offset]
+    if report_ts and report_ts != device_time_offset:
+        offsets += [report_ts, report_ts - bucket, report_ts + bucket]
+    if device_time_offset:
+        offsets += [device_time_offset - bucket, device_time_offset + bucket]
+
+    seen: set[int] = set()
+    last_err: Optional[Exception] = None
+    for ts in offsets:
+        if ts in seen:
+            continue
+        seen.add(ts)
+        try:
+            return _decrypt_network_report(identity_key, enc.encryptedLocation, enc.publicKeyRandom, ts)
+        except Exception as e:
+            last_err = e
+
+    logger.error(
+        "Google Find My: network report decryption failed for %s (tried %d time offsets): %s",
+        canonic_id, len(seen), last_err,
+    )
+    return None
 
 
 def _decrypt_own_report(identity_key: bytes, encrypted_location: bytes) -> bytes:

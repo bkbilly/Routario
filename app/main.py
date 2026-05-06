@@ -549,4 +549,6 @@ if __name__ == "__main__":
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
+    # FCM library logs ConnectionResetError at ERROR level on routine MCS reconnects; suppress it.
+    logging.getLogger("firebase_messaging.fcmpushclient").setLevel(logging.CRITICAL)
     run_server()
