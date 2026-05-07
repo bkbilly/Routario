@@ -37,6 +37,7 @@ from firebase_messaging import FcmRegisterConfig, FcmPushClient
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import symbol_database as _symbol_database
+from google.protobuf import unknown_fields as _unknown_fields
 from google.protobuf.internal import builder as _builder
 
 _symbol_database.Default()
@@ -462,9 +463,19 @@ class GoogleFindHubIntegration(BaseIntegration):
 
             sensors: dict = {}
             if location.get("accuracy") is not None:
-                sensors["accuracy_m"] = location["accuracy"]
+                sensors["accuracy"] = location["accuracy"]
             if location.get("source"):
                 sensors["location_source"] = location["source"]
+            if location.get("battery"):
+                sensors["battery_status"] = location["battery"]
+            if location.get("manufacturer"):
+                sensors["manufacturer"] = location["manufacturer"]
+            if location.get("model"):
+                sensors["model"] = location["model"]
+            if location.get("semantic_location"):
+                sensors["semantic_location"] = location["semantic_location"]
+            if location.get("location_status"):
+                sensors["location_status"] = location["location_status"]
 
             yield NormalizedPosition(
                 imei=imei,
@@ -624,14 +635,43 @@ def _canonic_ids(meta) -> list[str]:
     return [c.id for c in ident.canonicIds.canonicId if c.id]
 
 
+def _extract_battery(meta) -> Optional[str]:
+    """Extract battery status from DeviceMetadata unknown fields.
+
+    Trackers: field 8 of DeviceMetadata is the FMDN advertisement status byte;
+              bits 6-7 encode battery level (0=ok, 1=low, 2=very_low, 3=critical).
+    Phones:   field 11 of DeviceTypeInformation carries a battery tier
+              (1=low, 2=medium, 3=high).
+    """
+    try:
+        # FMDN tracker: status byte at DeviceMetadata.field8
+        for uf in _unknown_fields.UnknownFieldSet(meta):
+            if uf.field_number == 8 and uf.wire_type == 0:
+                bits = (uf.data >> 6) & 0x3
+                return {0: "ok", 1: "low", 2: "very_low", 3: "critical"}[bits]
+
+        # Android phone: battery tier in DeviceTypeInformation.field11
+        type_info = meta.information.deviceRegistration.deviceTypeInformation
+        for uf in _unknown_fields.UnknownFieldSet(type_info):
+            if uf.field_number == 11 and uf.wire_type == 0:
+                return {1: "low", 2: "medium", 3: "high"}.get(uf.data)
+    except Exception:
+        pass
+    return None
+
+
 def _decrypt_device_update(device_update, owner_key: Optional[bytes], canonic_id: str) -> Optional[dict]:
     """Decrypt location from a DeviceUpdate protobuf (FCM response)."""
     if owner_key is None:
         return None
 
-    meta = device_update.deviceMetadata
-    reg  = meta.information.deviceRegistration
-    eus  = reg.encryptedUserSecrets
+    meta  = device_update.deviceMetadata
+    reg   = meta.information.deviceRegistration
+    eus   = reg.encryptedUserSecrets
+
+    battery      = _extract_battery(meta)
+    manufacturer = reg.manufacturer or None
+    model        = reg.model or None
     enc_eik = eus.encryptedIdentityKey
     if not enc_eik:
         logger.error("Google Find Hub: no encryptedIdentityKey in DeviceUpdate for %s", canonic_id)
@@ -683,7 +723,7 @@ def _decrypt_device_update(device_update, owner_key: Optional[bytes], canonic_id
         geo      = loc_report.geoLocation
         enc      = geo.encryptedReport
         accuracy = float(geo.accuracy) if geo.accuracy else None
-        logger.info(
+        logger.debug(
             "Google Find Hub: candidate[%d] raw geoLocation hex: %s for %s",
             i, geo.SerializeToString().hex(), canonic_id,
         )
@@ -708,13 +748,24 @@ def _decrypt_device_update(device_update, owner_key: Optional[bytes], canonic_id
             continue
 
         source    = "find_hub_own" if enc.isOwnReport else "find_hub_network"
+        sem_name  = (
+            loc_report.semanticLocation.locationName
+            if loc_report.HasField("semanticLocation") and loc_report.semanticLocation.locationName
+            else None
+        )
+        status_names = {0: "semantic", 1: "last_known", 2: "crowdsourced", 3: "aggregated"}
         candidate = {
-            "latitude":  lat,
-            "longitude": lng,
-            "altitude":  loc_proto.altitude if loc_proto.altitude else None,
-            "accuracy":  accuracy,
-            "timestamp": ts,
-            "source":    source,
+            "latitude":          lat,
+            "longitude":         lng,
+            "altitude":          loc_proto.altitude if loc_proto.altitude else None,
+            "accuracy":          accuracy,
+            "timestamp":         ts,
+            "source":            source,
+            "battery":           battery,
+            "manufacturer":      manufacturer,
+            "model":             model,
+            "semantic_location": sem_name,
+            "location_status":   status_names.get(loc_report.status),
         }
         if ts > best_ts:
             best_ts = ts
