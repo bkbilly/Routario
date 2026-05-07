@@ -6,6 +6,9 @@
 // markerState[deviceId] = { lat, lng, heading, animFrame }
 const markerState = {};
 
+// accuracyCircles[deviceId] = L.circle instance (or undefined)
+const accuracyCircles = {};
+
 const MAP_TILES = {
     openstreetmap: {
         label: '🗺️ OpenStreetMap',
@@ -196,6 +199,7 @@ function updateDeviceMarker(deviceId, state) {
     const HIDDEN_SENSOR_KEYS = new Set([
         'last_gps_time',
         'last_known_satellites',
+        'accuracy',
     ]);
 
     const sensors = Object.fromEntries(
@@ -239,10 +243,10 @@ function updateDeviceMarker(deviceId, state) {
                 <span class="vp-name">${deviceName}</span>
             </div>
             <div class="vp-grid">
-                <span class="vp-label">Ignition</span>   <span class="vp-value" style="color:${ignitionColor};font-weight:700;">${ignitionText}</span>
-                <span class="vp-label">Last GPS</span>   <span class="vp-value vp-mono" style="font-size:0.72rem;">${lastGpsTimeStr}</span>
-                <span class="vp-label">Speed</span>      <span class="vp-value">${state.last_speed != null ? Number(state.last_speed).toFixed(1) + ' km/h' : '—'}</span>
-                <span class="vp-label">Satellites</span> <span class="vp-value">${satellites}</span>
+                ${state.ignition_on != null ? `<span class="vp-label">Ignition</span>   <span class="vp-value" style="color:${ignitionColor};font-weight:700;">${ignitionText}</span>` : ''}
+                ${lastGpsTimeStr !== '—'     ? `<span class="vp-label">Last GPS</span>   <span class="vp-value vp-mono" style="font-size:0.72rem;">${lastGpsTimeStr}</span>` : ''}
+                ${state.last_speed != null   ? `<span class="vp-label">Speed</span>      <span class="vp-value">${Number(state.last_speed).toFixed(1)} km/h</span>` : ''}
+                ${satellites !== '—'         ? `<span class="vp-label">Satellites</span> <span class="vp-value">${satellites}</span>` : ''}
                 <span class="vp-label">Altitude</span>   <span class="vp-value">${Math.round(altitude)} m</span>
                 <span class="vp-label">Odometer</span>   <span class="vp-value">${Math.round(state.total_odometer || 0)} km</span>
             </div>
@@ -308,7 +312,8 @@ function updateDeviceMarker(deviceId, state) {
         const fromLat  = prev.lat;
         const fromLng  = prev.lng;
         const fromHead = prev.heading;
-        const dH = ((toHead - fromHead + 540) % 360) - 180;
+        const canAnimateHead = toHead != null && fromHead != null;
+        const dH = canAnimateHead ? ((toHead - fromHead + 540) % 360) - 180 : 0;
         const duration  = 1000;
         const startTime = performance.now();
 
@@ -323,7 +328,7 @@ function updateDeviceMarker(deviceId, state) {
 
             const lat  = fromLat  + (toLat  - fromLat)  * ease;
             const lng  = fromLng  + (toLng  - fromLng)  * ease;
-            const head = fromHead + dH * ease;
+            const head = canAnimateHead ? fromHead + dH * ease : toHead;
 
             markers[deviceId].setLatLng([lat, lng]);
             _applyMarkerRotation(markers[deviceId], head, device?.vehicle_type);
@@ -344,6 +349,26 @@ function updateDeviceMarker(deviceId, state) {
             heading: fromHead,
             animFrame: requestAnimationFrame(step)
         };
+    }
+
+    // ── Accuracy circle ───────────────────────────────────────────────────────
+    const accuracyM = state.sensors?.accuracy ?? null;
+    if (accuracyM != null && accuracyM > 0) {
+        if (accuracyCircles[deviceId]) {
+            accuracyCircles[deviceId].setLatLng([toLat, toLng]);
+            accuracyCircles[deviceId].setRadius(accuracyM);
+        } else {
+            accuracyCircles[deviceId] = L.circle([toLat, toLng], {
+                radius:    accuracyM,
+                className: 'device-accuracy-circle',
+                interactive: false,
+            }).addTo(map);
+            // Keep circle below the marker
+            accuracyCircles[deviceId].bringToBack();
+        }
+    } else if (accuracyCircles[deviceId]) {
+        map.removeLayer(accuracyCircles[deviceId]);
+        delete accuracyCircles[deviceId];
     }
 
     const deviceIndex = devices.findIndex(d => d.id === deviceId);
@@ -425,7 +450,11 @@ function handleWebSocketMessage(message) {
     if (message.type === 'position_update') {
         const devIdx = devices.findIndex(d => d.id === message.device_id);
         if (devIdx > -1) {
-            devices[devIdx] = { ...devices[devIdx], ...message.data };
+            const merged = { ...devices[devIdx], ...message.data };
+            if (message.data.sensors) {
+                merged.sensors = { ...(devices[devIdx].sensors || {}), ...message.data.sensors };
+            }
+            devices[devIdx] = merged;
             // Don't update markers or animate anything while in history mode
             if (!historyDeviceId) {
                 updateDeviceMarker(message.device_id, devices[devIdx]);

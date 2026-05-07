@@ -297,10 +297,13 @@ function filterDevices() {
         // ── Map marker ──
         if (device && markers[device.id]) {
             const marker = markers[device.id];
+            const circle = accuracyCircles[device.id];
             if (visible) {
                 if (!map.hasLayer(marker)) marker.addTo(map);
+                if (circle && !map.hasLayer(circle)) circle.addTo(map);
             } else {
                 if (map.hasLayer(marker)) map.removeLayer(marker);
+                if (circle && map.hasLayer(circle)) map.removeLayer(circle);
             }
         }
     });
