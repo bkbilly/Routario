@@ -17,8 +17,6 @@ theme:
   logo: assets/logo.png
   favicon: assets/logo.png
   features:
-    - navigation.sections
-    - navigation.expand
     - navigation.top
     - navigation.footer
     - search.highlight
@@ -29,16 +27,14 @@ theme:
 
 nav:
   - Home: index.md
-  - Core Features:
-    - Features: features.md
-    - Supported Devices: devices.md
-    - Alerts: alerts.md
-    - Cloud Integrations: integrations.md
-    - Notifications: notifications.md
-  - Getting Started:
-    - Installation: installation.md
-    - Configuration: configuration.md
+  - Features: features.md
+  - Supported Devices: devices.md
+  - Alerts: alerts.md
+  - Cloud Integrations: integrations.md
+  - Notifications: notifications.md
   - Administration: administration.md
+  - Installation: installation.md
+  - Configuration: configuration.md
   - Extending Routario: extending.md
 
 markdown_extensions:
