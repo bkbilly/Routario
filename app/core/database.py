@@ -119,6 +119,15 @@ class DatabaseService:
             connect_args=connect_args,
         )
 
+        if self._is_sqlite:
+            from sqlalchemy import event
+
+            @event.listens_for(self.engine.sync_engine, "connect")
+            def _set_sqlite_pragmas(dbapi_conn, _rec):
+                cur = dbapi_conn.cursor()
+                cur.execute("PRAGMA foreign_keys=ON")
+                cur.close()
+
         self.async_session_maker = async_sessionmaker(
             self.engine,
             class_=AsyncSession,
@@ -157,6 +166,26 @@ class DatabaseService:
                     ))
                 except Exception:
                     pass  # already widened or unsupported
+
+            # Clean up orphaned rows from devices that were deleted while
+            # SQLite foreign-key enforcement was off (pre-fix databases).
+            if self._is_sqlite:
+                for tbl, col in [
+                    ("device_states",   "device_id"),
+                    ("position_records","device_id"),
+                    ("trips",           "device_id"),
+                    ("alert_history",   "device_id"),
+                    ("command_queue",   "device_id"),
+                    ("geofences",       "device_id"),
+                    ("location_shares", "device_id"),
+                ]:
+                    try:
+                        await conn.execute(text(
+                            f"DELETE FROM {tbl} WHERE {col} IS NOT NULL"
+                            f" AND {col} NOT IN (SELECT id FROM devices)"
+                        ))
+                    except Exception:
+                        pass  # table may not exist in older schemas
 
         logger.info("Database initialised (%s)", self._db_url.split("://")[0])
 
@@ -350,6 +379,8 @@ class DatabaseService:
                 user.language = user_data.language
             if user_data.webhook_urls is not None:
                 user.webhook_urls = user_data.webhook_urls
+            if user_data.is_admin is not None:
+                user.is_admin = user_data.is_admin
             await session.flush()
             await session.refresh(user)
             return user

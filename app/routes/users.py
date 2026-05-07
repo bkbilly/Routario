@@ -8,14 +8,17 @@ Access rules:
   GET  /api/users/{id}     → self or admin
   PUT  /api/users/{id}     → self or admin (admin can also toggle is_admin)
   DELETE /api/users/{id}   → admin only
-  POST /api/users/{id}/devices → admin only
+  POST /api/users/{id}/devices     → admin only
+  POST /api/users/{id}/impersonate → admin only
 """
 from typing import List
 
+import jwt
 from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy import select, delete
 
 from core.database import get_db
+from core.config import get_settings
 from core.auth import get_current_user, require_admin, require_self_or_admin
 from models import User, user_device_association
 from models.schemas import UserCreate, UserUpdate, UserResponse, DeviceResponse
@@ -83,6 +86,31 @@ async def delete_user(user_id: int, admin: User = Depends(require_admin)):
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="User not found")
     return {"status": "deleted"}
+
+
+@router.post("/{user_id}/impersonate")
+async def impersonate_user(user_id: int, admin: User = Depends(require_admin)):
+    """Issue a token for another user. Admin only."""
+    if admin.id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot impersonate yourself")
+    db = get_db()
+    target = await db.get_user(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    settings = get_settings()
+    token = jwt.encode(
+        {"sub": str(target.id), "name": target.username, "is_admin": target.is_admin},
+        settings.secret_key,
+        algorithm=settings.algorithm,
+    )
+    return {
+        "access_token": token,
+        "token_type":   "bearer",
+        "user_id":      target.id,
+        "username":     target.username,
+        "is_admin":     target.is_admin,
+    }
 
 
 @router.post("/{user_id}/devices")

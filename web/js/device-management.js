@@ -283,7 +283,8 @@ function openAddDeviceModal() {
     const panel = document.getElementById('integrationFieldsPanel');
     if (panel) { panel.style.display = 'none'; panel.innerHTML = ''; }
     const imeiInput = document.getElementById('deviceImei');
-    if (imeiInput) { imeiInput.required = true; imeiInput.closest('.form-group').style.display = ''; }
+    if (imeiInput) { imeiInput.required = true; imeiInput.closest('.form-group').style.display = ''; imeiInput.disabled = false; }
+    document.getElementById('deviceProtocol').disabled = false;
 
     alertRows = [];
     renderAlertsTable();
@@ -310,6 +311,11 @@ function openDeviceModal(deviceId, startTab = 'general') {
         d.state?.total_odometer != null ? d.state.total_odometer.toFixed(1) : '0.0';
     document.getElementById('offlineTimeoutHours').value =
         d.config?.offline_timeout_hours ?? 24;
+
+    const imeiEl     = document.getElementById('deviceImei');
+    const protocolEl = document.getElementById('deviceProtocol');
+    imeiEl.disabled     = !isAdmin;
+    protocolEl.disabled = !isAdmin;
 
     populateVehicleTypeSelect(document.getElementById('vehicleType'), d.vehicle_type || DEFAULT_TYPE);
 
@@ -1148,9 +1154,22 @@ async function clearAllAlerts() {
 }
 
 function showAlert(message, type) {
-    const el = document.createElement('div');
-    el.className = `alert alert-${type}`;
-    el.innerHTML = `<span>${type === 'success' ? '✅' : '❌'} ${message}</span>`;
-    document.getElementById('alertContainer')?.appendChild(el);
-    setTimeout(() => el.remove(), 4000);
+    if (typeof message === 'object' && message !== null) {
+        type    = message.type;
+        message = message.message;
+    }
+    if (Array.isArray(message)) {
+        message = message.map(e => e.msg || JSON.stringify(e)).join(', ');
+    } else if (typeof message === 'object' && message !== null) {
+        message = JSON.stringify(message);
+    }
+    const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type || 'info'}`;
+    toast.innerHTML = `<span class="toast-icon">${icons[type] || 'ℹ'}</span><span>${message}</span>`;
+    document.getElementById('toastContainer').appendChild(toast);
+    setTimeout(() => {
+        toast.style.animation = 'slideInRight 0.3s reverse forwards';
+        setTimeout(() => toast.remove(), 300);
+    }, 3500);
 }
