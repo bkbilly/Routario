@@ -59,11 +59,10 @@ async function loadHistory(deviceId, startTime, endTime) {
     }
     stopPlayback();
 
-    // Hide ALL live markers when entering history mode
+    // Hide ALL live markers and accuracy circles when entering history mode
     devices.forEach(d => {
-        if (markers[d.id] && map.hasLayer(markers[d.id])) {
-            markers[d.id].remove();
-        }
+        if (markers[d.id] && map.hasLayer(markers[d.id])) markers[d.id].remove();
+        if (accuracyCircles[d.id] && map.hasLayer(accuracyCircles[d.id])) map.removeLayer(accuracyCircles[d.id]);
     });
 
     try {
@@ -79,9 +78,8 @@ async function loadHistory(deviceId, startTime, endTime) {
             showAlert({ title: 'History', message: 'No data found.', type: 'warning' });
             // Restore live markers since we're not entering history mode
             devices.forEach(d => {
-                if (markers[d.id] && !map.hasLayer(markers[d.id])) {
-                    markers[d.id].addTo(map);
-                }
+                if (markers[d.id] && !map.hasLayer(markers[d.id])) markers[d.id].addTo(map);
+                if (accuracyCircles[d.id] && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
             });
             return;
         }
@@ -173,9 +171,8 @@ async function loadHistory(deviceId, startTime, endTime) {
         showAlert({ title: 'Error', message: 'Failed to load history.', type: 'error' });
         // Restore live markers since history mode was not entered
         devices.forEach(d => {
-            if (markers[d.id] && !map.hasLayer(markers[d.id])) {
-                markers[d.id].addTo(map);
-            }
+            if (markers[d.id] && !map.hasLayer(markers[d.id])) markers[d.id].addTo(map);
+            if (accuracyCircles[d.id] && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
         });
     }
 }
@@ -197,11 +194,16 @@ function exitHistoryMode() {
     currentHistoryTab = 'trips';
     switchHistoryTab('trips');
 
-    // Restore ALL live markers when exiting history mode
+    // Remove history accuracy circle
+    if (accuracyCircles['history_pos']) {
+        map.removeLayer(accuracyCircles['history_pos']);
+        delete accuracyCircles['history_pos'];
+    }
+
+    // Restore ALL live markers and accuracy circles when exiting history mode
     devices.forEach(d => {
-        if (markers[d.id] && !map.hasLayer(markers[d.id])) {
-            markers[d.id].addTo(map);
-        }
+        if (markers[d.id] && !map.hasLayer(markers[d.id])) markers[d.id].addTo(map);
+        if (accuracyCircles[d.id] && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
     });
 
     // Hide history footer
@@ -287,6 +289,24 @@ function updatePlaybackUI() {
         iconSize: [32, 32],
         iconAnchor: [16, 16]
     })).bindPopup(historyPopup);
+
+    // History accuracy circle
+    const histAccuracy = p.sensors?.accuracy ?? null;
+    if (histAccuracy != null && histAccuracy > 0) {
+        if (accuracyCircles['history_pos']) {
+            accuracyCircles['history_pos'].setLatLng(position).setRadius(histAccuracy);
+        } else {
+            accuracyCircles['history_pos'] = L.circle(position, {
+                radius: histAccuracy,
+                className: 'device-accuracy-circle',
+                interactive: false,
+            }).addTo(map);
+            accuracyCircles['history_pos'].bringToBack();
+        }
+    } else if (accuracyCircles['history_pos']) {
+        map.removeLayer(accuracyCircles['history_pos']);
+        delete accuracyCircles['history_pos'];
+    }
 
     updatePointDetails(feature);
 
