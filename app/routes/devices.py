@@ -90,6 +90,11 @@ async def update_device(
     caller: User = Depends(verify_device_access),
 ):
     db = get_db()
+    if not caller.is_admin:
+        existing = await db.get_device_by_id(device_id)
+        if existing:
+            device_data.imei = existing.imei
+            device_data.protocol = existing.protocol
     device = await db.update_device(device_id, device_data)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")

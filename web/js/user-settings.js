@@ -109,8 +109,9 @@ async function loadAllUsers() {
         const res = await apiFetch(`${API_BASE}/users`);
         if (res.ok) {
             const users = await res.json();
-            // Load device counts for each user
+            // Load device counts for non-admin users only
             for (const user of users) {
+                if (user.is_admin) continue;
                 try {
                     const deviceRes = await apiFetch(`${API_BASE}/users/${user.id}/devices`);
                     if (deviceRes.ok) {
@@ -144,22 +145,32 @@ function renderUserList(users) {
         if (u.id === parseInt(localStorage.getItem('user_id'))) return;
         const div = document.createElement('div');
         div.className = 'user-list-item';
-        const deviceCountText = u.deviceCount !== undefined
-            ? `${u.deviceCount} device${u.deviceCount !== 1 ? 's' : ''}`
-            : '';
+        const deviceCountText = u.is_admin
+            ? 'Admin'
+            : u.deviceCount !== undefined
+                ? `${u.deviceCount} device${u.deviceCount !== 1 ? 's' : ''}`
+                : '';
         div.innerHTML = `
             <div class="user-info">
                 <span class="user-name">${u.username}</span>
                 <span class="user-email">${u.email} · ${deviceCountText}</span>
             </div>
             <div class="user-actions">
-                <button type="button" class="btn btn-secondary"
+                <button type="button" class="btn ${u.is_admin ? 'btn-warning' : 'btn-secondary'}"
+                        onclick="toggleAdmin(${u.id}, ${u.is_admin})">
+                    ${u.is_admin ? 'Revoke Admin' : 'Make Admin'}
+                </button>
+                ${!u.is_admin ? `<button type="button" class="btn btn-secondary"
                         onclick="openAssignModal(${u.id}, '${u.username}')">
                     Devices
-                </button>
+                </button>` : ''}
                 <button type="button" class="btn btn-secondary"
                         onclick="promptPasswordChange(${u.id})">
                     Password
+                </button>
+                <button type="button" class="btn btn-secondary"
+                        onclick="loginAsUser(${u.id}, '${u.username}')">
+                    Login As
                 </button>
                 <button type="button" class="btn btn-danger"
                         onclick="deleteUser(${u.id})">
@@ -168,6 +179,48 @@ function renderUserList(users) {
             </div>`;
         container.appendChild(div);
     });
+}
+
+async function toggleAdmin(userId, currentlyAdmin) {
+    const action = currentlyAdmin ? 'revoke admin from' : 'grant admin to';
+    if (!confirm(`Are you sure you want to ${action} this user?`)) return;
+    try {
+        const res = await apiFetch(`${API_BASE}/users/${userId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_admin: !currentlyAdmin }),
+        });
+        if (res.ok) {
+            showAlert(`Admin status updated`, 'success');
+            loadAllUsers();
+        } else {
+            const err = await res.json();
+            showAlert(err.detail || 'Failed to update admin status', 'error');
+        }
+    } catch (e) { showAlert('Error updating admin status', 'error'); }
+}
+
+async function loginAsUser(userId, username) {
+    if (!confirm(`Login as "${username}"? You can return to your admin account from the dashboard.`)) return;
+    try {
+        const res = await apiFetch(`${API_BASE}/users/${userId}/impersonate`, { method: 'POST' });
+        if (!res.ok) {
+            const err = await res.json();
+            showAlert(err.detail || 'Failed to impersonate user', 'error');
+            return;
+        }
+        const data = await res.json();
+        // Save admin session so we can restore it later
+        localStorage.setItem('impersonating_admin_token',    localStorage.getItem('auth_token'));
+        localStorage.setItem('impersonating_admin_user_id',  localStorage.getItem('user_id'));
+        localStorage.setItem('impersonating_admin_username', localStorage.getItem('username'));
+        // Switch to target user
+        localStorage.setItem('auth_token', data.access_token);
+        localStorage.setItem('user_id',    data.user_id);
+        localStorage.setItem('username',   data.username);
+        localStorage.setItem('is_admin',   data.is_admin);
+        window.location.href = 'gps-dashboard.html';
+    } catch (e) { showAlert('Error during impersonation', 'error'); }
 }
 
 function renderAssignList() {
