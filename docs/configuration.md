@@ -8,13 +8,27 @@ All Routario settings are controlled via environment variables. Place them in a 
 
 | Variable | Default | Description |
 |---|---|---|
-| `DATABASE_URL` | `postgresql+asyncpg://gps_user:gps_password@localhost/gps_platform` | Full async PostgreSQL connection string |
-| `DB_POOL_SIZE` | `20` | SQLAlchemy connection pool size |
-| `DB_MAX_OVERFLOW` | `40` | Maximum overflow connections beyond the pool |
+| `DATABASE_URL` | `sqlite:///./routario.db` | Database connection string. SQLite is used by default — no setup required. Switch to `postgresql+asyncpg://` for production. |
+| `DB_POOL_SIZE` | `20` | SQLAlchemy connection pool size (ignored for SQLite) |
+| `DB_MAX_OVERFLOW` | `40` | Maximum overflow connections beyond the pool (ignored for SQLite) |
+
+**SQLite** (default, no setup needed):
+```env
+DATABASE_URL=sqlite:///./routario.db
+```
+
+**PostgreSQL** (recommended for production):
+```env
+DATABASE_URL=postgresql+asyncpg://gps_user:password@localhost/gps_platform
+```
+
+See [Installation → Databases](installation.md#databases) for setup instructions.
 
 ---
 
 ## Redis
+
+Redis is **optional**. When not available, Routario falls back to in-process WebSocket broadcasting automatically — suitable for single-worker deployments.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -78,7 +92,7 @@ On first startup, Routario creates an admin account using these values. If the u
 
 ## Geocoding (Optional)
 
-Reverse geocoding populates start/end addresses on trips.
+Reverse geocoding populates start/end addresses on trips (stored in the database for future use).
 
 | Variable | Default | Description |
 |---|---|---|

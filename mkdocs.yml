@@ -29,16 +29,17 @@ theme:
 
 nav:
   - Home: index.md
-  - Getting Started:
-    - Installation: installation.md
-    - Configuration: configuration.md
   - Core Features:
     - Features: features.md
     - Supported Devices: devices.md
     - Alerts: alerts.md
-  - Integrations:
     - Cloud Integrations: integrations.md
     - Notifications: notifications.md
+  - Getting Started:
+    - Installation: installation.md
+    - Configuration: configuration.md
+  - Administration: administration.md
+  - Extending Routario: extending.md
 
 markdown_extensions:
   - admonition

@@ -10,17 +10,16 @@ The main dashboard provides a real-time bird's-eye view of your entire fleet:
 
 - **Live markers** — all tracked devices appear on an interactive Leaflet map, updated in real time via WebSocket with no page refreshes.
 - **Device sidebar** — sortable list of all devices with live status indicators (online/offline), last-seen time, speed, and ignition state.
-- **Multiple tile layers** — switch between standard street maps, satellite imagery, and hybrid views.
-- **Cluster mode** — automatically groups nearby markers when zoomed out to keep the map readable for large fleets.
-- **Follow mode** — the map pans to keep the selected vehicle centred as it moves.
+- **Multiple tile layers** — switch between OpenStreetMap, dark, satellite, hybrid, and ESRI imagery.
+- **Jump to device** — clicking a device on the sidebar or map flies the view to its current position.
 
 ---
 
 ## Trip History & Playback
 
 - **Date-range picker** — query any time window for any device.
-- **Route playback** — animate the vehicle's path on the map with adjustable speed controls.
-- **Trip segmentation** — trips are automatically detected and separated by ignition events. Each trip shows start/end address, distance, duration, and max speed.
+- **Route playback** — animate the vehicle's path on the map with play/pause and a scrub slider.
+- **Trip segmentation** — trips are automatically detected and separated by ignition events. Each trip shows start/end time, distance, and duration.
 - **Sensor graph** — plot any sensor attribute (speed, fuel level, temperature, voltage, etc.) over time on an interactive chart.
 - **Raw data table** — browse individual position records with full sensor payloads.
 - **CSV export** — download the full position history for any date range.
@@ -49,7 +48,19 @@ The main dashboard provides a real-time bird's-eye view of your entire fleet:
 
 ## Smart Alert Engine
 
-Routario evaluates alert rules continuously as positions arrive. Alerts include speed-limit violations backed by real OSM road data (via Valhalla), geofence crossings, ignition events, SOS signals, and custom sensor expressions.
+Routario evaluates alert rules continuously as positions arrive. Supported alert types include:
+
+- **Speed limit** — backed by real OSM road data via Valhalla
+- **Geofence** — enter/exit events for polygons and circles
+- **Ignition** — on/off events from the device
+- **SOS** — hardware panic button trigger
+- **Low battery** — voltage or percentage threshold
+- **Idling** — engine running but vehicle stationary
+- **Towing / Shock** — hardware sensor trigger
+- **Maintenance Due** — odometer-based service intervals with advance warnings
+- **Driver ID (Beacon)** — unauthorized driver detection via BLE beacon proximity
+- **Custom / Sensor Rule** — arbitrary boolean expression over device sensor data
+- **Device Offline** — no position received within a configurable timeout
 
 [:octicons-arrow-right-24: Full Alert Reference](alerts.md)
 
@@ -84,7 +95,36 @@ The dashboard maintains a persistent WebSocket connection. Whenever a device sen
 
 ---
 
-## Logbook & Sharing
+## Maintenance Logbook & Sharing
 
-- **Trip logbook** — structured list of all trips for a device with start/end location, duration, and distance.
+- **Maintenance logbook** — per-device log of service events (oil changes, tyre changes, repairs, etc.) with date, odometer reading, cost, description, and file attachments (invoices, photos).
 - **Share live location** — generate a public share link for a device so external users can view its current position without logging in.
+
+---
+
+## Cloud Integrations
+
+Pull live positions from third-party GPS platforms without reconfiguring your devices. Supported providers:
+
+| Provider | Notes |
+|---|---|
+| **Wialon (Gurtam)** | Wialon Hosting and Wialon Local (on-premise) |
+| **Flespi Cloud** | Supports any device registered on your Flespi account |
+| **Traccar** | Any Traccar server (self-hosted or cloud) |
+| **3D Tracking** | European fleet management platform |
+| **GPS-Server.net** | Hosted and white-label/self-hosted installations |
+| **Google Find Hub** | BLE trackers and Android phones via Find Hub |
+
+[:octicons-arrow-right-24: Cloud Integrations](integrations.md)
+
+!!! tip "Build your own"
+    Adding a new integration provider requires a single Python file. See [Extending Routario](extending.md#adding-a-cloud-integration).
+
+---
+
+## Administration
+
+- **Backup & Restore** — download a full database backup as a portable archive, and restore from a previous backup, all from the admin panel.
+- **User impersonation** — admins can temporarily act as any user to diagnose access or configuration issues.
+
+[:octicons-arrow-right-24: Administration Guide](administration.md)

@@ -1,34 +1,65 @@
 # Installation
 
-Get Routario running locally or on a server in minutes using Docker Compose. A manual bare-metal setup is also supported.
+Routario runs out of the box with Python and SQLite — no external services required. For production deployments with higher load, PostgreSQL and Docker Compose are recommended.
 
 ---
 
-## Prerequisites
+## Quick Start (Python + SQLite)
 
-- **Docker 24+** and **Docker Compose v2+** *(recommended path)*
-- Or: **Python 3.11+**, **PostgreSQL 15+** with PostGIS, and **Redis 7+**
-- Open firewall/NAT ports for each GPS protocol you want to use — see [Port Reference](devices.md#protocol-reference)
-- *(Optional)* A [Valhalla](https://valhalla.github.io/valhalla/) instance for road speed-limit alerts
-
----
-
-## Docker Compose (recommended)
+The fastest way to try Routario. No database or Docker setup needed.
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-org/routario.git
+git clone https://github.com/bkbilly/routario.git
 cd routario
 ```
 
-### 2. Create your environment file
+### 2. Install dependencies
 
 ```bash
+pip install -r requirements.txt
+```
+
+### 3. Run
+
+```bash
+python app/main.py
+```
+
+Routario creates `routario.db` in the current directory on first run and starts the web interface on port **8000**.
+
+Open `http://localhost:8000` and log in with:
+
+| Username | Password |
+|---|---|
+| `admin` | `admin_password` |
+
+!!! warning "Change your password"
+    Update the default admin password immediately after first login, or set `ADMIN_PASSWORD` before first run.
+
+That's it. GPS devices can now connect to their respective protocol ports. All alert, history, and notification features work with SQLite — no further configuration required for a single-user or small deployment.
+
+---
+
+## Production Setup (Docker Compose + PostgreSQL)
+
+For fleets, multi-user deployments, or anywhere you need reliability and performance, Docker Compose is the recommended path. It starts Routario alongside PostgreSQL, Redis, and Valhalla.
+
+### Prerequisites
+
+- **Docker 24+** and **Docker Compose v2+**
+- Open firewall/NAT ports for each GPS protocol — see [Port Reference](devices.md#protocol-reference)
+
+### 1. Clone and configure
+
+```bash
+git clone https://github.com/bkbilly/routario.git
+cd routario
 cp .env.example .env
 ```
 
-Edit `.env` with your preferred editor. At minimum, change the secret key and admin credentials:
+Edit `.env` and set at minimum:
 
 ```env
 SECRET_KEY=change-me-to-a-long-random-string
@@ -39,80 +70,100 @@ ADMIN_PASSWORD=your-secure-password
 
 See the [Configuration](configuration.md) page for all available variables.
 
-### 3. Start the stack
+### 2. Start the stack
 
 ```bash
 docker compose up -d
 ```
 
-This starts:
+This starts four containers:
 
 | Service | Description |
 |---|---|
 | `routario` | Main application — API + all protocol servers |
-| `postgres` | PostgreSQL 15 with the PostGIS extension |
-| `redis` | Pub/sub broker and position cache |
+| `postgres` | PostgreSQL with the PostGIS extension |
+| `redis` | Pub/sub broker for multi-worker WebSocket sync |
+| `valhalla` | Routing engine for road speed-limit alerts |
 
-### 4. Open the dashboard
+### 3. Open the dashboard
 
 Navigate to `http://localhost:8000` and log in with the admin credentials you set in `.env`.
 
 !!! info "First run"
     Routario automatically creates the database schema and the default admin user on startup. No manual migration step is required.
 
----
+!!! info "Valhalla startup time"
+    On the very first start, Valhalla downloads and builds routing tiles for the configured region — this can take several minutes. Subsequent restarts reuse cached tiles and start in seconds.
 
-## Optional: Valhalla (road speed limits)
+### Configuring the Valhalla region
 
-Valhalla is an open-source routing engine used by Routario to look up the posted speed limit of the road a vehicle is on. Without it, the *Speed Limit Alert* is silently skipped; all other alerts work normally.
+By default the compose file downloads the OSM extract for Greece. Change `tile_urls` in `docker-compose.yml` to the [Geofabrik extract](https://download.geofabrik.de) for your region before the first run:
 
 ```yaml
-# Add to your docker-compose.yml
-valhalla:
-  image: ghcr.io/gis-ops/docker-valhalla/valhalla:latest
-  volumes:
-    - ./valhalla_data:/custom_files
-  environment:
-    - tile_urls=https://download.geofabrik.de/europe/greece-latest.osm.pbf
-  ports:
-    - "8002:8002"
-```
-
-Then in your `.env`:
-
-```env
-VALHALLA_URL=http://valhalla:8002
-VALHALLA_ENABLED=true
+environment:
+  - tile_urls=https://download.geofabrik.de/europe/germany-latest.osm.pbf
 ```
 
 ---
 
-## Manual Installation (bare-metal)
+## Databases
 
-### 1. Set up the database
+### SQLite (default)
 
-```bash
-createuser -P gps_user
-createdb -O gps_user gps_platform
-psql gps_platform -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+SQLite requires no installation or configuration. It is the default when `DATABASE_URL` is not set, making it ideal for development, testing, and small single-server deployments.
+
+```env
+DATABASE_URL=sqlite:///./routario.db
 ```
 
-### 2. Install Python dependencies
+Routario uses `aiosqlite` for fully async SQLite access and applies WAL mode automatically for better concurrent read performance.
+
+### PostgreSQL (recommended for production)
+
+PostgreSQL is recommended when you need multiple API workers, better concurrent write throughput, or PostGIS for advanced geo queries.
 
 ```bash
+# Create the database
+createuser -P routario
+createdb -O routario routario
+psql routario -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+```
+
+```env
+DATABASE_URL=postgresql+asyncpg://routario:routariopass@localhost/routario
+```
+
+### Redis (optional)
+
+Redis is used for WebSocket pub/sub so that position updates and alerts are broadcast across all Uvicorn worker processes. Without Redis, broadcasting works within a single process only — fine for development or single-worker deployments.
+
+```env
+REDIS_URL=redis://localhost:6379
+```
+
+If Redis is not reachable at startup, Routario logs a warning and falls back to in-process broadcasting automatically. No configuration change needed to run without it.
+
+---
+
+## Bare-Metal (Python + PostgreSQL)
+
+If you prefer to run without Docker but want PostgreSQL:
+
+```bash
+# Set up the database
+createuser -P routario
+createdb -O routario routario
+psql routario -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+
+# Install dependencies
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-```
 
-### 3. Configure environment
-
-Export the variables listed in [Configuration](configuration.md), or create a `.env` file in the project root.
-
-### 4. Run the application
-
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+# Configure and run
+export DATABASE_URL=postgresql+asyncpg://routario:routariopass@localhost/routario
+export SECRET_KEY=your-long-random-secret
+python app/main.py
 ```
 
 !!! warning "Production"
@@ -122,12 +173,12 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 
 ## Firewall & Port Forwarding
 
-Each GPS protocol listens on its own dedicated TCP (and sometimes UDP) port. You must open these in your firewall and forward them from your router if running behind NAT.
+Each GPS protocol listens on its own dedicated TCP (and sometimes UDP) port. Open these in your firewall and forward them from your router if running behind NAT.
 
 Refer to the [Protocol Reference](devices.md#protocol-reference) table for the complete port list.
 
 !!! tip
-    The REST API and web interface are served on port **8000** only. GPS devices communicate directly with the protocol ports — they never go through port 8000.
+    The web interface and REST API are served on port **8000** only. GPS devices communicate directly with the protocol ports and never go through port 8000.
 
 ---
 
@@ -136,7 +187,7 @@ Refer to the [Protocol Reference](devices.md#protocol-reference) table for the c
 ```bash
 git pull
 docker compose pull
-docker compose up -d --build
+docker compose up -d
 ```
 
 Routario applies any new database migrations automatically on startup.
