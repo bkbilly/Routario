@@ -104,6 +104,44 @@ Fires when a device has not sent a position for longer than a configurable timeo
 
 ---
 
+### 🔧 Maintenance Due Alert
+
+Fires when a vehicle's odometer is approaching or has reached a scheduled service interval. Useful for tracking recurring maintenance across a fleet without an external service management tool.
+
+| Parameter | Default | Description |
+|---|---|---|
+| Maintenance Type | `service` | Preset types: Service, Oil Change, Tire Change, Brake Service, Air Filter, or Custom. |
+| Custom Label | — | Name shown in the alert when type is *Custom*. |
+| Next Service At (km) | `0` | Odometer reading at which the first service is due. |
+| Repeat Every (km) | `5000` | After the first service, how often (in km) to repeat the alert. |
+| Warn When Within (km) | `500` | Fire an advance warning this many km before the service is due. |
+
+Two alert events are generated for each interval:
+
+- **Info** — fired `Warn When Within` km before the due odometer reading.
+- **Warning** — fired when the odometer reaches or passes the due reading.
+
+After the due reading is passed, the next interval begins automatically based on the *Repeat Every* value — no manual reset needed.
+
+---
+
+### 🪪 Driver ID (Beacon) Alert
+
+Fires when the ignition is on but no authorised BLE beacon has been detected within the expected window. Use this to verify that a registered driver (carrying a paired beacon) is present whenever the vehicle is running.
+
+| Parameter | Default | Description |
+|---|---|---|
+| Authorised Beacon ID | *(any)* | Full beacon ID to accept, e.g. `uuid:major:minor` or `namespace:instance`. Leave blank to accept any beacon. |
+| Absence Timeout (s) | `30` | Fire the alert if no matching beacon is seen for this many seconds while ignition is on. |
+| Minimum RSSI (dBm) | `-90` | Ignore beacons with a weaker signal than this threshold — prevents ghost detections from distant beacons. |
+
+The alert fires **once** per ignition cycle and resets automatically when the ignition turns off or when a valid beacon is seen again.
+
+!!! info "Device support"
+    BLE beacon detection requires the tracker hardware to scan for beacons and include them in the position payload (typically in a `beacon_ids` sensor field). Not all devices support this — check your device's firmware and protocol documentation.
+
+---
+
 ## Configuring Alerts
 
 Alert rules are configured per device in **Device Management**:
@@ -124,8 +162,8 @@ Alert rules are configured per device in **Device Management**:
 | Severity | Colour | Typical Use |
 |---|---|---|
 | `critical` | 🔴 Red | SOS, power cut, device tamper |
-| `warning` | 🟡 Amber | Speeding, geofence, towing, low battery |
-| `info` | 🔵 Blue | Ignition on/off, device online/offline |
+| `warning` | 🟡 Amber | Speeding, geofence, towing, low battery, maintenance due, unauthorized driver |
+| `info` | 🔵 Blue | Ignition on/off, device online/offline, maintenance approaching |
 
 ---
 

@@ -1,6 +1,6 @@
 # Notifications
 
-Routario can deliver alerts to virtually any messaging service. It uses the [Apprise](https://github.com/caronc/apprise) library as a catch-all backend, so anything Apprise supports works out of the box.
+Routario can deliver alerts to virtually any messaging service. It uses the [Apprise](https://appriseit.com/services/) library as a catch-all backend, so anything Apprise supports works out of the box.
 
 ---
 
@@ -26,7 +26,7 @@ If no channels are configured or selected for an alert, Routario falls back to *
 
 ## Supported Channels
 
-Any URL scheme supported by [Apprise](https://github.com/caronc/apprise/wiki) works. The most commonly used channels are listed below.
+Any URL scheme supported by [Apprise](https://appriseit.com/services/) works. The most commonly used channels are listed below.
 
 ### Telegram
 
@@ -64,7 +64,7 @@ mailto://myemail@gmail.com:apppassword@gmail.com/recipient@example.com
 slack://<token_a>/<token_b>/<token_c>/<channel>
 ```
 
-Get your token parts from a Slack Incoming Webhook URL. See [Apprise Slack docs](https://github.com/caronc/apprise/wiki/Notify_slack).
+Get your token parts from a Slack Incoming Webhook URL. See the [Apprise services list](https://appriseit.com/services/) for details.
 
 ---
 
@@ -112,6 +112,44 @@ signal://<host>:<port>/<sender_number>/<recipient_number>
 
 ---
 
+## SIP Voice Call
+
+Routario includes a built-in SIP channel that places an outbound voice call when an alert fires. The alert message is read aloud using text-to-speech (TTS), or a pre-recorded audio file can be played instead.
+
+!!! info "Dependencies"
+    The SIP channel requires `pjsua` (part of [PJSIP](https://www.pjsip.org/)) to be installed on the Routario host. For gTTS-based TTS, `gtts` must also be available. Install with `pip install gtts`.
+
+### URL format
+
+```
+sip://<username>:<password>@<server>:<port>/<extension>?<options>
+```
+
+### Options
+
+| Parameter | Default | Description |
+|---|---|---|
+| `file` | — | Path to a pre-recorded WAV file to play instead of TTS, e.g. `file=/audio/alert.wav` |
+| `repeat` | `1` | How many times to repeat the message |
+| `pause` | `2` | Seconds of silence between repetitions |
+| `tts` | `gtts` | TTS engine: `gtts` (Google TTS) or `espeak`. Ignored when `file=` is set. |
+| `lang` | `en` | BCP-47 language code for TTS, e.g. `en`, `de`, `fr`. Ignored when `file=` is set. |
+
+### Examples
+
+```
+# TTS call, repeated twice in English
+sip://user:pass@192.168.1.100/1001?repeat=2&lang=en
+
+# Pre-recorded WAV file, repeated 3 times
+sip://user:pass@192.168.1.100/1001?file=/audio/alert.wav&repeat=3
+
+# TTS in German via espeak
+sip://user:pass@pbx.example.com:5060/200?tts=espeak&lang=de
+```
+
+---
+
 ## Webhooks
 
 In addition to Apprise channels, each user can configure **Webhook URLs** — raw HTTP endpoints that receive a JSON `POST` payload when an alert fires. Ideal for connecting Routario to home automation or no-code platforms.
@@ -143,28 +181,4 @@ Generate a VAPID key pair and configure them in your environment — see [Config
 
 ## Adding Custom Notification Channels
 
-The notification system is auto-discovering. To add a custom channel handler:
-
-1. Create a new `.py` file in `app/notifications/`.
-2. Subclass `BaseNotificationChannel`.
-3. Implement `matches(url)` — return `True` if this class handles the URL scheme.
-4. Implement `async send(url, title, message)` — deliver the notification and return `True` on success.
-
-No registration step is needed — the channel is discovered automatically on the next restart.
-
-```python
-from notifications.base import BaseNotificationChannel
-
-class MyChannel(BaseNotificationChannel):
-
-    @classmethod
-    def matches(cls, url: str) -> bool:
-        return url.startswith("myscheme://")
-
-    async def send(self, url: str, title: str, message: str) -> bool:
-        # Implement delivery logic here
-        return True
-```
-
-!!! info
-    The built-in `AppriseChannel` is named with a `z_` prefix so it sorts last and only handles URLs that no other channel claimed first.
+See [Extending Routario → Adding a Notification Channel](extending.md#adding-a-notification-channel).

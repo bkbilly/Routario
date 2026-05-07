@@ -4,13 +4,24 @@
 
 ---
 
+## See It in Action
+
+<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;">
+  <iframe src="https://www.youtube.com/embed/kp6ITLmgnFI"
+          style="position:absolute;top:0;left:0;width:100%;height:100%;"
+          frameborder="0" allowfullscreen>
+  </iframe>
+</div>
+
+---
+
 ## What can it do?
 
 <div class="grid cards" markdown>
 
-- :material-antenna: **10+ Native Protocols**
+- :material-antenna: **8 Native Protocols**
 
-    Built-in TCP/UDP decoders for Teltonika, GT06, TK103, Queclink, Meitrack, H02, Flespi, OsmAnd and more.
+    Built-in TCP/UDP decoders for Teltonika, GT06, TK103, Queclink, Meitrack, H02, Flespi, and OsmAnd.
 
     [:octicons-arrow-right-24: Supported Devices](devices.md)
 
@@ -22,13 +33,13 @@
 
 - :material-cloud-sync: **Cloud Integrations**
 
-    Pull live positions from Wialon, Flespi Cloud, and other third-party platforms alongside your native devices.
+    Pull live positions from Wialon, Flespi Cloud, Traccar, 3D Tracking, GPS-Server.net, and Google Find Hub alongside your native devices.
 
     [:octicons-arrow-right-24: Cloud Integrations](integrations.md)
 
 - :material-message-badge: **Rich Notifications**
 
-    Telegram, Email, Slack, Discord, webhooks, browser push — via the Apprise library or Web Push API.
+    Telegram, Email, Slack, Discord, SIP voice calls, webhooks, browser push — via the Apprise library or Web Push API.
 
     [:octicons-arrow-right-24: Notifications](notifications.md)
 
@@ -52,26 +63,29 @@
 
 Routario runs as a single Python/FastAPI application managing three concurrent responsibilities:
 
-1. **Protocol Gateway** — listens on separate TCP/UDP ports for each device protocol, decodes incoming packets into a normalised position format, and persists them to PostgreSQL.
+1. **Protocol Gateway** — listens on separate TCP/UDP ports for each device protocol, decodes incoming packets into a normalised position format, and persists them to the database.
 2. **REST API + WebSocket** — serves the web frontend, exposes a JSON API for all CRUD operations, and broadcasts live position updates in real time.
 3. **Alert & Integration Engine** — runs background tasks that evaluate alert rules per device, poll cloud integrations, and dispatch notifications.
 
 !!! info "Stack"
-    Python 3.11+ · FastAPI · SQLAlchemy 2 (async) · PostgreSQL + PostGIS · Redis · Valhalla (optional, for road speed limits)
+    Python 3.11+ · FastAPI · SQLAlchemy 2 (async) · SQLite *(default)* or PostgreSQL · Redis *(optional)* · Valhalla *(optional, for road speed limits)*
 
 ---
 
 ## Quick Start
 
-The fastest way to run Routario is with Docker Compose:
+Get up and running in three commands — no Docker or database setup required:
 
 ```bash
-git clone https://github.com/your-org/routario.git
+git clone https://github.com/bkbilly/routario.git
 cd routario
-cp .env.example .env   # edit as needed
-docker compose up -d
+pip install -r requirements.txt
+python app/main.py
 ```
 
-The web interface is available at `http://localhost:8000` after startup.
+Routario starts with **SQLite** by default. The database file `routario.db` is created automatically on first run. Open `http://localhost:8000` and log in with `admin` / `admin_password`.
+
+!!! tip "Production deployments"
+    For a production setup — PostgreSQL, Redis pub/sub, multiple workers, reverse proxy — see the full installation guide.
 
 [:octicons-arrow-right-24: Full Installation Guide](installation.md)
