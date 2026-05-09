@@ -156,6 +156,12 @@ class DatabaseService:
             except Exception:
                 pass  # column already exists
 
+            # Migration: add buffer_meters to geofences for existing DBs
+            try:
+                await conn.execute(text("ALTER TABLE geofences ADD COLUMN buffer_meters INTEGER DEFAULT 50"))
+            except Exception:
+                pass  # column already exists
+
             # Migration: widen devices.imei from VARCHAR(20) to VARCHAR(64)
             # Needed for integration-device synthetic IMEIs (e.g. EXT-google_find_hub-<canonic_id>).
             # PostgreSQL enforces VARCHAR width; SQLite ignores it and needs no migration.
@@ -231,7 +237,7 @@ class DatabaseService:
 
         violations = []
         for gf in geofences:
-            is_inside = point_in_geometry(latitude, longitude, gf.polygon_wkt)
+            is_inside = point_in_geometry(latitude, longitude, gf.polygon_wkt, gf.buffer_meters or 50)
             if is_inside and gf.alert_on_enter:
                 violations.append({
                     "type": "enter",
@@ -262,6 +268,7 @@ class DatabaseService:
                 alert_on_exit=geofence_data.get("alert_on_exit", False),
                 color=geofence_data.get("color", "#3388ff"),
                 geometry_type=geofence_data.get("geometry_type", "polygon"),
+                buffer_meters=geofence_data.get("buffer_meters", 50),
             )
             session.add(geofence)
             await session.flush()
@@ -279,7 +286,7 @@ class DatabaseService:
                 return None
 
             for field in ("name", "description", "color", "alert_on_enter",
-                          "alert_on_exit", "geometry_type"):
+                          "alert_on_exit", "geometry_type", "buffer_meters"):
                 if field in update_data and update_data[field] is not None:
                     setattr(gf, field, update_data[field])
 
@@ -313,6 +320,7 @@ class DatabaseService:
                 "is_active":      gf.is_active,
                 "color":          gf.color,
                 "geometry_type":  gf.geometry_type or "polygon",
+                "buffer_meters":  gf.buffer_meters or 50,
                 "created_at":     gf.created_at,
                 "coordinates":    wkt_to_geojson_coords(
                     gf.polygon_wkt, gf.geometry_type or "polygon"

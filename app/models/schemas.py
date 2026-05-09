@@ -293,6 +293,7 @@ class GeofenceCreate(BaseModel):
     alert_on_exit: bool = False
     color: str = '#3388ff'
     geometry_type: str = 'polygon'
+    buffer_meters: int = 50
 
 class GeofenceUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -302,10 +303,11 @@ class GeofenceUpdate(BaseModel):
     alert_on_exit: Optional[bool] = None
     color: Optional[str] = None
     geometry_type: Optional[str] = None
+    buffer_meters: Optional[int] = None
 
 class GeofenceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: int
     device_id: Optional[int]
     name: str
@@ -315,6 +317,7 @@ class GeofenceResponse(BaseModel):
     is_active: bool
     color: str
     geometry_type: str = 'polygon'
+    buffer_meters: int = 50
     coordinates: Optional[List[List[float]]] = None
     created_at: datetime
 
