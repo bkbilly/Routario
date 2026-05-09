@@ -21,6 +21,7 @@ function handleLogout() {
     localStorage.removeItem('user_id');
     localStorage.removeItem('username');
     localStorage.removeItem('is_admin');
+    localStorage.removeItem('units');
     localStorage.removeItem('impersonating_admin_token');
     localStorage.removeItem('impersonating_admin_user_id');
     localStorage.removeItem('impersonating_admin_username');

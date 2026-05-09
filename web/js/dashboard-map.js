@@ -255,10 +255,10 @@ function updateDeviceMarker(deviceId, state) {
             <div class="vp-grid">
                 ${state.ignition_on != null ? `<span class="vp-label">Ignition</span>   <span class="vp-value" style="color:${ignitionColor};font-weight:700;">${ignitionText}</span>` : ''}
                 ${lastGpsTimeStr !== '—'     ? `<span class="vp-label">Last GPS</span>   <span class="vp-value vp-mono" style="font-size:0.72rem;">${lastGpsTimeStr}</span>` : ''}
-                ${state.last_speed != null   ? `<span class="vp-label">Speed</span>      <span class="vp-value">${Number(state.last_speed).toFixed(1)} km/h</span>` : ''}
+                ${state.last_speed != null   ? `<span class="vp-label">Speed</span>      <span class="vp-value">${fmtSpeed(state.last_speed)}</span>` : ''}
                 ${satellites !== '—'         ? `<span class="vp-label">Satellites</span> <span class="vp-value">${satellites}</span>` : ''}
-                <span class="vp-label">Altitude</span>   <span class="vp-value">${Math.round(altitude)} m</span>
-                <span class="vp-label">Odometer</span>   <span class="vp-value">${Math.round(state.total_odometer || 0)} km</span>
+                <span class="vp-label">Altitude</span>   <span class="vp-value">${fmtAlt(altitude)}</span>
+                <span class="vp-label">Odometer</span>   <span class="vp-value">${fmtOdometer(state.total_odometer || 0)}</span>
             </div>
             ${sensorRows ? `
             <div style="border-top:1px solid #374151;">

@@ -177,6 +177,7 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=8)
     notification_channels: List[Dict[str, str]] = Field(default_factory=list)
     language: Optional[str] = "en"
+    units: Optional[str] = "metric"
     is_admin: bool = False
 
 
@@ -186,6 +187,7 @@ class UserUpdate(BaseModel):
     password: Optional[str] = Field(None, min_length=8)
     notification_channels: Optional[List[Dict[str, str]]] = None
     language: Optional[str] = None
+    units: Optional[str] = None
     is_admin: Optional[bool] = None
     webhook_urls: Optional[List[str]] = None
 
@@ -201,6 +203,7 @@ class Token(BaseModel):
     user_id: int
     username: str
     is_admin: bool
+    units: str = "metric"
 
 
 class UserResponse(BaseModel):
@@ -211,6 +214,7 @@ class UserResponse(BaseModel):
     email: str
     is_admin: bool = False
     language: Optional[str] = "en"
+    units: Optional[str] = "metric"
     notification_channels: List[Dict[str, str]] = Field(default_factory=list)
     created_at: datetime
     webhook_urls: List[str] = Field(default_factory=list)
