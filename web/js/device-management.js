@@ -16,9 +16,10 @@ let userChannels         = [];
 let editingDeviceId      = null;
 
 // Alerts tab
-let alertRows       = [];
-let editingAlertUid = null;
-let uidCounter      = 0;
+let alertRows            = [];
+let editingAlertUid      = null;
+let uidCounter           = 0;
+let cachedGeofenceOptions = [];  // { value, label } for current device
 let ALERT_TYPES     = {};
 let protocolInfo = {};
 
@@ -322,6 +323,10 @@ function openDeviceModal(deviceId, startTab = 'general') {
     restoreIntegrationFields(d);
     if (!d.config?.integration?.provider) onProtocolChange();
 
+    loadGeofencesForDevice(d.id).then(opts => {
+        cachedGeofenceOptions = opts;
+        renderAlertsTable();
+    });
     loadAlertsFromConfig(d.config || {});
     switchModalTab(startTab);
     refreshNativeEventAlerts();
@@ -687,8 +692,9 @@ function renderAlertsTable() {
                 const val = row.params?.[f.key];
                 if (val == null || val === '') return null;
                 let display = val;
-                if (f.field_type === 'select' && f.options?.length) {
-                    const opt = f.options.find(o => String(o.value) === String(val));
+                if (f.field_type === 'select') {
+                    const options = f.key === 'geofence_id' ? cachedGeofenceOptions : (f.options || []);
+                    const opt = options.find(o => String(o.value) === String(val));
                     if (opt) display = opt.label;
                 }
                 return `<span class="alert-threshold-badge">

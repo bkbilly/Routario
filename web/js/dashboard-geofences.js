@@ -9,6 +9,56 @@
  *   reloadGeofences()            — re-fetch and re-render all geofences
  */
 
+// ── Buffer polygon helper ─────────────────────────────────────────────────────
+/**
+ * Build an approximate corridor polygon around a polyline with rounded end caps.
+ * Returns an array of [lat, lng] pairs suitable for L.polygon.
+ */
+function _polylineBufferPolygon(latlngs, bufferMeters) {
+    if (latlngs.length < 2) return [];
+    const bufDeg = bufferMeters / 111320;
+    const CAP_STEPS = 16;
+    const left = [], right = [];
+
+    for (let i = 0; i < latlngs.length; i++) {
+        const prev = latlngs[Math.max(i - 1, 0)];
+        const next = latlngs[Math.min(i + 1, latlngs.length - 1)];
+        const dx = next.lng - prev.lng;
+        const dy = next.lat - prev.lat;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        const px = (-dy / len) * bufDeg;
+        const py = ( dx / len) * bufDeg;
+        left.push( [latlngs[i].lat + py, latlngs[i].lng + px]);
+        right.push([latlngs[i].lat - py, latlngs[i].lng - px]);
+    }
+
+    // Sweep a semicircle (clockwise) around a cap point, starting at startAngle
+    function cap(center, startAngle) {
+        const pts = [];
+        for (let i = 0; i <= CAP_STEPS; i++) {
+            const a = startAngle - (i / CAP_STEPS) * Math.PI;
+            pts.push([center.lat + Math.sin(a) * bufDeg, center.lng + Math.cos(a) * bufDeg]);
+        }
+        return pts;
+    }
+
+    // End cap: sweep clockwise from last-left to last-right around the final point
+    const last = latlngs[latlngs.length - 1];
+    const prevLast = latlngs[latlngs.length - 2];
+    const eDx = last.lng - prevLast.lng, eDy = last.lat - prevLast.lat;
+    const eLen = Math.sqrt(eDx * eDx + eDy * eDy) || 1;
+    const endCap = cap(last, Math.atan2(eDx / eLen, -eDy / eLen));
+
+    // Start cap: sweep clockwise from first-right to first-left around the first point
+    const first = latlngs[0];
+    const second = latlngs[1];
+    const sDx = second.lng - first.lng, sDy = second.lat - first.lat;
+    const sLen = Math.sqrt(sDx * sDx + sDy * sDy) || 1;
+    const startCap = cap(first, Math.atan2(-sDx / sLen, sDy / sLen));
+
+    return [...left, ...endCap, ...right.reverse(), ...startCap];
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let _map = null;
 let _geofenceLayer = null;        // L.FeatureGroup holding all rendered shapes
@@ -65,9 +115,30 @@ function _addLayerToMap(gf) {
     const isLine = gf.geometry_type === 'polyline';
 
     if (isLine) {
-        // Polyline — [lat, lng] pairs
-        const latlngs = gf.coordinates.map(c => [c[1], c[0]]);
-        layer = L.polyline(latlngs, { ...styleOpts, fillOpacity: 0 });
+        const latlngs = gf.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
+        layer = L.polyline(latlngs.map(ll => [ll.lat, ll.lng]), { ...styleOpts, fillOpacity: 0 });
+
+        // Draw the corridor buffer as a semi-transparent polygon
+        const bufferMeters = gf.buffer_meters || 50;
+        const corridor = _polylineBufferPolygon(latlngs, bufferMeters);
+        if (corridor.length > 0) {
+            const corridorLayer = L.polygon(corridor, {
+                color,
+                fillColor: color,
+                fillOpacity: 0.12,
+                weight: 0,
+            });
+            corridorLayer.bindTooltip(gf.name, {
+                permanent: false,
+                direction: 'center',
+                className: 'geofence-tooltip',
+            });
+            corridorLayer.on('click', (e) => {
+                L.DomEvent.stopPropagation(e);
+                _enterEditMode(layer, gf.id);
+            });
+            _geofenceLayer.addLayer(corridorLayer);
+        }
     } else {
         // Polygon — [lat, lng] pairs
         const latlngs = gf.coordinates.map(c => [c[1], c[0]]);
@@ -248,6 +319,10 @@ function _openGeofenceModal(id, gf, type) {
     document.getElementById('geofenceModalName').value = gf?.name || '';
     document.getElementById('geofenceModalDescription').value = gf?.description || '';
     document.getElementById('geofenceModalColor').value = gf?.color || '#3b82f6';
+    document.getElementById('geofenceModalBuffer').value = gf?.buffer_meters ?? 50;
+
+    const bufferGroup = document.getElementById('geofenceBufferGroup');
+    if (bufferGroup) bufferGroup.style.display = type === 'polyline' ? '' : 'none';
 
     const titleEl = document.getElementById('geofenceModalTitle');
     if (titleEl) titleEl.textContent = id ? 'Edit Geofence' : 'Save Geofence';
@@ -284,12 +359,15 @@ async function submitGeofenceModal() {
         return;
     }
 
+    const bufferMeters = parseInt(document.getElementById('geofenceModalBuffer').value, 10) || 50;
+
     const payload = {
         name,
         description: description || null,
         polygon: coords,   // backend field name (works for both types)
         color,
         geometry_type: type,
+        buffer_meters: type === 'polyline' ? bufferMeters : 50,
     };
 
     try {

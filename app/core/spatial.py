@@ -73,21 +73,20 @@ def wkt_to_geojson_coords(
 
 # ── Containment ───────────────────────────────────────────────────
 
-def point_in_geometry(lat: float, lon: float, polygon_wkt: str) -> bool:
+def point_in_geometry(lat: float, lon: float, polygon_wkt: str, buffer_meters: int = 50) -> bool:
     """
     Return True if the point (lat, lon) lies inside (or on the boundary of)
     the geometry stored as WKT.
 
     For LINESTRING geofences the check is whether the point is within
-    a 50-metre buffer of the line, which mirrors typical corridor-alert UX.
+    buffer_meters of the line, which mirrors typical corridor-alert UX.
     """
     try:
         geom = shapely_wkt.loads(polygon_wkt)
         point = Point(lon, lat)
 
         if isinstance(geom, LineString):
-            # ~50 m buffer in degrees (rough, equator-based)
-            buffer_deg = 50 / 111_320
+            buffer_deg = buffer_meters / 111_320
             return geom.buffer(buffer_deg).contains(point)
 
         return geom.contains(point) or geom.boundary.contains(point)

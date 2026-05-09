@@ -1612,6 +1612,16 @@ body::before {
     color: #e5e7eb !important;
 }
 
+.leaflet-control-attribution {
+    background: rgba(15, 20, 35, 0.75) !important;
+    color: #9ca3af !important;
+    backdrop-filter: blur(4px);
+}
+
+.leaflet-control-attribution a {
+    color: #6b9fd4 !important;
+}
+
 .vp-popup {
     min-width: 220px;
     font-family: 'Outfit', sans-serif;

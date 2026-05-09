@@ -161,6 +161,7 @@ class Geofence(Base):
     is_active:      Mapped[bool]          = mapped_column(Boolean, default=True)
     color:          Mapped[str]           = mapped_column(String(20), default='#3388ff')
     geometry_type:  Mapped[str]           = mapped_column(String(20), default='polygon')
+    buffer_meters:  Mapped[int]           = mapped_column(Integer, default=50)
     created_at:     Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
 
     device: Mapped[Optional["Device"]] = relationship(back_populates="geofences")
