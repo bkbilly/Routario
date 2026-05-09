@@ -688,7 +688,14 @@ function renderAlertsTable() {
                 ${_esc(String(tv))}
             </span>${durBadge}`;
         } else {
-            const visibleFields = (def?.fields || []).filter(f => f.field_type !== 'checkbox');
+            const visibleFields = (def?.fields || []).filter(f => {
+                if (f.field_type === 'checkbox') return false;
+                if (!f.show_if) return true;
+                const cur = String(row.params?.[f.show_if.key] ?? '');
+                return f.show_if.values
+                    ? f.show_if.values.map(String).includes(cur)
+                    : cur === String(f.show_if.value);
+            });
             const badges = visibleFields.map(f => {
                 const val = row.params?.[f.key];
                 if (val == null || val === '') return null;
@@ -800,13 +807,23 @@ async function openAlertEditor(uid) {
                 }).join('');
                 const updatesAttr = f.updates_field ? ` data-updates-field="${_esc(f.updates_field)}"` : '';
                 inputHtml = `<select class="form-input alert-param-input" data-param-key="${f.key}"${updatesAttr}>${opts}</select>`;
+            } else if (f.field_type === 'date') {
+                inputHtml = `<input type="date" class="form-input alert-param-input" data-param-key="${_esc(f.key)}" value="${_esc(v || '')}">`;
             }
 
             const showIfAttr = f.show_if
-                ? ` data-show-if-key="${_esc(f.show_if.key)}" data-show-if-val="${_esc(String(f.show_if.value))}"`
+                ? ` data-show-if-key="${_esc(f.show_if.key)}" ` + (
+                    f.show_if.values
+                        ? `data-show-if-vals='${JSON.stringify(f.show_if.values)}'`
+                        : `data-show-if-val="${_esc(String(f.show_if.value))}"`)
+                : '';
+            const _siCurrent = f.show_if
+                ? String(row.params?.[f.show_if.key] ?? def.fields.find(x => x.key === f.show_if.key)?.default)
                 : '';
             const showIfHidden = f.show_if
-                ? String(row.params?.[f.show_if.key] ?? def.fields.find(x => x.key === f.show_if.key)?.default) !== String(f.show_if.value)
+                ? (f.show_if.values
+                    ? !f.show_if.values.map(String).includes(_siCurrent)
+                    : _siCurrent !== String(f.show_if.value))
                 : false;
             const groupStyle = `margin-bottom:1rem;${showIfHidden ? 'display:none;' : ''}`;
 
@@ -954,12 +971,19 @@ async function openAlertEditor(uid) {
             const ctrl = document.querySelector(
                 `#alertEditorBody .alert-param-input[data-param-key="${group.dataset.showIfKey}"]`
             );
-            group.style.display = (ctrl && ctrl.value === group.dataset.showIfVal) ? '' : 'none';
+            let show;
+            if (group.dataset.showIfVals) {
+                show = ctrl && JSON.parse(group.dataset.showIfVals).includes(ctrl.value);
+            } else {
+                show = ctrl && ctrl.value === group.dataset.showIfVal;
+            }
+            group.style.display = show ? '' : 'none';
         });
     };
     document.querySelectorAll('#alertEditorBody .alert-param-input').forEach(inp => {
         inp.addEventListener('change', applyShowIf);
     });
+    applyShowIf();
 
     document.getElementById('alertEditorModal').classList.add('active');
 }
