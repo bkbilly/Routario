@@ -1,4 +1,5 @@
 import math
+from datetime import datetime, timedelta, date
 from typing import Optional
 
 from .base import BaseAlert, AlertDefinition, AlertField
@@ -44,6 +45,20 @@ class MaintenanceAlert(BaseAlert):
                     show_if    = {"key": "maintenance_type", "value": "custom"},
                 ),
                 AlertField(
+                    key        = "tracking_mode",
+                    label      = "Track By",
+                    field_type = "select",
+                    default    = "km",
+                    required   = True,
+                    options    = [
+                        {"value": "km",   "label": "Mileage only"},
+                        {"value": "days", "label": "Time only"},
+                        {"value": "both", "label": "Either (whichever comes first)"},
+                    ],
+                    help_text  = "What triggers the maintenance alert.",
+                ),
+                # ── Mileage fields ─────────────────────────────────────────
+                AlertField(
                     key       = "next_service_km",
                     label     = "Next Service At",
                     unit      = "km",
@@ -52,6 +67,7 @@ class MaintenanceAlert(BaseAlert):
                     max_value = 9999999,
                     required  = True,
                     help_text = "Odometer reading at which the next service is due.",
+                    show_if   = {"key": "tracking_mode", "values": ["km", "both"]},
                 ),
                 AlertField(
                     key       = "interval_km",
@@ -61,6 +77,7 @@ class MaintenanceAlert(BaseAlert):
                     min_value = 10,
                     max_value = 100000,
                     help_text = "After the first service, how often (in km) to repeat.",
+                    show_if   = {"key": "tracking_mode", "values": ["km", "both"]},
                 ),
                 AlertField(
                     key       = "warning_km",
@@ -70,12 +87,50 @@ class MaintenanceAlert(BaseAlert):
                     min_value = 10,
                     max_value = 5000,
                     required  = False,
-                    help_text = "Fire a warning alert this many km before the service is due.",
+                    help_text = "Fire a warning this many km before the service is due.",
+                    show_if   = {"key": "tracking_mode", "values": ["km", "both"]},
+                ),
+                # ── Time fields ────────────────────────────────────────────
+                AlertField(
+                    key        = "next_service_date",
+                    label      = "Next Service Date",
+                    field_type = "date",
+                    default    = "",
+                    required   = True,
+                    help_text  = "Date when the next service is due.",
+                    show_if    = {"key": "tracking_mode", "values": ["days", "both"]},
+                ),
+                AlertField(
+                    key       = "interval_days",
+                    label     = "Repeat Every",
+                    unit      = "days",
+                    default   = 180,
+                    min_value = 1,
+                    max_value = 3650,
+                    help_text = "How often (in days) to repeat after the first due date.",
+                    show_if   = {"key": "tracking_mode", "values": ["days", "both"]},
+                ),
+                AlertField(
+                    key       = "warning_days",
+                    label     = "Warn When Within",
+                    unit      = "days",
+                    default   = 14,
+                    min_value = 1,
+                    max_value = 365,
+                    required  = False,
+                    help_text = "Fire a warning this many days before the service is due.",
+                    show_if   = {"key": "tracking_mode", "values": ["days", "both"]},
                 ),
             ],
         )
 
+    # ── Mileage check — called on each incoming position ─────────────────────
+
     async def check_many(self, position, device, state, params: dict) -> list:
+        tracking_mode = params.get("tracking_mode", "km")
+        if tracking_mode not in ("km", "both"):
+            return []
+
         mtype        = params.get("maintenance_type", "service")
         next_service = float(params.get("next_service_km", 0))
         interval_km  = float(params.get("interval_km", 5000))
@@ -87,16 +142,14 @@ class MaintenanceAlert(BaseAlert):
 
         odometer = float(state.total_odometer or 0)
 
-        # Find the upcoming service km: the first point in the series
-        # {next_service, next_service+interval, ...} that is >= odometer.
         if odometer <= next_service:
             due_km = next_service
         else:
             n      = math.ceil((odometer - next_service) / interval_km)
             due_km = next_service + n * interval_km
 
-        warned_key = f"maint_{mtype}_warned_at"
-        due_key    = f"maint_{mtype}_due_at"
+        warned_key = f"maint_{mtype}_km_warned_at"
+        due_key    = f"maint_{mtype}_km_due_at"
 
         warned_at = state.alert_states.get(warned_key)
         due_at    = state.alert_states.get(due_key)
@@ -133,6 +186,74 @@ class MaintenanceAlert(BaseAlert):
                 })
 
         return alerts
+
+    # ── Time check — called by periodic_alert_task (no position needed) ───────
+
+    async def check_device(self, device, state, params: dict) -> Optional[dict]:
+        tracking_mode = params.get("tracking_mode", "km")
+        if tracking_mode not in ("days", "both"):
+            return None
+
+        mtype            = params.get("maintenance_type", "service")
+        next_service_str = params.get("next_service_date", "")
+        interval_days    = int(params.get("interval_days", 180))
+        warning_days     = int(params.get("warning_days", 14))
+        label            = params.get("custom_label") or mtype.replace("_", " ").title()
+
+        if not next_service_str or interval_days <= 0:
+            return None
+
+        try:
+            next_service_date = date.fromisoformat(next_service_str)
+        except ValueError:
+            return None
+
+        today        = datetime.utcnow().date()
+        days_elapsed = (today - next_service_date).days
+
+        if days_elapsed <= 0:
+            due_date = next_service_date
+        else:
+            n        = math.ceil(days_elapsed / interval_days)
+            due_date = next_service_date + timedelta(days=n * interval_days)
+
+        due_str    = due_date.isoformat()
+        warned_key = f"maint_{mtype}_days_warned_at"
+        due_key    = f"maint_{mtype}_days_due_at"
+
+        warned_at      = state.alert_states.get(warned_key)
+        due_at         = state.alert_states.get(due_key)
+        days_remaining = (due_date - today).days
+
+        if days_remaining <= 0:
+            if due_at != due_str:
+                state.alert_states[due_key]    = due_str
+                state.alert_states[warned_key] = due_str
+                return {
+                    "type":     AlertType.MAINTENANCE,
+                    "severity": Severity.WARNING,
+                    "message":  f"Maintenance: {label} is due today! (scheduled {due_str})",
+                    "alert_metadata": {
+                        "maintenance_type": mtype,
+                        "due_date":         due_str,
+                        "days_remaining":   0,
+                    },
+                }
+        elif days_remaining <= warning_days:
+            if warned_at != due_str:
+                state.alert_states[warned_key] = due_str
+                return {
+                    "type":     AlertType.MAINTENANCE,
+                    "severity": Severity.INFO,
+                    "message":  f"Maintenance: {label} due in {days_remaining} day(s) (on {due_str}).",
+                    "alert_metadata": {
+                        "maintenance_type": mtype,
+                        "due_date":         due_str,
+                        "days_remaining":   days_remaining,
+                    },
+                }
+
+        return None
 
     async def check(self, position, device, state, params: dict) -> Optional[dict]:
         return None
