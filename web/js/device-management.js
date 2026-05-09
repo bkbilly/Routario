@@ -234,7 +234,7 @@ function renderDeviceTable(list) {
     tbody.innerHTML = list.map(d => {
         const icon     = (VEHICLE_ICONS[d.vehicle_type] || VEHICLE_ICONS['other']).emoji;
         const lastSeen = d.state?.last_update ? formatDateToLocal(d.state.last_update) : '—';
-        const odometer = d.state?.total_odometer != null ? `${d.state.total_odometer.toFixed(0)} km` : '—';
+        const odometer = d.state?.total_odometer != null ? fmtOdometer(d.state.total_odometer) : '—';
         const plate    = d.license_plate || '—';
         const cmds     = d.supports_commands !== false;
 
@@ -309,7 +309,7 @@ function openDeviceModal(deviceId, startTab = 'general') {
     document.getElementById('licensePlate').value        = d.license_plate || '';
     document.getElementById('vin').value                 = d.vin || '';
     document.getElementById('currentOdometer').value     =
-        d.state?.total_odometer != null ? d.state.total_odometer.toFixed(1) : '0.0';
+        d.state?.total_odometer != null ? toDisplayDist(d.state.total_odometer) : '0.0';
     document.getElementById('offlineTimeoutHours').value =
         d.config?.offline_timeout_hours ?? 24;
 
@@ -419,7 +419,8 @@ async function handleSubmit(event) {
 
         let response;
         if (editingDeviceId) {
-            const odo = parseFloat(document.getElementById('currentOdometer').value) || null;
+            const odoDisplay = parseFloat(document.getElementById('currentOdometer').value) || null;
+            const odo = odoDisplay !== null ? fromDisplayDist(odoDisplay) : null;
             const url = `${API_BASE}/devices/${editingDeviceId}${odo !== null ? `?new_odometer=${odo}` : ''}`;
             response  = await apiFetch(url, {
                 method:  'PUT',
@@ -766,13 +767,22 @@ async function openAlertEditor(uid) {
             let inputHtml = '';
 
             if (f.field_type === 'number') {
+                const isSpeedField = f.unit === 'km/h';
+                const isDistField  = f.unit === 'km';
+                const displayVal   = v == null ? '' :
+                    isSpeedField ? toDisplaySpeed(v) :
+                    isDistField  ? toDisplayDist(v)  : v;
+                const displayUnit  = isSpeedField ? speedUnit() :
+                    isDistField  ? distUnit()    : (f.unit || '');
+                const unitAttr     = isSpeedField ? 'data-unit-type="speed"' :
+                    isDistField  ? 'data-unit-type="dist"'  : '';
                 inputHtml = `<div style="display:flex;align-items:center;gap:0.75rem;">
-                    <input type="number" class="form-input alert-param-input" data-param-key="${f.key}"
-                           value="${v ?? ''}"
+                    <input type="number" class="form-input alert-param-input" data-param-key="${f.key}" ${unitAttr}
+                           value="${displayVal}"
                            ${f.min_value != null ? `min="${f.min_value}"` : ''}
                            ${f.max_value != null ? `max="${f.max_value}"` : ''}
                            style="max-width:140px;">
-                    ${f.unit ? `<span style="color:var(--text-muted);">${_esc(f.unit)}</span>` : ''}
+                    ${displayUnit ? `<span style="color:var(--text-muted);">${_esc(displayUnit)}</span>` : ''}
                 </div>`;
             } else if (f.field_type === 'text') {
                 inputHtml = `<input type="text" class="form-input alert-param-input"
@@ -983,9 +993,19 @@ function saveAlertFromEditor() {
         document.querySelectorAll('#alertEditorBody .alert-param-input').forEach(input => {
             const key = input.dataset.paramKey;
             if (!key) return;
-            if (input.type === 'checkbox')     row.params[key] = input.checked;
-            else if (input.type === 'number')  { const v = parseFloat(input.value); if (!isNaN(v)) row.params[key] = v; }
-            else                               row.params[key] = input.value;
+            if (input.type === 'checkbox') {
+                row.params[key] = input.checked;
+            } else if (input.type === 'number') {
+                const v = parseFloat(input.value);
+                if (!isNaN(v)) {
+                    const unitType = input.dataset.unitType;
+                    row.params[key] = unitType === 'speed' ? fromDisplaySpeed(v)
+                                    : unitType === 'dist'  ? fromDisplayDist(v)
+                                    : v;
+                }
+            } else {
+                row.params[key] = input.value;
+            }
         });
     }
 
@@ -1094,10 +1114,10 @@ function renderRawDataPage() {
             <td style="white-space:nowrap;color:var(--text-muted);font-size:0.8em;">${serverTime}</td>
             <td>${coords[1].toFixed(5)}</td>
             <td>${coords[0].toFixed(5)}</td>
-            <td>${p.speed != null ? p.speed.toFixed(1) + ' km/h' : '—'}</td>
+            <td>${p.speed != null ? fmtSpeed(p.speed) : '—'}</td>
             <td>${p.course != null ? p.course.toFixed(0) + '°' : '—'}</td>
             <td>${p.satellites != null ? p.satellites : '—'}</td>
-            <td>${(p.altitude  || 0).toFixed(0)} m</td>
+            <td>${fmtAlt(p.altitude || 0)}</td>
             <td>${p.ignition === true ? '<span style="color:var(--accent-success);font-weight:600;">ON</span>' : p.ignition === false ? '<span style="color:var(--accent-danger);font-weight:600;">OFF</span>' : '<span style="color:var(--text-muted);">—</span>'}</td>
             <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:0.72rem;"
                 title="${_esc(attrStr)}">${_esc(attrStr)}</td>`;

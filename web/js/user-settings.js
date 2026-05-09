@@ -44,9 +44,10 @@ async function loadSettings() {
         
         document.getElementById('username').value = user.username || '';
         document.getElementById('email').value = user.email || '';
+        document.getElementById('unitSystem').value = user.units || 'metric';
         webhooks = user.webhook_urls || [];
         renderWebhooks();
-        
+
         channels = user.notification_channels || [];
         renderChannels();
         
@@ -425,9 +426,11 @@ async function saveSettings(e) {
     btn.disabled = true;
     btn.textContent = 'Saving Settings...';
 
+    const selectedUnits = document.getElementById('unitSystem').value;
     const payload = {
         email: document.getElementById('email').value,
-        notification_channels: channels 
+        notification_channels: channels,
+        units: selectedUnits,
     };
 
     const password = document.getElementById('password').value;
@@ -444,6 +447,7 @@ async function saveSettings(e) {
 
         if (res.ok) {
             showAlert('Profile updated successfully', 'success');
+            localStorage.setItem('units', selectedUnits);
             document.getElementById('password').value = '';
         } else {
             const err = await res.json();

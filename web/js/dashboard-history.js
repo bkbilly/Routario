@@ -274,11 +274,11 @@ function updatePlaybackUI() {
             </div>
             <div class="vp-grid">
                 <span class="vp-label">Time</span>      <span class="vp-value vp-mono">${time}</span>
-                <span class="vp-label">Speed</span>     <span class="vp-value">${p.speed != null ? Number(p.speed).toFixed(1) + ' km/h' : '—'}</span>
+                <span class="vp-label">Speed</span>     <span class="vp-value">${p.speed != null ? fmtSpeed(p.speed) : '—'}</span>
                 <span class="vp-label">Heading</span>   <span class="vp-value">${p.course != null ? Number(p.course).toFixed(0) + '°' : '—'}</span>
                 <span class="vp-label">Ignition</span>  <span class="vp-value" style="color:${ignColor};font-weight:700;">${p.ignition === true ? 'ON' : p.ignition === false ? 'OFF' : '—'}</span>
                 <span class="vp-label">Satellites</span><span class="vp-value">${p.satellites != null ? p.satellites : '—'}</span>
-                <span class="vp-label">Altitude</span>  <span class="vp-value">${Number(p.altitude || 0).toFixed(0)} m</span>
+                <span class="vp-label">Altitude</span>  <span class="vp-value">${fmtAlt(p.altitude || 0)}</span>
                 <span class="vp-label">Lat/Lng</span>   <span class="vp-value">${position[0].toFixed(5)}, ${position[1].toFixed(5)}</span>
             </div>
         </div>
@@ -316,7 +316,7 @@ function updatePlaybackUI() {
     if (tripLabel) {
         if (currentTrip) {
             const tripIndex = historyTrips.length - historyTrips.indexOf(currentTrip);
-            const dist = currentTrip.distance_km != null ? ` · ${currentTrip.distance_km.toFixed(1)} km` : '';
+            const dist = currentTrip.distance_km != null ? ` · ${fmtDist(currentTrip.distance_km)}` : '';
             tripLabel.textContent = `Trip ${tripIndex}${dist}`;
         } else {
             tripLabel.textContent = historyTrips.length ? 'Between trips' : '';
@@ -337,9 +337,9 @@ function updatePointDetails(feature) {
     let html = `
         <div class="detail-grid">
             <div class="detail-item"><span class="detail-key">Heading</span><div class="detail-val">${p.course != null ? p.course.toFixed(0) + '°' : '—'}</div></div>
-            <div class="detail-item"><span class="detail-key">Speed</span><div class="detail-val">${p.speed != null ? p.speed.toFixed(1) + ' km/h' : '—'}</div></div>
+            <div class="detail-item"><span class="detail-key">Speed</span><div class="detail-val">${p.speed != null ? fmtSpeed(p.speed) : '—'}</div></div>
             <div class="detail-item"><span class="detail-key">Lat/Lon</span><div class="detail-val">${feature.geometry.coordinates[1].toFixed(5)}, ${feature.geometry.coordinates[0].toFixed(5)}</div></div>
-            <div class="detail-item"><span class="detail-key">Altitude</span><div class="detail-val">${(p.altitude || 0).toFixed(0)} m</div></div>
+            <div class="detail-item"><span class="detail-key">Altitude</span><div class="detail-val">${fmtAlt(p.altitude || 0)}</div></div>
             <div class="detail-item"><span class="detail-key">Satellites</span><div class="detail-val">${p.satellites != null ? p.satellites : '—'}</div></div>
             <div class="detail-item"><span class="detail-key">Ignition</span><div class="detail-val" style="color: ${p.ignition === true ? 'var(--accent-success)' : p.ignition === false ? 'var(--accent-danger)' : 'var(--text-muted)'}">${p.ignition === true ? 'ON' : p.ignition === false ? 'OFF' : '—'}</div></div>
         </div>
@@ -435,7 +435,7 @@ async function loadTripsForHistory(deviceId, startTime, endTime) {
             // Better: just show total trip distance vs period label
         }
 
-        const fmtDist = (km) => km >= 1 ? `${km.toFixed(1)} km` : `${Math.round(km * 1000)} m`;
+        // fmtDist is provided globally by units.js
         const fmtTime = (mins) => {
             const h = Math.floor(mins / 60);
             const m = Math.round(mins % 60);
@@ -458,7 +458,7 @@ async function loadTripsForHistory(deviceId, startTime, endTime) {
         container.innerHTML = summaryHtml + trips.map((trip, i) => {
             const start = trip.start_time ? formatDateToLocal(trip.start_time) : '—';
             const end   = trip.end_time   ? formatDateToLocal(trip.end_time)   : 'Ongoing';
-            const dist  = trip.distance_km != null ? `${trip.distance_km.toFixed(1)} km` : '—';
+            const dist  = trip.distance_km != null ? fmtDist(trip.distance_km) : '—';
             const dur   = formatDuration(trip.duration_minutes);
             const label = trips.length - i;
             const color = tripColorMap[trip.id] || tripColors[i % tripColors.length];

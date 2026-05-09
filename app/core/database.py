@@ -158,6 +158,7 @@ class DatabaseService:
             # Old schema had a 'polygon' column (NOT NULL) that was renamed to
             # 'polygon_wkt' in the model. Drop the NOT NULL so inserts don't fail.
             "ALTER TABLE geofences ALTER COLUMN polygon DROP NOT NULL",
+            "ALTER TABLE users ADD COLUMN units VARCHAR(10) DEFAULT 'metric'",
         ]
         if self._is_postgres:
             migrations.append("ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)")
@@ -382,6 +383,8 @@ class DatabaseService:
                 user.notification_channels = user_data.notification_channels
             if user_data.language:
                 user.language = user_data.language
+            if user_data.units is not None:
+                user.units = user_data.units
             if user_data.webhook_urls is not None:
                 user.webhook_urls = user_data.webhook_urls
             if user_data.is_admin is not None:
