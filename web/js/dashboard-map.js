@@ -10,6 +10,13 @@ const markerState = {};
 const accuracyCircles = {};
 
 const MAP_TILES = {
+    openstreetmap_dark: {
+        label: '🌙 OpenStreetMap Dark',
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19,
+        cssFilter: 'invert(100%) hue-rotate(180deg)'
+    },
     openstreetmap: {
         label: '🗺️ OpenStreetMap',
         url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -97,7 +104,7 @@ function initMap() {
         zoomControl: false,
     }).setView([20, 0], 2);
 
-    const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap';
+    const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap_dark';
     applyTileLayer(savedTile);
     populateMapPicker();
 
@@ -124,7 +131,7 @@ function initMap() {
 // ── Tile layers ───────────────────────────────────────────────────────────────
 
 function applyTileLayer(tileKey) {
-    const tile = MAP_TILES[tileKey] || MAP_TILES['openstreetmap'];
+    const tile = MAP_TILES[tileKey] || MAP_TILES['openstreetmap_dark'];
 
     if (currentTileLayer) map.removeLayer(currentTileLayer);
 
@@ -132,6 +139,9 @@ function applyTileLayer(tileKey) {
         attribution: tile.attribution,
         maxZoom: tile.maxZoom
     }).addTo(map);
+
+    const tileContainer = currentTileLayer.getContainer();
+    if (tileContainer) tileContainer.style.filter = tile.cssFilter || '';
 
     localStorage.setItem('mapTileLayer', tileKey);
 
@@ -143,7 +153,7 @@ function applyTileLayer(tileKey) {
 function populateMapPicker() {
     const flyout = document.getElementById('mapLayersFlyout');
     if (!flyout) return;
-    const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap';
+    const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap_dark';
     flyout.innerHTML = Object.entries(MAP_TILES).map(([key, tile]) => `
         <label>
             <input type="radio" name="map-tile-radio" value="${key}" ${key === savedTile ? 'checked' : ''}
