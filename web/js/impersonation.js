@@ -33,4 +33,5 @@ document.addEventListener('DOMContentLoaded', () => {
         </button>
     `;
     document.body.insertBefore(banner, document.body.firstChild);
+    document.documentElement.style.setProperty('--banner-height', banner.offsetHeight + 'px');
 });

@@ -78,8 +78,8 @@ body::before {
     display: grid;
     grid-template-columns: var(--sidebar-width) 1fr;
     grid-template-rows: 70px 1fr;
-    height: 100vh;
-    height: var(--app-height, 100dvh);
+    height: calc(100vh - var(--banner-height, 0px));
+    height: calc(var(--app-height, 100dvh) - var(--banner-height, 0px));
     gap: 0;
     transition: grid-template-columns var(--transition-base);
 }
