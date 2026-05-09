@@ -150,32 +150,26 @@ class DatabaseService:
 
             await conn.run_sync(Base.metadata.create_all)
 
-            # Migration: add state column to integration_accounts for existing DBs
+        # Run each migration in its own transaction so a no-op failure (column
+        # already exists) on PostgreSQL doesn't abort the whole block.
+        migrations = [
+            "ALTER TABLE integration_accounts ADD COLUMN state TEXT",
+            "ALTER TABLE geofences ADD COLUMN buffer_meters INTEGER DEFAULT 50",
+        ]
+        if self._is_postgres:
+            migrations.append("ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)")
+
+        for stmt in migrations:
             try:
-                await conn.execute(text("ALTER TABLE integration_accounts ADD COLUMN state TEXT"))
+                async with self.engine.begin() as conn:
+                    await conn.execute(text(stmt))
             except Exception:
-                pass  # column already exists
+                pass  # column/change already applied
 
-            # Migration: add buffer_meters to geofences for existing DBs
-            try:
-                await conn.execute(text("ALTER TABLE geofences ADD COLUMN buffer_meters INTEGER DEFAULT 50"))
-            except Exception:
-                pass  # column already exists
-
-            # Migration: widen devices.imei from VARCHAR(20) to VARCHAR(64)
-            # Needed for integration-device synthetic IMEIs (e.g. EXT-google_find_hub-<canonic_id>).
-            # PostgreSQL enforces VARCHAR width; SQLite ignores it and needs no migration.
-            if self._is_postgres:
-                try:
-                    await conn.execute(text(
-                        "ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)"
-                    ))
-                except Exception:
-                    pass  # already widened or unsupported
-
-            # Clean up orphaned rows from devices that were deleted while
-            # SQLite foreign-key enforcement was off (pre-fix databases).
-            if self._is_sqlite:
+        # Clean up orphaned rows from devices that were deleted while
+        # SQLite foreign-key enforcement was off (pre-fix databases).
+        if self._is_sqlite:
+            async with self.engine.begin() as conn:
                 for tbl, col in [
                     ("device_states",   "device_id"),
                     ("position_records","device_id"),
