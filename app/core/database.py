@@ -155,6 +155,9 @@ class DatabaseService:
         migrations = [
             "ALTER TABLE integration_accounts ADD COLUMN state TEXT",
             "ALTER TABLE geofences ADD COLUMN buffer_meters INTEGER DEFAULT 50",
+            # Old schema had a 'polygon' column (NOT NULL) that was renamed to
+            # 'polygon_wkt' in the model. Drop the NOT NULL so inserts don't fail.
+            "ALTER TABLE geofences ALTER COLUMN polygon DROP NOT NULL",
         ]
         if self._is_postgres:
             migrations.append("ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)")
