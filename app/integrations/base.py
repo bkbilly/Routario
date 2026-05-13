@@ -108,7 +108,8 @@ class BaseIntegration(ABC):
     DISPLAY_NAME:                 str  = ""    # e.g. "3D Tracking"
     POLL_INTERVAL_SECONDS:        int  = 120   # idle / unknown interval (seconds)
     POLL_INTERVAL_ACTIVE_SECONDS: int  = 30    # active (ignition ON) interval (seconds)
-    FIELDS: list[IntegrationField] = []        # credential fields for the UI
+    FIELDS:          list[IntegrationField] = []   # credential fields for the UI
+    SUPPORTS_BROWSE: bool = True                   # False hides the Browse button in the UI
 
     # ── Auth ──────────────────────────────────────────────────────────────────
 
