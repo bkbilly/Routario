@@ -147,10 +147,11 @@ function _renderIntegrationFields(provider, existingIntg = null) {
                            placeholder="ID on ${_esc(provider.display_name)}"
                            value="${_esc(existingIntg?.remote_id || '')}"
                            style="flex:1;">
+                    ${provider.supports_browse !== false ? `
                     <button type="button" class="btn btn-secondary"
                             style="white-space:nowrap;" onclick="browseRemoteDevices()">
                         📋 Browse
-                    </button>
+                    </button>` : ''}
                 </div>
                 <div class="form-help">The identifier used by ${_esc(provider.display_name)} for this vehicle.</div>
             </div>

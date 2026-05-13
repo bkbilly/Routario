@@ -66,9 +66,10 @@ class IntegrationRegistry:
         result = []
         for pid, cls in _REGISTRY.items():
             result.append({
-                "provider_id":   pid,
-                "display_name":  cls.DISPLAY_NAME,
-                "poll_interval": cls.POLL_INTERVAL_SECONDS,
+                "provider_id":    pid,
+                "display_name":   cls.DISPLAY_NAME,
+                "poll_interval":  cls.POLL_INTERVAL_SECONDS,
+                "supports_browse": cls.SUPPORTS_BROWSE,
                 "fields": [
                     {
                         "key":         f.key,
