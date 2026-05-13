@@ -66,11 +66,37 @@ Access via **Admin Panel → Users → Impersonate** next to any non-admin accou
 
 ## User Management
 
-Admins have full control over all user accounts:
+Routario uses a three-tier role hierarchy:
 
-- **Create users** — set username, email, password, and role (admin or regular user).
-- **Edit users** — update credentials or change the role.
+| Role | Capabilities |
+|---|---|
+| **Super Admin** | Full access — manage all users, devices, companies, backup/restore, and impersonation |
+| **Company Admin** | Manage users and devices within their assigned company; cannot access other companies or system-level settings |
+| **Regular User** | Can only view devices they have been explicitly assigned |
+
+### Managing users (super admin)
+
+Super admins have full control over all user accounts:
+
+- **Create users** — set username, email, password, and role. Company Admin and Regular User accounts must be assigned to a company.
+- **Edit users** — update credentials or change the role via the role picker.
 - **Delete users** — cascades to remove the user's device assignments and notification channels.
-- **Assign devices** — grant or revoke access to specific devices per user. Regular users only see their assigned devices.
+- **Assign devices** — grant or revoke access to specific devices per user.
 
 Access via **Admin Panel → Users**.
+
+### Managing users (company admin)
+
+Company admins can promote or demote users within their own company between the Company Admin and Regular User roles. They cannot create new users, access other companies, or change super admin accounts.
+
+---
+
+## Company Management
+
+Companies let you partition users and devices into isolated groups. A user or device belongs to at most one company.
+
+- **Create companies** — give each company a name.
+- **Assign users** — toggle which users belong to a company. Mark specific users as Company Admin within that company.
+- **Assign devices** — toggle which devices belong to a company. Company admins and their users only see devices assigned to their company.
+
+Access via **Admin Panel → Companies** (super admin only).

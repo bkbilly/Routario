@@ -66,12 +66,13 @@ Routario evaluates alert rules continuously as positions arrive. Supported alert
 
 ---
 
-## User Management
+## User Management & Multi-Tenancy
 
-- **Multi-user** — create separate accounts for drivers, dispatchers, and administrators.
-- **Role-based access** — admins manage users and assign devices; regular users only see their assigned devices.
+- **Three-tier roles** — Super Admin, Company Admin, and Regular User. Company Admins manage users and devices scoped to their company without visibility into other companies.
+- **Company management** — group users and devices into companies. Super admins manage all companies; company admins are self-contained within theirs.
+- **Device assignment** — grant or revoke access to specific devices per user. Regular users only see their assigned devices.
 - **Per-user notification channels** — each user independently configures their alert delivery URLs (Telegram, email, Slack, webhooks, etc.).
-- **Device assignment** — admins can grant or revoke access to specific devices per user.
+- **Unit system** — each user can independently choose metric (km, km/h, m) or imperial (mi, mph, ft) display units.
 
 ---
 
@@ -114,6 +115,7 @@ Pull live positions from third-party GPS platforms without reconfiguring your de
 | **3D Tracking** | European fleet management platform |
 | **GPS-Server.net** | Hosted and white-label/self-hosted installations |
 | **Google Find Hub** | BLE trackers and Android phones via Find Hub |
+| **GPS Simulator** | Built-in virtual vehicle — drive any route with configurable speed, ignition, and sensors, no hardware needed |
 
 [:octicons-arrow-right-24: Cloud Integrations](integrations.md)
 
@@ -126,5 +128,6 @@ Pull live positions from third-party GPS platforms without reconfiguring your de
 
 - **Backup & Restore** — download a full database backup as a portable archive, and restore from a previous backup, all from the admin panel.
 - **User impersonation** — admins can temporarily act as any user to diagnose access or configuration issues.
+- **Company management** — partition users and devices into isolated companies with their own admin accounts.
 
 [:octicons-arrow-right-24: Administration Guide](administration.md)
