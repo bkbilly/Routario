@@ -129,6 +129,8 @@
                     localStorage.setItem('user_id', data.user_id);
                     localStorage.setItem('username', data.username);
                     localStorage.setItem('is_admin', data.is_admin);
+                    localStorage.setItem('is_company_admin', data.is_company_admin || false);
+                    localStorage.setItem('company_id', data.company_id ?? '');
                     localStorage.setItem('units', data.units || 'metric');
                     window.location.href = 'gps-dashboard.html';
                 } else {

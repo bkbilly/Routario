@@ -24,6 +24,7 @@
             </div>
         </div>
         <div style="display:flex;gap:1rem;">
+            <a href="company-management.html" class="btn btn-secondary" id="companyMgmtBtn" style="display:none;">&#127970; Companies</a>
             <a href="user-settings.html" class="btn btn-secondary">&#9881;&#65039; User Settings</a>
             <button class="btn btn-primary" onclick="openAddDeviceModal()">&#10133; Add New Device</button>
         </div>
@@ -49,6 +50,7 @@
                         <th>Name</th>
                         <th>Protocol</th>
                         <th>Plate</th>
+                        <th id="companyColHeader" class="company-col" style="display:none;">Company</th>
                         <th>Last Seen</th>
                         <th>Odometer</th>
                         <th style="width:180px;text-align:center;">Actions</th>
@@ -120,6 +122,12 @@
                             <div class="form-group">
                                 <label class="form-label">VIN</label>
                                 <input type="text" class="form-input" id="vin" placeholder="17-character VIN">
+                            </div>
+                            <div class="form-group" id="deviceCompanyGroup" style="display:none;">
+                                <label class="form-label">Company</label>
+                                <select class="form-input" id="deviceCompany">
+                                    <option value="">— None —</option>
+                                </select>
                             </div>
                             <div class="form-group">
                                 <label class="form-label">

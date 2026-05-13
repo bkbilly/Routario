@@ -33,11 +33,16 @@ let currentRawDeviceId = null;
 let allUsers                = [];
 let deviceAssignedUserIds   = new Set();
 
+// Companies
+let allCompanies            = [];
+
 // ── Constants ────────────────────────────────────────────────────
 const DAYS             = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DEFAULT_PROTOCOL = 'teltonika';
 const DEFAULT_TYPE     = 'car';
 const isAdmin          = localStorage.getItem('is_admin') === 'true';
+const isCompanyAdmin   = localStorage.getItem('is_company_admin') === 'true';
+const hasAdminAccess   = isAdmin || isCompanyAdmin;
 
 // ── Helpers ───────────────────────────────────────────────────────
 function checkLogin() {
@@ -73,16 +78,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     checkLogin();
 
     const addBtn = document.querySelector('button[onclick="openAddDeviceModal()"]');
-    if (addBtn) addBtn.style.display = isAdmin ? '' : 'none';
+    if (addBtn) addBtn.style.display = hasAdminAccess ? '' : 'none';
+
+    const companyBtn = document.getElementById('companyMgmtBtn');
+    if (companyBtn) companyBtn.style.display = isAdmin ? '' : 'none';
 
     const usersTabBtn = document.getElementById('usersTabBtn');
     if (usersTabBtn) usersTabBtn.style.display = 'none';
+
+    if (isAdmin) {
+        const colHeader = document.getElementById('companyColHeader');
+        if (colHeader) colHeader.style.display = '';
+        document.getElementById('deviceCompanyGroup').style.display = '';
+        loadAllCompanies();
+    }
 
     await loadAlertTypes();
     await loadAvailableProtocols();
     await loadUserChannels();
     await loadDevices();
-    if (isAdmin) loadAllUsers();
+    if (hasAdminAccess) loadAllUsers();
     populateAddAlertDropdown();
 
     document.addEventListener('keydown', e => {
@@ -240,11 +255,14 @@ function renderDeviceTable(list) {
     }
 
     tbody.innerHTML = list.map(d => {
-        const icon     = (VEHICLE_ICONS[d.vehicle_type] || VEHICLE_ICONS['other']).emoji;
-        const lastSeen = d.state?.last_update ? formatDateToLocal(d.state.last_update) : '—';
-        const odometer = d.state?.total_odometer != null ? fmtOdometer(d.state.total_odometer) : '—';
-        const plate    = d.license_plate || '—';
-        const cmds     = d.supports_commands !== false;
+        const icon        = (VEHICLE_ICONS[d.vehicle_type] || VEHICLE_ICONS['other']).emoji;
+        const lastSeen    = d.state?.last_update ? formatDateToLocal(d.state.last_update) : '—';
+        const odometer    = d.state?.total_odometer != null ? fmtOdometer(d.state.total_odometer) : '—';
+        const plate       = d.license_plate || '—';
+        const cmds        = d.supports_commands !== false;
+        const companyName = isAdmin
+            ? (allCompanies.find(c => c.id === d.company_id)?.name || '—')
+            : null;
 
         return `
         <tr class="device-row" ondblclick="openDeviceModal(${d.id},'general')">
@@ -255,6 +273,7 @@ function renderDeviceTable(list) {
             </td>
             <td>${protoBadgeHtml(d.protocol)}</td>
             <td>${_esc(plate)}</td>
+            ${isAdmin ? `<td class="company-col" style="font-size:0.85rem;color:var(--text-secondary);">${_esc(companyName)}</td>` : ''}
             <td style="font-size:0.85rem;color:var(--text-secondary);">${lastSeen}</td>
             <td style="font-family:var(--font-mono);font-size:0.85rem;">${odometer}</td>
             <td style="text-align:right;white-space:nowrap;">
@@ -277,7 +296,7 @@ function switchModalTab(tabId, btn) {
 
 // ── Open / Close Device Modal ─────────────────────────────────────
 function openAddDeviceModal() {
-    if (!isAdmin) return;
+    if (!hasAdminAccess) return;
     editingDeviceId = null;
 
     document.getElementById('modalTitle').textContent        = 'Add New Device';
@@ -298,6 +317,8 @@ function openAddDeviceModal() {
     if (imeiInput) { imeiInput.required = true; imeiInput.closest('.form-group').style.display = ''; imeiInput.disabled = false; }
     document.getElementById('deviceProtocol').disabled = false;
 
+    if (isAdmin) populateDeviceCompanySelect();
+
     alertRows = [];
     renderAlertsTable();
     populateAddAlertDropdown();
@@ -312,9 +333,9 @@ function openDeviceModal(deviceId, startTab = 'general') {
 
     document.getElementById('modalTitle').textContent        = 'Edit Device';
     document.getElementById('submitText').textContent        = 'Save Changes';
-    document.getElementById('deleteDeviceBtn').style.display = isAdmin ? 'inline-flex' : 'none';
+    document.getElementById('deleteDeviceBtn').style.display = hasAdminAccess ? 'inline-flex' : 'none';
     const usersTabBtnEdit = document.getElementById('usersTabBtn');
-    if (usersTabBtnEdit) usersTabBtnEdit.style.display = isAdmin ? '' : 'none';
+    if (usersTabBtnEdit) usersTabBtnEdit.style.display = hasAdminAccess ? '' : 'none';
     deviceAssignedUserIds = new Set();
 
     document.getElementById('deviceName').value          = d.name;
@@ -322,6 +343,7 @@ function openDeviceModal(deviceId, startTab = 'general') {
     document.getElementById('deviceProtocol').value      = d.protocol || DEFAULT_PROTOCOL;
     document.getElementById('licensePlate').value        = d.license_plate || '';
     document.getElementById('vin').value                 = d.vin || '';
+    if (isAdmin) populateDeviceCompanySelect(d.company_id);
     document.getElementById('currentOdometer').value     =
         d.state?.total_odometer != null ? toDisplayDist(d.state.total_odometer) : '0.0';
     document.getElementById('offlineTimeoutHours').value =
@@ -430,6 +452,10 @@ async function handleSubmit(event) {
             vin:           document.getElementById('vin').value            || null,
             config:        newConfig,
         };
+        if (isAdmin) {
+            const companyId = parseInt(document.getElementById('deviceCompany').value) || null;
+            payload.company_id = companyId;
+        }
 
         let response;
         if (editingDeviceId) {
@@ -469,7 +495,7 @@ async function handleSubmit(event) {
 
 // ── Delete Device ─────────────────────────────────────────────────
 async function deleteCurrentDevice() {
-    if (!editingDeviceId || !isAdmin) return;
+    if (!editingDeviceId || !hasAdminAccess) return;
     const d = devices.find(x => x.id === editingDeviceId);
     if (!confirm(`Delete "${d?.name || 'this device'}"?\n\nThis cannot be undone.`)) return;
     try {
@@ -742,6 +768,8 @@ function renderAlertsTable() {
         const tr       = document.createElement('tr');
         tr.className   = 'alert-data-row';
         tr.dataset.uid = row.uid;
+        tr.style.cursor = 'pointer';
+        tr.ondblclick  = () => openAlertEditor(row.uid);
         tr.innerHTML   = `
             <td style="color:var(--text-muted);font-size:0.82rem;">${idx + 1}</td>
             <td><span class="alert-type-label ${isCustom ? 'custom' : 'system'}">${label}</span></td>
@@ -1083,6 +1111,23 @@ async function loadAllUsers() {
         const res = await apiFetch(`${API_BASE}/users`);
         if (res.ok) allUsers = await res.json();
     } catch (e) { console.error('Failed to load users:', e); }
+}
+
+async function loadAllCompanies() {
+    try {
+        const res = await apiFetch(`${API_BASE}/companies`);
+        if (res.ok) {
+            allCompanies = await res.json();
+            populateDeviceCompanySelect();
+        }
+    } catch (e) { console.error('Failed to load companies:', e); }
+}
+
+function populateDeviceCompanySelect(selectedId) {
+    const sel = document.getElementById('deviceCompany');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— None —</option>' +
+        allCompanies.map(c => `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${_esc(c.name)}</option>`).join('');
 }
 
 async function loadUsersForDevice(deviceId) {

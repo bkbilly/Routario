@@ -33,5 +33,7 @@ async def login(form_data: UserLogin):
         "user_id": user.id,
         "username": user.username,
         "is_admin": user.is_admin,
+        "is_company_admin": getattr(user, "is_company_admin", False) or False,
+        "company_id": getattr(user, "company_id", None),
         "units": getattr(user, "units", "metric") or "metric",
     }

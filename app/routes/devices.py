@@ -20,7 +20,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy import select, update, and_
 
 from core.database import get_db
-from core.auth import get_current_user, require_admin, verify_device_access
+from core.auth import get_current_user, require_admin, require_company_admin, verify_device_access
 from integrations.engine import clear_device_state, evict_auth_cache
 from integrations.integration_model import IntegrationAccount
 from models import User, Device, DeviceState, user_device_association
@@ -30,21 +30,30 @@ router = APIRouter(prefix="/api/devices", tags=["devices"])
 
 
 @router.get("/all", response_model=List[DeviceResponse])
-async def get_all_devices(admin: User = Depends(require_admin)):
-    """Return every device in the system. Admin only."""
+async def get_all_devices(caller: User = Depends(require_company_admin)):
+    """Return devices. Super admin sees all; company admin sees their company's."""
     db = get_db()
     async with db.get_session() as session:
-        result = await session.execute(select(Device))
+        if caller.is_admin:
+            result = await session.execute(select(Device))
+        else:
+            result = await session.execute(select(Device).where(Device.company_id == caller.company_id))
         return result.scalars().all()
 
 
 @router.get("", response_model=List[DeviceResponse])
 async def get_devices(current_user: User = Depends(get_current_user)):
-    """Return devices belonging to the authenticated user. Admins see all."""
+    """Return devices for the caller. Company admins see all company devices."""
     db = get_db()
     if current_user.is_admin:
         async with db.get_session() as session:
             result = await session.execute(select(Device))
+            return result.scalars().all()
+    if current_user.is_company_admin and current_user.company_id is not None:
+        async with db.get_session() as session:
+            result = await session.execute(
+                select(Device).where(Device.company_id == current_user.company_id)
+            )
             return result.scalars().all()
     return await db.get_user_devices(current_user.id)
 
@@ -52,12 +61,12 @@ async def get_devices(current_user: User = Depends(get_current_user)):
 @router.post("", response_model=DeviceResponse)
 async def create_device(
     device_data: DeviceCreate,
-    assign_to: Optional[int] = Query(None, description="User ID to assign device to (admin only)"),
-    current_user: User = Depends(get_current_user),
+    assign_to: Optional[int] = Query(None, description="User ID to assign device to"),
+    caller: User = Depends(require_company_admin),
 ):
-    """Create a new device. Admin only."""
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+    """Create a new device. Super admin or company admin."""
+    if not caller.is_admin:
+        device_data.company_id = caller.company_id  # force company for company admins
 
     db = get_db()
     existing = await db.get_device_by_imei(device_data.imei)
@@ -65,7 +74,7 @@ async def create_device(
         raise HTTPException(status_code=400, detail="IMEI already exists")
 
     device = await db.create_device(device_data)
-    target_user = assign_to if assign_to else current_user.id
+    target_user = assign_to if assign_to else caller.id
     await db.add_device_to_user(target_user, device.id)
     return device
 
@@ -93,8 +102,9 @@ async def update_device(
     if not caller.is_admin:
         existing = await db.get_device_by_id(device_id)
         if existing:
-            device_data.imei = existing.imei
-            device_data.protocol = existing.protocol
+            device_data.imei       = existing.imei
+            device_data.protocol   = existing.protocol
+            device_data.company_id = existing.company_id
     device = await db.update_device(device_id, device_data)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -110,7 +120,7 @@ async def update_device(
 
 
 @router.delete("/{device_id}")
-async def delete_device(device_id: int, admin: User = Depends(require_admin)):
+async def delete_device(device_id: int, admin: User = Depends(require_company_admin)):
     """Delete a device and all associated data. Admin only."""
     db = get_db()
 
@@ -202,8 +212,8 @@ async def get_device_trips(
 
 
 @router.get("/{device_id}/users", response_model=List[UserResponse])
-async def get_device_users(device_id: int, admin: User = Depends(require_admin)):
-    """Get users assigned to this device. Admin only."""
+async def get_device_users(device_id: int, admin: User = Depends(require_company_admin)):
+    """Get users assigned to this device. Admin or company admin."""
     db = get_db()
     device = await db.get_device_by_id(device_id)
     if not device:
@@ -216,9 +226,9 @@ async def assign_user_to_device(
     device_id: int,
     user_id: int = Query(...),
     action: str = Query("add"),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_company_admin),
 ):
-    """Assign or remove a user from a device. Admin only."""
+    """Assign or remove a user from a device. Admin or company admin."""
     db = get_db()
     async with db.get_session() as session:
         if action == "add":

@@ -31,14 +31,27 @@ user_device_association = Table(
 )
 
 
+class Company(Base):
+    __tablename__ = 'companies'
+
+    id:         Mapped[int]      = mapped_column(Integer, primary_key=True)
+    name:       Mapped[str]      = mapped_column(String(200), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    users:   Mapped[List["User"]]   = relationship(back_populates="company")
+    devices: Mapped[List["Device"]] = relationship(back_populates="company")
+
+
 class User(Base):
     __tablename__ = 'users'
 
-    id:            Mapped[int]  = mapped_column(Integer, primary_key=True)
-    username:      Mapped[str]  = mapped_column(String(100), unique=True, nullable=False)
-    email:         Mapped[str]  = mapped_column(String(255), unique=True, nullable=False)
-    password_hash: Mapped[str]  = mapped_column(String(255), nullable=False)
-    is_admin:      Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    id:               Mapped[int]           = mapped_column(Integer, primary_key=True)
+    username:         Mapped[str]           = mapped_column(String(100), unique=True, nullable=False)
+    email:            Mapped[str]           = mapped_column(String(255), unique=True, nullable=False)
+    password_hash:    Mapped[str]           = mapped_column(String(255), nullable=False)
+    is_admin:         Mapped[bool]          = mapped_column(Boolean, default=False, nullable=False)
+    company_id:       Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('companies.id', ondelete='SET NULL'), nullable=True)
+    is_company_admin: Mapped[bool]          = mapped_column(Boolean, default=False, nullable=False)
 
     notification_channels: Mapped[Dict] = mapped_column(JsonType, default={})
     webhook_urls:          Mapped[Optional[list]] = mapped_column(JsonType, nullable=True, default=list)
@@ -49,6 +62,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
+    company:       Mapped[Optional["Company"]]  = relationship(back_populates="users")
     devices:       Mapped[List["Device"]]       = relationship(secondary=user_device_association, back_populates="users")
     alert_history: Mapped[List["AlertHistory"]] = relationship(back_populates="user")
 
@@ -63,10 +77,12 @@ class Device(Base):
     vehicle_type:  Mapped[Optional[str]] = mapped_column(String(50),  nullable=True)
     license_plate: Mapped[Optional[str]] = mapped_column(String(20),  nullable=True)
     vin:           Mapped[Optional[str]] = mapped_column(String(17),  nullable=True)
-    is_active:     Mapped[bool]          = mapped_column(Boolean, default=True)
-    config:        Mapped[Dict]          = mapped_column(JsonType, default={})
-    created_at:    Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
+    is_active:     Mapped[bool]           = mapped_column(Boolean, default=True)
+    config:        Mapped[Dict]           = mapped_column(JsonType, default={})
+    created_at:    Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
+    company_id:    Mapped[Optional[int]]  = mapped_column(Integer, ForeignKey('companies.id', ondelete='SET NULL'), nullable=True)
 
+    company:       Mapped[Optional["Company"]]     = relationship(back_populates="devices")
     state:         Mapped[Optional["DeviceState"]] = relationship(back_populates="device", uselist=False)
     users:         Mapped[List["User"]]            = relationship(secondary=user_device_association, back_populates="devices")
     positions:     Mapped[List["PositionRecord"]]  = relationship(back_populates="device")

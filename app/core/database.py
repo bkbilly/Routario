@@ -30,6 +30,7 @@ from models.models import (
     Base,
     AlertHistory,
     CommandQueue,
+    Company,
     Device,
     DeviceState,
     Geofence,
@@ -42,6 +43,8 @@ from models.models import (
 from models.schemas import (
     AlertCreate,
     CommandCreate,
+    CompanyCreate,
+    CompanyUpdate,
     DeviceCreate,
     NormalizedPosition,
     UserCreate,
@@ -159,6 +162,9 @@ class DatabaseService:
             # 'polygon_wkt' in the model. Drop the NOT NULL so inserts don't fail.
             "ALTER TABLE geofences ALTER COLUMN polygon DROP NOT NULL",
             "ALTER TABLE users ADD COLUMN units VARCHAR(10) DEFAULT 'metric'",
+            "ALTER TABLE users ADD COLUMN company_id INTEGER",
+            "ALTER TABLE users ADD COLUMN is_company_admin BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE devices ADD COLUMN company_id INTEGER",
         ]
         if self._is_postgres:
             migrations.append("ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)")
@@ -346,6 +352,8 @@ class DatabaseService:
                 email=user_data.email,
                 password_hash=pw_hash,
                 is_admin=user_data.is_admin,
+                company_id=user_data.company_id,
+                is_company_admin=user_data.is_company_admin,
                 notification_channels=user_data.notification_channels,
             )
             session.add(user)
@@ -389,6 +397,10 @@ class DatabaseService:
                 user.webhook_urls = user_data.webhook_urls
             if user_data.is_admin is not None:
                 user.is_admin = user_data.is_admin
+            if user_data.is_company_admin is not None:
+                user.is_company_admin = user_data.is_company_admin
+            if user_data.company_id is not None:
+                user.company_id = user_data.company_id
             await session.flush()
             await session.refresh(user)
             return user
@@ -405,6 +417,43 @@ class DatabaseService:
             )
             return result.scalar_one_or_none()
 
+    # ── Company CRUD ─────────────────────────────────────────────
+
+    async def create_company(self, data: CompanyCreate) -> Company:
+        async with self.get_session() as session:
+            company = Company(name=data.name)
+            session.add(company)
+            await session.flush()
+            await session.refresh(company)
+            return company
+
+    async def get_company(self, company_id: int) -> Optional[Company]:
+        async with self.get_session() as session:
+            result = await session.execute(select(Company).where(Company.id == company_id))
+            return result.scalar_one_or_none()
+
+    async def get_all_companies(self) -> List[Company]:
+        async with self.get_session() as session:
+            result = await session.execute(select(Company))
+            return result.scalars().all()
+
+    async def update_company(self, company_id: int, data: CompanyUpdate) -> Optional[Company]:
+        async with self.get_session() as session:
+            result = await session.execute(select(Company).where(Company.id == company_id))
+            company = result.scalar_one_or_none()
+            if not company:
+                return None
+            if data.name is not None:
+                company.name = data.name
+            await session.flush()
+            await session.refresh(company)
+            return company
+
+    async def delete_company(self, company_id: int) -> bool:
+        async with self.get_session() as session:
+            result = await session.execute(delete(Company).where(Company.id == company_id))
+            return result.rowcount > 0
+
     # ── Device CRUD ───────────────────────────────────────────────
 
     async def create_device(self, device_data: DeviceCreate) -> Device:
@@ -417,6 +466,7 @@ class DatabaseService:
                 license_plate=device_data.license_plate,
                 vin=device_data.vin,
                 config=device_data.config.model_dump(),
+                company_id=device_data.company_id,
             )
             session.add(device)
             await session.flush()
@@ -471,6 +521,7 @@ class DatabaseService:
             device.license_plate = device_data.license_plate
             device.vin           = device_data.vin
             device.config        = device_data.config.model_dump()
+            device.company_id    = device_data.company_id
             await session.flush()
             await session.refresh(device)
             return device

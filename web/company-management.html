@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Company Management - Routario</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="css/device-management.css">
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <div class="header-title">
+            <button onclick="history.back()" class="back-btn" title="Go back">
+                <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div>
+                <h1>Company Management</h1>
+                <p style="color:var(--text-muted);margin-top:0.5rem;">Manage companies and their users &amp; devices</p>
+            </div>
+        </div>
+        <button class="btn btn-primary" onclick="openAddCompanyModal()">&#10133; Add Company</button>
+    </div>
+
+    <div class="devices-table-wrap">
+        <div class="devices-search-bar">
+            <div class="search-input-wrap">
+                <span class="search-icon">&#128269;</span>
+                <input type="text" id="companySearch" class="search-input"
+                    placeholder="Search companies&#8230;"
+                    oninput="filterCompanies()">
+            </div>
+            <span class="devices-count" id="companiesCount"></span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="devices-table company-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th style="text-align:center;">Users</th>
+                        <th style="text-align:center;">Devices</th>
+                        <th>Created</th>
+                        <th style="width:180px;text-align:center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="companiesTableBody">
+                    <tr id="loadingRow">
+                        <td colspan="5" style="text-align:center;padding:3rem;color:var(--text-muted);">
+                            <div class="loading" style="margin:0 auto 1rem;"></div>
+                            Loading companies&#8230;
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================
+     COMPANY MODAL
+================================================================ -->
+<div class="modal" id="companyModal">
+    <div class="modal-content wide">
+        <div class="modal-header">
+            <h2 class="modal-title" id="modalTitle">Company</h2>
+            <button type="button" class="modal-close" onclick="closeCompanyModal()">&#10005;</button>
+        </div>
+
+        <div class="modal-tabs">
+            <button type="button" class="modal-tab active" data-tab="general" onclick="switchTab('general',this)">&#127970; General</button>
+            <button type="button" class="modal-tab" id="usersTabBtn" data-tab="users" onclick="switchTab('users',this)" style="display:none;">&#128101; Users</button>
+            <button type="button" class="modal-tab" id="devicesTabBtn" data-tab="devices" onclick="switchTab('devices',this)" style="display:none;">&#128225; Devices</button>
+        </div>
+
+        <div class="modal-scrollable">
+            <!-- TAB: GENERAL -->
+            <div class="modal-tab-content active" id="tab-general">
+                <div class="form-group">
+                    <label class="form-label">Company Name *</label>
+                    <input type="text" class="form-input" id="companyName" required placeholder="e.g. Acme Corp">
+                </div>
+            </div>
+
+            <!-- TAB: USERS -->
+            <div class="modal-tab-content" id="tab-users">
+                <div class="form-group">
+                    <input type="text" class="form-input" id="userTabSearch"
+                        placeholder="Search users&#8230;" oninput="filterUserTab()">
+                </div>
+                <div id="userTabList" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+            </div>
+
+            <!-- TAB: DEVICES -->
+            <div class="modal-tab-content" id="tab-devices">
+                <div class="form-group">
+                    <input type="text" class="form-input" id="deviceTabSearch"
+                        placeholder="Search devices&#8230;" oninput="filterDeviceTab()">
+                </div>
+                <div id="deviceTabList" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <div style="display:flex;gap:0.75rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeCompanyModal()">Cancel</button>
+                <button type="button" class="btn btn-danger" id="deleteCompanyBtn" onclick="deleteCurrentCompany()" style="display:none;">&#128465;&#65039; Delete</button>
+            </div>
+            <button type="button" class="btn btn-primary" id="saveCompanyBtn" onclick="saveCompany()">
+                <span id="saveText">Save</span>
+                <span id="saveLoading" class="loading" style="display:none;"></span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="js/config.js"></script>
+<script src="js/impersonation.js"></script>
+<script src="js/company-management.js"></script>
+</body>
+</html>

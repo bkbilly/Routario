@@ -140,10 +140,11 @@
             <div class="card" id="adminPanel" style="display: none;">
                 <div class="card-header">
                     <div class="card-icon card-icon-warning">🛡️</div>
-                    <div>
+                    <div style="flex:1;">
                         <h2 class="card-title card-title-warning">Admin Panel</h2>
                         <p class="card-subtitle">Manage users, devices and system data</p>
                     </div>
+                    <a href="company-management.html" id="companyMgmtLink" class="btn btn-secondary" style="display:none;">&#127970; Companies</a>
                 </div>
 
                 <!-- Section: Users -->
@@ -164,17 +165,30 @@
                     <div class="admin-section-form">
                         <div class="admin-form-label">Add New User</div>
                         <div class="admin-user-form-grid">
+                            <div class="form-group" id="newUserRoleGroup">
+                                <label class="form-label">Role</label>
+                                <select id="newUserRole" class="form-input" onchange="onNewUserRoleChange()">
+                                    <option value="user">Regular User</option>
+                                    <option value="company_admin">Company Admin</option>
+                                </select>
+                            </div>
                             <div class="form-group">
-                                <label class="form-label">Username</label>
+                                <label class="form-label">Username *</label>
                                 <input type="text" id="newUserName" class="form-input" placeholder="e.g. john_doe">
                             </div>
                             <div class="form-group">
-                                <label class="form-label">Email</label>
+                                <label class="form-label">Email *</label>
                                 <input type="email" id="newUserEmail" class="form-input" placeholder="john@example.com">
                             </div>
                             <div class="form-group">
-                                <label class="form-label">Password</label>
+                                <label class="form-label">Password *</label>
                                 <input type="password" id="newUserPass" class="form-input" placeholder="Min. 8 characters">
+                            </div>
+                            <div class="form-group" id="newUserCompanyGroup" style="display:none;">
+                                <label class="form-label">Company *</label>
+                                <select id="newUserCompany" class="form-input">
+                                    <option value="">— Select Company —</option>
+                                </select>
                             </div>
                             <button type="button" class="btn btn-primary admin-form-btn" onclick="addNewUser()">
                                 + Add User
@@ -183,8 +197,8 @@
                     </div>
                 </div>
 
-                <!-- Section: Backup & Restore -->
-                <div class="admin-section">
+                <!-- Section: Backup & Restore (super admin only) -->
+                <div class="admin-section" id="backupSection">
                     <div class="admin-section-header">
                         <span class="admin-section-icon">💾</span>
                         <div class="admin-section-info">
@@ -246,6 +260,32 @@
             </div>
             <div class="device-assign-list" id="deviceAssignList">
                 <!-- Populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Role picker popup (for super admin) -->
+    <div id="rolePopup" class="role-popup" style="display:none;">
+        <div class="role-popup-header" id="rolePopupHeader"></div>
+        <div id="rolePopupOptions"></div>
+    </div>
+
+    <!-- Company Select Modal (for Make Co.Admin) -->
+    <div class="modal" id="companySelectModal">
+        <div class="modal-content" style="max-width:420px;">
+            <div class="modal-header">
+                <h2 class="modal-title">Assign Company</h2>
+                <button class="modal-close" onclick="closeCompanySelectModal()">&#10005;</button>
+            </div>
+            <div style="padding:1.25rem 1.5rem 0.5rem;">
+                <p style="margin:0 0 1rem;color:var(--text-secondary);">Select a company for <strong id="coAdminUsername"></strong></p>
+                <select id="coAdminCompanySelect" class="form-input">
+                    <option value="">— Select Company —</option>
+                </select>
+            </div>
+            <div style="padding:1rem 1.5rem 1.25rem;display:flex;justify-content:flex-end;gap:0.75rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeCompanySelectModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="confirmMakeCoAdmin()">Confirm</button>
             </div>
         </div>
     </div>

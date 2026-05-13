@@ -3,10 +3,12 @@ function returnToAdmin() {
     const userId   = localStorage.getItem('impersonating_admin_user_id');
     const username = localStorage.getItem('impersonating_admin_username');
     if (!token) return;
-    localStorage.setItem('auth_token', token);
-    localStorage.setItem('user_id',    userId);
-    localStorage.setItem('username',   username);
-    localStorage.setItem('is_admin',   'true');
+    localStorage.setItem('auth_token',        token);
+    localStorage.setItem('user_id',           userId);
+    localStorage.setItem('username',          username);
+    localStorage.setItem('is_admin',          'true');
+    localStorage.setItem('is_company_admin',  'false');
+    localStorage.setItem('company_id',        '');
     localStorage.removeItem('impersonating_admin_token');
     localStorage.removeItem('impersonating_admin_user_id');
     localStorage.removeItem('impersonating_admin_username');

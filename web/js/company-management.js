@@ -1,0 +1,373 @@
+// ================================================================
+//  company-management.js
+// ================================================================
+
+let companies    = [];
+let allCompanies = [];
+let allUsers     = [];
+let allDevices   = [];
+
+let editingCompanyId       = null;
+let companyUserIds         = new Set();
+let companyDeviceIds       = new Set();
+let companyAdminUserIds    = new Set();
+
+function checkLogin() {
+    const token   = localStorage.getItem('auth_token');
+    const isAdmin = localStorage.getItem('is_admin') === 'true';
+    if (!token || !isAdmin) window.location.href = 'login.html';
+}
+
+function _esc(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function formatDate(str) {
+    if (!str) return '—';
+    if (!str.includes('Z') && !str.includes('+')) str += 'Z';
+    return new Date(str).toLocaleDateString();
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    checkLogin();
+    await Promise.all([loadCompanies(), loadAllUsers(), loadAllDevices()]);
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeCompanyModal();
+    });
+});
+
+// ── Loaders ───────────────────────────────────────────────────────
+
+async function loadCompanies() {
+    try {
+        const res = await apiFetch(`${API_BASE}/companies`);
+        if (!res.ok) throw new Error(`${res.status}`);
+        companies    = await res.json();
+        allCompanies = [...companies];
+        renderTable(companies);
+    } catch (e) {
+        showAlert('Failed to load companies', 'error');
+        console.error(e);
+    }
+}
+
+async function loadAllUsers() {
+    try {
+        const res = await apiFetch(`${API_BASE}/users`);
+        if (res.ok) allUsers = (await res.json()).filter(u => !u.is_admin);
+    } catch (e) { console.error(e); }
+}
+
+async function loadAllDevices() {
+    try {
+        const res = await apiFetch(`${API_BASE}/devices/all`);
+        if (res.ok) allDevices = await res.json();
+    } catch (e) { console.error(e); }
+}
+
+// ── Table ─────────────────────────────────────────────────────────
+
+function filterCompanies() {
+    const q = (document.getElementById('companySearch').value || '').toLowerCase().trim();
+    const filtered = q ? allCompanies.filter(c => c.name.toLowerCase().includes(q)) : allCompanies;
+    renderTable(filtered);
+}
+
+function renderTable(list) {
+    const tbody = document.getElementById('companiesTableBody');
+    const count = document.getElementById('companiesCount');
+    count.textContent = `${list.length} compan${list.length !== 1 ? 'ies' : 'y'}`;
+
+    if (!list.length) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:3rem;color:var(--text-muted);">
+            <div style="font-size:2.5rem;margin-bottom:0.75rem;">&#127970;</div>No companies found</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = list.map(c => `
+        <tr class="device-row" ondblclick="openEditModal(${c.id})" style="cursor:pointer;">
+            <td><span class="device-row-name">${_esc(c.name)}</span></td>
+            <td style="text-align:center;font-family:var(--font-mono);">${c.user_count ?? 0}</td>
+            <td style="text-align:center;font-family:var(--font-mono);">${c.device_count ?? 0}</td>
+            <td style="font-size:0.85rem;color:var(--text-secondary);">${formatDate(c.created_at)}</td>
+            <td style="text-align:right;white-space:nowrap;">
+                <button class="btn btn-secondary tbl-btn" onclick="openEditModal(${c.id})">&#9999;&#65039; Edit</button>
+                <button class="btn btn-danger tbl-btn" onclick="confirmDelete(${c.id}, '${_esc(c.name)}')">&#128465;&#65039;</button>
+            </td>
+        </tr>`).join('');
+}
+
+// ── Modal ─────────────────────────────────────────────────────────
+
+function switchTab(tabId, btn) {
+    document.querySelectorAll('.modal-tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.modal-tab').forEach(el => el.classList.remove('active'));
+    document.getElementById(`tab-${tabId}`)?.classList.add('active');
+    (btn || document.querySelector(`.modal-tab[data-tab="${tabId}"]`))?.classList.add('active');
+    if (tabId === 'users')   renderUserTab();
+    if (tabId === 'devices') renderDeviceTab();
+}
+
+function openAddCompanyModal() {
+    editingCompanyId = null;
+    document.getElementById('modalTitle').textContent     = 'Add Company';
+    document.getElementById('companyName').value          = '';
+    document.getElementById('deleteCompanyBtn').style.display = 'none';
+    document.getElementById('usersTabBtn').style.display  = 'none';
+    document.getElementById('devicesTabBtn').style.display = 'none';
+    switchTab('general');
+    document.getElementById('companyModal').classList.add('active');
+}
+
+async function openEditModal(companyId) {
+    editingCompanyId = companyId;
+    const c = companies.find(x => x.id === companyId);
+    if (!c) return;
+
+    document.getElementById('modalTitle').textContent     = `Edit — ${c.name}`;
+    document.getElementById('companyName').value          = c.name;
+    document.getElementById('deleteCompanyBtn').style.display = 'inline-flex';
+    document.getElementById('usersTabBtn').style.display  = '';
+    document.getElementById('devicesTabBtn').style.display = '';
+
+    // Load current company memberships
+    const [userRes, deviceRes] = await Promise.all([
+        apiFetch(`${API_BASE}/companies/${companyId}/users`),
+        apiFetch(`${API_BASE}/companies/${companyId}/devices`),
+    ]);
+    if (userRes.ok) {
+        const users = await userRes.json();
+        companyUserIds      = new Set(users.map(u => u.id));
+        companyAdminUserIds = new Set(users.filter(u => u.is_company_admin).map(u => u.id));
+    }
+    if (deviceRes.ok) {
+        const devices = await deviceRes.json();
+        companyDeviceIds = new Set(devices.map(d => d.id));
+    }
+
+    switchTab('general');
+    document.getElementById('companyModal').classList.add('active');
+}
+
+function closeCompanyModal() {
+    document.getElementById('companyModal').classList.remove('active');
+}
+
+// ── Save / Delete ─────────────────────────────────────────────────
+
+async function saveCompany() {
+    const name = document.getElementById('companyName').value.trim();
+    if (!name) { showAlert('Company name is required', 'error'); return; }
+
+    const saveBtn  = document.getElementById('saveCompanyBtn');
+    const saveText = document.getElementById('saveText');
+    const saveLoad = document.getElementById('saveLoading');
+    saveBtn.disabled       = true;
+    saveText.style.display = 'none';
+    saveLoad.style.display = 'inline-block';
+
+    try {
+        const url    = editingCompanyId ? `${API_BASE}/companies/${editingCompanyId}` : `${API_BASE}/companies`;
+        const method = editingCompanyId ? 'PUT' : 'POST';
+        const res = await apiFetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }),
+        });
+        if (res.ok) {
+            showAlert(editingCompanyId ? 'Company updated' : 'Company created', 'success');
+            closeCompanyModal();
+            await loadCompanies();
+        } else {
+            const err = await res.json();
+            showAlert(err.detail || 'Failed to save', 'error');
+        }
+    } catch (e) { showAlert('Error saving company', 'error'); }
+    finally {
+        saveBtn.disabled       = false;
+        saveText.style.display = 'inline';
+        saveLoad.style.display = 'none';
+    }
+}
+
+async function deleteCurrentCompany() {
+    if (!editingCompanyId) return;
+    const c = companies.find(x => x.id === editingCompanyId);
+    if (!confirm(`Delete company "${c?.name || ''}"?\n\nUsers and devices will be unlinked but not deleted.`)) return;
+    try {
+        const res = await apiFetch(`${API_BASE}/companies/${editingCompanyId}`, { method: 'DELETE' });
+        if (res.ok) {
+            showAlert('Company deleted', 'success');
+            closeCompanyModal();
+            await loadCompanies();
+        } else {
+            const err = await res.json();
+            showAlert(err.detail || 'Failed to delete', 'error');
+        }
+    } catch (e) { showAlert('Error deleting company', 'error'); }
+}
+
+async function confirmDelete(companyId, name) {
+    if (!confirm(`Delete company "${name}"?\n\nUsers and devices will be unlinked but not deleted.`)) return;
+    try {
+        const res = await apiFetch(`${API_BASE}/companies/${companyId}`, { method: 'DELETE' });
+        if (res.ok) {
+            showAlert('Company deleted', 'success');
+            await loadCompanies();
+        } else {
+            const err = await res.json();
+            showAlert(err.detail || 'Failed to delete', 'error');
+        }
+    } catch (e) { showAlert('Error deleting company', 'error'); }
+}
+
+// ── Users Tab ─────────────────────────────────────────────────────
+
+function filterUserTab() { renderUserTab(); }
+
+function renderUserTab() {
+    const list  = document.getElementById('userTabList');
+    const query = (document.getElementById('userTabSearch')?.value || '').toLowerCase().trim();
+    const filtered = allUsers.filter(u =>
+        !query ||
+        (u.username || '').toLowerCase().includes(query) ||
+        (u.email    || '').toLowerCase().includes(query)
+    );
+    if (!filtered.length) {
+        list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No users found.</div>';
+        return;
+    }
+    list.innerHTML = '';
+    filtered.forEach(u => {
+        const inCompany  = companyUserIds.has(u.id);
+        const isCoAdmin  = companyAdminUserIds.has(u.id);
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.8rem;background:var(--bg-tertiary);border-radius:8px;gap:0.75rem;';
+        div.innerHTML = `
+            <div style="flex:1;min-width:0;">
+                <div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_esc(u.username)}</div>
+                <div style="font-size:0.8rem;color:var(--text-muted);">${_esc(u.email || '')}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:0.6rem;flex-shrink:0;">
+                <button type="button"
+                    class="co-admin-pill${isCoAdmin && inCompany ? ' active' : ''}"
+                    ${!inCompany ? 'disabled' : ''}
+                    onclick="toggleCompanyAdmin(${u.id}, ${!(isCoAdmin && inCompany)})"
+                    title="${isCoAdmin && inCompany ? 'Revoke company admin' : 'Make company admin'}">
+                    Company Admin
+                </button>
+                <label class="toggle-switch">
+                    <input type="checkbox" ${inCompany ? 'checked' : ''}
+                        onchange="toggleUserMembership(${u.id}, this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>`;
+        list.appendChild(div);
+    });
+}
+
+async function toggleUserMembership(userId, add) {
+    const action = add ? 'add' : 'remove';
+    try {
+        const res = await apiFetch(
+            `${API_BASE}/companies/${editingCompanyId}/users?user_id=${userId}&action=${action}`,
+            { method: 'POST' }
+        );
+        if (res.ok) {
+            if (add) companyUserIds.add(userId);
+            else { companyUserIds.delete(userId); companyAdminUserIds.delete(userId); }
+            renderUserTab();
+        } else {
+            showAlert('Failed to update membership', 'error');
+            renderUserTab();
+        }
+    } catch (e) { showAlert('Error updating membership', 'error'); renderUserTab(); }
+}
+
+async function toggleCompanyAdmin(userId, makeAdmin) {
+    try {
+        const res = await apiFetch(`${API_BASE}/users/${userId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_company_admin: makeAdmin }),
+        });
+        if (res.ok) {
+            if (makeAdmin) companyAdminUserIds.add(userId);
+            else companyAdminUserIds.delete(userId);
+            renderUserTab();
+        } else {
+            showAlert('Failed to update admin status', 'error');
+            renderUserTab();
+        }
+    } catch (e) { showAlert('Error updating admin status', 'error'); renderUserTab(); }
+}
+
+// ── Devices Tab ───────────────────────────────────────────────────
+
+function filterDeviceTab() { renderDeviceTab(); }
+
+function renderDeviceTab() {
+    const list  = document.getElementById('deviceTabList');
+    const query = (document.getElementById('deviceTabSearch')?.value || '').toLowerCase().trim();
+    const filtered = allDevices.filter(d =>
+        !query ||
+        (d.name          || '').toLowerCase().includes(query) ||
+        (d.imei          || '').toLowerCase().includes(query) ||
+        (d.license_plate || '').toLowerCase().includes(query)
+    );
+    if (!filtered.length) {
+        list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No devices found.</div>';
+        return;
+    }
+    list.innerHTML = '';
+    filtered.forEach(d => {
+        const inCompany = companyDeviceIds.has(d.id);
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.8rem;background:var(--bg-tertiary);border-radius:8px;gap:0.75rem;';
+        div.innerHTML = `
+            <div style="flex:1;min-width:0;">
+                <div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_esc(d.name)}</div>
+                <div style="font-size:0.8rem;color:var(--text-muted);font-family:var(--font-mono);">${_esc(d.imei)}${d.license_plate ? ' · ' + _esc(d.license_plate) : ''}</div>
+            </div>
+            <label class="toggle-switch" style="flex-shrink:0;">
+                <input type="checkbox" ${inCompany ? 'checked' : ''}
+                    onchange="toggleDeviceMembership(${d.id}, this.checked)">
+                <span class="toggle-slider"></span>
+            </label>`;
+        list.appendChild(div);
+    });
+}
+
+async function toggleDeviceMembership(deviceId, add) {
+    const action = add ? 'add' : 'remove';
+    try {
+        const res = await apiFetch(
+            `${API_BASE}/companies/${editingCompanyId}/devices?device_id=${deviceId}&action=${action}`,
+            { method: 'POST' }
+        );
+        if (res.ok) {
+            if (add) companyDeviceIds.add(deviceId);
+            else companyDeviceIds.delete(deviceId);
+            renderDeviceTab();
+        } else {
+            showAlert('Failed to update device assignment', 'error');
+            renderDeviceTab();
+        }
+    } catch (e) { showAlert('Error updating device assignment', 'error'); renderDeviceTab(); }
+}
+
+// ── Toast ─────────────────────────────────────────────────────────
+
+function showAlert(message, type) {
+    const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type || 'info'}`;
+    toast.innerHTML = `<span class="toast-icon">${icons[type] || 'ℹ'}</span><span>${message}</span>`;
+    document.getElementById('toastContainer').appendChild(toast);
+    setTimeout(() => {
+        toast.style.animation = 'slideInRight 0.3s reverse forwards';
+        setTimeout(() => toast.remove(), 300);
+    }, 3500);
+}
