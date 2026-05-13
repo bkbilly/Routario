@@ -428,7 +428,7 @@ h1 {
 
 .admin-user-form-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr auto;
+    grid-template-columns: 1fr 1fr 1fr 1fr auto;
     gap: 0.75rem;
     align-items: end;
 }
@@ -486,16 +486,71 @@ h1 {
 }
 
 .user-actions {
-    display: flow;
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.4rem;
     flex-shrink: 0;
     align-items: center;
+    justify-content: flex-end;
 }
 
 .user-actions .btn {
     padding: 0.35rem 0.65rem;
     font-size: 0.72rem;
     white-space: nowrap;
+}
+
+/* ── Role Popup ─────────────────────────────────────────────── */
+
+.role-popup {
+    position: fixed;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 0.35rem;
+    z-index: 2000;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+    min-width: 185px;
+}
+
+.role-popup-header {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    padding: 0.25rem 0.65rem 0.4rem;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 0.3rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.role-popup-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.45rem 0.7rem;
+    border: none;
+    background: none;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--text-primary);
+    text-align: left;
+    transition: background 0.12s;
+    font-family: inherit;
+    white-space: nowrap;
+}
+
+.role-popup-option:hover:not(.active) {
+    background: var(--bg-tertiary);
+}
+
+.role-popup-option.active {
+    background: var(--accent-primary);
+    color: #fff;
+    font-weight: 500;
+    cursor: default;
 }
 
 /* ── Backup Actions ────────────────────────────────────────── */
@@ -766,6 +821,40 @@ input:checked + .slider:before {
 
 /* ── Responsive ────────────────────────────────────────────── */
 
+@media (max-width: 950px) {
+    .admin-user-form-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: flex-end;
+    }
+
+    .admin-user-form-grid .form-group {
+        flex: 1;
+        min-width: 160px;
+        margin-bottom: 0;
+    }
+
+    .admin-form-btn {
+        align-self: flex-end;
+        width: auto;
+        flex-shrink: 0;
+    }
+
+    .user-list-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .user-info {
+        width: 100%;
+    }
+
+    .user-actions {
+        width: 100%;
+    }
+}
+
 @media (max-width: 650px) {
     .add-form-inline {
         flex-direction: column;
@@ -849,16 +938,6 @@ input:checked + .slider:before {
     .card {
         padding: 0.75rem;
         margin-bottom: 1rem;
-    }
-
-    .user-list-item {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .user-actions {
-        width: 100%;
-        justify-content: flex-end;
     }
 
     .user-actions .btn {

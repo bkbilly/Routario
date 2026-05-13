@@ -94,6 +94,22 @@
                     </svg>
                 </a>
 
+                <a href="company-management.html" class="header-menu-item" id="companiesMenuItem" style="display:none;">
+                    <span class="header-menu-item-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="7" width="20" height="14" rx="2"/>
+                            <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+                        </svg>
+                    </span>
+                    <span>Companies</span>
+                    <svg class="header-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="13" height="13"
+                         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                </a>
+
                 <a href="user-settings.html" class="header-menu-item">
                     <span class="header-menu-item-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
@@ -662,10 +678,13 @@
             // Populate user info from localStorage
             const username = localStorage.getItem('username') || 'User';
             const isAdmin = localStorage.getItem('is_admin') === 'true';
+            const isCompanyAdmin = localStorage.getItem('is_company_admin') === 'true';
             const menuUsername = document.getElementById('menuUsername');
             const menuRole = document.getElementById('menuRole');
+            const companiesMenuItem = document.getElementById('companiesMenuItem');
             if (menuUsername) menuUsername.textContent = username;
-            if (menuRole) menuRole.textContent = isAdmin ? 'Administrator' : 'User';
+            if (menuRole) menuRole.textContent = isAdmin ? 'Super Admin' : isCompanyAdmin ? 'Company Admin' : 'User';
+            if (companiesMenuItem) companiesMenuItem.style.display = isAdmin ? '' : 'none';
         }
         document.addEventListener('click', (e) => {
             const dropdown = document.getElementById('headerMenuDropdown');

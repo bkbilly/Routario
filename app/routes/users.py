@@ -19,7 +19,7 @@ from sqlalchemy import select, delete
 
 from core.database import get_db
 from core.config import get_settings
-from core.auth import get_current_user, require_admin, require_self_or_admin
+from core.auth import get_current_user, require_admin, require_company_admin, require_self_or_admin
 from models import User, user_device_association
 from models.schemas import UserCreate, UserUpdate, UserResponse, DeviceResponse
 from sqlalchemy import and_
@@ -28,23 +28,29 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 
 
 @router.get("", response_model=List[UserResponse])
-async def get_all_users(admin: User = Depends(require_admin)):
-    """Return all users. Admin only."""
+async def get_all_users(caller: User = Depends(require_company_admin)):
+    """Return all users. Super admin sees all; company admin sees own company."""
     db = get_db()
     async with db.get_session() as session:
-        result = await session.execute(select(User))
+        if caller.is_admin:
+            result = await session.execute(select(User))
+        else:
+            result = await session.execute(select(User).where(User.company_id == caller.company_id))
         return result.scalars().all()
 
 
 @router.post("", response_model=UserResponse)
-async def create_user(user_data: UserCreate, admin: User = Depends(require_admin)):
-    """Create a new user. Admin only."""
+async def create_user(user_data: UserCreate, caller: User = Depends(require_company_admin)):
+    """Create a new user. Company admin auto-assigns to their company."""
+    if not caller.is_admin:
+        user_data.company_id = caller.company_id
+        user_data.is_admin = False  # company admins cannot create super admins
     db = get_db()
     return await db.create_user(user_data)
 
 @router.get("/{user_id}/devices", response_model=List[DeviceResponse])
-async def get_user_devices(user_id: int, admin: User = Depends(require_admin)):
-    """Get devices assigned to a specific user. Admin only."""
+async def get_user_devices(user_id: int, caller: User = Depends(require_company_admin)):
+    """Get devices assigned to a specific user. Admin or company admin."""
     db = get_db()
     return await db.get_user_devices(user_id)
 
@@ -76,10 +82,15 @@ async def update_user(
 
 
 @router.delete("/{user_id}")
-async def delete_user(user_id: int, admin: User = Depends(require_admin)):
-    """Delete a user. Admin only."""
-    if admin.id == user_id:
+async def delete_user(user_id: int, caller: User = Depends(require_company_admin)):
+    """Delete a user. Company admin can delete users in their company."""
+    if caller.id == user_id:
         raise HTTPException(status_code=400, detail="You cannot delete your own account")
+    if not caller.is_admin:
+        db = get_db()
+        target = await db.get_user(user_id)
+        if not target or target.company_id != caller.company_id:
+            raise HTTPException(status_code=403, detail="Cannot delete a user outside your company")
     db = get_db()
     async with db.get_session() as session:
         result = await session.execute(delete(User).where(User.id == user_id))
@@ -105,11 +116,13 @@ async def impersonate_user(user_id: int, admin: User = Depends(require_admin)):
         algorithm=settings.algorithm,
     )
     return {
-        "access_token": token,
-        "token_type":   "bearer",
-        "user_id":      target.id,
-        "username":     target.username,
-        "is_admin":     target.is_admin,
+        "access_token":     token,
+        "token_type":       "bearer",
+        "user_id":          target.id,
+        "username":         target.username,
+        "is_admin":         target.is_admin,
+        "is_company_admin": getattr(target, "is_company_admin", False) or False,
+        "company_id":       getattr(target, "company_id", None),
     }
 
 
@@ -118,9 +131,9 @@ async def assign_device(
     user_id: int,
     device_id: int = Query(...),
     action: str = Query("add"),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_company_admin),
 ):
-    """Assign or remove a device from a user. Admin only."""
+    """Assign or remove a device from a user. Admin or company admin."""
     db = get_db()
     async with db.get_session() as session:
         if action == "add":

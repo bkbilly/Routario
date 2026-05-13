@@ -121,6 +121,7 @@ class DeviceCreate(BaseModel):
     vehicle_type: Optional[str] = "car"
     license_plate: Optional[str] = None
     vin: Optional[str] = None
+    company_id: Optional[int] = None
     config: DeviceConfig = Field(
         default_factory=lambda: DeviceConfig(
             offline_timeout_hours=None,
@@ -139,7 +140,7 @@ class DeviceCreate(BaseModel):
 
 class DeviceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    
+
     id: int
     imei: str
     name: str
@@ -149,6 +150,7 @@ class DeviceResponse(BaseModel):
     is_active: bool
     created_at: datetime
     config: Optional[Dict[str, Any]] = None
+    company_id: Optional[int] = None
 
 
 class DeviceStateResponse(BaseModel):
@@ -179,6 +181,8 @@ class UserCreate(BaseModel):
     language: Optional[str] = "en"
     units: Optional[str] = "metric"
     is_admin: bool = False
+    company_id: Optional[int] = None
+    is_company_admin: bool = False
 
 
 class UserUpdate(BaseModel):
@@ -189,6 +193,8 @@ class UserUpdate(BaseModel):
     language: Optional[str] = None
     units: Optional[str] = None
     is_admin: Optional[bool] = None
+    is_company_admin: Optional[bool] = None
+    company_id: Optional[int] = None
     webhook_urls: Optional[List[str]] = None
 
 
@@ -203,6 +209,8 @@ class Token(BaseModel):
     user_id: int
     username: str
     is_admin: bool
+    is_company_admin: bool = False
+    company_id: Optional[int] = None
     units: str = "metric"
 
 
@@ -213,6 +221,8 @@ class UserResponse(BaseModel):
     username: str
     email: str
     is_admin: bool = False
+    is_company_admin: bool = False
+    company_id: Optional[int] = None
     language: Optional[str] = "en"
     units: Optional[str] = "metric"
     notification_channels: List[Dict[str, str]] = Field(default_factory=list)
@@ -227,6 +237,25 @@ class UserResponse(BaseModel):
         if v is None:
             return []
         return v
+
+
+# ==================== Company Schemas ====================
+
+class CompanyCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+
+
+class CompanyUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+
+
+class CompanyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    created_at: datetime
+    user_count: Optional[int] = None
+    device_count: Optional[int] = None
 
 
 # ==================== Position Schemas ====================

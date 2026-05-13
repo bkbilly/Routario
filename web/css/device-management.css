@@ -164,6 +164,39 @@ h1 {
     margin: 0 1px;
 }
 
+/* ── Co-Admin Pill Toggle ──────────────────────────────────────── */
+
+.co-admin-pill {
+    padding: 0.25rem 0.65rem;
+    font-size: 0.75rem;
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-weight: 500;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.co-admin-pill:not(:disabled):hover {
+    border-color: var(--accent-warning);
+    color: var(--accent-warning);
+}
+
+.co-admin-pill.active {
+    background: rgba(245, 158, 11, 0.12);
+    border-color: var(--accent-warning);
+    color: var(--accent-warning);
+}
+
+.co-admin-pill:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
 /* ── Alerts / Toasts ───────────────────────────────────────────── */
 
 .alert {
@@ -933,6 +966,15 @@ h1 {
 }
 
 /* ── Mobile: Device Table ───────────────────────────────────────── */
+
+@media (max-width: 900px) {
+    .company-col { display: none; }
+}
+
+.company-table th:nth-child(3),
+.company-table td:nth-child(3) {
+    display: table-cell !important;
+}
 
 @media (max-width: 768px) {
     h1 {

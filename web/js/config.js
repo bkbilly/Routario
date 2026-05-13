@@ -36,6 +36,8 @@ async function apiFetch(url, options = {}) {
         localStorage.removeItem('user_id');
         localStorage.removeItem('username');
         localStorage.removeItem('is_admin');
+        localStorage.removeItem('is_company_admin');
+        localStorage.removeItem('company_id');
         window.location.href = 'login.html';
         return response; // won't reach, but keeps return type consistent
     }
