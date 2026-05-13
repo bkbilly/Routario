@@ -207,26 +207,28 @@ async function loadAlerts() {
 }
 
 function applyDeviceAlertHighlights() {
-    const alertDeviceIds = new Set(
-        loadedAlerts.filter(a => a.device_id != null).map(a => a.device_id)
-    );
+    const alertCountByDevice = {};
+    loadedAlerts.forEach(a => {
+        if (a.device_id != null) {
+            alertCountByDevice[a.device_id] = (alertCountByDevice[a.device_id] || 0) + 1;
+        }
+    });
 
     document.querySelectorAll('.device-card').forEach(card => {
         const deviceId = parseInt(card.id.replace('device-card-', ''));
-        const hasAlert = alertDeviceIds.has(deviceId);
-        card.classList.toggle('has-alert', hasAlert);
+        const count    = alertCountByDevice[deviceId] || 0;
+        card.classList.toggle('has-alert', count > 0);
 
-        const nameEl = card.querySelector('.device-name');
-        if (nameEl) {
-            const existing = nameEl.querySelector('.alert-pulse');
-            if (hasAlert && !existing) {
-                const dot = document.createElement('span');
-                dot.className = 'alert-pulse';
-                dot.title = 'Unread alert';
-                nameEl.appendChild(dot);
-            } else if (!hasAlert && existing) {
-                existing.remove();
-            }
+        const infoEl   = card.querySelector('.device-info');
+        const existing = card.querySelector('.device-alert-row');
+        if (count > 0 && infoEl) {
+            const row = existing || document.createElement('div');
+            row.className = 'device-info-row device-alert-row';
+            row.innerHTML = `<span class="info-label">Alerts</span>
+                <span class="info-value device-alert-count">${count > 99 ? '99+' : count} unread</span>`;
+            if (!existing) infoEl.appendChild(row);
+        } else if (existing) {
+            existing.remove();
         }
     });
 }

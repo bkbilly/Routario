@@ -351,8 +351,8 @@ function openDeviceModal(deviceId, startTab = 'general') {
 
     const imeiEl     = document.getElementById('deviceImei');
     const protocolEl = document.getElementById('deviceProtocol');
-    imeiEl.disabled     = !isAdmin;
-    protocolEl.disabled = !isAdmin;
+    imeiEl.disabled     = !hasAdminAccess;
+    protocolEl.disabled = !hasAdminAccess;
 
     populateVehicleTypeSelect(document.getElementById('vehicleType'), d.vehicle_type || DEFAULT_TYPE);
 
@@ -419,22 +419,27 @@ async function handleSubmit(event) {
         const provider   = isIntg ? integrationProviders.find(p => p.provider_id === providerId) : null;
 
         if (isIntg && provider) {
-            const existingSel  = document.getElementById('intgAccountSelect');
-            const accountId    = existingSel?.value ? parseInt(existingSel.value) : null;
-            const account      = accountId ? integrationAccounts.find(a => a.id === accountId) : null;
-            const accountLabel = account?.account_label
-                ?? document.getElementById('intgAccountLabel')?.value?.trim() ?? '';
-            const remoteId     = document.getElementById('intgRemoteId')?.value?.trim() ?? '';
+            if (!hasAdminAccess) {
+                // Non-admins cannot edit integration credentials — preserve as-is
+                newConfig.integration = existingConfig.integration || {};
+            } else {
+                const existingSel  = document.getElementById('intgAccountSelect');
+                const accountId    = existingSel?.value ? parseInt(existingSel.value) : null;
+                const account      = accountId ? integrationAccounts.find(a => a.id === accountId) : null;
+                const accountLabel = account?.account_label
+                    ?? document.getElementById('intgAccountLabel')?.value?.trim() ?? '';
+                const remoteId     = document.getElementById('intgRemoteId')?.value?.trim() ?? '';
 
-            if (!accountId && accountLabel) {
-                await _ensureAccount(provider);
+                if (!accountId && accountLabel) {
+                    await _ensureAccount(provider);
+                }
+
+                newConfig.integration = {
+                    provider:      providerId,
+                    account_label: accountLabel,
+                    remote_id:     remoteId,
+                };
             }
-
-            newConfig.integration = {
-                provider:      providerId,
-                account_label: accountLabel,
-                remote_id:     remoteId,
-            };
         }
 
         let imei = document.getElementById('deviceImei').value.trim();

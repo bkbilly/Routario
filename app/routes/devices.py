@@ -99,11 +99,16 @@ async def update_device(
     caller: User = Depends(verify_device_access),
 ):
     db = get_db()
-    if not caller.is_admin:
+    if not (caller.is_admin or caller.is_company_admin):
         existing = await db.get_device_by_id(device_id)
         if existing:
             device_data.imei       = existing.imei
             device_data.protocol   = existing.protocol
+            device_data.company_id = existing.company_id
+    elif not caller.is_admin:
+        # Company admins can change IMEI and protocol but not company assignment
+        existing = await db.get_device_by_id(device_id)
+        if existing:
             device_data.company_id = existing.company_id
     device = await db.update_device(device_id, device_data)
     if not device:
