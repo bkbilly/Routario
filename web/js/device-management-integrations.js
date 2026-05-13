@@ -49,6 +49,21 @@ function _isIntegrationSelected() {
 // ── Render credential form for a provider ────────────────────────
 
 function _renderIntegrationFields(provider, existingIntg = null) {
+    // Regular users cannot see or edit integration credentials — show a read-only badge
+    if (!hasAdminAccess) {
+        const label = existingIntg?.account_label || provider.display_name;
+        return `
+            <div style="background:var(--bg-tertiary); border:1px solid var(--accent-primary);
+                        border-radius:10px; padding:1rem 1.25rem; margin-top:0.5rem;
+                        display:flex; align-items:center; gap:0.75rem;">
+                <span style="font-size:1.25rem;">🔌</span>
+                <div>
+                    <div style="font-weight:600;">${_esc(provider.display_name)}</div>
+                    <div style="font-size:0.8rem; color:var(--text-muted);">Connected via <em>${_esc(label)}</em></div>
+                </div>
+            </div>`;
+    }
+
     const existing = integrationAccounts.filter(a => a.provider_id === provider.provider_id);
 
     const existingOptions = existing.map(a =>

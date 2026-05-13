@@ -1581,6 +1581,11 @@ body::before {
     100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
+.device-alert-count {
+    color: var(--accent-danger);
+    font-weight: 600;
+}
+
 /* ── Vehicle Popup ─────────────────────────────────────────────── */
 
 .leaflet-popup-content-wrapper {

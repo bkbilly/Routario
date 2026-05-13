@@ -82,12 +82,10 @@ async def list_providers():
 async def list_accounts(current_user: User = Depends(get_current_user)):
     db = get_db()
     async with db.get_session() as session:
-        result = await session.execute(
-            select(IntegrationAccount).where(
-                IntegrationAccount.user_id   == current_user.id,
-                IntegrationAccount.is_active == True,
-            )
-        )
+        query = select(IntegrationAccount).where(IntegrationAccount.is_active == True)
+        if not (current_user.is_admin or current_user.is_company_admin):
+            query = query.where(IntegrationAccount.user_id == current_user.id)
+        result = await session.execute(query)
         return result.scalars().all()
 
 
@@ -145,12 +143,10 @@ async def delete_account(
 ):
     db = get_db()
     async with db.get_session() as session:
-        result = await session.execute(
-            select(IntegrationAccount).where(
-                IntegrationAccount.id      == account_id,
-                IntegrationAccount.user_id == current_user.id,
-            )
-        )
+        query = select(IntegrationAccount).where(IntegrationAccount.id == account_id)
+        if not (current_user.is_admin or current_user.is_company_admin):
+            query = query.where(IntegrationAccount.user_id == current_user.id)
+        result = await session.execute(query)
         account = result.scalar_one_or_none()
         if not account:
             raise HTTPException(status_code=404, detail="Account not found")
@@ -183,13 +179,13 @@ async def list_account_devices(
     """List remote devices available on an integration account."""
     db = get_db()
     async with db.get_session() as session:
-        result = await session.execute(
-            select(IntegrationAccount).where(
-                IntegrationAccount.id      == account_id,
-                IntegrationAccount.user_id == current_user.id,
-                IntegrationAccount.is_active == True,
-            )
+        query = select(IntegrationAccount).where(
+            IntegrationAccount.id        == account_id,
+            IntegrationAccount.is_active == True,
         )
+        if not (current_user.is_admin or current_user.is_company_admin):
+            query = query.where(IntegrationAccount.user_id == current_user.id)
+        result = await session.execute(query)
         account = result.scalar_one_or_none()
         if not account:
             raise HTTPException(status_code=404, detail="Account not found")
