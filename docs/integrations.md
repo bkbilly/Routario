@@ -209,6 +209,78 @@ Google Find Hub polls every **120 seconds** when a device was recently active, a
 
 ---
 
+## GPS Simulator
+
+The GPS Simulator is a built-in integration that drives a virtual vehicle along a configurable route in real time — no hardware or external account required. It is useful for testing dashboards, alerts, geofences, and webhooks without a physical device.
+
+### Credentials
+
+| Field | Required | Description |
+|---|---|---|
+| `waypoints` | Yes | Route definition — one waypoint per line (see format below) |
+| `speed_kmh` | No | Default travel speed in km/h used for waypoints that don't specify their own. Default: `50` |
+| `loop` | No | `true` to repeat the route continuously, `false` to stop at the last waypoint. Default: `true` |
+
+### Waypoint format
+
+Each line defines one waypoint:
+
+```
+lat,lng[,key=value,...]
+```
+
+Supported keys:
+
+| Key | Example | Description |
+|---|---|---|
+| `wait=N` | `wait=30` | Pause N seconds at this point before continuing |
+| `speed=N` | `speed=110` | Travel speed (km/h) from this point to the next |
+| `heading=N` | `heading=45` | Override the reported course in degrees instead of auto-calculating the bearing |
+| `ignition=true\|false` | `ignition=false` | Set ignition state from this point onward; persists until changed by a later waypoint |
+| `sat=N` | `sat=8` | Reported satellite count at this point |
+| `<any>=<value>` | `fuel_level=0.75` | Any other key is added directly to the sensors dict |
+
+Lines starting with `#` are treated as comments. A bare number as the third field is a shorthand for `wait` (e.g. `48.85,2.35,10` = wait 10 seconds).
+
+**Example:**
+
+```
+# Depot — engine off, waiting
+48.8566,2.3522,wait=30,ignition=false,sat=5,fuel_level=0.90
+# Pull out and start driving
+48.8600,2.3600,speed=30,ignition=true,sat=8,fuel_level=0.89
+# Main road
+48.8800,2.4000,speed=60,sat=10
+# Destination — park and wait
+48.9000,2.4200,wait=120,ignition=false,sat=12,fuel_level=0.85
+```
+
+### How to connect
+
+1. In Routario, open **Device Management → Add New Device**.
+2. Select **GPS Simulator** from the External Integrations group.
+3. Enter a label (e.g. `Test Vehicle`), paste your waypoints, and optionally set a default speed.
+4. Click **Test Connection** — it will report the number of waypoints, total route length, and loop mode.
+5. Enter any value for the Remote Device ID (e.g. `sim-1`) and save.
+
+!!! info "No Browse button"
+    The GPS Simulator has no remote device list to query, so the Browse button is not shown.
+
+### What is reported
+
+- Position interpolated smoothly between waypoints at the configured speed
+- Speed (0 while waiting or stopped, travel speed otherwise)
+- Auto-calculated course/bearing between waypoints (overridable with `heading=`)
+- Ignition state (persists from the last waypoint that set it)
+- Satellite count and any extra sensor values defined in the waypoints
+- `sensors.simulated: true` on every position
+
+### Poll interval
+
+The GPS Simulator polls every **5 seconds**, advancing the vehicle in real time based on elapsed wall-clock time.
+
+---
+
 ## Adding New Integration Providers
 
 See [Extending Routario → Adding a Cloud Integration](extending.md#adding-a-cloud-integration).

@@ -48,13 +48,15 @@ from integrations.registry import IntegrationRegistry
 
 @IntegrationRegistry.register("myprovider")
 class MyProviderIntegration(BaseIntegration):
-    PROVIDER_ID           = "myprovider"
-    DISPLAY_NAME          = "My Provider"
-    POLL_INTERVAL_SECONDS = 30
+    PROVIDER_ID              = "myprovider"
+    DISPLAY_NAME             = "My Provider"
+    POLL_INTERVAL_SECONDS    = 30
+    SUPPORTS_BROWSE          = True   # set False to hide the Browse button in the UI
 
     FIELDS = [
         IntegrationField(key="token", label="API Token",
                          field_type="password", required=True),
+        # field_type options: "text" | "password" | "number" | "url" | "textarea"
     ]
 
     async def authenticate(self, credentials: dict) -> AuthContext:
@@ -66,6 +68,9 @@ class MyProviderIntegration(BaseIntegration):
 
 !!! tip
     Raise `AuthExpiredError` inside `fetch_positions()` when the remote API rejects your session. Routario evicts the cached `AuthContext` and re-authenticates on the next poll cycle automatically.
+
+!!! info "`SUPPORTS_BROWSE = False`"
+    Set this on integrations that have no remote device list to query (e.g. the built-in GPS Simulator). It hides the **Browse** button from the credential form so users are not presented with a button that does nothing.
 
 ---
 

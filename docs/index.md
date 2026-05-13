@@ -33,7 +33,7 @@
 
 - :material-cloud-sync: **Cloud Integrations**
 
-    Pull live positions from Wialon, Flespi Cloud, Traccar, 3D Tracking, GPS-Server.net, and Google Find Hub alongside your native devices.
+    Pull live positions from Wialon, Flespi Cloud, Traccar, 3D Tracking, GPS-Server.net, and Google Find Hub alongside your native devices. A built-in GPS Simulator lets you test without real hardware.
 
     [:octicons-arrow-right-24: Cloud Integrations](integrations.md)
 
