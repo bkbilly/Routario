@@ -83,6 +83,7 @@
                 <button type="button" class="modal-tab active" data-tab="general" onclick="switchModalTab('general',this)">&#128203; General</button>
                 <button type="button" class="modal-tab" data-tab="alerts"  onclick="switchModalTab('alerts',this)">&#128276; Alerts</button>
                 <button type="button" class="modal-tab" data-tab="rawdata" onclick="switchModalTab('rawdata',this)">&#128202; Raw Data</button>
+                <button type="button" class="modal-tab" data-tab="users" id="usersTabBtn" onclick="switchModalTab('users',this)" style="display:none;">&#128101; Users</button>
             </div>
 
             <div class="modal-scrollable">
@@ -211,6 +212,14 @@
                         <span class="page-info" id="pageInfo"></span>
                         <button type="button" class="btn btn-secondary" id="nextPageBtn" onclick="changeRawDataPage(1)">Next</button>
                     </div>
+                </div>
+
+                <!-- TAB: USERS -->
+                <div class="modal-tab-content" id="tab-users">
+                    <div class="form-group">
+                        <input type="text" class="form-input" id="usersTabSearch" placeholder="Search users&#8230;" oninput="filterUsersTab()">
+                    </div>
+                    <div id="usersAssignList" style="display:flex;flex-direction:column;gap:0.5rem;"></div>
                 </div>
 
             </div><!-- /.modal-scrollable -->
