@@ -29,6 +29,10 @@ let currentPage        = 1;
 const itemsPerPage     = 50;
 let currentRawDeviceId = null;
 
+// Users tab
+let allUsers                = [];
+let deviceAssignedUserIds   = new Set();
+
 // ── Constants ────────────────────────────────────────────────────
 const DAYS             = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DEFAULT_PROTOCOL = 'teltonika';
@@ -71,10 +75,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const addBtn = document.querySelector('button[onclick="openAddDeviceModal()"]');
     if (addBtn) addBtn.style.display = isAdmin ? '' : 'none';
 
+    const usersTabBtn = document.getElementById('usersTabBtn');
+    if (usersTabBtn) usersTabBtn.style.display = 'none';
+
     await loadAlertTypes();
     await loadAvailableProtocols();
     await loadUserChannels();
     await loadDevices();
+    if (isAdmin) loadAllUsers();
     populateAddAlertDropdown();
 
     document.addEventListener('keydown', e => {
@@ -264,6 +272,7 @@ function switchModalTab(tabId, btn) {
     document.getElementById(`tab-${tabId}`)?.classList.add('active');
     (btn || document.querySelector(`.modal-tab[data-tab="${tabId}"]`))?.classList.add('active');
     if (tabId === 'rawdata' && editingDeviceId) loadRawDataForModal(editingDeviceId);
+    if (tabId === 'users' && editingDeviceId) loadUsersForDevice(editingDeviceId);
 }
 
 // ── Open / Close Device Modal ─────────────────────────────────────
@@ -274,6 +283,8 @@ function openAddDeviceModal() {
     document.getElementById('modalTitle').textContent        = 'Add New Device';
     document.getElementById('submitText').textContent        = 'Add Device';
     document.getElementById('deleteDeviceBtn').style.display = 'none';
+    const usersTabBtnAdd = document.getElementById('usersTabBtn');
+    if (usersTabBtnAdd) usersTabBtnAdd.style.display = 'none';
     document.getElementById('deviceForm').reset();
     document.getElementById('deviceProtocol').value          = '';
     document.getElementById('currentOdometer').value         = '0.0';
@@ -302,6 +313,9 @@ function openDeviceModal(deviceId, startTab = 'general') {
     document.getElementById('modalTitle').textContent        = 'Edit Device';
     document.getElementById('submitText').textContent        = 'Save Changes';
     document.getElementById('deleteDeviceBtn').style.display = isAdmin ? 'inline-flex' : 'none';
+    const usersTabBtnEdit = document.getElementById('usersTabBtn');
+    if (usersTabBtnEdit) usersTabBtnEdit.style.display = isAdmin ? '' : 'none';
+    deviceAssignedUserIds = new Set();
 
     document.getElementById('deviceName').value          = d.name;
     document.getElementById('deviceImei').value          = d.imei;
@@ -1058,6 +1072,82 @@ function buildConfigFromAlertRows(existing = {}) {
             config.alert_channels[row.alertKey] = row.channels || [];
     });
     return config;
+}
+
+// ================================================================
+//  USERS TAB
+// ================================================================
+
+async function loadAllUsers() {
+    try {
+        const res = await apiFetch(`${API_BASE}/users`);
+        if (res.ok) allUsers = await res.json();
+    } catch (e) { console.error('Failed to load users:', e); }
+}
+
+async function loadUsersForDevice(deviceId) {
+    try {
+        const res = await apiFetch(`${API_BASE}/devices/${deviceId}/users`);
+        deviceAssignedUserIds = res.ok
+            ? new Set((await res.json()).map(u => u.id))
+            : new Set();
+    } catch (e) { deviceAssignedUserIds = new Set(); }
+    renderUsersTab();
+}
+
+function filterUsersTab() { renderUsersTab(); }
+
+function renderUsersTab() {
+    const list = document.getElementById('usersAssignList');
+    if (!list) return;
+    const query = (document.getElementById('usersTabSearch')?.value || '').toLowerCase().trim();
+    const filtered = allUsers.filter(u =>
+        !u.is_admin && (
+            !query ||
+            (u.username || '').toLowerCase().includes(query) ||
+            (u.email    || '').toLowerCase().includes(query)
+        )
+    );
+    if (!filtered.length) {
+        list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No users found.</div>';
+        return;
+    }
+    list.innerHTML = '';
+    filtered.forEach(u => {
+        const assigned = deviceAssignedUserIds.has(u.id);
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.8rem;background:var(--bg-tertiary);border-radius:8px;';
+        div.innerHTML = `
+            <div>
+                <div style="font-weight:500;">${_esc(u.username)}</div>
+                <div style="font-size:0.8rem;color:var(--text-muted);">${_esc(u.email || '')}</div>
+            </div>
+            <label class="toggle-switch">
+                <input type="checkbox" ${assigned ? 'checked' : ''} onchange="toggleUserAssignment(${u.id}, this.checked)">
+                <span class="toggle-slider"></span>
+            </label>`;
+        list.appendChild(div);
+    });
+}
+
+async function toggleUserAssignment(userId, assign) {
+    const action = assign ? 'add' : 'remove';
+    try {
+        const res = await apiFetch(
+            `${API_BASE}/devices/${editingDeviceId}/users?user_id=${userId}&action=${action}`,
+            { method: 'POST' }
+        );
+        if (res.ok) {
+            if (assign) deviceAssignedUserIds.add(userId);
+            else deviceAssignedUserIds.delete(userId);
+        } else {
+            showAlert('Failed to update user assignment', 'error');
+            renderUsersTab();
+        }
+    } catch (e) {
+        showAlert('Error updating user assignment', 'error');
+        renderUsersTab();
+    }
 }
 
 // ================================================================

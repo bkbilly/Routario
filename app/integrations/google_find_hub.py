@@ -498,7 +498,7 @@ class GoogleFindHubIntegration(BaseIntegration):
         req.requestMetadata.gcmRegistrationId.id = fcm_token
         req.requestMetadata.unknown        = True
 
-        req.action.locateTracker.lastHighTrafficEnablingTime.seconds = int(datetime.now(timezone.utc).timestamp())
+        req.action.locateTracker.lastHighTrafficEnablingTime.seconds = int((datetime.now(timezone.utc) - timedelta(days=7)).timestamp())
         req.action.locateTracker.contributorType = SpotContributorType.Value("FMDN_ALL_LOCATIONS")
 
         await self._nova_post(access_token, "nbe_execute_action", req.SerializeToString())

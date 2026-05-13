@@ -17,14 +17,14 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
-from sqlalchemy import select, update
+from sqlalchemy import select, update, and_
 
 from core.database import get_db
 from core.auth import get_current_user, require_admin, verify_device_access
 from integrations.engine import clear_device_state, evict_auth_cache
 from integrations.integration_model import IntegrationAccount
-from models import User, Device, DeviceState
-from models.schemas import DeviceCreate, DeviceResponse, DeviceStateResponse, TripResponse
+from models import User, Device, DeviceState, user_device_association
+from models.schemas import DeviceCreate, DeviceResponse, DeviceStateResponse, TripResponse, UserResponse
 
 router = APIRouter(prefix="/api/devices", tags=["devices"])
 
@@ -199,6 +199,53 @@ async def get_device_trips(
     if not end_date:
         end_date = datetime.utcnow()
     return await db.get_device_trips(device_id, start_date, end_date)
+
+
+@router.get("/{device_id}/users", response_model=List[UserResponse])
+async def get_device_users(device_id: int, admin: User = Depends(require_admin)):
+    """Get users assigned to this device. Admin only."""
+    db = get_db()
+    device = await db.get_device_by_id(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    return device.users or []
+
+
+@router.post("/{device_id}/users")
+async def assign_user_to_device(
+    device_id: int,
+    user_id: int = Query(...),
+    action: str = Query("add"),
+    admin: User = Depends(require_admin),
+):
+    """Assign or remove a user from a device. Admin only."""
+    db = get_db()
+    async with db.get_session() as session:
+        if action == "add":
+            exists = await session.execute(
+                user_device_association.select().where(
+                    and_(
+                        user_device_association.c.user_id == user_id,
+                        user_device_association.c.device_id == device_id,
+                    )
+                )
+            )
+            if not exists.scalar_one_or_none():
+                await session.execute(
+                    user_device_association.insert().values(
+                        user_id=user_id, device_id=device_id, access_level="user"
+                    )
+                )
+        elif action == "remove":
+            await session.execute(
+                user_device_association.delete().where(
+                    and_(
+                        user_device_association.c.user_id == user_id,
+                        user_device_association.c.device_id == device_id,
+                    )
+                )
+            )
+    return {"status": "success"}
 
 
 @router.get("/{device_id}/command-support")
