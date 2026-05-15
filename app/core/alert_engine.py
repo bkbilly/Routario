@@ -9,6 +9,8 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 import re
 
+import httpx
+
 import rule_engine
 
 from models import Device, DeviceState, User, AlertHistory
@@ -195,6 +197,7 @@ class AlertEngine:
                     severity=alert_data.get('severity', 'info'),
                     device_name=device.name,
                 )
+                await self._send_alert_webhooks(user, device, alert_data)
                 return
 
             # 3. Dispatch each URL to the matching channel handler
@@ -220,8 +223,39 @@ class AlertEngine:
                 device_name=device.name,
             )
 
-        except Exception as e: 
+            # 5. Alert webhooks
+            await self._send_alert_webhooks(user, device, alert_data)
+
+        except Exception as e:
             logger.error(f"Notify error: {e}")
+
+    async def _send_alert_webhooks(self, user: User, device: Device, alert_data: Dict[str, Any]):
+        urls = user.webhook_urls or []
+        if not urls:
+            return
+        payload = {
+            "event":         "alert",
+            "device_id":     device.id,
+            "device_name":   device.name,
+            "imei":          device.imei,
+            "vehicle_type":  device.vehicle_type,
+            "license_plate": device.license_plate,
+            "alert_type":    alert_data['type'].value,
+            "severity":      alert_data.get('severity', Severity.WARNING).value
+                             if hasattr(alert_data.get('severity'), 'value')
+                             else str(alert_data.get('severity', 'warning')),
+            "message":       alert_data['message'],
+            "latitude":      alert_data.get('latitude'),
+            "longitude":     alert_data.get('longitude'),
+            "timestamp":     datetime.now(timezone.utc).isoformat(),
+            "metadata":      alert_data.get('alert_metadata', {}),
+        }
+        async with httpx.AsyncClient(timeout=5) as client:
+            for url in urls:
+                try:
+                    await client.post(url, json=payload)
+                except Exception as exc:
+                    logger.warning("Alert webhook failed %s: %s", url, exc)
     
 
 
