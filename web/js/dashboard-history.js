@@ -21,24 +21,87 @@ function openHistoryModal(deviceId) {
     document.getElementById('historyModalDeviceName').textContent = `${icon} ${name}`;
 
     document.getElementById('historyModal').classList.add('active');
+    const defaultBtn = [...document.querySelectorAll('.history-quick-btn')].find(b => b.textContent.trim() === '1 Day');
+    setHistoryRange(24, defaultBtn);
 }
 
-function closeHistoryModal() { document.getElementById('historyModal').classList.remove('active'); }
+function closeHistoryModal() {
+    document.getElementById('historyModal').classList.remove('active');
+    _setActiveQuickBtn(null);
+}
 
-function setHistoryRange(hours) {
+const toLocalISO = (date) => {
+    const tzOffset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+};
+
+function _setActiveQuickBtn(btn) {
+    document.querySelectorAll('.history-quick-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    _validateHistoryRange();
+}
+
+function setHistoryRange(hours, btn) {
     const now = new Date();
     const end = new Date();
     end.setHours(23, 59, 59, 999);
     const start = new Date(now.getTime() - hours * 60 * 60 * 1000);
-
-    const toLocalISO = (date) => {
-        const tzOffset = date.getTimezoneOffset() * 60000;
-        return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
-    };
-
     document.getElementById('historyStart').value = toLocalISO(start);
     document.getElementById('historyEnd').value = toLocalISO(end);
+    _setActiveQuickBtn(btn);
 }
+
+function setHistoryRangeToday(btn) {
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const end = new Date(); end.setHours(23, 59, 59, 999);
+    document.getElementById('historyStart').value = toLocalISO(start);
+    document.getElementById('historyEnd').value = toLocalISO(end);
+    _setActiveQuickBtn(btn);
+}
+
+function setHistoryRangeYesterday(btn) {
+    const start = new Date(); start.setDate(start.getDate() - 1); start.setHours(0, 0, 0, 0);
+    const end = new Date(); end.setDate(end.getDate() - 1); end.setHours(23, 59, 59, 999);
+    document.getElementById('historyStart').value = toLocalISO(start);
+    document.getElementById('historyEnd').value = toLocalISO(end);
+    _setActiveQuickBtn(btn);
+}
+
+function setHistoryRangeThisMonth(btn) {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    document.getElementById('historyStart').value = toLocalISO(start);
+    document.getElementById('historyEnd').value = toLocalISO(end);
+    _setActiveQuickBtn(btn);
+}
+
+function setHistoryRangePrevMonth(btn) {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    document.getElementById('historyStart').value = toLocalISO(start);
+    document.getElementById('historyEnd').value = toLocalISO(end);
+    _setActiveQuickBtn(btn);
+}
+
+function _validateHistoryRange() {
+    const start = document.getElementById('historyStart').value;
+    const end = document.getElementById('historyEnd').value;
+    const invalid = start && end && start >= end;
+    document.getElementById('historySubmitBtn').disabled = invalid;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('historyStart').addEventListener('input', () => { _setActiveQuickBtn(null); _validateHistoryRange(); });
+    document.getElementById('historyEnd').addEventListener('input', () => { _setActiveQuickBtn(null); _validateHistoryRange(); });
+
+    const now = new Date();
+    const monthName = (offset) => new Date(now.getFullYear(), now.getMonth() + offset, 1)
+        .toLocaleString('default', { month: 'long' });
+    document.getElementById('historyBtnThisMonth').textContent = monthName(0);
+    document.getElementById('historyBtnPrevMonth').textContent = monthName(-1);
+});
 
 async function handleHistorySubmit(e) {
     e.preventDefault();
@@ -420,6 +483,7 @@ async function loadTripsForHistory(deviceId, startTime, endTime) {
 
         if (!trips.length) {
             container.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:0.5rem 0;text-align:center;">No trips detected in this period</div>';
+            switchHistoryTab('details');
             return;
         }
 
