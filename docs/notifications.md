@@ -152,11 +152,61 @@ sip://user:pass@pbx.example.com:5060/200?tts=espeak&lang=de
 
 ## Webhooks
 
-In addition to Apprise channels, each user can configure **Webhook URLs** — raw HTTP endpoints that receive a JSON `POST` payload when an alert fires. Ideal for connecting Routario to home automation or no-code platforms.
+Each user can configure **Webhook URLs** under **User Settings → Webhooks**. Routario sends a JSON `POST` to every configured URL on two events: every **position update** and every **alert**. The `event` field in the payload distinguishes the two.
 
 **Compatible platforms:** Home Assistant · n8n · Zapier · Make (Integromat) · any HTTP server
 
-Configure webhooks under **User Settings → Webhooks**. Routario sends a `POST` request with a JSON body containing the alert type, message, device name, severity, and coordinates.
+### Position payload
+
+Sent on every incoming GPS position update.
+
+```json
+{
+  "device_id": 1,
+  "device_name": "Truck 1",
+  "imei": "123456789012345",
+  "vehicle_type": "truck",
+  "license_plate": "AB-1234",
+  "latitude": 37.9838,
+  "longitude": 23.7275,
+  "speed": 62.5,
+  "course": 180.0,
+  "altitude": 45.0,
+  "satellites": 9,
+  "ignition": true,
+  "timestamp": "2024-06-01T12:00:00+00:00",
+  "sensors": {
+    "battery_voltage": 12.6,
+    "fuel_level": 74
+  }
+}
+```
+
+### Alert payload
+
+Sent whenever an alert fires for the device. Receivers can check `"event": "alert"` to distinguish this from a position update.
+
+```json
+{
+  "event": "alert",
+  "device_id": 1,
+  "device_name": "Truck 1",
+  "imei": "123456789012345",
+  "vehicle_type": "truck",
+  "license_plate": "AB-1234",
+  "alert_type": "speeding",
+  "severity": "warning",
+  "message": "Speed 95 km/h exceeded limit of 80 km/h",
+  "latitude": 37.9838,
+  "longitude": 23.7275,
+  "timestamp": "2024-06-01T12:00:00+00:00",
+  "metadata": {}
+}
+```
+
+Possible `alert_type` values: `speeding` · `idling` · `geofence_enter` · `geofence_exit` · `offline` · `towing` · `maintenance` · `low_battery` · `device_event` · `custom`
+
+Possible `severity` values: `info` · `warning` · `critical`
 
 ---
 

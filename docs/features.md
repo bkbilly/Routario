@@ -17,9 +17,9 @@ The main dashboard provides a real-time bird's-eye view of your entire fleet:
 
 ## Trip History & Playback
 
-- **Date-range picker** — query any time window for any device.
+- **Date-range picker** — query any time window for any device. Quick-select buttons (Today, Yesterday, 1 Hour, 2 Hours, 1 Day, 2 Days, 7 Days, current month, previous month) fill the range instantly. The Load button is disabled when the start time is not before the end time.
 - **Route playback** — animate the vehicle's path on the map with play/pause and a scrub slider.
-- **Trip segmentation** — trips are automatically detected and separated by ignition events. Each trip shows start/end time, distance, and duration.
+- **Trip segmentation** — trips are automatically detected and separated by ignition events. Each trip shows start/end time, distance, and duration. When no trips are found in the selected range, the view switches automatically to the point details panel.
 - **Sensor graph** — plot any sensor attribute (speed, fuel level, temperature, voltage, etc.) over time on an interactive chart.
 - **Raw data table** — browse individual position records with full sensor payloads.
 - **CSV export** — download the full position history for any date range.
