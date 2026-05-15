@@ -188,6 +188,13 @@ body::before {
     box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
 }
 
+.btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
 .btn-secondary {
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
@@ -199,6 +206,30 @@ body::before {
     background: var(--bg-hover);
     border-color: var(--accent-primary);
     transform: translateY(-2px);
+}
+
+.btn-secondary.active {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.history-quick-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+@media (max-width: 600px) {
+    .history-quick-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .history-quick-grid .btn {
+        padding: 0.45rem 0.5rem;
+        font-size: 0.78rem;
+    }
 }
 
 /* Sidebar */
