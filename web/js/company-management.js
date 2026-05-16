@@ -399,10 +399,10 @@ async function toggleDeviceMembership(deviceId, add) {
 // ── Toast ─────────────────────────────────────────────────────────
 
 function showAlert(message, type) {
-    const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+    const icons = { success: 'mdi-check', error: 'mdi-close', warning: 'mdi-alert', info: 'mdi-information' };
     const toast = document.createElement('div');
     toast.className = `toast toast-${type || 'info'}`;
-    toast.innerHTML = `<span class="toast-icon">${icons[type] || 'ℹ'}</span><span>${message}</span>`;
+    toast.innerHTML = `<span class="toast-icon"><i class="mdi ${icons[type] || 'mdi-information'}"></i></span><span>${message}</span>`;
     document.getElementById('toastContainer').appendChild(toast);
     setTimeout(() => {
         toast.style.animation = 'slideInRight 0.3s reverse forwards';

@@ -984,13 +984,13 @@ h1 {
 }
 
 .devices-table th[data-sort-dir="asc"]::after {
-    content: ' ▲';
+    content: ' ▼';
     opacity: 1;
     color: var(--accent-primary);
 }
 
 .devices-table th[data-sort-dir="desc"]::after {
-    content: ' ▼';
+    content: ' ▲';
     opacity: 1;
     color: var(--accent-primary);
 }

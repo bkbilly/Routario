@@ -180,7 +180,7 @@ function showNotificationBlockedBanner() {
       width: calc(100% - 2rem);
       animation: slideUp 0.3s ease;
     ">
-      <span style="font-size: 1.75rem; flex-shrink: 0; line-height: 1;">🔔</span>
+      <span style="font-size: 1.75rem; flex-shrink: 0; line-height: 1;"><i class="mdi mdi-bell"></i></span>
       <div style="flex: 1; min-width: 0;">
         <div style="
           font-weight: 700;
@@ -205,7 +205,7 @@ function showNotificationBlockedBanner() {
             cursor: pointer;
             font-size: 0.8rem;
             font-family: var(--font-display, sans-serif);
-          ">✓ I've enabled them — retry</button>
+          "><i class="mdi mdi-check"></i> I've enabled them — retry</button>
           <button onclick="dismissNotifBanner()" style="
             background: transparent;
             border: 1px solid var(--border-color, #374151);
@@ -237,7 +237,7 @@ async function retryNotificationPermission() {
     // Permission was granted in settings — just subscribe
     const success = await _subscribeToPush();
     if (!success) {
-      showPWAToast('❌ Could not enable notifications. Please try again.', 'error');
+      showPWAToast('Could not enable notifications. Please try again.', 'error');
     }
   } else if (Notification.permission === 'default') {
     await enablePushNotifications();
@@ -262,7 +262,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
 window.addEventListener('appinstalled', () => {
   hidePWABanner();
-  showPWAToast('✅ App installed successfully!', 'success');
+  showPWAToast('App installed successfully!', 'success');
   deferredInstallPrompt = null;
   // Re-check notification permission after install —
   // the installed PWA context may have different permissions
@@ -290,7 +290,7 @@ function showInstallBanner() {
       max-width: 420px; width: calc(100% - 2rem);
       animation: slideUp 0.3s ease;
     ">
-      <span style="font-size: 2rem;">📱</span>
+      <span style="font-size: 2rem;"><i class="mdi mdi-cellphone"></i></span>
       <div style="flex: 1;">
         <div style="font-weight: 700; color: var(--text-primary, #f1f5f9); font-size: 0.95rem;">
           Install Routario
@@ -310,7 +310,7 @@ function showInstallBanner() {
         background: transparent; border: none;
         color: var(--text-muted, #94a3b8);
         cursor: pointer; font-size: 1.2rem; padding: 0.25rem;
-      ">✕</button>
+      "><i class="mdi mdi-close"></i></button>
     </div>
   `;
   document.body.appendChild(banner);
@@ -361,11 +361,11 @@ function showPWAToast(message, type = 'info') {
   // Fallback: plain toast
   const container = document.getElementById('toastContainer');
   if (!container) return;
-  const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+  const icons = { success: 'mdi-check', error: 'mdi-close', warning: 'mdi-alert', info: 'mdi-information' };
   const toast = document.createElement('div');
   toast.className = 'toast';
   toast.innerHTML = `
-    <div class="toast-icon">${icons[type] || 'ℹ'}</div>
+    <div class="toast-icon"><i class="mdi ${icons[type] || 'mdi-information'}"></i></div>
     <div class="toast-message">${message}</div>
   `;
   container.appendChild(toast);

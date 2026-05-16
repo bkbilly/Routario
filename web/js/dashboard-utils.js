@@ -67,12 +67,12 @@ function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
     if (!container) return;
 
-    const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+    const icons = { success: 'mdi-check', error: 'mdi-close', warning: 'mdi-alert', info: 'mdi-information' };
 
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.innerHTML = `
-        <span class="toast-icon">${icons[type] || 'ℹ'}</span>
+        <span class="toast-icon"><i class="mdi ${icons[type] || 'mdi-information'}"></i></span>
         <span>${message}</span>
     `;
 

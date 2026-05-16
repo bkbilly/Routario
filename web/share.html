@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Live Location Share</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Material Design Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="/js/vehicle-icons.js"></script>
@@ -89,7 +91,7 @@
 
 <div id="header">
     <div id="deviceName">
-        <span id="vehicleIcon">📍</span>
+        <span id="vehicleIcon"><i class="mdi mdi-map-marker"></i></span>
         <span id="nameText">Loading…</span>
         <span id="statusBadge" class="badge-stopped">–</span>
     </div>
@@ -223,7 +225,7 @@
         document.body.innerHTML = `
             <div style="display:flex;align-items:center;justify-content:center;height:100vh;
                         background:#0a0e1a;color:#e5e7eb;font-family:sans-serif;flex-direction:column;gap:1rem;text-align:center;">
-                <div style="font-size:3rem">🔗</div>
+                <div style="font-size:3rem"><i class="mdi mdi-link-off"></i></div>
                 <h2>This link has expired or been revoked</h2>
                 <p style="color:#9ca3af">Ask the sender to generate a new share link.</p>
             </div>`;

@@ -289,7 +289,7 @@ function togglePlayback() { if (playbackInterval) stopPlayback(); else startPlay
 
 function startPlayback() {
     if (historyData.length === 0) return;
-    document.getElementById('playbackBtn').textContent = '⏸️';
+    document.getElementById('playbackBtn').innerHTML = '<i class="mdi mdi-pause"></i>';
     if (!markers['history_pos']) createHistoryMarker();
     playbackInterval = setInterval(() => {
         if (historyIndex >= historyData.length - 1) { stopPlayback(); return; }
@@ -299,7 +299,7 @@ function startPlayback() {
 }
 
 function stopPlayback() {
-    if (playbackInterval) { clearInterval(playbackInterval); playbackInterval = null; document.getElementById('playbackBtn').textContent = '▶️'; }
+    if (playbackInterval) { clearInterval(playbackInterval); playbackInterval = null; document.getElementById('playbackBtn').innerHTML = '<i class="mdi mdi-play"></i>'; }
 }
 
 function seekHistory(value) { historyIndex = parseInt(value); stopPlayback(); updatePlaybackUI(); }
@@ -533,7 +533,7 @@ async function loadTripsForHistory(deviceId, startTime, endTime) {
                 <div class="trip-card-header">
                     <span class="trip-index" style="color: ${color};">Trip ${label}</span>
                     <span class="trip-badges">
-                        <span class="trip-badge">📍 ${dist}</span>
+                        <span class="trip-badge"><i class="mdi mdi-map-marker"></i> ${dist}</span>
                         <span class="trip-badge">⏱ ${dur}</span>
                     </span>
                 </div>

@@ -4,7 +4,7 @@
  * Place this file at: /web/sw.js  (root of your web directory)
  */
 
-const CACHE_NAME = 'gps-dashboard-v51';
+const CACHE_NAME = 'gps-dashboard-v52';
 const STATIC_ASSETS = [
   '/gps-dashboard.html',
   '/device-management.html',
@@ -103,7 +103,7 @@ self.addEventListener('push', (event) => {
     requireInteraction: data.severity === 'critical' || data.severity === 'high',
     vibrate: data.severity === 'critical' ? [200, 100, 200, 100, 200] : [200, 100, 200],
     actions: [
-      { action: 'open', title: '🗺️ Open Map' },
+      { action: 'open', title: 'Open Map' },
       { action: 'dismiss', title: 'Dismiss' }
     ]
   };

@@ -6,6 +6,7 @@
 
 // ── Core State ────────────────────────────────────────────────────────────────
 let map = null;
+let clusterGroup = null;
 let currentTileLayer = null;
 let devices = [];
 let markers = {};

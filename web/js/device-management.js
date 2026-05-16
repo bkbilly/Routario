@@ -286,7 +286,7 @@ function renderDeviceTable(list) {
     if (!list.length) {
         tbody.innerHTML = `
             <tr><td colspan="7" style="text-align:center;padding:3rem;color:var(--text-muted);">
-                <div style="font-size:2.5rem;margin-bottom:0.75rem;">📡</div>
+                <div style="font-size:2.5rem;margin-bottom:0.75rem;"><i class="mdi mdi-antenna"></i></div>
                 No devices found
             </td></tr>`;
         return;
@@ -313,8 +313,8 @@ function renderDeviceTable(list) {
             <td style="font-size:0.85rem;color:var(--text-secondary);">${lastSeen}</td>
             <td style="font-family:var(--font-mono);font-size:0.85rem;">${odometer}</td>
             <td style="text-align:right;white-space:nowrap;">
-                ${cmds ? `<button class="btn btn-secondary tbl-btn" onclick="openCommandModal(${d.id})">📡</button>` : ''}
-                <button class="btn btn-secondary tbl-btn" onclick="openDeviceModal(${d.id},'general')">✏️ Edit</button>
+                ${cmds ? `<button class="btn btn-secondary tbl-btn" onclick="openCommandModal(${d.id})"><i class="mdi mdi-antenna"></i></button>` : ''}
+                <button class="btn btn-secondary tbl-btn" onclick="openDeviceModal(${d.id},'general')"><i class="mdi mdi-pencil"></i> Edit</button>
             </td>
         </tr>`;
     }).join('');
@@ -585,7 +585,7 @@ function populateAddAlertDropdown() {
     customGrp.label = 'Custom';
     const customOpt = document.createElement('option');
     customOpt.value       = '__custom__';
-    customOpt.textContent = '⚡ Custom Rule';
+    customOpt.textContent = '★ Custom Rule';
     customGrp.appendChild(customOpt);
     sel.appendChild(customGrp);
 
@@ -595,7 +595,7 @@ function populateAddAlertDropdown() {
     for (const [key, def] of Object.entries(ALERT_TYPES)) {
         const opt       = document.createElement('option');
         opt.value       = key;
-        opt.textContent = `${def.icon || '🔔'} ${def.label}`;
+        opt.textContent = `${def.icon || ''} ${def.label}`.trim();
         sysGrp.appendChild(opt);
     }
     sel.appendChild(sysGrp);
@@ -733,7 +733,7 @@ function renderAlertsTable() {
         const isDeviceEvent = row.alertKey === 'device_event';
 
         const label = isCustom
-            ? `<span class="custom-alert-module"><span class="custom-alert-module-title">⚡ ${_esc(row.name)}</span></span>`
+            ? `<span class="custom-alert-module"><span class="custom-alert-module-title"><i class="mdi mdi-lightning-bolt"></i> ${_esc(row.name)}</span></span>`
             : isDeviceEvent
             ? `<span class="alert-type-label system">${_esc(row.params?.event_icon || '📡')} ${_esc(row.params?.event_label || row.params?.sensor_key || 'Device Event')}</span>`
             : (def?.icon ? `${def.icon} ` : '') + _esc(def?.label || row.alertKey);
@@ -818,8 +818,8 @@ function renderAlertsTable() {
             <td><div style="display:flex;flex-wrap:wrap;gap:0.3rem;">${chHtml}</div></td>
             <td>${schedHtml}</td>
             <td style="text-align:center;white-space:nowrap;">
-                <button type="button" class="btn btn-secondary tbl-btn" onclick="openAlertEditor(${row.uid})">✏️</button>
-                <button type="button" class="btn btn-danger    tbl-btn" onclick="removeAlertRow(${row.uid})">✕</button>
+                <button type="button" class="btn btn-secondary tbl-btn" onclick="openAlertEditor(${row.uid})"><i class="mdi mdi-pencil"></i></button>
+                <button type="button" class="btn btn-danger    tbl-btn" onclick="removeAlertRow(${row.uid})"><i class="mdi mdi-close"></i></button>
             </td>`;
         tbody.appendChild(tr);
     });
@@ -1344,17 +1344,17 @@ async function loadAlerts() {
         if (!list) return;
         list.innerHTML = '';
         loadedAlerts.forEach(alert => {
-            const icon = alert.type === 'speeding' ? '⚡' : alert.type === 'offline' ? '📴' : '🔔';
+            const iconCls = alert.type === 'speeding' ? 'mdi-lightning-bolt' : alert.type === 'offline' ? 'mdi-wifi-off' : 'mdi-bell';
             const item = document.createElement('div');
             item.className = `alert-item ${alert.severity}`;
             item.innerHTML = `
-                <div class="alert-icon">${icon}</div>
+                <div class="alert-icon"><i class="mdi ${iconCls}"></i></div>
                 <div class="alert-content">
                     <div class="alert-title">${alert.type}</div>
                     <div class="alert-message">${alert.message}</div>
                     <div class="alert-time">${formatDateToLocal(alert.created_at)}</div>
                 </div>
-                <button class="alert-dismiss" onclick="dismissAlert(${alert.id})">✕</button>`;
+                <button class="alert-dismiss" onclick="dismissAlert(${alert.id})"><i class="mdi mdi-close"></i></button>`;
             list.appendChild(item);
         });
     } catch (e) { console.error('Error loading alerts:', e); }
@@ -1389,10 +1389,10 @@ function showAlert(message, type) {
     } else if (typeof message === 'object' && message !== null) {
         message = JSON.stringify(message);
     }
-    const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+    const icons = { success: 'mdi-check', error: 'mdi-close', warning: 'mdi-alert', info: 'mdi-information' };
     const toast = document.createElement('div');
     toast.className = `toast toast-${type || 'info'}`;
-    toast.innerHTML = `<span class="toast-icon">${icons[type] || 'ℹ'}</span><span>${message}</span>`;
+    toast.innerHTML = `<span class="toast-icon"><i class="mdi ${icons[type] || 'mdi-information'}"></i></span><span>${message}</span>`;
     document.getElementById('toastContainer').appendChild(toast);
     setTimeout(() => {
         toast.style.animation = 'slideInRight 0.3s reverse forwards';
