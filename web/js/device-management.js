@@ -12,6 +12,8 @@ let integrationProviders = [];
 let integrationAccounts  = [];
 let devices              = [];
 let allDevices           = [];
+let sortCol              = 'name';
+let sortDir              = 1; // 1 = asc, -1 = desc
 let userChannels         = [];
 let editingDeviceId      = null;
 
@@ -226,6 +228,36 @@ async function loadGeofencesForDevice(deviceId) {
 }
 
 // ── Device Table ──────────────────────────────────────────────────
+function sortDevices(col) {
+    if (sortCol === col) {
+        sortDir = -sortDir;
+    } else {
+        sortCol = col;
+        sortDir = 1;
+    }
+    updateSortHeaders();
+    filterDevices();
+}
+
+function updateSortHeaders() {
+    document.querySelectorAll('.devices-table th[data-sort]').forEach(th => {
+        const col = th.dataset.sort;
+        th.dataset.sortDir = col === sortCol ? (sortDir === 1 ? 'asc' : 'desc') : '';
+    });
+}
+
+function _deviceSortValue(d, col) {
+    switch (col) {
+        case 'name':      return (d.name || '').toLowerCase();
+        case 'protocol':  return (d.protocol || '').toLowerCase();
+        case 'plate':     return (d.license_plate || '').toLowerCase();
+        case 'company':   return (allCompanies.find(c => c.id === d.company_id)?.name || '').toLowerCase();
+        case 'last_seen': return d.state?.last_update ? new Date(d.state.last_update).getTime() : -Infinity;
+        case 'odometer':  return d.state?.total_odometer ?? -Infinity;
+        default:          return '';
+    }
+}
+
 function filterDevices() {
     const q = (document.getElementById('deviceSearch').value || '').toLowerCase().trim();
     const filtered = q
@@ -236,7 +268,14 @@ function filterDevices() {
             (d.protocol      || '').toLowerCase().includes(q) ||
             (d.vehicle_type  || '').toLowerCase().includes(q))
         : allDevices;
-    renderDeviceTable([...filtered].sort((a, b) => a.name.localeCompare(b.name)));
+    const sorted = [...filtered].sort((a, b) => {
+        const av = _deviceSortValue(a, sortCol);
+        const bv = _deviceSortValue(b, sortCol);
+        if (av < bv) return -sortDir;
+        if (av > bv) return sortDir;
+        return 0;
+    });
+    renderDeviceTable(sorted);
 }
 
 function renderDeviceTable(list) {
