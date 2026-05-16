@@ -967,8 +967,13 @@ h1 {
 
 /* ── Mobile: Device Table ───────────────────────────────────────── */
 
+/* Company column hidden by default; shown only for admins via JS-added class */
+.company-col { display: none; }
+
+.devices-table.show-company-col .company-col { display: table-cell; }
+
 @media (max-width: 900px) {
-    .company-col { display: none; }
+    .devices-table.show-company-col .company-col { display: none; }
 }
 
 .company-table th:nth-child(3),
