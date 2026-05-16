@@ -103,7 +103,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.addEventListener('keydown', e => {
         if (e.key !== 'Escape') return;
-        ['deviceModal', 'alertEditorModal', 'commandModal'].forEach(id => {
+        ['deviceModal', 'alertEditorModal'].forEach(id => {
             document.getElementById(id)?.classList.remove('active');
         });
     });
@@ -313,7 +313,7 @@ function renderDeviceTable(list) {
             <td style="font-size:0.85rem;color:var(--text-secondary);">${lastSeen}</td>
             <td style="font-family:var(--font-mono);font-size:0.85rem;">${odometer}</td>
             <td style="text-align:right;white-space:nowrap;">
-                ${cmds ? `<button class="btn btn-secondary tbl-btn" onclick="openCommandModal(${d.id})"><i class="mdi mdi-antenna"></i></button>` : ''}
+                ${cmds ? `<button class="btn btn-secondary tbl-btn" onclick="openDeviceModal(${d.id},'commands')" title="Commands"><i class="mdi mdi-antenna"></i></button>` : ''}
                 <button class="btn btn-secondary tbl-btn" onclick="openDeviceModal(${d.id},'general')"><i class="mdi mdi-pencil"></i> Edit</button>
             </td>
         </tr>`;
@@ -326,8 +326,17 @@ function switchModalTab(tabId, btn) {
     document.querySelectorAll('.modal-tab').forEach(el => el.classList.remove('active'));
     document.getElementById(`tab-${tabId}`)?.classList.add('active');
     (btn || document.querySelector(`.modal-tab[data-tab="${tabId}"]`))?.classList.add('active');
-    if (tabId === 'rawdata' && editingDeviceId) loadRawDataForModal(editingDeviceId);
-    if (tabId === 'users' && editingDeviceId) loadUsersForDevice(editingDeviceId);
+    const commandTabsBar = document.getElementById('commandTabsBar');
+    if (commandTabsBar) commandTabsBar.style.display = tabId === 'commands' ? 'flex' : 'none';
+    if (tabId !== 'commands') { clearInterval(commandHistoryInterval); commandHistoryInterval = null; }
+    if (tabId === 'rawdata'  && editingDeviceId) loadRawDataForModal(editingDeviceId);
+    if (tabId === 'users'    && editingDeviceId) loadUsersForDevice(editingDeviceId);
+    if (tabId === 'commands' && editingDeviceId) {
+        currentCommandDeviceId = editingDeviceId;
+        currentCommandDevice   = devices.find(d => d.id === editingDeviceId);
+        switchCommandTab('send');
+        loadAvailableCommands();
+    }
 }
 
 // ── Open / Close Device Modal ─────────────────────────────────────
@@ -340,6 +349,8 @@ function openAddDeviceModal() {
     document.getElementById('deleteDeviceBtn').style.display = 'none';
     const usersTabBtnAdd = document.getElementById('usersTabBtn');
     if (usersTabBtnAdd) usersTabBtnAdd.style.display = 'none';
+    const commandsTabBtnAdd = document.getElementById('commandsTabBtn');
+    if (commandsTabBtnAdd) commandsTabBtnAdd.style.display = 'none';
     document.getElementById('deviceForm').reset();
     document.getElementById('deviceProtocol').value          = '';
     document.getElementById('currentOdometer').value         = '0.0';
@@ -372,6 +383,8 @@ function openDeviceModal(deviceId, startTab = 'general') {
     document.getElementById('deleteDeviceBtn').style.display = hasAdminAccess ? 'inline-flex' : 'none';
     const usersTabBtnEdit = document.getElementById('usersTabBtn');
     if (usersTabBtnEdit) usersTabBtnEdit.style.display = hasAdminAccess ? '' : 'none';
+    const commandsTabBtnEdit = document.getElementById('commandsTabBtn');
+    if (commandsTabBtnEdit) commandsTabBtnEdit.style.display = d.supports_commands ? '' : 'none';
     deviceAssignedUserIds = new Set();
 
     document.getElementById('deviceName').value          = d.name;
@@ -407,20 +420,16 @@ function openDeviceModal(deviceId, startTab = 'general') {
 
 function closeDeviceModal() {
     document.getElementById('deviceModal').classList.remove('active');
+    clearInterval(commandHistoryInterval);
+    commandHistoryInterval = null;
 }
 
 function editDevice(id)       { openDeviceModal(id, 'general'); }
 function openRawDataModal(id) { openDeviceModal(id, 'rawdata'); }
 
-// ── Commands Modal ────────────────────────────────────────────────
+// ── Commands Tab ──────────────────────────────────────────────────
 function openCommandModal(deviceId) {
-    currentCommandDeviceId = deviceId;
-    currentCommandDevice   = devices.find(d => d.id == deviceId);
-    if (!currentCommandDevice) return;
-    document.getElementById('commandDeviceName').textContent = currentCommandDevice.name;
-    document.getElementById('commandModal').classList.add('active');
-    switchCommandTab('send');
-    loadAvailableCommands();
+    openDeviceModal(deviceId, 'commands');
 }
 
 // ── Form Submit ───────────────────────────────────────────────────

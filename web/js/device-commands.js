@@ -3,42 +3,7 @@ let currentCommandDeviceId = null;
 let currentCommandDevice = null;
 let availableCommands = [];
 let commandInfo = {};
-
-// Open Command Modal
-async function openCommandModal(deviceId) {
-    currentCommandDeviceId = deviceId;
-    currentCommandDevice = devices.find(d => d.id === deviceId);
-    
-    if (!currentCommandDevice) {
-        showToast('Device not found', 'error');
-        return;
-    }
-    
-    document.getElementById('commandDeviceName').textContent = currentCommandDevice.name;
-    document.getElementById('commandModal').classList.add('active');
-    
-    // Switch to send tab by default
-    switchCommandTab('send');
-    
-    // Load available commands for this device
-    await loadAvailableCommands();
-}
-
-// Close Command Modal
-function closeCommandModal() {
-    document.getElementById('commandModal').classList.remove('active');
-    currentCommandDeviceId = null;
-    currentCommandDevice = null;
-    
-    // Reset forms
-    document.getElementById('commandTypeSelect').value = '';
-    document.getElementById('commandParams').value = '';
-    document.getElementById('customCommandInput').value = '';
-    document.getElementById('commandInfoBox').style.display = 'none';
-    document.getElementById('commandParamsBox').style.display = 'none';
-    document.getElementById('commandPreviewBox').style.display = 'none';
-    document.getElementById('customCommandPreviewBox').style.display = 'none';
-}
+let commandHistoryInterval = null;
 
 // Switch between Send and History tabs
 function switchCommandTab(tab) {
@@ -53,9 +18,12 @@ function switchCommandTab(tab) {
     document.getElementById('sendCommandTab').classList.toggle('active', tab === 'send');
     document.getElementById('historyCommandTab').classList.toggle('active', tab === 'history');
     
-    // Load history if switching to history tab
+    // Start/stop auto-refresh when switching tabs
+    clearInterval(commandHistoryInterval);
+    commandHistoryInterval = null;
     if (tab === 'history') {
         loadCommandHistory();
+        commandHistoryInterval = setInterval(loadCommandHistory, 5000);
     }
 }
 
@@ -73,10 +41,26 @@ function switchCommandSubtab(subtab) {
     document.getElementById('customCommandContent').classList.toggle('active', subtab === 'custom');
 }
 
+// Returns true and shows an alert if the protocol in the form hasn't been saved yet
+function _checkProtocolUnsaved() {
+    const selectedProtocol = document.getElementById('deviceProtocol')?.value;
+    const device = currentCommandDevice || (editingDeviceId ? devices.find(d => d.id === editingDeviceId) : null);
+    if (device?.protocol && selectedProtocol && selectedProtocol !== device.protocol) {
+        showAlert('Save the device first before sending commands with the new protocol', 'warning');
+        return true;
+    }
+    return false;
+}
+
 // Load available commands for the device
 async function loadAvailableCommands() {
     try {
-        const response = await apiFetch(`${API_BASE}/devices/${currentCommandDeviceId}/command-support`);
+        // Use the currently-selected protocol from the form (may differ from saved device protocol)
+        const selectedProtocol = document.getElementById('deviceProtocol')?.value;
+        const url = selectedProtocol
+            ? `${API_BASE}/devices/protocol/${selectedProtocol}/command-support`
+            : `${API_BASE}/devices/${currentCommandDeviceId}/command-support`;
+        const response = await apiFetch(url);
         if (!response.ok) {
             throw new Error('Failed to load command support info');
         }
@@ -100,11 +84,11 @@ async function loadAvailableCommands() {
         });
         
         if (availableCommands.length === 0) {
-            showToast('This device protocol does not support commands', 'warning');
+            showAlert('This device protocol does not support commands', 'warning');
         }
     } catch (error) {
         console.error('Error loading available commands:', error);
-        showToast('Failed to load available commands', 'error');
+        showAlert('Failed to load available commands', 'error');
     }
 }
 
@@ -162,7 +146,7 @@ function onCommandSelect() {
 async function previewCommand() {
     const commandType = document.getElementById('commandTypeSelect').value;
     if (!commandType) {
-        showToast('Please select a command', 'warning');
+        showAlert('Please select a command', 'warning');
         return;
     }
     
@@ -177,27 +161,28 @@ async function previewCommand() {
     } else if (!info.requires_params) {
         payload = commandType;
     } else if (info.requires_params && !params) {
-        showToast('This command requires parameters', 'warning');
+        showAlert('This command requires parameters', 'warning');
         return;
     }
     
     try {
-        const response = await apiFetch(`${API_BASE}/devices/${currentCommandDeviceId}/command/preview`, {
+        const selectedProtocol = document.getElementById('deviceProtocol')?.value;
+        const previewUrl = selectedProtocol
+            ? `${API_BASE}/devices/protocol/${selectedProtocol}/command/preview`
+            : `${API_BASE}/devices/${currentCommandDeviceId}/command/preview`;
+        const response = await apiFetch(previewUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                command_type: commandType,  // Use actual command type, not 'custom'
-                payload: payload
-            })
+            body: JSON.stringify({ command_type: commandType, payload: payload })
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Preview failed');
         }
-        
+
         const data = await response.json();
-        
+
         // Show preview
         document.getElementById('commandPreviewHex').textContent = data.hex || 'N/A';
         document.getElementById('commandPreviewAscii').textContent = data.ascii || 'Non-ASCII binary data';
@@ -205,15 +190,16 @@ async function previewCommand() {
         
     } catch (error) {
         console.error('Error previewing command:', error);
-        showToast(error.message || 'Failed to preview command', 'error');
+        showAlert(error.message || 'Failed to preview command', 'error');
     }
 }
 
 // Send Command
 async function sendCommand() {
+    if (_checkProtocolUnsaved()) return;
     const commandType = document.getElementById('commandTypeSelect').value;
     if (!commandType) {
-        showToast('Please select a command', 'warning');
+        showAlert('Please select a command', 'warning');
         return;
     }
     
@@ -228,7 +214,7 @@ async function sendCommand() {
     } else if (!info.requires_params) {
         payload = commandType;
     } else if (info.requires_params && !params) {
-        showToast('This command requires parameters', 'warning');
+        showAlert('This command requires parameters', 'warning');
         return;
     }
     
@@ -260,7 +246,7 @@ async function sendCommand() {
         
         const result = await response.json();
         
-        showToast('Command queued successfully', 'success');
+        showAlert('Command queued successfully', 'success');
         
         // Reset form
         document.getElementById('commandTypeSelect').value = '';
@@ -276,7 +262,7 @@ async function sendCommand() {
         
     } catch (error) {
         console.error('Error sending command:', error);
-        showToast(error.message || 'Failed to send command', 'error');
+        showAlert(error.message || 'Failed to send command', 'error');
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="mdi mdi-antenna"></i> Send Command';
@@ -287,18 +273,19 @@ async function sendCommand() {
 async function previewCustomCommand() {
     const customInput = document.getElementById('customCommandInput').value.trim();
     if (!customInput) {
-        showToast('Please enter a command', 'warning');
+        showAlert('Please enter a command', 'warning');
         return;
     }
     
     try {
-        const response = await apiFetch(`${API_BASE}/devices/${currentCommandDeviceId}/command/preview`, {
+        const selectedProtocol = document.getElementById('deviceProtocol')?.value;
+        const previewUrl = selectedProtocol
+            ? `${API_BASE}/devices/protocol/${selectedProtocol}/command/preview`
+            : `${API_BASE}/devices/${currentCommandDeviceId}/command/preview`;
+        const response = await apiFetch(previewUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                command_type: 'custom',
-                payload: customInput
-            })
+            body: JSON.stringify({ command_type: 'custom', payload: customInput })
         });
         
         if (!response.ok) {
@@ -315,15 +302,16 @@ async function previewCustomCommand() {
         
     } catch (error) {
         console.error('Error previewing custom command:', error);
-        showToast(error.message || 'Failed to preview command', 'error');
+        showAlert(error.message || 'Failed to preview command', 'error');
     }
 }
 
 // Send Custom Command
 async function sendCustomCommand() {
+    if (_checkProtocolUnsaved()) return;
     const customInput = document.getElementById('customCommandInput').value.trim();
     if (!customInput) {
-        showToast('Please enter a command', 'warning');
+        showAlert('Please enter a command', 'warning');
         return;
     }
     
@@ -355,7 +343,7 @@ async function sendCustomCommand() {
         
         const result = await response.json();
         
-        showToast('Custom command queued successfully', 'success');
+        showAlert('Custom command queued successfully', 'success');
         
         // Reset form
         document.getElementById('customCommandInput').value = '';
@@ -368,7 +356,7 @@ async function sendCustomCommand() {
         
     } catch (error) {
         console.error('Error sending custom command:', error);
-        showToast(error.message || 'Failed to send command', 'error');
+        showAlert(error.message || 'Failed to send command', 'error');
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="mdi mdi-antenna"></i> Send Custom Command';
@@ -394,12 +382,6 @@ async function loadCommandHistory() {
             </td></tr>
         `;
     }
-}
-
-// Refresh Command History
-async function refreshCommandHistory() {
-    await loadCommandHistory();
-    showToast('Command history refreshed', 'info');
 }
 
 // Render Command History

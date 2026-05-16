@@ -303,3 +303,34 @@ async def check_command_support(
         "protocol": device.protocol,
         "command_info": command_info,
     }
+
+
+def _command_support_for_protocol(protocol: str) -> dict:
+    from protocols import ProtocolRegistry
+    decoder = ProtocolRegistry.get_decoder(protocol)
+    if not decoder:
+        return {"supports_commands": False, "available_commands": [], "protocol": protocol, "command_info": {}}
+    available_commands = []
+    command_info = {}
+    if hasattr(decoder, "get_available_commands"):
+        try:
+            available_commands = decoder.get_available_commands()
+            if hasattr(decoder, "get_command_info"):
+                for cmd in available_commands:
+                    command_info[cmd] = decoder.get_command_info(cmd)
+        except Exception:
+            pass
+    return {
+        "supports_commands": len(available_commands) > 0,
+        "available_commands": available_commands,
+        "protocol": protocol,
+        "command_info": command_info,
+    }
+
+
+@router.get("/protocol/{protocol}/command-support")
+async def check_protocol_command_support(
+    protocol: str,
+    caller: User = Depends(get_current_user),
+):
+    return _command_support_for_protocol(protocol)
