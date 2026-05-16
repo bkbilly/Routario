@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Depends
 
 from core.database import get_db
-from core.auth import verify_device_access
+from core.auth import get_current_user, verify_device_access
 from models import User
 from models.schemas import CommandCreate
 from protocols import ProtocolRegistry
@@ -67,6 +67,39 @@ async def preview_command(
         raise HTTPException(status_code=404, detail="Device not found")
 
     decoder = ProtocolRegistry.get_decoder(device.protocol)
+    if not decoder:
+        raise HTTPException(status_code=400, detail="Protocol not found")
+
+    command_type = command_data.get("command_type", "")
+    payload = command_data.get("payload", "")
+
+    try:
+        encoded = await decoder.encode_command(
+            command_type, {"payload": payload} if payload else {}
+        )
+        if not encoded or len(encoded) == 0:
+            raise HTTPException(status_code=400, detail="Command could not be encoded")
+
+        try:
+            ascii_repr = encoded.decode("ascii", errors="replace")
+        except Exception:
+            ascii_repr = "Non-ASCII binary data"
+
+        return {"hex": encoded.hex(), "bytes": len(encoded), "ascii": ascii_repr, "success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Command encoding failed: {str(e)}")
+
+
+@router.post("/protocol/{protocol}/command/preview")
+async def preview_command_for_protocol(
+    protocol: str,
+    command_data: dict,
+    caller: User = Depends(get_current_user),
+):
+    """Preview hex encoding of a command for a given protocol (no device required)."""
+    decoder = ProtocolRegistry.get_decoder(protocol)
     if not decoder:
         raise HTTPException(status_code=400, detail="Protocol not found")
 

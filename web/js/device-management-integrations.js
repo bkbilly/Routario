@@ -23,6 +23,19 @@ function onProtocolChange(existingIntg = null) {
         if (imeiInput) imeiInput.required = !isIntg;
     }
 
+    // Show/hide Commands tab based on protocol command support
+    const commandsBtn = document.getElementById('commandsTabBtn');
+    if (commandsBtn) {
+        const supportsCommands = protocolInfo[selected]?.supports_commands || false;
+        commandsBtn.style.display = supportsCommands ? '' : 'none';
+        const activeTab = document.querySelector('.modal-tab.active');
+        if (!supportsCommands && activeTab?.dataset?.tab === 'commands') {
+            switchModalTab('general');
+        } else if (supportsCommands && activeTab?.dataset?.tab === 'commands') {
+            loadAvailableCommands();
+        }
+    }
+
     const panel = document.getElementById('integrationFieldsPanel');
     if (!panel) return;
 

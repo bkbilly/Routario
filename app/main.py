@@ -421,10 +421,15 @@ app.include_router(integrations_router)
 async def get_protocols():
     protocols_info = {}
     for name, decoder in ProtocolRegistry.get_all().items():
+        try:
+            cmds = decoder.get_available_commands() if hasattr(decoder, "get_available_commands") else []
+        except Exception:
+            cmds = []
         protocols_info[name] = {
-            "native_events":   getattr(decoder, "NATIVE_EVENTS", []),
-            "port":            getattr(decoder, "PORT", None),
-            "protocol_types":  getattr(decoder, "PROTOCOL_TYPES", ["tcp"]),
+            "native_events":     getattr(decoder, "NATIVE_EVENTS", []),
+            "port":              getattr(decoder, "PORT", None),
+            "protocol_types":    getattr(decoder, "PROTOCOL_TYPES", ["tcp"]),
+            "supports_commands": len(cmds) > 0,
         }
     return {
         "protocols":       ProtocolRegistry.list_protocols(),

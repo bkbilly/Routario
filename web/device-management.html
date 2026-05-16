@@ -87,7 +87,8 @@
                 <button type="button" class="modal-tab active" data-tab="general" onclick="switchModalTab('general',this)"><i class="mdi mdi-clipboard-outline"></i> General</button>
                 <button type="button" class="modal-tab" data-tab="alerts"  onclick="switchModalTab('alerts',this)"><i class="mdi mdi-bell"></i> Alerts</button>
                 <button type="button" class="modal-tab" data-tab="rawdata" onclick="switchModalTab('rawdata',this)"><i class="mdi mdi-chart-bar"></i> Raw Data</button>
-                <button type="button" class="modal-tab" data-tab="users" id="usersTabBtn" onclick="switchModalTab('users',this)" style="display:none;"><i class="mdi mdi-account-group"></i> Users</button>
+                <button type="button" class="modal-tab" data-tab="users"     id="usersTabBtn"    onclick="switchModalTab('users',this)"    style="display:none;"><i class="mdi mdi-account-group"></i> Users</button>
+                <button type="button" class="modal-tab" data-tab="commands" id="commandsTabBtn" onclick="switchModalTab('commands',this)" style="display:none;"><i class="mdi mdi-antenna"></i> Commands</button>
             </div>
 
             <div class="modal-scrollable">
@@ -232,6 +233,86 @@
                     <div id="usersAssignList" style="display:flex;flex-direction:column;gap:0.5rem;"></div>
                 </div>
 
+                <!-- TAB: COMMANDS -->
+                <div class="modal-tab-content" id="tab-commands">
+                    <div class="command-tabs">
+                        <button type="button" class="command-tab active" onclick="switchCommandTab('send')"><i class="mdi mdi-send"></i> Send Command</button>
+                        <button type="button" class="command-tab" onclick="switchCommandTab('history')"><i class="mdi mdi-history"></i> History</button>
+                    </div>
+
+                    <!-- Send Command Tab -->
+                    <div class="command-tab-content active" id="sendCommandTab">
+                        <div class="command-subtabs">
+                            <button type="button" class="command-subtab active" onclick="switchCommandSubtab('predefined')">Predefined Commands</button>
+                            <button type="button" class="command-subtab" onclick="switchCommandSubtab('custom')">Custom Command</button>
+                        </div>
+
+                        <div class="command-subtab-content active" id="predefinedCommandContent">
+                            <div class="form-group">
+                                <label class="form-label">Select Command</label>
+                                <select class="form-select" id="commandTypeSelect" onchange="onCommandSelect()">
+                                    <option value="">-- Select a command --</option>
+                                </select>
+                            </div>
+                            <div id="commandInfoBox" class="command-info-box" style="display:none;">
+                                <div class="command-info-label">Description:</div>
+                                <div id="commandDescription"></div>
+                                <div class="command-info-label" style="margin-top:0.75rem;">Example:</div>
+                                <div id="commandExample" style="font-family:var(--font-mono);background:var(--bg-tertiary);padding:0.5rem;border-radius:6px;margin-top:0.25rem;"></div>
+                            </div>
+                            <div id="commandParamsBox" class="form-group" style="display:none;">
+                                <label class="form-label">Parameters</label>
+                                <input type="text" class="form-input" id="commandParams" placeholder="Enter parameters here">
+                                <div style="font-size:0.8125rem;color:var(--text-muted);margin-top:0.5rem;">Parameters will be appended after the command with a space</div>
+                            </div>
+                            <div id="commandPreviewBox" class="command-preview-box" style="display:none;">
+                                <div class="command-preview-label">Data to be sent:</div>
+                                <div id="commandPreviewHex" class="command-preview-hex"></div>
+                                <div id="commandPreviewAscii" class="command-preview-ascii"></div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" onclick="previewCommand()"><i class="mdi mdi-magnify"></i> Preview</button>
+                                <button type="button" class="btn btn-primary" id="sendCommandBtn" onclick="sendCommand()"><i class="mdi mdi-antenna"></i> Send Command</button>
+                            </div>
+                        </div>
+
+                        <div class="command-subtab-content" id="customCommandContent">
+                            <div class="form-group">
+                                <label class="form-label">Custom Command</label>
+                                <textarea class="form-textarea" id="customCommandInput" placeholder="Enter raw command text or hex string" rows="3"></textarea>
+                                <div style="font-size:0.875rem;color:var(--text-muted);margin-top:0.5rem;">Enter plain text or hex string (will be automatically converted to bytes)</div>
+                            </div>
+                            <div id="customCommandPreviewBox" class="command-preview-box" style="display:none;">
+                                <div class="command-preview-label">Data to be sent:</div>
+                                <div id="customCommandPreviewHex" class="command-preview-hex"></div>
+                                <div id="customCommandPreviewAscii" class="command-preview-ascii"></div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" onclick="previewCustomCommand()"><i class="mdi mdi-magnify"></i> Preview</button>
+                                <button type="button" class="btn btn-primary" id="sendCustomCommandBtn" onclick="sendCustomCommand()"><i class="mdi mdi-antenna"></i> Send Custom Command</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- History Tab -->
+                    <div class="command-tab-content" id="historyCommandTab">
+                        <div style="overflow-x:auto;">
+                            <table class="command-history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th><th>Command</th><th>Payload</th><th>Status</th><th>Response</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="commandHistoryBody"></tbody>
+                            </table>
+                        </div>
+                        <div id="commandHistoryEmpty" style="display:none;text-align:center;padding:3rem;color:var(--text-muted);">
+                            <div style="font-size:3rem;margin-bottom:1rem;"><i class="mdi mdi-inbox-remove"></i></div>
+                            <div>No command history available</div>
+                        </div>
+                    </div>
+                </div>
+
             </div><!-- /.modal-scrollable -->
 
             <!-- PERSISTENT FOOTER -->
@@ -264,113 +345,6 @@
             <button type="button" class="btn btn-secondary" onclick="closeAlertEditor()">Cancel</button>
             <button type="button" class="btn btn-primary" onclick="saveAlertFromEditor()">Save Alert</button>
         </div>
-    </div>
-</div>
-
-<!-- =============================================================
-     COMMANDS MODAL
-============================================================= -->
-<div class="modal" id="commandModal">
-    <div class="modal-content wide">
-        <div class="modal-header">
-            <h2 class="modal-title">Device Commands &#8211; <span id="commandDeviceName"></span></h2>
-            <button type="button" class="modal-close" onclick="closeCommandModal()"><i class="mdi mdi-close"></i></button>
-        </div>
-
-        <div class="modal-scrollable">
-            <div class="command-tabs">
-                <button class="command-tab active" onclick="switchCommandTab('send')"><i class="mdi mdi-send"></i> Send Command</button>
-                <button class="command-tab" onclick="switchCommandTab('history')"><i class="mdi mdi-history"></i> History</button>
-            </div>
-
-            <!-- Send Command Tab -->
-            <div class="command-tab-content active" id="sendCommandTab">
-                <div class="command-subtabs">
-                    <button class="command-subtab active" onclick="switchCommandSubtab('predefined')">Predefined Commands</button>
-                    <button class="command-subtab" onclick="switchCommandSubtab('custom')">Custom Command</button>
-                </div>
-
-                <!-- Predefined Commands -->
-                <div class="command-subtab-content active" id="predefinedCommandContent">
-                    <div class="form-group">
-                        <label class="form-label">Select Command</label>
-                        <select class="form-select" id="commandTypeSelect" onchange="onCommandSelect()">
-                            <option value="">-- Select a command --</option>
-                        </select>
-                    </div>
-
-                    <div id="commandInfoBox" class="command-info-box" style="display:none;">
-                        <div class="command-info-label">Description:</div>
-                        <div id="commandDescription"></div>
-                        <div class="command-info-label" style="margin-top:0.75rem;">Example:</div>
-                        <div id="commandExample" style="font-family:var(--font-mono);background:var(--bg-tertiary);padding:0.5rem;border-radius:6px;margin-top:0.25rem;"></div>
-                    </div>
-
-                    <div id="commandParamsBox" class="form-group" style="display:none;">
-                        <label class="form-label">Parameters</label>
-                        <input type="text" class="form-input" id="commandParams" placeholder="Enter parameters here">
-                        <div style="font-size:0.8125rem;color:var(--text-muted);margin-top:0.5rem;">Parameters will be appended after the command with a space</div>
-                    </div>
-
-                    <div id="commandPreviewBox" class="command-preview-box" style="display:none;">
-                        <div class="command-preview-label">Data to be sent:</div>
-                        <div id="commandPreviewHex" class="command-preview-hex"></div>
-                        <div id="commandPreviewAscii" class="command-preview-ascii"></div>
-                    </div>
-
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-secondary" onclick="previewCommand()"><i class="mdi mdi-magnify"></i> Preview</button>
-                        <button type="button" class="btn btn-primary" onclick="sendCommand()" id="sendCommandBtn"><i class="mdi mdi-send"></i> Send Command</button>
-                    </div>
-                </div>
-
-                <!-- Custom Command -->
-                <div class="command-subtab-content" id="customCommandContent">
-                    <div class="form-group">
-                        <label class="form-label">Custom Command</label>
-                        <textarea class="form-textarea" id="customCommandInput" placeholder="Enter raw command text or hex string" rows="3"></textarea>
-                        <div style="font-size:0.875rem;color:var(--text-muted);margin-top:0.5rem;">Enter plain text or hex string (will be automatically converted to bytes)</div>
-                    </div>
-
-                    <div id="customCommandPreviewBox" class="command-preview-box" style="display:none;">
-                        <div class="command-preview-label">Data to be sent:</div>
-                        <div id="customCommandPreviewHex" class="command-preview-hex"></div>
-                        <div id="customCommandPreviewAscii" class="command-preview-ascii"></div>
-                    </div>
-
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-secondary" onclick="previewCustomCommand()"><i class="mdi mdi-magnify"></i> Preview</button>
-                        <button type="button" class="btn btn-primary" onclick="sendCustomCommand()" id="sendCustomCommandBtn"><i class="mdi mdi-send"></i> Send Custom Command</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- History Tab -->
-            <div class="command-tab-content" id="historyCommandTab">
-                <div style="margin-bottom:1rem;">
-                    <button class="btn btn-secondary" onclick="refreshCommandHistory()"><i class="mdi mdi-refresh"></i> Refresh</button>
-                </div>
-                <div style="overflow-x:auto;">
-                    <table class="command-history-table">
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>Command</th>
-                                <th>Payload</th>
-                                <th>Status</th>
-                                <th>Response</th>
-                            </tr>
-                        </thead>
-                        <tbody id="commandHistoryBody"></tbody>
-                    </table>
-                </div>
-                <div id="commandHistoryEmpty" style="display:none;text-align:center;padding:3rem;color:var(--text-muted);">
-                    <div style="font-size:3rem;margin-bottom:1rem;"><i class="mdi mdi-inbox-remove"></i></div>
-                    <div>No command history available</div>
-                </div>
-            </div>
-        </div><!-- /.modal-scrollable -->
-
     </div>
 </div>
 
