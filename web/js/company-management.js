@@ -7,6 +7,9 @@ let allCompanies = [];
 let allUsers     = [];
 let allDevices   = [];
 
+let companySortCol         = 'name';
+let companySortDir         = 1;
+
 let editingCompanyId       = null;
 let companyUserIds         = new Set();
 let companyDeviceIds       = new Set();
@@ -46,7 +49,7 @@ async function loadCompanies() {
         if (!res.ok) throw new Error(`${res.status}`);
         companies    = await res.json();
         allCompanies = [...companies];
-        renderTable(companies);
+        filterCompanies();
     } catch (e) {
         showAlert('Failed to load companies', 'error');
         console.error(e);
@@ -69,10 +72,45 @@ async function loadAllDevices() {
 
 // ── Table ─────────────────────────────────────────────────────────
 
+function sortCompanies(col) {
+    if (companySortCol === col) {
+        companySortDir = -companySortDir;
+    } else {
+        companySortCol = col;
+        companySortDir = 1;
+    }
+    updateCompanySortHeaders();
+    filterCompanies();
+}
+
+function updateCompanySortHeaders() {
+    document.querySelectorAll('.company-table th[data-sort]').forEach(th => {
+        th.dataset.sortDir = th.dataset.sort === companySortCol
+            ? (companySortDir === 1 ? 'asc' : 'desc') : '';
+    });
+}
+
+function _companySortValue(c, col) {
+    switch (col) {
+        case 'name':    return (c.name || '').toLowerCase();
+        case 'users':   return c.user_count ?? -Infinity;
+        case 'devices': return c.device_count ?? -Infinity;
+        case 'created': return c.created_at ? new Date(c.created_at).getTime() : -Infinity;
+        default:        return '';
+    }
+}
+
 function filterCompanies() {
     const q = (document.getElementById('companySearch').value || '').toLowerCase().trim();
     const filtered = q ? allCompanies.filter(c => c.name.toLowerCase().includes(q)) : allCompanies;
-    renderTable(filtered);
+    const sorted = [...filtered].sort((a, b) => {
+        const av = _companySortValue(a, companySortCol);
+        const bv = _companySortValue(b, companySortCol);
+        if (av < bv) return -companySortDir;
+        if (av > bv) return companySortDir;
+        return 0;
+    });
+    renderTable(sorted);
 }
 
 function renderTable(list) {

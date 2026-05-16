@@ -965,6 +965,36 @@ h1 {
     .alerts-add-divider { width: auto; height: 1px; margin: 0; }
 }
 
+/* ── Sortable Table Headers ─────────────────────────────────────── */
+
+.devices-table th[data-sort] {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.devices-table th[data-sort]:hover {
+    color: var(--accent-primary);
+}
+
+.devices-table th[data-sort]::after {
+    content: ' ⇅';
+    opacity: 0.3;
+    font-size: 0.75em;
+}
+
+.devices-table th[data-sort-dir="asc"]::after {
+    content: ' ▲';
+    opacity: 1;
+    color: var(--accent-primary);
+}
+
+.devices-table th[data-sort-dir="desc"]::after {
+    content: ' ▼';
+    opacity: 1;
+    color: var(--accent-primary);
+}
+
 /* ── Mobile: Device Table ───────────────────────────────────────── */
 
 /* Company column hidden by default; shown only for admins via JS-added class */
@@ -1005,8 +1035,8 @@ h1 {
     .devices-table td:nth-child(3),
     .devices-table th:nth-child(4),   /* Plate */
     .devices-table td:nth-child(4),
-    .devices-table th:nth-child(6),   /* Odometer */
-    .devices-table td:nth-child(6) {
+    .devices-table th:nth-child(7),   /* Odometer */
+    .devices-table td:nth-child(7) {
         display: none;
     }
 
@@ -1038,12 +1068,6 @@ h1 {
 }
 
 @media (max-width: 480px) {
-    /* On very small screens, also hide Last Seen */
-    .devices-table th:nth-child(5),
-    .devices-table td:nth-child(5) {
-        display: none;
-    }
-
     .container {
         padding: 1rem 0.75rem;
     }

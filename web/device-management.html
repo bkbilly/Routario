@@ -47,12 +47,12 @@
                 <thead>
                     <tr>
                         <th style="width:44px;"></th>
-                        <th>Name</th>
-                        <th>Protocol</th>
-                        <th>Plate</th>
-                        <th class="company-col">Company</th>
-                        <th>Last Seen</th>
-                        <th>Odometer</th>
+                        <th data-sort="name" data-sort-dir="asc" onclick="sortDevices('name')">Name</th>
+                        <th data-sort="protocol" onclick="sortDevices('protocol')">Protocol</th>
+                        <th data-sort="plate" onclick="sortDevices('plate')">Plate</th>
+                        <th class="company-col" data-sort="company" onclick="sortDevices('company')">Company</th>
+                        <th data-sort="last_seen" onclick="sortDevices('last_seen')">Last Seen</th>
+                        <th data-sort="odometer" onclick="sortDevices('odometer')">Odometer</th>
                         <th style="width:180px;text-align:center;">Actions</th>
                     </tr>
                 </thead>
