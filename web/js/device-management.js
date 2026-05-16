@@ -87,8 +87,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (usersTabBtn) usersTabBtn.style.display = 'none';
 
     if (isAdmin) {
-        const colHeader = document.getElementById('companyColHeader');
-        if (colHeader) colHeader.style.display = '';
+        document.querySelector('.devices-table')?.classList.add('show-company-col');
         document.getElementById('deviceCompanyGroup').style.display = '';
         loadAllCompanies();
     }
@@ -260,9 +259,7 @@ function renderDeviceTable(list) {
         const odometer    = d.state?.total_odometer != null ? fmtOdometer(d.state.total_odometer) : '—';
         const plate       = d.license_plate || '—';
         const cmds        = d.supports_commands !== false;
-        const companyName = isAdmin
-            ? (allCompanies.find(c => c.id === d.company_id)?.name || '—')
-            : null;
+        const companyName = allCompanies.find(c => c.id === d.company_id)?.name || '—';
 
         return `
         <tr class="device-row" ondblclick="openDeviceModal(${d.id},'general')">
@@ -273,7 +270,7 @@ function renderDeviceTable(list) {
             </td>
             <td>${protoBadgeHtml(d.protocol)}</td>
             <td>${_esc(plate)}</td>
-            ${isAdmin ? `<td class="company-col" style="font-size:0.85rem;color:var(--text-secondary);">${_esc(companyName)}</td>` : ''}
+            <td class="company-col" style="font-size:0.85rem;color:var(--text-secondary);">${_esc(companyName)}</td>
             <td style="font-size:0.85rem;color:var(--text-secondary);">${lastSeen}</td>
             <td style="font-family:var(--font-mono);font-size:0.85rem;">${odometer}</td>
             <td style="text-align:right;white-space:nowrap;">
