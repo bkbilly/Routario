@@ -11,56 +11,56 @@ const accuracyCircles = {};
 
 const MAP_TILES = {
     openstreetmap_dark: {
-        label: '🌙 OpenStreetMap Dark',
+        label: 'OpenStreetMap Dark',
         url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
         cssFilter: 'invert(100%) hue-rotate(180deg)'
     },
     openstreetmap: {
-        label: '🗺️ OpenStreetMap',
+        label: 'OpenStreetMap',
         url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19
     },
     stadia_dark: {
-        label: '🌒 Stadia Dark',
+        label: 'Stadia Dark',
         url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
         attribution: '© <a href="https://stadiamaps.com/">Stadia Maps</a>',
         maxZoom: 20
     },
     google_streets: {
-        label: '🛣️ Google Streets',
+        label: 'Google Streets',
         url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
         attribution: '© Google Maps',
         maxZoom: 21
     },
     google_satellite: {
-        label: '🛰️ Google Satellite',
+        label: 'Google Satellite',
         url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
         attribution: '© Google Maps',
         maxZoom: 21
     },
     google_hybrid: {
-        label: '🌍 Google Hybrid',
+        label: 'Google Hybrid',
         url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
         attribution: '© Google Maps',
         maxZoom: 21
     },
     carto_dark: {
-        label: '🌑 Carto Dark',
+        label: 'Carto Dark',
         url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
         attribution: '© <a href="https://carto.com/">CARTO</a>',
         maxZoom: 19
     },
     carto_light: {
-        label: '☀️ Carto Light',
+        label: 'Carto Light',
         url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
         attribution: '© <a href="https://carto.com/">CARTO</a>',
         maxZoom: 19
     },
     esri_satellite: {
-        label: '🌐 ESRI Satellite',
+        label: 'ESRI Satellite',
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         attribution: '© Esri, Maxar, Earthstar Geographics',
         maxZoom: 19
@@ -124,6 +124,13 @@ function initMap() {
         }
 
     });
+
+    clusterGroup = L.markerClusterGroup({
+        disableClusteringAtZoom: 14,
+        spiderfyOnMaxZoom: false,
+        showCoverageOnHover: false,
+        maxClusterRadius: 60,
+    }).addTo(map);
 
     initGeofences(map);
 }
@@ -272,9 +279,9 @@ function updateDeviceMarker(deviceId, state) {
                 </div>
             </div>` : ''}
             <div class="vp-actions">
-                <button class="vp-action-btn" onclick="openLogbookModal(${deviceId}); if(map) map.closePopup();">📋 Logbook</button>
-                <button class="vp-action-btn" onclick="openShareModal(${deviceId}); if(map) map.closePopup();">🔗 Share</button>
-                <button class="vp-action-btn" onclick="openHistoryModal(${deviceId}); if(map) map.closePopup();">🕒 History</button>
+                <button class="vp-action-btn" onclick="openLogbookModal(${deviceId}); if(map) map.closePopup();"><i class="mdi mdi-clipboard-list"></i> Logbook</button>
+                <button class="vp-action-btn" onclick="openShareModal(${deviceId}); if(map) map.closePopup();"><i class="mdi mdi-share"></i> Share</button>
+                <button class="vp-action-btn" onclick="openHistoryModal(${deviceId}); if(map) map.closePopup();"><i class="mdi mdi-history"></i> History</button>
             </div>
         </div>`;
 
@@ -282,8 +289,8 @@ function updateDeviceMarker(deviceId, state) {
         markers[deviceId] = L.marker([toLat, toLng], {
             icon: _makeMarkerIcon(device?.vehicle_type, state.ignition_on, toHead)
         })
-            .bindPopup(popupContent)
-            .addTo(map);
+            .bindPopup(popupContent);
+        clusterGroup.addLayer(markers[deviceId]);
 
         markers[deviceId].on('click', () => selectDevice(deviceId, { zoom: false }));
 
@@ -310,7 +317,14 @@ function updateDeviceMarker(deviceId, state) {
                 .replace('▼ More sensors', '▲ Less sensors')
             : popupContent;
 
-        markers[deviceId].setPopupContent(finalContent);
+        if (markers[deviceId].isPopupOpen()) {
+            // Update in-place — avoids Leaflet's visibility:hidden flash that looks like close/reopen
+            existingPopup._content = finalContent;
+            const contentNode = existingPopup.getElement()?.querySelector('.leaflet-popup-content');
+            if (contentNode) contentNode.innerHTML = finalContent;
+        } else {
+            markers[deviceId].setPopupContent(finalContent);
+        }
 
         const prev = markerState[deviceId] || { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
 
@@ -328,7 +342,7 @@ function updateDeviceMarker(deviceId, state) {
         const startTime = performance.now();
 
         function step(now) {
-            if (!markers[deviceId] || !map.hasLayer(markers[deviceId])) {
+            if (!markers[deviceId] || !clusterGroup.hasLayer(markers[deviceId])) {
                 markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
                 return;
             }
@@ -340,7 +354,11 @@ function updateDeviceMarker(deviceId, state) {
             const lng  = fromLng  + (toLng  - fromLng)  * ease;
             const head = canAnimateHead ? fromHead + dH * ease : toHead;
 
+            // Suppress markercluster's move handler during animation — it would
+            // removeLayer + addLayer on every frame, making the popup flash
+            clusterGroup._ignoreMove = true;
             markers[deviceId].setLatLng([lat, lng]);
+            clusterGroup._ignoreMove = false;
             _applyMarkerRotation(markers[deviceId], head, device?.vehicle_type);
 
             if (t < 1) {

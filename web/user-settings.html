@@ -14,6 +14,8 @@
     <meta name="apple-mobile-web-app-title" content="Routario">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
 
+    <!-- Material Design Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <link rel="stylesheet" href="css/user-settings.css">
 </head>
 <body>
@@ -29,13 +31,13 @@
             <!-- Notifications -->
             <div class="card">
                 <div class="card-header">
-                    <div class="card-icon">📬</div>
+                    <div class="card-icon"><i class="mdi mdi-email"></i></div>
                     <h2 class="card-title">Notification Channels</h2>
                 </div>
                 <p class="card-description">
                     Configure services to receive alerts (e.g., Telegram, Discord, Email).<br>
                     <span class="card-help">
-                        📚 <strong>How to format URLs:</strong> 
+                        <i class="mdi mdi-book-open-variant"></i> <strong>How to format URLs:</strong>
                         <a href="https://appriseit.com/services/" target="_blank">
                             Read Apprise Documentation ↗
                         </a>
@@ -73,7 +75,7 @@
             <!-- Webhooks -->
             <div class="card">
                 <div class="card-header">
-                    <div class="card-icon">🔗</div>
+                    <div class="card-icon"><i class="mdi mdi-link-variant"></i></div>
                     <h2 class="card-title">Webhooks</h2>
                 </div>
                 <p class="card-description">
@@ -105,7 +107,7 @@
             <!-- Account Info -->
             <div class="card">
                 <div class="card-header">
-                    <div class="card-icon">👤</div>
+                    <div class="card-icon"><i class="mdi mdi-account"></i></div>
                     <h2 class="card-title">Account Information</h2>
                 </div>
                 <div class="form-row">
@@ -139,7 +141,7 @@
             <!-- Admin Panel (Hidden by default) -->
             <div class="card" id="adminPanel" style="display: none;">
                 <div class="card-header">
-                    <div class="card-icon card-icon-warning">🛡️</div>
+                    <div class="card-icon card-icon-warning"><i class="mdi mdi-shield"></i></div>
                     <div style="flex:1;">
                         <h2 class="card-title card-title-warning">Admin Panel</h2>
                         <p class="card-subtitle">Manage users, devices and system data</p>
@@ -150,7 +152,7 @@
                 <!-- Section: Users -->
                 <div class="admin-section">
                     <div class="admin-section-header">
-                        <span class="admin-section-icon">👥</span>
+                        <span class="admin-section-icon"><i class="mdi mdi-account-group"></i></span>
                         <div class="admin-section-info">
                             <div class="admin-section-title">Users</div>
                             <div class="admin-section-subtitle">Manage accounts and device access</div>
@@ -200,7 +202,7 @@
                 <!-- Section: Backup & Restore (super admin only) -->
                 <div class="admin-section" id="backupSection">
                     <div class="admin-section-header">
-                        <span class="admin-section-icon">💾</span>
+                        <span class="admin-section-icon"><i class="mdi mdi-content-save"></i></span>
                         <div class="admin-section-info">
                             <div class="admin-section-title">Backup & Restore</div>
                             <div class="admin-section-subtitle">Database and uploaded files</div>
@@ -215,7 +217,7 @@
                                 <div class="backup-action-subtitle">Full snapshot — database + uploads</div>
                             </div>
                             <button class="btn btn-primary" onclick="downloadBackup()" id="backupDownloadBtn">
-                                ⬇️ Download
+                                <i class="mdi mdi-download"></i> Download
                             </button>
                         </div>
 
@@ -233,13 +235,13 @@
 
                             <div class="file-picker-row">
                                 <button class="btn btn-secondary" onclick="document.getElementById('restoreFileInput').click()">
-                                    📂 Choose file…
+                                    <i class="mdi mdi-folder-open"></i> Choose file…
                                 </button>
                                 <span id="restoreFileName">No file selected</span>
                             </div>
 
                             <button id="restoreConfirmBtn" onclick="confirmRestore()" class="btn-restore">
-                                ⚠️ Restore — this will overwrite all data
+                                <i class="mdi mdi-alert"></i> Restore — this will overwrite all data
                             </button>
                         </div>
                     </div>
@@ -253,7 +255,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2 class="modal-title">Manage Devices for <span id="assignUserName" class="modal-highlight"></span></h2>
-                <button class="modal-close" onclick="closeAssignModal()">✕</button>
+                <button class="modal-close" onclick="closeAssignModal()"><i class="mdi mdi-close"></i></button>
             </div>
             <div class="form-group">
                 <input type="text" class="form-input" id="deviceSearch" placeholder="Search devices..." onkeyup="filterDeviceList()">

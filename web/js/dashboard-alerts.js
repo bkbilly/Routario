@@ -48,11 +48,11 @@ async function jumpToAlert(alert) {
     closeAlertsModal();
 
     const ICON_MAP = {
-        speeding: '⚡', geofence_enter: '📍', geofence_exit: '🚪',
-        offline: '📡', towing: '🚨', low_battery: '🪫',
-        power_cut: '⛔', sos: '🆘', tampering: '⚠️',
+        speeding: 'mdi-speedometer', geofence_enter: 'mdi-map-marker-check', geofence_exit: 'mdi-map-marker-minus',
+        offline: 'mdi-wifi-off', towing: 'mdi-tow-truck', low_battery: 'mdi-battery-low',
+        power_cut: 'mdi-power-plug-off', sos: 'mdi-alarm-light', tampering: 'mdi-alert',
     };
-    const icon  = ICON_MAP[alert.alert_type] || '🔔';
+    const icon  = `<i class="mdi ${ICON_MAP[alert.alert_type] || 'mdi-bell'}"></i>`;
     const title = alert.alert_type === 'custom' && alert.alert_metadata?.rule_name
         ? alert.alert_metadata.rule_name
         : alert.alert_type.replace(/_/g, ' ').toUpperCase();
@@ -105,17 +105,17 @@ async function jumpToAlert(alert) {
 // ── Build a single alert-item element ────────────────────────────────────────
 function _buildAlertItem(alert, { dimmed = false, clickable = true } = {}) {
     const ICON_MAP = {
-        speeding:       '⚡',
-        geofence_enter: '📍',
-        geofence_exit:  '🚪',
-        offline:        '📡',
-        towing:         '🚨',
-        low_battery:    '🪫',
-        power_cut:      '⛔',
-        sos:            '🆘',
-        tampering:      '⚠️',
+        speeding:       'mdi-speedometer',
+        geofence_enter: 'mdi-map-marker-check',
+        geofence_exit:  'mdi-map-marker-minus',
+        offline:        'mdi-wifi-off',
+        towing:         'mdi-tow-truck',
+        low_battery:    'mdi-battery-low',
+        power_cut:      'mdi-power-plug-off',
+        sos:            'mdi-alarm-light',
+        tampering:      'mdi-alert',
     };
-    const icon = ICON_MAP[alert.alert_type] || '🔔';
+    const icon = `<i class="mdi ${ICON_MAP[alert.alert_type] || 'mdi-bell'}"></i>`;
 
     let title, messageText;
     if (alert.alert_type === 'custom' && alert.alert_metadata?.rule_name) {
@@ -141,7 +141,7 @@ function _buildAlertItem(alert, { dimmed = false, clickable = true } = {}) {
     const hasLocation = alert.latitude && alert.longitude;
     const jumpHint = clickable && hasLocation
         ? `<div style="font-size:0.68rem; color:var(--accent-primary); margin-top:0.2rem; opacity:0.8;">
-               🗺 Click to view on map
+               <i class="mdi mdi-map"></i> Click to view on map
            </div>`
         : '';
 
@@ -168,7 +168,7 @@ function _buildAlertItem(alert, { dimmed = false, clickable = true } = {}) {
             <div class="alert-time">${formatDateToLocal(alert.created_at)}</div>
             ${jumpHint}
         </div>
-        ${clickable ? `<button class="alert-dismiss" onclick="dismissAlert(${alert.id})">✕</button>` : ''}
+        ${clickable ? `<button class="alert-dismiss" onclick="dismissAlert(${alert.id})"><i class="mdi mdi-close"></i></button>` : ''}
     `;
 
     return item;
@@ -237,7 +237,7 @@ function openAlertsModal() {
     historyVisible = false;
     historyOffset  = 0;
     document.getElementById('alertsHistorySection').style.display = 'none';
-    document.getElementById('alertHistoryToggleBtn').textContent  = '🕘 History';
+    document.getElementById('alertHistoryToggleBtn').innerHTML  = '<i class="mdi mdi-history"></i> History';
     document.getElementById('alertsHistoryList').innerHTML        = '';
     loadAlerts();
     document.getElementById('alertsModal').classList.add('active');
@@ -280,7 +280,7 @@ async function toggleAlertHistory() {
     const section = document.getElementById('alertsHistorySection');
     const btn     = document.getElementById('alertHistoryToggleBtn');
     section.style.display = historyVisible ? 'block' : 'none';
-    btn.textContent       = historyVisible ? '✕ Hide History' : '🕘 History';
+    btn.innerHTML       = historyVisible ? '<i class="mdi mdi-close"></i> Hide History' : '<i class="mdi mdi-history"></i> History';
     if (historyVisible) {
         historyOffset = 0;
         document.getElementById('alertsHistoryList').innerHTML = '';
@@ -325,9 +325,9 @@ function showAlert(data) {
     const toast     = document.createElement('div');
     toast.className = `toast`;
 
-    const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+    const icons = { success: 'mdi-check', error: 'mdi-close', warning: 'mdi-alert', info: 'mdi-information' };
     toast.innerHTML = `
-        <div class="toast-icon">${icons[type] || 'ℹ'}</div>
+        <div class="toast-icon"><i class="mdi ${icons[type] || 'mdi-information'}"></i></div>
         <div class="toast-content">
             <div class="toast-title">${title}</div>
             <div class="toast-message">${message}</div>

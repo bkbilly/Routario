@@ -40,7 +40,7 @@ function populateVehicleTypeSelect(selectEl, current) {
     const arrowGroup  = document.createElement('optgroup');
     arrowGroup.label  = '▲ Arrows';
     const vehicleGroup = document.createElement('optgroup');
-    vehicleGroup.label = '🚗 Vehicles';
+    vehicleGroup.label = 'Vehicles';
 
     Object.entries(VEHICLE_ICONS).forEach(([key, cfg]) => {
         const opt = document.createElement('option');
@@ -67,14 +67,23 @@ function getMarkerHtml(type, ignitionOn, heading = null) {
 
     if (cfg.arrow) {
         const color = cfg.color || '#3b82f6';
-        const rotStyle = heading != null ? `transform:rotate(${heading}deg);` : '';
-        iconContent = `
-            <svg class="marker-svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
-                 xmlns="http://www.w3.org/2000/svg"
-                 style="${rotStyle}filter:drop-shadow(0px 2px 2px rgba(0,0,0,0.5));">
-                <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z"
-                      fill="${color}" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
-            </svg>`;
+        if (heading != null) {
+            iconContent = `
+                <svg class="marker-svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+                     xmlns="http://www.w3.org/2000/svg"
+                     style="transform:rotate(${heading}deg);filter:drop-shadow(0px 2px 2px rgba(0,0,0,0.5));">
+                    <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z"
+                          fill="${color}" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>`;
+        } else {
+            iconContent = `
+                <svg class="marker-svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+                     xmlns="http://www.w3.org/2000/svg"
+                     style="filter:drop-shadow(0px 2px 2px rgba(0,0,0,0.5));">
+                    <circle cx="12" cy="12" r="9" fill="${color}" stroke="white" stroke-width="1.5"/>
+                    <circle cx="12" cy="12" r="3" fill="white"/>
+                </svg>`;
+        }
     } else {
         const rotation = heading != null ? heading + cfg.offset : 0;
         iconContent = `<div class="marker-svg" style="font-size:28px;transform:rotate(${rotation}deg);display:inline-block;">${cfg.emoji}</div>`;

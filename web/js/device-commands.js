@@ -239,7 +239,7 @@ async function sendCommand() {
     
     const btn = document.getElementById('sendCommandBtn');
     btn.disabled = true;
-    btn.textContent = '⏳ Sending...';
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Sending...';
     
     try {
         const response = await apiFetch(`${API_BASE}/devices/${currentCommandDeviceId}/command`, {
@@ -279,7 +279,7 @@ async function sendCommand() {
         showToast(error.message || 'Failed to send command', 'error');
     } finally {
         btn.disabled = false;
-        btn.textContent = '📡 Send Command';
+        btn.innerHTML = '<i class="mdi mdi-antenna"></i> Send Command';
     }
 }
 
@@ -334,7 +334,7 @@ async function sendCustomCommand() {
     
     const btn = document.getElementById('sendCustomCommandBtn');
     btn.disabled = true;
-    btn.textContent = '⏳ Sending...';
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Sending...';
     
     try {
         const response = await apiFetch(`${API_BASE}/devices/${currentCommandDeviceId}/command`, {
@@ -371,7 +371,7 @@ async function sendCustomCommand() {
         showToast(error.message || 'Failed to send command', 'error');
     } finally {
         btn.disabled = false;
-        btn.textContent = '📡 Send Custom Command';
+        btn.innerHTML = '<i class="mdi mdi-antenna"></i> Send Custom Command';
     }
 }
 

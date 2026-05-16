@@ -39,7 +39,7 @@ function closeLogbookModal() {
 // ── Form collapse / expand ────────────────────────────────────────────────────
 function _collapseLogbookForm() {
     document.getElementById('logbookFormPanel').style.display = 'none';
-    document.getElementById('lbToggleFormBtn').textContent    = '➕ New Entry';
+    document.getElementById('lbToggleFormBtn').innerHTML    = '<i class="mdi mdi-plus"></i> New Entry';
     _editingEntryId = null;
 }
 
@@ -48,7 +48,7 @@ function toggleLogbookForm() {
     const isHidden = panel.style.display === 'none';
     if (isHidden) {
         panel.style.display = 'block';
-        document.getElementById('lbToggleFormBtn').textContent = '✕ Cancel';
+        document.getElementById('lbToggleFormBtn').innerHTML = '<i class="mdi mdi-close"></i> Cancel';
         const device = devices.find(d => d.id === _logbookDeviceId);
         _prefillLogbookForm(device);
         document.getElementById('lbDescription').focus();
@@ -74,7 +74,7 @@ function _prefillLogbookForm(device) {
     _editingEntryId = null;
     const submitBtn = document.getElementById('lbSubmitBtn');
     submitBtn.disabled    = false;
-    submitBtn.textContent = '➕ Add Entry';
+    submitBtn.innerHTML = '<i class="mdi mdi-plus"></i> Add Entry';
     document.getElementById('lbCancelEditBtn').style.display = 'none';
 }
 
@@ -99,7 +99,7 @@ function _renderLogbookTable() {
 
     if (!_logbookEntries.length) {
         tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2.5rem;color:var(--text-muted);">
-            <div style="font-size:2.5rem;margin-bottom:0.5rem;">📋</div>
+            <div style="font-size:2.5rem;margin-bottom:0.5rem;"><i class="mdi mdi-clipboard-list"></i></div>
             No logbook entries yet. Click <strong>New Entry</strong> to add one.
         </td></tr>`;
         return;
@@ -116,7 +116,7 @@ function _renderLogbookTable() {
                 const ext  = dot !== -1 ? raw.slice(dot) : '';
                 const base = dot !== -1 ? raw.slice(0, dot) : raw;
                 const label = base.length > 16 ? base.slice(0, 5) + '…' + ext : raw;
-                return `<a href="${d}" target="_blank" class="lb-doc-badge" title="${_escHtml(raw)}">📎 ${_escHtml(label)}</a>`;
+                return `<a href="${d}" target="_blank" class="lb-doc-badge" title="${_escHtml(raw)}"><i class="mdi mdi-paperclip"></i> ${_escHtml(label)}</a>`;
               }).join('')
             : '—';
 
@@ -127,8 +127,8 @@ function _renderLogbookTable() {
             <td style="white-space:nowrap;">${price}</td>
             <td class="lb-docs-cell">${docHtml}</td>
             <td style="white-space:nowrap;text-align:right;">
-                <button class="btn btn-secondary tbl-btn" onclick="startEditLogbookEntry(${e.id})">✏️</button>
-                <button class="btn btn-secondary tbl-btn" onclick="deleteLogbookEntry(${e.id})" style="color:var(--accent-danger);">🗑️</button>
+                <button class="btn btn-secondary tbl-btn" onclick="startEditLogbookEntry(${e.id})"><i class="mdi mdi-pencil"></i></button>
+                <button class="btn btn-secondary tbl-btn" onclick="deleteLogbookEntry(${e.id})" style="color:var(--accent-danger);"><i class="mdi mdi-delete"></i></button>
             </td>
         </tr>`;
     }).join('');
@@ -157,7 +157,7 @@ async function submitLogbookEntry() {
 
     const btn = document.getElementById('lbSubmitBtn');
     btn.disabled = true;
-    btn.textContent = _editingEntryId ? '💾 Saving…' : '⏳ Adding…';
+    btn.innerHTML = _editingEntryId ? '<i class="mdi mdi-content-save"></i> Saving…' : '<i class="mdi mdi-loading mdi-spin"></i> Adding…';
 
     try {
         const url    = _editingEntryId
@@ -183,7 +183,7 @@ async function submitLogbookEntry() {
         errEl.textContent = e.message;
     } finally {
         btn.disabled = false;
-        btn.textContent = _editingEntryId ? '💾 Save Changes' : '➕ Add Entry';
+        btn.innerHTML = _editingEntryId ? '<i class="mdi mdi-content-save"></i> Save Changes' : '<i class="mdi mdi-plus"></i> Add Entry';
     }
 }
 
@@ -196,7 +196,7 @@ function startEditLogbookEntry(entryId) {
     // Show the form panel
     const panel = document.getElementById('logbookFormPanel');
     panel.style.display = 'block';
-    document.getElementById('lbToggleFormBtn').textContent = '✕ Cancel';
+    document.getElementById('lbToggleFormBtn').innerHTML = '<i class="mdi mdi-close"></i> Cancel';
 
     document.getElementById('lbDescription').value = entry.description;
     const localIso = new Date(new Date(entry.date).getTime()
@@ -207,7 +207,7 @@ function startEditLogbookEntry(entryId) {
     document.getElementById('lbFiles').value     = '';
     document.getElementById('lbFormError').textContent = '';
 
-    document.getElementById('lbSubmitBtn').textContent         = '💾 Save Changes';
+    document.getElementById('lbSubmitBtn').innerHTML         = '<i class="mdi mdi-content-save"></i> Save Changes';
     document.getElementById('lbCancelEditBtn').style.display   = 'inline-block';
 
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

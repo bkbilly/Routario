@@ -139,9 +139,9 @@ function getDeviceCardContent(device, icon) {
             </div>
         </div>
         <div class="device-actions">
-            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openLogbookModal(${device.id})" title="Service logbook">📋 Logbook</button>
-            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openShareModal(${device.id})" title="Share live location">🔗 Share</button>
-            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openHistoryModal(${device.id})">🕒 History</button>
+            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openLogbookModal(${device.id})" title="Service logbook"><i class="mdi mdi-clipboard-list"></i> Logbook</button>
+            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openShareModal(${device.id})" title="Share live location"><i class="mdi mdi-share"></i> Share</button>
+            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openHistoryModal(${device.id})"><i class="mdi mdi-history"></i> History</button>
         </div>
     `;
 }
@@ -212,16 +212,18 @@ function selectDevice(deviceId, { zoom = true } = {}) {
     const marker = markers[deviceId];
     if (marker) {
         if (zoom) {
-            const targetZoom = 15
+            const targetZoom = 15;
             const currentZoom = map.getZoom();
             const zoomDelta   = Math.abs(targetZoom - currentZoom);
+            map.once('moveend', () => marker.openPopup());
             map.flyTo(marker.getLatLng(), targetZoom, {
                 animate:         true,
                 duration:        0.5 + zoomDelta * 0.15,
                 easeLinearity:   0.25,
             });
+        } else {
+            marker.openPopup();
         }
-        marker.openPopup();
     }
 }
 
@@ -299,10 +301,10 @@ function filterDevices() {
             const marker = markers[device.id];
             const circle = accuracyCircles[device.id];
             if (visible) {
-                if (!map.hasLayer(marker)) marker.addTo(map);
+                if (!clusterGroup.hasLayer(marker)) clusterGroup.addLayer(marker);
                 if (circle && !map.hasLayer(circle)) circle.addTo(map);
             } else {
-                if (map.hasLayer(marker)) map.removeLayer(marker);
+                if (clusterGroup.hasLayer(marker)) clusterGroup.removeLayer(marker);
                 if (circle && map.hasLayer(circle)) map.removeLayer(circle);
             }
         }
@@ -458,7 +460,7 @@ function renderActiveShareLinks(links) {
                 <span style="font-size:0.75rem; color:var(--text-muted);">Expires ${expiresStr}</span>
                 <button onclick="revokeShareLink('${link.token}')"
                     style="background:none; border:none; color:var(--text-muted); cursor:pointer;
-                           font-size:0.75rem; line-height:1; padding:0;" title="Revoke">✕</button>
+                           font-size:0.75rem; line-height:1; padding:0;" title="Revoke"><i class="mdi mdi-close"></i></button>
             </div>
             <div style="display:flex; gap:0.4rem;">
                 <input readonly value="${fullUrl}"
@@ -466,9 +468,9 @@ function renderActiveShareLinks(links) {
                            border:1px solid var(--border-color); border-radius:5px;
                            color:var(--text-muted); font-size:0.72rem; font-family:monospace; cursor:text;">
                 <button class="btn btn-secondary" style="font-size:0.75rem; padding:0.3rem 0.55rem;"
-                    onclick="copyLinkUrl('${fullUrl}', this)" title="Copy">📋</button>
+                    onclick="copyLinkUrl('${fullUrl}', this)" title="Copy"><i class="mdi mdi-content-copy"></i></button>
                 <button class="btn btn-secondary" style="font-size:0.75rem; padding:0.3rem 0.55rem;"
-                    onclick="renewShareLink('${link.token}')" title="Renew timer">🔄</button>
+                    onclick="renewShareLink('${link.token}')" title="Renew timer"><i class="mdi mdi-refresh"></i></button>
             </div>
         </div>`;
     }).join('');
@@ -476,9 +478,9 @@ function renderActiveShareLinks(links) {
 
 function copyLinkUrl(url, btn) {
     navigator.clipboard.writeText(url).then(() => {
-        const orig = btn.textContent;
-        btn.textContent = '✅';
-        setTimeout(() => btn.textContent = orig, 2000);
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="mdi mdi-check"></i>';
+        setTimeout(() => btn.innerHTML = orig, 2000);
     });
 }
 

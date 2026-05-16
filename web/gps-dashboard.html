@@ -14,8 +14,14 @@
     <!-- Leaflet.draw for geofence creation/editing -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <!-- Leaflet.markercluster -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <script src="https://unpkg.com/leaflet-ant-path@1.3.0/dist/leaflet-ant-path.js"></script>
 
+    <!-- Material Design Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <!-- Chart.js for analytics -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     
@@ -36,7 +42,7 @@
     <div class="dashboard">
         <header class="header">
             <div style="display: flex; align-items: center; gap: 1rem;">
-                <button class="btn-icon" onclick="toggleSidebar()" style="border:none; background: transparent; color: var(--text-primary); font-size: 1.25rem; width: auto; height: auto;">☰</button>
+                <button class="btn-icon" onclick="toggleSidebar()" style="border:none; background: transparent; color: var(--text-primary); font-size: 1.25rem; width: auto; height: auto;"><i class="mdi mdi-menu"></i></button>
                 <div class="logo">
                     <img src="/icons/icon-192.png" class="logo-icon">
                     <span class="logo-text">Routario</span>
@@ -155,7 +161,7 @@
             <div class="sidebar-section" id="sidebarDeviceList" style="flex: 1; overflow-y: auto;">
                 <div class="search-bar-row">
                     <div class="search-input-wrap">
-                        <span class="search-icon">🔍</span>
+                        <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
                         <input type="text"
                                class="search-input"
                                id="deviceSearchInput"
@@ -174,14 +180,14 @@
             <div class="sidebar-section" id="sidebarHistoryDetails" style="display: none; flex: 1; overflow-y: auto; padding-bottom: 0;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0 0 0 0;">
                     <h3 class="section-title" id="historyDeviceName" style="margin-bottom: 0;">History Details</h3>
-                    <button class="sidebar-close-btn" onclick="exitHistoryMode()" title="Close History" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer;">✕</button>
+                    <button class="sidebar-close-btn" onclick="exitHistoryMode()" title="Close History" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer;"><i class="mdi mdi-close"></i></button>
                 </div>
 
                 <!-- Tab switcher -->
                 <div class="history-tab-bar" style="display:flex; gap:0.5rem; margin-bottom:1rem;">
-                    <button class="history-tab active" id="tabBtnTrips" onclick="switchHistoryTab('trips')">🗺️ Trips</button>
-                    <button class="history-tab" id="tabBtnDetails" onclick="switchHistoryTab('details')">📍 Details</button>
-                    <button class="history-tab" id="tabBtnGraph" onclick="switchHistoryTab('graph')">📈 Graph</button>
+                    <button class="history-tab active" id="tabBtnTrips" onclick="switchHistoryTab('trips')"><i class="mdi mdi-map"></i> Trips</button>
+                    <button class="history-tab" id="tabBtnDetails" onclick="switchHistoryTab('details')"><i class="mdi mdi-map-marker"></i> Details</button>
+                    <button class="history-tab" id="tabBtnGraph" onclick="switchHistoryTab('graph')"><i class="mdi mdi-chart-line"></i> Graph</button>
                 </div>
 
                 <!-- Tab: Trips -->
@@ -219,7 +225,7 @@
                     </div>
                     <div style="display:flex; justify-content:flex-end; margin-top:0.75rem;">
                         <button class="btn btn-secondary" onclick="exportHistoryCSV()" style="font-size:0.78rem; padding:0.4rem 0.9rem; display:flex; align-items:center; gap:0.4rem;">
-                            ⬇️ Export CSV
+                            <i class="mdi mdi-download"></i> Export CSV
                         </button>
                     </div>
                 </div>
@@ -318,18 +324,18 @@
                 <button onclick="saveEditedGeofence()"
                     style="background: var(--accent-primary); border: none; color: #fff; padding: 0.45rem 1rem;
                            border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
-                    💾 Save
+                    <i class="mdi mdi-content-save"></i> Save
                 </button>
                 <button onclick="deleteGeofence()"
                     style="background: rgba(239,68,68,0.15); border: 1px solid var(--accent-danger);
                            color: var(--accent-danger); padding: 0.45rem 1rem; border-radius: 8px;
                            cursor: pointer; font-size: 0.85rem; font-weight: 600;">
-                    🗑️ Delete
+                    <i class="mdi mdi-delete"></i> Delete
                 </button>
                 <button onclick="cancelGeofenceEdit()"
                     style="background: transparent; border: 1px solid var(--border-color); color: var(--text-muted);
                            padding: 0.45rem 0.85rem; border-radius: 8px; cursor: pointer; font-size: 0.85rem;">
-                    ✕ Cancel
+                    <i class="mdi mdi-close"></i> Cancel
                 </button>
             </div>
 
@@ -339,13 +345,13 @@
                 <div class="history-controls-top">
                     <span id="historyTimestamp" class="history-time">--:--:--</span>
                     <span id="historyTripLabel" class="history-trip-label"></span>
-                    <button class="history-close-btn" onclick="exitHistoryMode()" title="Exit History">✕</button>
+                    <button class="history-close-btn" onclick="exitHistoryMode()" title="Exit History"><i class="mdi mdi-close"></i></button>
                 </div>
                 <!-- Row 2: playback buttons -->
                 <div class="history-controls-buttons">
-                    <button class="btn-icon" onclick="stepHistory(-1)" title="Previous Event">⏮</button>
-                    <button class="btn-icon btn-icon-play" onclick="togglePlayback()" id="playbackBtn" title="Play/Pause">▶️</button>
-                    <button class="btn-icon" onclick="stepHistory(1)" title="Next Event">⏭</button>
+                    <button class="btn-icon" onclick="stepHistory(-1)" title="Previous Event"><i class="mdi mdi-skip-previous"></i></button>
+                    <button class="btn-icon btn-icon-play" onclick="togglePlayback()" id="playbackBtn" title="Play/Pause"><i class="mdi mdi-play"></i></button>
+                    <button class="btn-icon" onclick="stepHistory(1)" title="Next Event"><i class="mdi mdi-skip-next"></i></button>
                 </div>
                 <!-- Row 3: slider -->
                 <div class="history-slider-row">
@@ -362,9 +368,9 @@
             <div class="modal-header">
                 <h2 class="modal-title">Recent Alerts</h2>
                 <div style="display:flex; gap: 10px; align-items: center;">
-                    <button class="btn btn-secondary" id="alertHistoryToggleBtn" onclick="toggleAlertHistory()">🕘 History</button>
+                    <button class="btn btn-secondary" id="alertHistoryToggleBtn" onclick="toggleAlertHistory()"><i class="mdi mdi-history"></i> History</button>
                     <button class="btn btn-secondary" id="alertClearAllBtn" onclick="clearAllAlerts()">Clear All</button>
-                    <button class="modal-close" onclick="closeAlertsModal()">✕</button>
+                    <button class="modal-close" onclick="closeAlertsModal()"><i class="mdi mdi-close"></i></button>
                 </div>
             </div>
             <div class="alerts-list" id="alertsList"></div>
@@ -385,7 +391,7 @@
         <div class="modal-content" style="max-width: 480px;">
             <div class="modal-header">
                 <h2 class="modal-title" id="geofenceModalTitle">Save Geofence</h2>
-                <button class="modal-close" onclick="closeGeofenceModal()">✕</button>
+                <button class="modal-close" onclick="closeGeofenceModal()"><i class="mdi mdi-close"></i></button>
             </div>
 
             <!-- Hidden state fields -->
@@ -442,7 +448,7 @@
                         style="background: var(--accent-primary); border: none; color: #fff;
                                padding: 0.6rem 1.4rem; border-radius: 8px; cursor: pointer;
                                font-size: 0.9rem; font-weight: 600;">
-                        💾 Save
+                        <i class="mdi mdi-content-save"></i> Save
                     </button>
                 </div>
             </div>
@@ -454,10 +460,10 @@
         <div class="modal-content">
             <div class="modal-header">
                 <div>
-                    <h2 style="font-size:1.1rem; margin:0;">🕒 View History</h2>
+                    <h2 style="font-size:1.1rem; margin:0;"><i class="mdi mdi-history"></i> View History</h2>
                     <div id="historyModalDeviceName" style="font-size:1rem; color:var(--text-muted); margin-top:0.2rem;"></div>
                 </div>
-                <button class="modal-close" onclick="closeHistoryModal()">✕</button>
+                <button class="modal-close" onclick="closeHistoryModal()"><i class="mdi mdi-close"></i></button>
             </div>
             <form onsubmit="handleHistorySubmit(event)" style="padding-top:1rem;">
                 <div class="form-group">
@@ -496,10 +502,10 @@
         <div class="modal-content" style="max-width:420px; height:auto; max-height:90vh;">
             <div class="modal-header">
                 <div>
-                    <h2 style="font-size:1.1rem; margin:0;">🔗 Share</h2>
+                    <h2 style="font-size:1.1rem; margin:0;"><i class="mdi mdi-share"></i> Share</h2>
                     <div id="shareDeviceName" style="font-size:1rem; color:var(--text-muted); margin-top:0.2rem;"></div>
                 </div>
-                <button class="modal-close" onclick="closeShareModal()">✕</button>
+                <button class="modal-close" onclick="closeShareModal()"><i class="mdi mdi-close"></i></button>
             </div>
             <div style="padding:1.5rem; display:flex; flex-direction:column; gap:1.25rem;">
 
@@ -508,8 +514,8 @@
                     <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em;
                                 color:var(--text-muted); margin-bottom:0.6rem;">Location</div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
-                        <button class="btn btn-secondary" onclick="openShareInMaps()">🗺️ Open in Maps</button>
-                        <button class="btn btn-secondary" onclick="copyShareCoords()">📍 Copy Coords</button>
+                        <button class="btn btn-secondary" onclick="openShareInMaps()"><i class="mdi mdi-map"></i> Open in Maps</button>
+                        <button class="btn btn-secondary" onclick="copyShareCoords()"><i class="mdi mdi-map-marker"></i> Copy Coords</button>
                     </div>
                 </div>
 
@@ -534,7 +540,7 @@
                             oninput="document.querySelectorAll('.share-duration-btn').forEach(b=>b.classList.remove('active'))">
                     </div>
                     <button class="btn btn-primary" style="width:100%;" onclick="generateShareLink()">
-                        Generate &amp; Copy Link →
+                        Generate &amp; Copy Link <i class="mdi mdi-arrow-right"></i>
                     </button>
                 </div>
 
@@ -557,10 +563,10 @@
             <!-- ── Fixed header ───────────────────────────────────── -->
             <div class="modal-header" style="flex-shrink:0;">
                 <div>
-                    <h2 style="font-size:1.1rem; margin:0;">📋 Logbook</h2>
+                    <h2 style="font-size:1.1rem; margin:0;"><i class="mdi mdi-clipboard-list"></i> Logbook</h2>
                     <div id="logbookModalTitle" style="font-size:1rem; color:var(--text-muted); margin-top:0.2rem;"></div>
                 </div>
-                <button class="modal-close" onclick="closeLogbookModal()">✕</button>
+                <button class="modal-close" onclick="closeLogbookModal()"><i class="mdi mdi-close"></i></button>
             </div>
 
             <!-- ── Scrollable area — toolbar + form + table ───────── -->
@@ -568,7 +574,7 @@
 
                 <!-- "New Entry" toggle button -->
                 <div style="display:flex; justify-content:flex-end; margin-bottom:0.75rem;">
-                    <button id="lbToggleFormBtn" class="btn btn-primary" onclick="toggleLogbookForm()">➕ New Entry</button>
+                    <button id="lbToggleFormBtn" class="btn btn-primary" onclick="toggleLogbookForm()"><i class="mdi mdi-plus"></i> New Entry</button>
                 </div>
 
                 <!-- Collapsible add/edit form -->
@@ -615,8 +621,8 @@
                     <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;margin-top:0.25rem;">
                         <span id="lbFormError" style="color:var(--accent-danger);font-size:0.85rem;flex:1;"></span>
                         <button id="lbCancelEditBtn" class="btn btn-secondary"
-                                onclick="cancelEditLogbookEntry()" style="display:none;">✕ Cancel edit</button>
-                        <button id="lbSubmitBtn" class="btn btn-primary" onclick="submitLogbookEntry()">➕ Add Entry</button>
+                                onclick="cancelEditLogbookEntry()" style="display:none;"><i class="mdi mdi-close"></i> Cancel edit</button>
+                        <button id="lbSubmitBtn" class="btn btn-primary" onclick="submitLogbookEntry()"><i class="mdi mdi-plus"></i> Add Entry</button>
                     </div>
                 </div>
 

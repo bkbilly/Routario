@@ -733,7 +733,7 @@ function showAlert(message, type) {
     const toast = document.createElement('div');
     toast.className = `toast`;
     toast.innerHTML = `
-        <div class="toast-icon">${type === 'success' ? '✓' : '✕'}</div>
+        <div class="toast-icon"><i class="mdi ${type === 'success' ? 'mdi-check' : 'mdi-close'}"></i></div>
         <div class="toast-message">${message}</div>
     `;
     container.appendChild(toast);
@@ -752,7 +752,7 @@ if (localStorage.getItem('is_admin') === 'true') {
 async function downloadBackup() {
     const btn = document.getElementById('backupDownloadBtn');
     btn.disabled    = true;
-    btn.textContent = '⏳ Preparing…';
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Preparing…';
     try {
         const res = await apiFetch(`${API_BASE}/admin/backup/download`);
         if (!res.ok) throw new Error('Failed to generate backup');
@@ -770,7 +770,7 @@ async function downloadBackup() {
         showAlert('Backup failed: ' + e.message, 'error');
     } finally {
         btn.disabled    = false;
-        btn.textContent = '⬇️ Download Backup';
+        btn.innerHTML = '<i class="mdi mdi-download"></i> Download Backup';
     }
 }
 
@@ -792,14 +792,14 @@ function handleRestoreFile(input) {
 async function confirmRestore() {
     if (!_restoreFile) return;
     if (!confirm(
-        '⚠️ This will REPLACE all data with the backup.\n\n' +
+        'WARNING: This will REPLACE all data with the backup.\n\n' +
         'The platform will need to be restarted after restore.\n\n' +
         'Are you absolutely sure?'
     )) return;
 
     const btn = document.getElementById('restoreConfirmBtn');
     btn.disabled    = true;
-    btn.textContent = '⏳ Restoring…';
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Restoring…';
 
     try {
         const form = new FormData();
@@ -826,7 +826,7 @@ async function confirmRestore() {
         showAlert('Restore failed: ' + e.message, 'error');
     } finally {
         btn.disabled    = false;
-        btn.textContent = '⚠️ Restore — this will overwrite all data';
+        btn.innerHTML = '<i class="mdi mdi-alert"></i> Restore — this will overwrite all data';
     }
 }
 
