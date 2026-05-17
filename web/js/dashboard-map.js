@@ -11,56 +11,56 @@ const accuracyCircles = {};
 
 const MAP_TILES = {
     openstreetmap_dark: {
-        label: 'OpenStreetMap Dark',
+        label: '🌙 OpenStreetMap Dark',
         url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
         cssFilter: 'invert(100%) hue-rotate(180deg)'
     },
     openstreetmap: {
-        label: 'OpenStreetMap',
+        label: '🗺️ OpenStreetMap',
         url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19
     },
     stadia_dark: {
-        label: 'Stadia Dark',
+        label: '🌒 Stadia Dark',
         url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
         attribution: '© <a href="https://stadiamaps.com/">Stadia Maps</a>',
         maxZoom: 20
     },
     google_streets: {
-        label: 'Google Streets',
+        label: '🛣️ Google Streets',
         url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
         attribution: '© Google Maps',
         maxZoom: 21
     },
     google_satellite: {
-        label: 'Google Satellite',
+        label: '🛰️ Google Satellite',
         url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
         attribution: '© Google Maps',
         maxZoom: 21
     },
     google_hybrid: {
-        label: 'Google Hybrid',
+        label: '🌍 Google Hybrid',
         url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
         attribution: '© Google Maps',
         maxZoom: 21
     },
     carto_dark: {
-        label: 'Carto Dark',
+        label: '🌑 Carto Dark',
         url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
         attribution: '© <a href="https://carto.com/">CARTO</a>',
         maxZoom: 19
     },
     carto_light: {
-        label: 'Carto Light',
+        label: '☀️ Carto Light',
         url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
         attribution: '© <a href="https://carto.com/">CARTO</a>',
         maxZoom: 19
     },
     esri_satellite: {
-        label: 'ESRI Satellite',
+        label: '🌐 ESRI Satellite',
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         attribution: '© Esri, Maxar, Earthstar Geographics',
         maxZoom: 19
