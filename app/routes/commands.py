@@ -34,7 +34,7 @@ async def send_command(
     try:
         test_bytes = await decoder.encode_command(
             command.command_type,
-            {"payload": command.payload} if command.payload else {},
+            {"payload": command.payload, "imei": device.imei or ""},
         )
         if not test_bytes or len(test_bytes) == 0:
             raise HTTPException(
@@ -75,7 +75,7 @@ async def preview_command(
 
     try:
         encoded = await decoder.encode_command(
-            command_type, {"payload": payload} if payload else {}
+            command_type, {"payload": payload, "imei": device.imei or ""}
         )
         if not encoded or len(encoded) == 0:
             raise HTTPException(status_code=400, detail="Command could not be encoded")
@@ -108,7 +108,7 @@ async def preview_command_for_protocol(
 
     try:
         encoded = await decoder.encode_command(
-            command_type, {"payload": payload} if payload else {}
+            command_type, {"payload": payload, "imei": "000000000000000"}
         )
         if not encoded or len(encoded) == 0:
             raise HTTPException(status_code=400, detail="Command could not be encoded")
