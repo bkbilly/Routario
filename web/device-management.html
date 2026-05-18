@@ -11,26 +11,11 @@
     <!-- Material Design Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <link rel="stylesheet" href="css/device-management.css">
+    <script src="js/settings-nav.js"></script>
 </head>
 <body>
 
 <div class="container">
-    <div class="header">
-        <div class="header-title">
-            <button onclick="history.back()" class="back-btn" title="Go back">
-                <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <div>
-                <h1>Device Management</h1>
-                <p style="color:var(--text-muted);margin-top:0.5rem;">Configure and manage your GPS devices</p>
-            </div>
-        </div>
-        <div style="display:flex;gap:1rem;">
-            <a href="company-management.html" class="btn btn-secondary" id="companyMgmtBtn" style="display:none;"><i class="mdi mdi-office-building"></i> Companies</a>
-            <a href="user-settings.html" class="btn btn-secondary"><i class="mdi mdi-cog"></i> User Settings</a>
-            <button class="btn btn-primary" onclick="openAddDeviceModal()"><i class="mdi mdi-plus"></i> Add New Device</button>
-        </div>
-    </div>
 
 
     <!-- Searchable device table -->
