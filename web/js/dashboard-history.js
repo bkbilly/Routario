@@ -124,7 +124,7 @@ async function loadHistory(deviceId, startTime, endTime) {
 
     // Hide ALL live markers and accuracy circles when entering history mode
     devices.forEach(d => {
-        if (markers[d.id] && map.hasLayer(markers[d.id])) markers[d.id].remove();
+        if (markers[d.id] && clusterGroup.hasLayer(markers[d.id])) clusterGroup.removeLayer(markers[d.id]);
         if (accuracyCircles[d.id] && map.hasLayer(accuracyCircles[d.id])) map.removeLayer(accuracyCircles[d.id]);
     });
 
@@ -141,7 +141,7 @@ async function loadHistory(deviceId, startTime, endTime) {
             showAlert({ title: 'History', message: 'No data found.', type: 'warning' });
             // Restore live markers since we're not entering history mode
             devices.forEach(d => {
-                if (markers[d.id] && !map.hasLayer(markers[d.id])) markers[d.id].addTo(map);
+                if (markers[d.id] && !clusterGroup.hasLayer(markers[d.id])) clusterGroup.addLayer(markers[d.id]);
                 if (accuracyCircles[d.id] && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
             });
             return;
@@ -234,7 +234,7 @@ async function loadHistory(deviceId, startTime, endTime) {
         showAlert({ title: 'Error', message: 'Failed to load history.', type: 'error' });
         // Restore live markers since history mode was not entered
         devices.forEach(d => {
-            if (markers[d.id] && !map.hasLayer(markers[d.id])) markers[d.id].addTo(map);
+            if (markers[d.id] && !clusterGroup.hasLayer(markers[d.id])) clusterGroup.addLayer(markers[d.id]);
             if (accuracyCircles[d.id] && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
         });
     }
@@ -265,7 +265,7 @@ function exitHistoryMode() {
 
     // Restore ALL live markers and accuracy circles when exiting history mode
     devices.forEach(d => {
-        if (markers[d.id] && !map.hasLayer(markers[d.id])) markers[d.id].addTo(map);
+        if (markers[d.id] && !clusterGroup.hasLayer(markers[d.id])) clusterGroup.addLayer(markers[d.id]);
         if (accuracyCircles[d.id] && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
     });
 
