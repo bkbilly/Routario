@@ -281,6 +281,7 @@ body::before {
 .device-card.idle::before    { background: #ffa502; }
 .device-card.stopped::before { background: #ff4757; }
 .device-card.offline::before { background: #5a6a85; }
+.device-card.pending::before { background: #4b5563; }
 
 .device-card::before {
     content: '';
@@ -364,6 +365,12 @@ body::before {
     background: rgba(90, 106, 133, 0.08);
     color: #5a6a85;
     border: 1px solid rgba(90, 106, 133, 0.25);
+}
+
+.device-status.pending {
+    background: rgba(75, 85, 99, 0.08);
+    color: #6b7280;
+    border: 1px solid rgba(75, 85, 99, 0.25);
 }
 
 .ign-badge {

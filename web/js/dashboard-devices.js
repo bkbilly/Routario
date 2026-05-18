@@ -80,7 +80,7 @@ function renderDeviceList() {
 
         card.innerHTML = getDeviceCardContent(device, vehicleIcon);
         const vs = getVehicleStatus(device);
-        card.classList.remove('moving', 'idle', 'stopped', 'offline');
+        card.classList.remove('moving', 'idle', 'stopped', 'offline', 'pending');
         card.classList.add(vs.cls);
 
         list.appendChild(card);
@@ -138,11 +138,12 @@ function getDeviceCardContent(device, icon) {
                 <span class="info-value" id="imei-${device.id}" style="font-family:var(--font-mono);font-size:0.72rem;">${device.imei || '—'}</span>
             </div>
         </div>
+        ${vs.cls !== 'pending' ? `
         <div class="device-actions">
             <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openLogbookModal(${device.id})" title="Service logbook"><i class="mdi mdi-clipboard-list"></i> Logbook</button>
             <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openShareModal(${device.id})" title="Share live location"><i class="mdi mdi-share"></i> Share</button>
             <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openHistoryModal(${device.id})"><i class="mdi mdi-history"></i> History</button>
-        </div>
+        </div>` : ''}
     `;
 }
 
@@ -159,7 +160,7 @@ function updateSidebarCard(deviceId) {
 
         // Stamp status class so ::before colour matches vehicle state
         const vs = getVehicleStatus(device);
-        card.classList.remove('moving', 'idle', 'stopped', 'offline');
+        card.classList.remove('moving', 'idle', 'stopped', 'offline', 'pending');
         card.classList.add(vs.cls);
     }
     applyDeviceAlertHighlights();
@@ -192,7 +193,7 @@ function updateSidebarTimes() {
 
             const card = document.getElementById(`device-card-${device.id}`);
             if (card) {
-                card.classList.remove('moving', 'idle', 'stopped', 'offline');
+                card.classList.remove('moving', 'idle', 'stopped', 'offline', 'pending');
                 card.classList.add(vs.cls);
             }
         }
@@ -207,6 +208,14 @@ function selectDevice(deviceId, { zoom = true } = {}) {
     if (card) {
         card.classList.add('active');
         card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    const device = devices.find(d => d.id === deviceId);
+    if (!device?.last_latitude || !device?.last_longitude) {
+        map.closePopup();
+        const icon = (VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other']).emoji;
+        showAlert({ title: `${icon} ${device?.name || 'Device'}`, message: 'No position data yet.', type: 'info' });
+        return;
     }
 
     const marker = markers[deviceId];
@@ -234,6 +243,8 @@ function updateStats() {
 
 // Vehicle sidebar status helper
 function getVehicleStatus(device) {
+    if (!device.last_update && !device.last_latitude) return { label: 'Pending', cls: 'pending', key: 0 };
+
     // Treat as offline if last_update exceeds the configured timeout
     const timeoutHours = device.config?.offline_timeout_hours ?? 24;
     if (device.last_update) {
