@@ -82,9 +82,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const addBtn = document.querySelector('button[onclick="openAddDeviceModal()"]');
     if (addBtn) addBtn.style.display = hasAdminAccess ? '' : 'none';
 
-    const companyBtn = document.getElementById('companyMgmtBtn');
-    if (companyBtn) companyBtn.style.display = isAdmin ? '' : 'none';
-
     const usersTabBtn = document.getElementById('usersTabBtn');
     if (usersTabBtn) usersTabBtn.style.display = 'none';
 
