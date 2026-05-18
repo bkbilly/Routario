@@ -24,7 +24,19 @@
             align-items: center;
             justify-content: space-between;
             gap: 0.75rem;
-            margin-bottom: 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--bg-primary);
+            padding: 1rem 0;
+            margin-bottom: 1rem;
+            transition: background 0.2s ease, box-shadow 0.2s ease;
+        }
+        .settings-nav.scrolled {
+            background: rgba(10, 14, 26, 0.7);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
         }
         .settings-nav-title {
             flex: 1;
@@ -411,5 +423,9 @@
                 btn.classList.remove('active');
             }
         });
+
+        window.addEventListener('scroll', () => {
+            nav.classList.toggle('scrolled', window.scrollY > 0);
+        }, { passive: true });
     });
 })();
