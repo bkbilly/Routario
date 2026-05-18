@@ -777,6 +777,29 @@ body::before {
     color: white;
 }
 
+.alerts-modal-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.alerts-modal-header .modal-title {
+    flex: 1;
+}
+
+.alerts-modal-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+@media (max-width: 480px) {
+    .alerts-modal-actions {
+        width: 100%;
+        order: 3;
+    }
+}
+
+
 .form-group {
     margin-bottom: 1.5rem;
 }

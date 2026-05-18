@@ -79,8 +79,9 @@ function protoBadgeHtml(protocol) {
 document.addEventListener('DOMContentLoaded', async () => {
     checkLogin();
 
-    const addBtn = document.querySelector('button[onclick="openAddDeviceModal()"]');
-    if (addBtn) addBtn.style.display = hasAdminAccess ? '' : 'none';
+    document.querySelectorAll('button[onclick*="openAddDeviceModal"]').forEach(btn => {
+        btn.style.display = hasAdminAccess ? '' : 'none';
+    });
 
     const usersTabBtn = document.getElementById('usersTabBtn');
     if (usersTabBtn) usersTabBtn.style.display = 'none';
