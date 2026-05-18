@@ -258,8 +258,6 @@
         </button>
         <span class="settings-nav-title"><span>${pageTitle}</span></span>
         <div class="settings-nav-right">
-        ${isDevices   ? `<button class="btn btn-primary" onclick="openAddDeviceModal()"><i class="mdi mdi-plus"></i> Add Device</button>`   : ''}
-        ${isCompanies ? `<button class="btn btn-primary" onclick="openAddCompanyModal()"><i class="mdi mdi-plus"></i> Add Company</button>` : ''}
         <div class="header-menu-wrap">
             <button class="header-gear-btn" id="snGearBtn" title="Settings">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
@@ -349,6 +347,30 @@
                     <span>User Settings</span>
                     ${chevron}
                 </a>
+
+                ${isDevices || isCompanies ? `<div class="header-menu-divider"></div>` : ''}
+
+                ${isDevices ? `
+                <button class="header-menu-item" onclick="openAddDeviceModal(); document.getElementById('snDropdown').classList.remove('open'); document.getElementById('snGearBtn').classList.remove('active');">
+                    <span class="header-menu-item-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                    </span>
+                    <span>Add Device</span>
+                </button>` : ''}
+
+                ${isCompanies ? `
+                <button class="header-menu-item" onclick="openAddCompanyModal(); document.getElementById('snDropdown').classList.remove('open'); document.getElementById('snGearBtn').classList.remove('active');">
+                    <span class="header-menu-item-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                    </span>
+                    <span>Add Company</span>
+                </button>` : ''}
 
                 <div class="header-menu-divider"></div>
 
