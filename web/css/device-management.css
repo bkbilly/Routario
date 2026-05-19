@@ -1072,3 +1072,21 @@ h1 {
         padding: 1rem 0.75rem;
     }
 }
+
+/* ── Responsive Modal Footer ──────────────────────────────────── */
+
+@media (max-width: 480px) {
+    .modal-footer {
+        padding: 0.875rem 1rem;
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .modal-footer > .btn {
+        justify-content: center;
+    }
+    .modal-footer > div > .btn {
+        flex: 1;
+        justify-content: center;
+    }
+}
+

@@ -986,3 +986,12 @@ input:checked + .slider:before {
         font-size: 1.25rem;
     }
 }
+
+@media (max-width: 380px) {
+    #adminPanel .card-header {
+        flex-wrap: wrap;
+    }
+    #adminPanel #companyMgmtLink {
+        flex: 0 0 100%;
+    }
+}

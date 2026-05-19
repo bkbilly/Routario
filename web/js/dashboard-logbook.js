@@ -21,7 +21,7 @@ function openLogbookModal(deviceId) {
     const icon   = device ? (VEHICLE_ICONS[device.vehicle_type] || VEHICLE_ICONS['other']).emoji : '🚗';
     const name   = device ? device.name : `Device ${deviceId}`;
 
-    document.getElementById('logbookModalTitle').textContent = `${icon} ${name} — Logbook`;
+    document.getElementById('logbookModalTitle').textContent = `${icon} ${name}`;
 
     // Always start with form collapsed
     _collapseLogbookForm();
@@ -39,7 +39,10 @@ function closeLogbookModal() {
 // ── Form collapse / expand ────────────────────────────────────────────────────
 function _collapseLogbookForm() {
     document.getElementById('logbookFormPanel').style.display = 'none';
-    document.getElementById('lbToggleFormBtn').innerHTML    = '<i class="mdi mdi-plus"></i> New Entry';
+    const toggleBtn = document.getElementById('lbToggleFormBtn');
+    toggleBtn.style.display = 'inline-flex';
+    toggleBtn.innerHTML = '<i class="mdi mdi-plus"></i> New Entry';
+    document.getElementById('lbSubmitBtn').style.display = 'none';
     _editingEntryId = null;
 }
 
@@ -73,9 +76,9 @@ function _prefillLogbookForm(device) {
     document.getElementById('lbFormError').textContent  = '';
     _editingEntryId = null;
     const submitBtn = document.getElementById('lbSubmitBtn');
-    submitBtn.disabled    = false;
+    submitBtn.disabled = false;
+    submitBtn.style.display = 'inline-flex';
     submitBtn.innerHTML = '<i class="mdi mdi-plus"></i> Add Entry';
-    document.getElementById('lbCancelEditBtn').style.display = 'none';
 }
 
 // ── Load entries ──────────────────────────────────────────────────────────────
@@ -196,7 +199,9 @@ function startEditLogbookEntry(entryId) {
     // Show the form panel
     const panel = document.getElementById('logbookFormPanel');
     panel.style.display = 'block';
-    document.getElementById('lbToggleFormBtn').innerHTML = '<i class="mdi mdi-close"></i> Cancel';
+    const toggleBtn = document.getElementById('lbToggleFormBtn');
+    toggleBtn.style.display = 'inline-flex';
+    toggleBtn.innerHTML = '<i class="mdi mdi-close"></i> Cancel';
 
     document.getElementById('lbDescription').value = entry.description;
     const localIso = new Date(new Date(entry.date).getTime()
@@ -207,15 +212,12 @@ function startEditLogbookEntry(entryId) {
     document.getElementById('lbFiles').value     = '';
     document.getElementById('lbFormError').textContent = '';
 
-    document.getElementById('lbSubmitBtn').innerHTML         = '<i class="mdi mdi-content-save"></i> Save Changes';
-    document.getElementById('lbCancelEditBtn').style.display   = 'inline-block';
+    const submitBtn = document.getElementById('lbSubmitBtn');
+    submitBtn.style.display = 'inline-flex';
+    submitBtn.innerHTML = '<i class="mdi mdi-content-save"></i> Save Changes';
 
-    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function cancelEditLogbookEntry() {
-    _collapseLogbookForm();
-}
 
 // ── Delete ────────────────────────────────────────────────────────────────────
 async function deleteLogbookEntry(entryId) {
