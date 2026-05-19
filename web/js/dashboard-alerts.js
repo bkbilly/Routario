@@ -332,11 +332,14 @@ function showAlert(data) {
             <div class="toast-title">${title}</div>
             <div class="toast-message">${message}</div>
         </div>
+        <button class="toast-close" onclick="this.closest('.toast').remove()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0 0 0 0.5rem;font-size:1rem;line-height:1;flex-shrink:0;"><i class="mdi mdi-close"></i></button>
     `;
 
     container.appendChild(toast);
+    const duration = (typeof data === 'object' && data.duration) ? data.duration : 3000;
     setTimeout(() => {
+        if (!toast.isConnected) return;
         toast.style.animation = 'slideInRight 0.3s reverse forwards';
         setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    }, duration);
 }
