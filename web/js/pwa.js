@@ -51,6 +51,14 @@ async function registerServiceWorker() {
   try {
     const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
     console.log('[PWA] Service worker registered:', reg.scope);
+
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data?.type === 'SW_UPDATED') {
+        console.log('[PWA] New version activated — reloading');
+        window.location.reload();
+      }
+    });
+
     return reg;
   } catch (err) {
     console.error('[PWA] Service worker registration failed:', err);

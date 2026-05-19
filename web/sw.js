@@ -4,7 +4,7 @@
  * Place this file at: /web/sw.js  (root of your web directory)
  */
 
-const CACHE_NAME = 'gps-dashboard-v60';
+const CACHE_NAME = 'gps-dashboard-v61';
 const STATIC_ASSETS = [
   '/gps-dashboard.html',
   '/device-management.html',
@@ -42,6 +42,8 @@ self.addEventListener('activate', (event) => {
           .map((key) => caches.delete(key))
       )
     ).then(() => self.clients.claim())
+     .then(() => self.clients.matchAll({ type: 'window' }))
+     .then((clients) => clients.forEach((client) => client.postMessage({ type: 'SW_UPDATED' })))
   );
 });
 
