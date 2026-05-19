@@ -344,6 +344,7 @@ function openAddDeviceModal() {
 
     document.getElementById('modalTitle').textContent        = 'Add New Device';
     document.getElementById('submitText').textContent        = 'Add Device';
+    document.getElementById('submitIcon').className         = 'mdi mdi-plus';
     document.getElementById('deleteDeviceBtn').style.display = 'none';
     const usersTabBtnAdd = document.getElementById('usersTabBtn');
     if (usersTabBtnAdd) usersTabBtnAdd.style.display = 'none';
@@ -377,7 +378,8 @@ function openDeviceModal(deviceId, startTab = 'general') {
     editingDeviceId = d.id;
 
     document.getElementById('modalTitle').textContent        = 'Edit Device';
-    document.getElementById('submitText').textContent        = 'Save Changes';
+    document.getElementById('submitText').textContent        = 'Save';
+    document.getElementById('submitIcon').className         = 'mdi mdi-content-save';
     document.getElementById('deleteDeviceBtn').style.display = hasAdminAccess ? 'inline-flex' : 'none';
     const usersTabBtnEdit = document.getElementById('usersTabBtn');
     if (usersTabBtnEdit) usersTabBtnEdit.style.display = hasAdminAccess ? '' : 'none';

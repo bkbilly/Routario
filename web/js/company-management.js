@@ -131,8 +131,8 @@ function renderTable(list) {
             <td style="text-align:center;font-family:var(--font-mono);">${c.device_count ?? 0}</td>
             <td style="font-size:0.85rem;color:var(--text-secondary);">${formatDate(c.created_at)}</td>
             <td style="text-align:right;white-space:nowrap;">
-                <button class="btn btn-secondary tbl-btn" onclick="openEditModal(${c.id})">&#9999;&#65039; Edit</button>
-                <button class="btn btn-danger tbl-btn" onclick="confirmDelete(${c.id}, '${_esc(c.name)}')">&#128465;&#65039;</button>
+                <button class="btn btn-secondary tbl-btn" onclick="openEditModal(${c.id})"><i class="mdi mdi-pencil"></i> Edit</button>
+                <button class="btn btn-danger tbl-btn" onclick="confirmDelete(${c.id}, '${_esc(c.name)}')"><i class="mdi mdi-delete"></i></button>
             </td>
         </tr>`).join('');
 }
