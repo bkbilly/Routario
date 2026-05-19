@@ -16,6 +16,7 @@ let pendingCompanyAssignRole = 'company_admin';
 let rolePopupUserId = null;
 let rolePopupCurrentRole = null;
 let rolePopupUsername = '';
+let rolePopupCompanyId = null;
 
 // Auth Check
 function checkLogin() {
@@ -234,11 +235,11 @@ function renderUserList(users) {
             <div class="user-actions">
                 ${IS_ADMIN
                     ? `<button type="button" class="btn ${roleBtnClass}"
-                           onclick="openRolePopup(event,${u.id},'${esc}',${u.is_admin},${u.is_company_admin})">
+                           onclick="openRolePopup(event,${u.id},'${esc}',${u.is_admin},${u.is_company_admin},${u.company_id || null})">
                            ${roleLabel} &#9660;</button>`
                     : (!u.is_admin
                         ? `<button type="button" class="btn ${u.is_company_admin ? 'btn-warning' : 'btn-secondary'}"
-                               onclick="toggleCompanyAdmin(${u.id},${u.is_company_admin},'${esc}')">
+                               onclick="toggleCompanyAdmin(${u.id},${u.is_company_admin},'${esc}',${u.company_id || null})">
                                ${u.is_company_admin ? 'Revoke Admin' : 'Make Admin'}</button>`
                         : '')}
                 ${!u.is_admin && !u.is_company_admin ? `<button type="button" class="btn btn-secondary"
@@ -281,9 +282,9 @@ async function toggleAdmin(userId, currentlyAdmin) {
     } catch (e) { showAlert('Error updating admin status', 'error'); }
 }
 
-async function toggleCompanyAdmin(userId, currentlyCompanyAdmin, username) {
+async function toggleCompanyAdmin(userId, currentlyCompanyAdmin, username, currentCompanyId) {
     if (!currentlyCompanyAdmin) {
-        openCompanySelectModal(userId, username);
+        openCompanySelectModal(userId, username, 'company_admin', currentCompanyId);
         return;
     }
     if (!confirm(`Revoke company admin from "${username}"?`)) return;
@@ -303,11 +304,12 @@ async function toggleCompanyAdmin(userId, currentlyCompanyAdmin, username) {
     } catch (e) { showAlert('Error updating company admin status', 'error'); }
 }
 
-function openRolePopup(event, userId, username, isUserAdmin, isUserCompanyAdmin) {
+function openRolePopup(event, userId, username, isUserAdmin, isUserCompanyAdmin, currentCompanyId) {
     event.stopPropagation();
     rolePopupUserId = userId;
     rolePopupUsername = username;
     rolePopupCurrentRole = isUserAdmin ? 'super_admin' : isUserCompanyAdmin ? 'company_admin' : 'user';
+    rolePopupCompanyId = currentCompanyId || null;
 
     document.getElementById('rolePopupHeader').textContent = username;
     const options = [
@@ -343,12 +345,14 @@ function closeRolePopup() {
     rolePopupUserId = null;
     rolePopupCurrentRole = null;
     rolePopupUsername = '';
+    rolePopupCompanyId = null;
 }
 
 async function selectRole(role) {
     const userId = rolePopupUserId;
     const username = rolePopupUsername;
     const fromRole = rolePopupCurrentRole;
+    const companyId = rolePopupCompanyId;
     closeRolePopup();
 
     if (role === fromRole) return;
@@ -357,9 +361,9 @@ async function selectRole(role) {
         if (!confirm(`Grant super admin to "${username}"?`)) return;
         await _applyRole(userId, { is_admin: true, is_company_admin: false });
     } else if (role === 'company_admin') {
-        openCompanySelectModal(userId, username, 'company_admin');
+        openCompanySelectModal(userId, username, 'company_admin', companyId);
     } else {
-        openCompanySelectModal(userId, username, 'user');
+        openCompanySelectModal(userId, username, 'user', companyId);
     }
 }
 
@@ -380,14 +384,14 @@ async function _applyRole(userId, payload) {
     } catch (e) { showAlert('Error updating role', 'error'); }
 }
 
-function openCompanySelectModal(userId, username, role) {
+function openCompanySelectModal(userId, username, role, currentCompanyId) {
     pendingCoAdminUserId = userId;
     pendingCoAdminUsername = username || '';
     pendingCompanyAssignRole = role || 'company_admin';
     populateCompanyDropdowns();
     const label = pendingCompanyAssignRole === 'company_admin' ? 'Company Admin' : 'Regular User';
     document.getElementById('coAdminUsername').textContent = `${username || 'this user'} as ${label}`;
-    document.getElementById('coAdminCompanySelect').value = '';
+    document.getElementById('coAdminCompanySelect').value = currentCompanyId ? String(currentCompanyId) : '';
     document.getElementById('companySelectModal').classList.add('active');
 }
 

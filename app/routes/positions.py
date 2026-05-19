@@ -33,8 +33,11 @@ async def get_position_history(
     # Fetch positions and trips for the requested time range in parallel
     positions = await db.get_position_history(
         request.device_id, request.start_time, request.end_time,
-        request.max_points, request.order
+        request.max_points, request.offset, request.order
     )
+    truncated = len(positions) > request.max_points
+    if truncated:
+        positions = positions[:request.max_points]
 
     trips = await db.get_device_trips(
         request.device_id, request.start_time, request.end_time
@@ -95,6 +98,7 @@ async def get_position_history(
     return PositionHistoryResponse(
         type="FeatureCollection",
         features=features,
+        truncated=truncated,
         summary={
             "total_distance_km": round(total_distance, 2),
             "duration_minutes":  duration_minutes,

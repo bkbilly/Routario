@@ -358,6 +358,12 @@
                     <input type="range" class="history-slider" id="historySlider" min="0" max="100" value="0" oninput="seekHistory(this.value)">
                     <span class="history-slider-counter" id="historySliderCounter">0 / 0</span>
                 </div>
+                <!-- Row 4: batch pagination (only shown when needed) -->
+                <div id="historyBatchNav" style="display:none; justify-content:center; align-items:center; gap:0.5rem; padding-top:0.25rem;">
+                    <button id="historyPrevBatch" class="btn btn-secondary" style="font-size:0.75rem;padding:0.3rem 0.7rem;" onclick="loadHistoryBatch(-1)"><i class="mdi mdi-chevron-left"></i> Prev</button>
+                    <span id="historyBatchLabel" style="font-size:0.75rem;color:var(--text-muted);"></span>
+                    <button id="historyNextBatch" class="btn btn-secondary" style="font-size:0.75rem;padding:0.3rem 0.7rem;" onclick="loadHistoryBatch(1)">Next <i class="mdi mdi-chevron-right"></i></button>
+                </div>
             </div>
         </main>
     </div>
@@ -709,7 +715,7 @@
             setAppHeight();
             
             // Auto-collapse sidebar on mobile/tablet load
-            if (window.innerWidth <= 600) {
+            if (window.innerWidth <= 630) {
                 document.querySelector('.dashboard').classList.add('sidebar-hidden');
                 // Tell Leaflet about the new map size once it has initialised
                 setTimeout(() => { if (map) map.invalidateSize(); }, 200);
@@ -718,13 +724,13 @@
         });
 
         // Add resize listener to handle dynamic window resizing
-        let lastWasWide = window.innerWidth > 600;
+        let lastWasWide = window.innerWidth > 630;
 
         window.addEventListener('resize', () => {
             setAppHeight();
 
             const dashboard = document.querySelector('.dashboard');
-            const isWide = window.innerWidth > 600;
+            const isWide = window.innerWidth > 630;
 
             if (!lastWasWide && !isWide) {
                 // Still in mobile range — don't touch the sidebar

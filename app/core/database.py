@@ -692,6 +692,7 @@ class DatabaseService:
         start_time: datetime,
         end_time: datetime,
         max_points: int = 1000,
+        offset: int = 0,
         order: str = "asc",
     ) -> List[PositionRecord]:
         if start_time.tzinfo:
@@ -715,7 +716,8 @@ class DatabaseService:
                     )
                 )
                 .order_by(sort_col)
-                .limit(max_points)
+                .offset(offset)
+                .limit(max_points + 1)
             )
             return result.scalars().all()
 
