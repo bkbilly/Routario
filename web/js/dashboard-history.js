@@ -229,6 +229,10 @@ async function loadHistory(deviceId, startTime, endTime) {
         document.getElementById('historyDeviceName').textContent = device ? device.name : 'History Details';
         await loadTripsForHistory(deviceId, startTime, endTime);
         updatePlaybackUI();
+
+        if (historyData.length >= 2000) {
+            showAlert({ title: 'History', message: 'Only the first 2,000 points are shown. Select a shorter time range to see full map data.', type: 'warning', duration: 8000 });
+        }
     } catch (error) {
         console.log(error);
         showAlert({ title: 'Error', message: 'Failed to load history.', type: 'error' });
@@ -397,14 +401,20 @@ function updatePointDetails(feature) {
     const p = feature.properties;
     const content = document.getElementById('pointDetailsContent');
 
+    const di = (key, val, style = '') =>
+        val != null ? `<div class="detail-item"><span class="detail-key">${key}</span><div class="detail-val"${style ? ` style="${style}"` : ''}>${val}</div></div>` : '';
+
+    const ignStyle = p.ignition === true ? 'color:var(--accent-success)' : 'color:var(--accent-danger)';
+    const ignVal   = p.ignition === true ? 'ON' : p.ignition === false ? 'OFF' : null;
+
     let html = `
         <div class="detail-grid">
-            <div class="detail-item"><span class="detail-key">Heading</span><div class="detail-val">${p.course != null ? p.course.toFixed(0) + '°' : '—'}</div></div>
-            <div class="detail-item"><span class="detail-key">Speed</span><div class="detail-val">${p.speed != null ? fmtSpeed(p.speed) : '—'}</div></div>
-            <div class="detail-item"><span class="detail-key">Lat/Lon</span><div class="detail-val">${feature.geometry.coordinates[1].toFixed(5)}, ${feature.geometry.coordinates[0].toFixed(5)}</div></div>
-            <div class="detail-item"><span class="detail-key">Altitude</span><div class="detail-val">${fmtAlt(p.altitude || 0)}</div></div>
-            <div class="detail-item"><span class="detail-key">Satellites</span><div class="detail-val">${p.satellites != null ? p.satellites : '—'}</div></div>
-            <div class="detail-item"><span class="detail-key">Ignition</span><div class="detail-val" style="color: ${p.ignition === true ? 'var(--accent-success)' : p.ignition === false ? 'var(--accent-danger)' : 'var(--text-muted)'}">${p.ignition === true ? 'ON' : p.ignition === false ? 'OFF' : '—'}</div></div>
+            ${di('Lat/Lon', `${feature.geometry.coordinates[1].toFixed(5)}, ${feature.geometry.coordinates[0].toFixed(5)}`)}
+            ${di('Speed',      p.speed      != null ? fmtSpeed(p.speed)        : null)}
+            ${di('Heading',    p.course     != null ? p.course.toFixed(0) + '°': null)}
+            ${di('Altitude',   p.altitude   != null ? fmtAlt(p.altitude)       : null)}
+            ${di('Satellites', p.satellites != null ? p.satellites             : null)}
+            ${di('Ignition',   ignVal, ignStyle)}
         </div>
     `;
     if (p.sensors && Object.keys(p.sensors).length > 0) {
@@ -481,6 +491,11 @@ async function loadTripsForHistory(deviceId, startTime, endTime) {
 
         historyTrips = trips;
 
+        // Build the set of trip IDs that have at least one point in the returned data
+        const tripIdsWithPoints = new Set(
+            historyData.map(f => f.properties?.trip_id).filter(id => id != null)
+        );
+
         if (!trips.length) {
             container.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:0.5rem 0;text-align:center;">No trips detected in this period</div>';
             switchHistoryTab('details');
@@ -520,16 +535,20 @@ async function loadTripsForHistory(deviceId, startTime, endTime) {
             </div>
         </div>`;
         container.innerHTML = summaryHtml + trips.map((trip, i) => {
-            const start = trip.start_time ? formatDateToLocal(trip.start_time) : '—';
-            const end   = trip.end_time   ? formatDateToLocal(trip.end_time)   : 'Ongoing';
-            const dist  = trip.distance_km != null ? fmtDist(trip.distance_km) : '—';
-            const dur   = formatDuration(trip.duration_minutes);
-            const label = trips.length - i;
-            const color = tripColorMap[trip.id] || tripColors[i % tripColors.length];
+            const start   = trip.start_time ? formatDateToLocal(trip.start_time) : '—';
+            const end     = trip.end_time   ? formatDateToLocal(trip.end_time)   : 'Ongoing';
+            const dist    = trip.distance_km != null ? fmtDist(trip.distance_km) : '—';
+            const dur     = formatDuration(trip.duration_minutes);
+            const label   = trips.length - i;
+            const color   = tripColorMap[trip.id] || tripColors[i % tripColors.length];
+            const hasData = tripIdsWithPoints.has(trip.id);
+            const dimStyle   = hasData ? '' : 'opacity:0.4;';
+            const titleAttr  = hasData ? 'Click to jump to this trip' : 'No map data — outside the 2,000-point limit';
+            const clickAttr  = hasData ? `onclick="seekToTrip('${trip.start_time}')"` : '';
 
             return `
-            <div class="trip-card" onclick="seekToTrip('${trip.start_time}')" title="Click to jump to this trip"
-                 style="border-left: 3px solid ${color};">
+            <div class="trip-card" ${clickAttr} title="${titleAttr}"
+                 style="border-left: 3px solid ${color}; ${dimStyle}${hasData ? 'cursor:pointer;' : 'cursor:default;'}">
                 <div class="trip-card-header">
                     <span class="trip-index" style="color: ${color};">Trip ${label}</span>
                     <span class="trip-badges">
