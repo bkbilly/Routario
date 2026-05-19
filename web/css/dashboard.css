@@ -949,6 +949,9 @@ body::before {
     position: fixed;
     bottom: 2rem;
     right: 2rem;
+    left: 2rem;
+    max-width: 400px;
+    margin-left: auto;
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -965,7 +968,8 @@ body::before {
     gap: 0.75rem;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
     animation: slideInRight 0.3s ease-out;
-    min-width: 300px;
+    min-width: 0;
+    width: 100%;
 }
 
 .toast-icon {
