@@ -113,7 +113,7 @@
                             </div>
                             <div class="form-group" id="deviceCompanyGroup" style="display:none;">
                                 <label class="form-label">Company</label>
-                                <select class="form-input" id="deviceCompany">
+                                <select class="form-input" id="deviceCompany" onchange="onDeviceCompanyChange()">
                                     <option value="">— None —</option>
                                 </select>
                             </div>
@@ -155,7 +155,7 @@
                                     onkeydown="if(event.key==='Enter'){event.preventDefault();addSelectedAlert();}">
                                 <input type="text" id="newRuleCond" class="form-input"
                                     placeholder="speed &gt; 80 and ignition"
-                                    style="flex:2;min-width:200px;"
+                                    style="flex:2;min-width:140px;"
                                     onkeydown="if(event.key==='Enter'){event.preventDefault();addSelectedAlert();}">
                             </div>
                             <details>

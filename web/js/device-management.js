@@ -382,7 +382,7 @@ function openDeviceModal(deviceId, startTab = 'general') {
     document.getElementById('submitIcon').className         = 'mdi mdi-content-save';
     document.getElementById('deleteDeviceBtn').style.display = hasAdminAccess ? 'inline-flex' : 'none';
     const usersTabBtnEdit = document.getElementById('usersTabBtn');
-    if (usersTabBtnEdit) usersTabBtnEdit.style.display = hasAdminAccess ? '' : 'none';
+    if (usersTabBtnEdit) usersTabBtnEdit.style.display = (isCompanyAdmin || (isAdmin && d.company_id)) ? '' : 'none';
     const commandsTabBtnEdit = document.getElementById('commandsTabBtn');
     if (commandsTabBtnEdit) commandsTabBtnEdit.style.display = d.supports_commands ? '' : 'none';
     deviceAssignedUserIds = new Set();
@@ -1173,6 +1173,16 @@ async function loadAllCompanies() {
     } catch (e) { console.error('Failed to load companies:', e); }
 }
 
+function onDeviceCompanyChange() {
+    const companyId = parseInt(document.getElementById('deviceCompany').value) || null;
+    const usersTabBtn = document.getElementById('usersTabBtn');
+    if (usersTabBtn) usersTabBtn.style.display = companyId ? '' : 'none';
+    if (!companyId && document.querySelector('.modal-tab.active')?.dataset.tab === 'users') {
+        switchModalTab('general');
+    }
+    renderUsersTab();
+}
+
 function populateDeviceCompanySelect(selectedId) {
     const sel = document.getElementById('deviceCompany');
     if (!sel) return;
@@ -1196,9 +1206,14 @@ function renderUsersTab() {
     const list = document.getElementById('usersAssignList');
     if (!list) return;
     const query = (document.getElementById('usersTabSearch')?.value || '').toLowerCase().trim();
+    const myCompanyId = isCompanyAdmin
+        ? (parseInt(localStorage.getItem('company_id')) || null)
+        : (parseInt(document.getElementById('deviceCompany')?.value) || null);
     const filtered = allUsers.filter(u =>
-        !u.is_admin && (
-            !query ||
+        !u.is_admin &&
+        !u.is_company_admin &&
+        (!myCompanyId || u.company_id === myCompanyId) &&
+        (!query ||
             (u.username || '').toLowerCase().includes(query) ||
             (u.email    || '').toLowerCase().includes(query)
         )

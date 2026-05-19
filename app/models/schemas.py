@@ -273,6 +273,7 @@ class PositionHistoryRequest(BaseModel):
     start_time: datetime
     end_time: datetime
     max_points: int = Field(1000, ge=1, le=10000)
+    offset: int = Field(0, ge=0)
     order: str = Field("asc", pattern="^(asc|desc)$")
 
 
@@ -280,6 +281,7 @@ class PositionHistoryResponse(BaseModel):
     """GeoJSON FeatureCollection for history playback"""
     type: str = "FeatureCollection"
     features: List[PositionGeoJSON]
+    truncated: bool = False
     summary: Dict[str, Any] = Field(
         default_factory=lambda: {
             "total_distance_km": 0,

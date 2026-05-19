@@ -111,7 +111,9 @@ async function handleHistorySubmit(e) {
     closeHistoryModal();
 }
 
-async function loadHistory(deviceId, startTime, endTime) {
+async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
+    historyBatchOffset = batchOffset;
+
     if (polylines['history']) {
         polylines['history'].eachLayer(l => map.removeLayer(l));
         delete polylines['history'];
@@ -132,9 +134,10 @@ async function loadHistory(deviceId, startTime, endTime) {
         const response = await apiFetch(`${API_BASE}/positions/history`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device_id: deviceId, start_time: startTime.toISOString(), end_time: endTime.toISOString(), max_points: 2000 })
+            body: JSON.stringify({ device_id: deviceId, start_time: startTime.toISOString(), end_time: endTime.toISOString(), max_points: HISTORY_BATCH_SIZE, offset: historyBatchOffset })
         });
         const data = await response.json();
+        historyHasNext = data.truncated;
         historyData = data.features;
         historyIndex = 0;
         if (historyData.length === 0) {
@@ -229,10 +232,7 @@ async function loadHistory(deviceId, startTime, endTime) {
         document.getElementById('historyDeviceName').textContent = device ? device.name : 'History Details';
         await loadTripsForHistory(deviceId, startTime, endTime);
         updatePlaybackUI();
-
-        if (historyData.length >= 2000) {
-            showAlert({ title: 'History', message: 'Only the first 2,000 points are shown. Select a shorter time range to see full map data.', type: 'warning', duration: 8000 });
-        }
+        _updateBatchNav();
     } catch (error) {
         console.log(error);
         showAlert({ title: 'Error', message: 'Failed to load history.', type: 'error' });
@@ -281,12 +281,39 @@ function exitHistoryMode() {
     document.querySelector('.sidebar').classList.remove('history-active');
 
     historyTrips = [];
+    historyBatchOffset = 0;
+    historyHasNext = false;
+    const batchNav = document.getElementById('historyBatchNav');
+    if (batchNav) batchNav.style.display = 'none';
     const tripLabel = document.getElementById('historyTripLabel');
     if (tripLabel) tripLabel.textContent = '';
     const tripList = document.getElementById('tripListContent');
     if (tripList) tripList.innerHTML = '';
     document.getElementById('sidebarDeviceList').style.display = 'block';
     document.getElementById('sidebarHistoryDetails').style.display = 'none';
+}
+
+function _updateBatchNav() {
+    const hasPrev = historyBatchOffset > 0;
+    const hasNext = historyHasNext;
+    const nav     = document.getElementById('historyBatchNav');
+    if (!nav) return;
+
+    nav.style.display = (hasPrev || hasNext) ? 'flex' : 'none';
+    document.getElementById('historyPrevBatch').style.visibility = hasPrev ? 'visible' : 'hidden';
+    document.getElementById('historyNextBatch').style.visibility = hasNext ? 'visible' : 'hidden';
+
+    const page = Math.floor(historyBatchOffset / HISTORY_BATCH_SIZE) + 1;
+    document.getElementById('historyBatchLabel').textContent = `Batch ${page}`;
+
+}
+
+async function loadHistoryBatch(direction) {
+    const newOffset = historyBatchOffset + direction * HISTORY_BATCH_SIZE;
+    if (newOffset < 0) return;
+    const start = new Date(document.getElementById('historyStart').value);
+    const end   = new Date(document.getElementById('historyEnd').value);
+    await loadHistory(historyDeviceId, start, end, newOffset);
 }
 
 function togglePlayback() { if (playbackInterval) stopPlayback(); else startPlayback(); }
