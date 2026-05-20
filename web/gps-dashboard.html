@@ -475,15 +475,10 @@
                 <div class="form-group">
                     <label class="form-label">Quick Select</label>
                     <div class="history-quick-grid">
-                        <button type="button" class="btn btn-secondary history-quick-btn" onclick="setHistoryRangeToday(this)">Today</button>
-                        <button type="button" class="btn btn-secondary history-quick-btn" onclick="setHistoryRangeYesterday(this)">Yesterday</button>
-                        <button type="button" class="btn btn-secondary history-quick-btn" onclick="setHistoryRange(1, this)">1 Hour</button>
-                        <button type="button" class="btn btn-secondary history-quick-btn" onclick="setHistoryRange(2, this)">2 Hours</button>
-                        <button type="button" class="btn btn-secondary history-quick-btn" onclick="setHistoryRange(24, this)">1 Day</button>
-                        <button type="button" class="btn btn-secondary history-quick-btn" onclick="setHistoryRange(48, this)">2 Days</button>
-                        <button type="button" class="btn btn-secondary history-quick-btn" onclick="setHistoryRange(168, this)">7 Days</button>
-                        <button type="button" class="btn btn-secondary history-quick-btn" id="historyBtnThisMonth" onclick="setHistoryRangeThisMonth(this)"></button>
-                        <button type="button" class="btn btn-secondary history-quick-btn" id="historyBtnPrevMonth" onclick="setHistoryRangePrevMonth(this)"></button>
+                        <button type="button" class="btn btn-secondary history-quick-btn" data-group="today-yesterday" onclick="cycleHistoryGroup(this, 'today-yesterday')">Today</button>
+                        <button type="button" class="btn btn-secondary history-quick-btn" data-group="hours" onclick="cycleHistoryGroup(this, 'hours')">1 Hour</button>
+                        <button type="button" class="btn btn-secondary history-quick-btn" data-group="days" onclick="cycleHistoryGroup(this, 'days')">1 Day</button>
+                        <button type="button" class="btn btn-secondary history-quick-btn" data-group="months" onclick="cycleHistoryGroup(this, 'months')"></button>
                     </div>
                 </div>
                 
