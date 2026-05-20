@@ -13,7 +13,12 @@ const tripColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b
 // --- HISTORY MODAL ---
 function openHistoryModal(deviceId) {
     historyDeviceId = deviceId;
-    setHistoryRange(24);
+
+    // Reset all cycle buttons to their first option
+    document.querySelectorAll('.history-quick-btn[data-group]').forEach(btn => {
+        const steps = HISTORY_QUICK_GROUPS[btn.dataset.group];
+        if (steps && steps.length) { btn.dataset.step = '0'; btn.textContent = steps[0].label; }
+    });
 
     const device = devices.find(d => d.id === deviceId);
     const icon = device ? (VEHICLE_ICONS[device.vehicle_type] || VEHICLE_ICONS['other']).emoji : '🚗';
@@ -21,8 +26,9 @@ function openHistoryModal(deviceId) {
     document.getElementById('historyModalDeviceName').textContent = `${icon} ${name}`;
 
     document.getElementById('historyModal').classList.add('active');
-    const defaultBtn = [...document.querySelectorAll('.history-quick-btn')].find(b => b.textContent.trim() === '1 Day');
-    setHistoryRange(24, defaultBtn);
+    const defaultBtn = document.querySelector('.history-quick-btn[data-group="days"]');
+    _setRangeHours(24);
+    _setActiveQuickBtn(defaultBtn);
 }
 
 function closeHistoryModal() {
@@ -41,47 +47,66 @@ function _setActiveQuickBtn(btn) {
     _validateHistoryRange();
 }
 
-function setHistoryRange(hours, btn) {
-    const now = new Date();
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
-    const start = new Date(now.getTime() - hours * 60 * 60 * 1000);
+const HISTORY_QUICK_GROUPS = {
+    'today-yesterday': [
+        {
+            label: 'Today',
+            set() {
+                const start = new Date(); start.setHours(0, 0, 0, 0);
+                const end   = new Date(); end.setHours(23, 59, 59, 999);
+                document.getElementById('historyStart').value = toLocalISO(start);
+                document.getElementById('historyEnd').value   = toLocalISO(end);
+            }
+        },
+        {
+            label: 'Yesterday',
+            set() {
+                const start = new Date(); start.setDate(start.getDate() - 1); start.setHours(0, 0, 0, 0);
+                const end   = new Date(); end.setDate(end.getDate() - 1);     end.setHours(23, 59, 59, 999);
+                document.getElementById('historyStart').value = toLocalISO(start);
+                document.getElementById('historyEnd').value   = toLocalISO(end);
+            }
+        },
+        {
+            label: '2 Days Ago',
+            set() {
+                const start = new Date(); start.setDate(start.getDate() - 2); start.setHours(0, 0, 0, 0);
+                const end   = new Date(); end.setDate(end.getDate() - 2);     end.setHours(23, 59, 59, 999);
+                document.getElementById('historyStart').value = toLocalISO(start);
+                document.getElementById('historyEnd').value   = toLocalISO(end);
+            }
+        },
+    ],
+    'hours': [
+        { label: '1 Hour',  set() { _setRangeHours(1);  } },
+        { label: '2 Hours', set() { _setRangeHours(2);  } },
+        { label: '6 Hours', set() { _setRangeHours(6);  } },
+    ],
+    'days': [
+        { label: '1 Day',  set() { _setRangeHours(24);  } },
+        { label: '2 Days', set() { _setRangeHours(48);  } },
+        { label: '7 Days', set() { _setRangeHours(168); } },
+    ],
+    'months': [], // populated in DOMContentLoaded
+};
+
+function _setRangeHours(hours) {
+    const now   = new Date();
+    const end   = new Date(); end.setHours(23, 59, 59, 999);
+    const start = new Date(now.getTime() - hours * 3600000);
     document.getElementById('historyStart').value = toLocalISO(start);
-    document.getElementById('historyEnd').value = toLocalISO(end);
-    _setActiveQuickBtn(btn);
+    document.getElementById('historyEnd').value   = toLocalISO(end);
 }
 
-function setHistoryRangeToday(btn) {
-    const start = new Date(); start.setHours(0, 0, 0, 0);
-    const end = new Date(); end.setHours(23, 59, 59, 999);
-    document.getElementById('historyStart').value = toLocalISO(start);
-    document.getElementById('historyEnd').value = toLocalISO(end);
-    _setActiveQuickBtn(btn);
-}
-
-function setHistoryRangeYesterday(btn) {
-    const start = new Date(); start.setDate(start.getDate() - 1); start.setHours(0, 0, 0, 0);
-    const end = new Date(); end.setDate(end.getDate() - 1); end.setHours(23, 59, 59, 999);
-    document.getElementById('historyStart').value = toLocalISO(start);
-    document.getElementById('historyEnd').value = toLocalISO(end);
-    _setActiveQuickBtn(btn);
-}
-
-function setHistoryRangeThisMonth(btn) {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-    document.getElementById('historyStart').value = toLocalISO(start);
-    document.getElementById('historyEnd').value = toLocalISO(end);
-    _setActiveQuickBtn(btn);
-}
-
-function setHistoryRangePrevMonth(btn) {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
-    const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-    document.getElementById('historyStart').value = toLocalISO(start);
-    document.getElementById('historyEnd').value = toLocalISO(end);
+function cycleHistoryGroup(btn, groupKey) {
+    const steps = HISTORY_QUICK_GROUPS[groupKey];
+    if (!steps || !steps.length) return;
+    const isActive = btn.classList.contains('active');
+    const currentStep = parseInt(btn.dataset.step || '0');
+    const step = isActive ? (currentStep + 1) % steps.length : currentStep;
+    btn.dataset.step = step;
+    btn.textContent  = steps[step].label;
+    steps[step].set();
     _setActiveQuickBtn(btn);
 }
 
@@ -96,11 +121,41 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('historyStart').addEventListener('input', () => { _setActiveQuickBtn(null); _validateHistoryRange(); });
     document.getElementById('historyEnd').addEventListener('input', () => { _setActiveQuickBtn(null); _validateHistoryRange(); });
 
-    const now = new Date();
-    const monthName = (offset) => new Date(now.getFullYear(), now.getMonth() + offset, 1)
-        .toLocaleString('default', { month: 'long' });
-    document.getElementById('historyBtnThisMonth').textContent = monthName(0);
-    document.getElementById('historyBtnPrevMonth').textContent = monthName(-1);
+    HISTORY_QUICK_GROUPS.months = [
+        {
+            label: 'This Month',
+            set() {
+                const n = new Date();
+                const start = new Date(n.getFullYear(), n.getMonth(), 1, 0, 0, 0, 0);
+                const end   = new Date(n.getFullYear(), n.getMonth() + 1, 0, 23, 59, 59, 999);
+                document.getElementById('historyStart').value = toLocalISO(start);
+                document.getElementById('historyEnd').value   = toLocalISO(end);
+            }
+        },
+        {
+            label: 'Last Month',
+            set() {
+                const n = new Date();
+                const start = new Date(n.getFullYear(), n.getMonth() - 1, 1, 0, 0, 0, 0);
+                const end   = new Date(n.getFullYear(), n.getMonth(), 0, 23, 59, 59, 999);
+                document.getElementById('historyStart').value = toLocalISO(start);
+                document.getElementById('historyEnd').value   = toLocalISO(end);
+            }
+        },
+        {
+            label: '2 Months Ago',
+            set() {
+                const n = new Date();
+                const start = new Date(n.getFullYear(), n.getMonth() - 2, 1, 0, 0, 0, 0);
+                const end   = new Date(n.getFullYear(), n.getMonth() - 1, 0, 23, 59, 59, 999);
+                document.getElementById('historyStart').value = toLocalISO(start);
+                document.getElementById('historyEnd').value   = toLocalISO(end);
+            }
+        },
+    ];
+
+    const monthsBtn = document.querySelector('.history-quick-btn[data-group="months"]');
+    if (monthsBtn) monthsBtn.textContent = 'This Month';
 });
 
 async function handleHistorySubmit(e) {
