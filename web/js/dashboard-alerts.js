@@ -61,7 +61,7 @@ async function jumpToAlert(alert) {
     if (alert.alert_type === 'offline' || !alert.latitude || !alert.longitude) {
         const device = devices.find(d => d.id === alert.device_id);
         if (device?.last_latitude && device?.last_longitude) {
-            map.setView([device.last_latitude, device.last_longitude], 15);
+            map.setView(applyLatLngOffset([device.last_latitude, device.last_longitude], 15), 15);
             _placeAlertHighlight(device.last_latitude, device.last_longitude, icon, `${title} (last known)`);
         } else {
             showAlert({ title: 'No location', message: 'No GPS position available for this alert.', type: 'warning' });
@@ -98,7 +98,7 @@ async function jumpToAlert(alert) {
     }
 
     // Drop the highlight pin and pan to it
-    map.setView([alert.latitude, alert.longitude], 16);
+    map.setView(applyLatLngOffset([alert.latitude, alert.longitude], 16), 16);
     _placeAlertHighlight(alert.latitude, alert.longitude, icon, title);
 }
 

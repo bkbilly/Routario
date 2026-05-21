@@ -71,17 +71,13 @@ body::before {
 
 
 /* Layout */
-.dashboard.sidebar-hidden {
-    grid-template-columns: 0px 1fr;
-}
 .dashboard {
     display: grid;
-    grid-template-columns: var(--sidebar-width) 1fr;
+    grid-template-columns: 1fr;
     grid-template-rows: 70px 1fr;
     height: calc(100vh - var(--banner-height, 0px));
     height: calc(var(--app-height, 100dvh) - var(--banner-height, 0px));
     gap: 0;
-    transition: grid-template-columns var(--transition-base);
 }
 
 /* Header */
@@ -234,15 +230,33 @@ body::before {
 
 /* Sidebar */
 .sidebar {
-    background: var(--bg-secondary);
+    grid-row: 2;
+    grid-column: 1;
+    z-index: 1000;
+    justify-self: start;
+    width: var(--sidebar-width);
+    background: color-mix(in srgb, var(--bg-secondary) 65%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     border-right: 1px solid var(--border-color);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.45);
     overflow-y: auto;
     overflow-x: hidden;
     display: flex;
     flex-direction: column;
     min-width: 0;
-    min-height: 0;   /* ← prevents grid blowout */
-    max-height: 100%; /* ← constrains to grid cell */
+    min-height: 0;
+    max-height: 100%;
+    transition: transform var(--transition-base);
+}
+
+.dashboard.sidebar-hidden .sidebar {
+    transform: translateX(calc(-1 * var(--sidebar-width)));
+    pointer-events: none;
+}
+
+.map-light .sidebar {
+    background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
 }
 
 .sidebar-section {
@@ -515,8 +529,10 @@ body::before {
 
 /* Main Content */
 .main-content {
+    grid-row: 2;
+    grid-column: 1;
     display: grid;
-    grid-template-rows: 1fr; /* REMOVED auto row for bottom bar */
+    grid-template-rows: 1fr;
     overflow: hidden;
 }
 
@@ -1034,6 +1050,7 @@ body::before {
     width: 80%;
     animation: slideUp 0.3s ease-out;
 }
+
 
 /* Row 1 */
 .history-controls-top {
@@ -2071,11 +2088,11 @@ body::before {
     }
     .sidebar.history-active .sidebar-section {
     }
-    .dashboard {
-        grid-template-columns: var(--sidebar-width-mobile) 1fr;
+    .sidebar {
+        width: var(--sidebar-width-mobile);
     }
-    .dashboard.sidebar-hidden {
-        grid-template-columns: 0px 1fr;
+    .dashboard.sidebar-hidden .sidebar {
+        transform: translateX(calc(-1 * var(--sidebar-width-mobile)));
     }
     .trip-badges {
         flex-direction: column;
