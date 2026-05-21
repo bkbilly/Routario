@@ -270,7 +270,7 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
         flushSegment();
 
         polylines['history'] = L.featureGroup(allLayers);
-        if (allLayers.length > 0) map.fitBounds(polylines['history'].getBounds());
+        if (allLayers.length > 0) map.fitBounds(polylines['history'].getBounds(), { paddingTopLeft: [getSidebarOffset(), 0] });
 
         const footer = document.getElementById('historyControls');
         if (footer) footer.style.display = 'flex';

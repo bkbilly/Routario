@@ -225,7 +225,7 @@ function selectDevice(deviceId, { zoom = true } = {}) {
             const currentZoom = map.getZoom();
             const zoomDelta   = Math.abs(targetZoom - currentZoom);
             map.once('moveend', () => marker.openPopup());
-            map.flyTo(marker.getLatLng(), targetZoom, {
+            map.flyTo(applyLatLngOffset(marker.getLatLng(), targetZoom), targetZoom, {
                 animate:         true,
                 duration:        0.5 + zoomDelta * 0.15,
                 easeLinearity:   0.25,

@@ -21,7 +21,8 @@ const MAP_TILES = {
         label: '🗺️ OpenStreetMap',
         url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 19
+        maxZoom: 19,
+        light: true
     },
     stadia_dark: {
         label: '🌒 Stadia Dark',
@@ -33,7 +34,8 @@ const MAP_TILES = {
         label: '🛣️ Google Streets',
         url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
         attribution: '© Google Maps',
-        maxZoom: 21
+        maxZoom: 21,
+        light: true
     },
     google_satellite: {
         label: '🛰️ Google Satellite',
@@ -57,7 +59,8 @@ const MAP_TILES = {
         label: '☀️ Carto Light',
         url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
         attribution: '© <a href="https://carto.com/">CARTO</a>',
-        maxZoom: 19
+        maxZoom: 19,
+        light: true
     },
     esri_satellite: {
         label: '🌐 ESRI Satellite',
@@ -151,6 +154,7 @@ function applyTileLayer(tileKey) {
     if (tileContainer) tileContainer.style.filter = tile.cssFilter || '';
 
     localStorage.setItem('mapTileLayer', tileKey);
+    document.body.classList.toggle('map-light', !!tile.light);
 
     document.querySelectorAll('.map-tile-option').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tile === tileKey);
@@ -429,15 +433,33 @@ function restoreMarkerRotation(deviceId) {
 
 // ── Map fit ───────────────────────────────────────────────────────────────────
 
+// Returns the width of the visible sidebar in pixels (0 when hidden).
+function getSidebarOffset() {
+    const dashboard = document.querySelector('.dashboard');
+    if (!dashboard || dashboard.classList.contains('sidebar-hidden')) return 0;
+    const sidebar = document.querySelector('.sidebar');
+    return sidebar ? sidebar.offsetWidth : 0;
+}
+
+// Shifts a latlng left so it appears centred in the visible map area (right of sidebar).
+function applyLatLngOffset(latlng, zoom) {
+    const offset = getSidebarOffset();
+    if (!offset) return L.latLng(latlng);
+    const point = map.project(L.latLng(latlng), zoom);
+    return map.unproject(L.point(point.x - offset / 2, point.y), zoom);
+}
+
 function fitMapToMarkers() {
     const validMarkers = Object.values(markers).filter(m => m && m.getLatLng);
     if (validMarkers.length === 0) return;
 
+    const sidebarOffset = getSidebarOffset();
     if (validMarkers.length === 1) {
-        map.setView(validMarkers[0].getLatLng(), 15);
+        const zoom = 15;
+        map.setView(applyLatLngOffset(validMarkers[0].getLatLng(), zoom), zoom);
     } else {
         const group = L.featureGroup(validMarkers);
-        map.fitBounds(group.getBounds().pad(0.2));
+        map.fitBounds(group.getBounds().pad(0.2), { paddingTopLeft: [sidebarOffset, 0] });
     }
 }
 
@@ -618,7 +640,7 @@ function _onLocationSuccess(pos) {
         // duration scales with how far we need to zoom
         const currentZoom = map.getZoom();
         const zoomDelta   = Math.abs(targetZoom - currentZoom);
-        map.flyTo([lat, lng], targetZoom, {
+        map.flyTo(applyLatLngOffset([lat, lng], targetZoom), targetZoom, {
             animate:         true,
             duration:        0.5 + zoomDelta * 0.15,
             easeLinearity:   0.25,
