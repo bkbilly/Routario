@@ -5,6 +5,7 @@ const IS_COMPANY_ADMIN = localStorage.getItem('is_company_admin') === 'true';
 const MY_COMPANY_ID    = parseInt(localStorage.getItem('company_id') || '0') || null;
 let channels = [];
 let webhooks = [];
+let allUsers = [];
 let allDevices = [];
 let allCompanies = [];
 let currentUserDevices = new Set();
@@ -17,13 +18,6 @@ let rolePopupUserId = null;
 let rolePopupCurrentRole = null;
 let rolePopupUsername = '';
 let rolePopupCompanyId = null;
-
-// Auth Check
-function checkLogin() {
-    if (!localStorage.getItem('auth_token')) {
-        window.location.href = 'login.html';
-    }
-}
 
 function maskUrl(url) {
     const schemeEnd = url.indexOf('://');
@@ -168,6 +162,7 @@ async function loadAllUsers() {
                     user.deviceCount = 0;
                 }
             }
+            allUsers = users;
             renderUserList(users);
         }
     } catch (e) { console.error("Failed to load users", e); }
@@ -254,6 +249,10 @@ function renderUserList(users) {
                         onclick="loginAsUser(${u.id}, '${u.username}')">
                     Login As
                 </button>` : ''}
+                <button type="button" class="btn btn-secondary"
+                        onclick="openNotifyModal(${u.id})">
+                    Notify
+                </button>
                 <button type="button" class="btn btn-danger"
                         onclick="deleteUser(${u.id})">
                     Delete
@@ -732,20 +731,6 @@ async function saveSettings(e) {
     }
 }
 
-function showAlert(message, type) {
-    const container = document.getElementById('toastContainer');
-    const toast = document.createElement('div');
-    toast.className = `toast`;
-    toast.innerHTML = `
-        <div class="toast-icon"><i class="mdi ${type === 'success' ? 'mdi-check' : 'mdi-close'}"></i></div>
-        <div class="toast-message">${message}</div>
-    `;
-    container.appendChild(toast);
-    setTimeout(() => {
-        toast.style.animation = 'slideIn 0.3s reverse forwards';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
 
 // Show backup panel for admins
 if (localStorage.getItem('is_admin') === 'true') {
@@ -831,6 +816,129 @@ async function confirmRestore() {
     } finally {
         btn.disabled    = false;
         btn.innerHTML = '<i class="mdi mdi-alert"></i> Restore — this will overwrite all data';
+    }
+}
+
+// ── Notify User ───────────────────────────────────────────────────────────────
+
+let _notifySelected = new Set();
+
+function _renderNotifyUserList(filter = '') {
+    const list = document.getElementById('notifyUserList');
+    const lower = filter.toLowerCase();
+    const me = parseInt(localStorage.getItem('user_id'));
+    const candidates = allUsers.filter(u => u.id !== me);
+    const filtered = lower
+        ? candidates.filter(u => u.username.toLowerCase().includes(lower) || (u.email || '').toLowerCase().includes(lower))
+        : candidates;
+
+    if (!filtered.length) {
+        list.innerHTML = `<div class="notify-user-empty">No users found.</div>`;
+        return;
+    }
+
+    const allChecked = filtered.every(u => _notifySelected.has(u.id));
+    list.innerHTML = `
+        <label class="notify-user-item notify-select-all">
+            <input type="checkbox" id="notifySelectAll" ${allChecked ? 'checked' : ''} onchange="_toggleSelectAllNotify(this.checked)">
+            <span>Select all${filtered.length < candidates.length ? ` filtered (${filtered.length})` : ` (${filtered.length})`}</span>
+        </label>
+        <div class="notify-user-grid">
+        ${filtered.map(u => `
+        <label class="notify-user-item">
+            <input type="checkbox" class="notify-user-cb" value="${u.id}" ${_notifySelected.has(u.id) ? 'checked' : ''} onchange="_onNotifyCbChange(this)">
+            <span class="notify-user-info">
+                <span class="notify-user-name">${_esc(u.username)}</span>
+                <span class="notify-user-email">${u.is_admin ? 'Admin' : u.is_company_admin ? 'Company Admin' : 'User'}</span>
+            </span>
+        </label>`).join('')}
+        </div>`;
+}
+
+function _onNotifyCbChange(cb) {
+    const id = parseInt(cb.value);
+    cb.checked ? _notifySelected.add(id) : _notifySelected.delete(id);
+    _updateSelectAllState();
+    _updateNotifyCount();
+}
+
+function _toggleSelectAllNotify(checked) {
+    document.querySelectorAll('.notify-user-cb').forEach(cb => {
+        cb.checked = checked;
+        const id = parseInt(cb.value);
+        checked ? _notifySelected.add(id) : _notifySelected.delete(id);
+    });
+    _updateNotifyCount();
+}
+
+function _updateSelectAllState() {
+    const all  = document.querySelectorAll('.notify-user-cb');
+    const nChecked = [...all].filter(cb => cb.checked).length;
+    const sel = document.getElementById('notifySelectAll');
+    if (!sel) return;
+    sel.indeterminate = nChecked > 0 && nChecked < all.length;
+    sel.checked = all.length > 0 && nChecked === all.length;
+}
+
+function _updateNotifyCount() {
+    const el = document.getElementById('notifySelectedCount');
+    if (!el) return;
+    const n = _notifySelected.size;
+    el.textContent = n > 0 ? `${n} selected` : '';
+}
+
+function filterNotifyUsers() {
+    _renderNotifyUserList(document.getElementById('notifyUserSearch').value.trim());
+}
+
+function openNotifyModal(userId) {
+    _notifySelected = new Set([userId]);
+    document.getElementById('notifyUserSearch').value = '';
+    document.getElementById('notifyTitle').value = '';
+    document.getElementById('notifyMessage').value = '';
+    _renderNotifyUserList();
+    _updateNotifyCount();
+    document.getElementById('notifyUserModal').classList.add('active');
+}
+
+function closeNotifyModal() {
+    document.getElementById('notifyUserModal').classList.remove('active');
+}
+
+async function sendNotification() {
+    const title   = document.getElementById('notifyTitle').value.trim();
+    const message = document.getElementById('notifyMessage').value.trim();
+    const userIds = [..._notifySelected];
+
+    if (!userIds.length) { showAlert('Select at least one recipient.', 'warning'); return; }
+    if (!title || !message) { showAlert('Title and message are required.', 'warning'); return; }
+
+    const btn = document.getElementById('notifySendBtn');
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+    try {
+        const results = await Promise.all(userIds.map(id =>
+            apiFetch(`${API_BASE}/users/${id}/notify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, message }),
+            }).then(r => r.json()).catch(() => ({ error: true }))
+        ));
+        const noPush = results.filter(r => !r.error && !r.push_delivered).length;
+        const failed = results.filter(r => r.error).length;
+        if (failed) {
+            showAlert(`Sent to ${userIds.length - failed} user(s). ${failed} failed.`, 'error', 5000);
+        } else if (noPush) {
+            showAlert(`Sent to ${userIds.length} user(s). ${noPush} have no push notifications enabled.`, 'warning', 6000);
+        } else {
+            showAlert(`Notification sent to ${userIds.length} user(s).`, 'success');
+        }
+        closeNotifyModal();
+    } catch (e) {
+        showAlert('Error sending notification.', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send';
     }
 }
 

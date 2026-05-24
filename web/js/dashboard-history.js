@@ -160,10 +160,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function handleHistorySubmit(e) {
     e.preventDefault();
-    const start = new Date(document.getElementById('historyStart').value);
-    const end = new Date(document.getElementById('historyEnd').value);
-    await loadHistory(historyDeviceId, start, end);
-    closeHistoryModal();
+    const btn = document.getElementById('historySubmitBtn');
+    const origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+    try {
+        const start = new Date(document.getElementById('historyStart').value);
+        const end = new Date(document.getElementById('historyEnd').value);
+        await loadHistory(historyDeviceId, start, end);
+        closeHistoryModal();
+    } finally {
+        btn.disabled = false;
+        btn.textContent = origText;
+    }
 }
 
 async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {

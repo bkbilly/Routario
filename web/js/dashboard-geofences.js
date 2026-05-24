@@ -298,10 +298,10 @@ async function deleteGeofence() {
         if (!res.ok) throw new Error('Delete failed');
         _cancelEdit();
         await reloadGeofences();
-        showToast('Geofence deleted.', 'success');
+        showAlert('Geofence deleted.', 'success');
     } catch (e) {
         console.error(e);
-        showToast('Failed to delete geofence.', 'error');
+        showAlert('Failed to delete geofence.', 'error');
     }
 }
 
@@ -354,7 +354,7 @@ async function submitGeofenceModal() {
 
     const coords = _pendingCoords;
     if (!coords || coords.length === 0) {
-        showToast('No shape coordinates. Please draw again.', 'error');
+        showAlert('No shape coordinates. Please draw again.', 'error');
         closeGeofenceModal();
         return;
     }
@@ -393,10 +393,10 @@ async function submitGeofenceModal() {
         _cancelEdit();
         _pendingCoords = null;
         await reloadGeofences();
-        showToast(id ? 'Geofence updated.' : 'Geofence created.', 'success');
+        showAlert(id ? 'Geofence updated.' : 'Geofence created.', 'success');
     } catch (e) {
         console.error(e);
-        showToast(`Error: ${e.message}`, 'error');
+        showAlert(`Error: ${e.message}`, 'error');
     }
 }
 

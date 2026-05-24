@@ -16,17 +16,19 @@ services:
       VAPID_PUBLIC_KEY: BGQ3prURPQf1PZSGKySh1Mnr1QQW5pVBGZujTApG_zhqKxGnCz30umqOg5Mh_Q6U-5nNbAtO7XVmz0G-3RR_84g
       VAPID_PRIVATE_KEY: Qk1wdfPJGQ4nLYN2SKLNGR5Z3FrD-e_LfByMTUyJ3Hc
       VALHALLA_URL: http://valhalla:8002
+    volumes:
+      - ./routario/uploads:/app/web/uploads
     ports:
       # Web UI + API + WebSocket
       - "8000:8000"
       # GPS Protocol Ports
-      - "5021:5021"     # TK103
-      - "5022:5022"     # GPS103
+      - "5001:5001"     # TK103
+      - "5013:5013"     # H02
+      - "5020:5020"     # Meitrack
       - "5023:5023"     # GT06 / Concox
-      - "5025:5025/udp" # H02
       - "5026:5026"     # Queclink
-      - "5027:5027"     # Teltonika
-      - "5028:5028"     # Totem
+      - "5027:5027"     # Teltonika (TCP)
+      - "5027:5027/udp" # Teltonika (UDP)
       - "5055:5055"     # OsmAnd
       - "5149:5149"     # Flespi
     networks:
@@ -41,7 +43,7 @@ services:
       POSTGRES_USER:     routario
       POSTGRES_PASSWORD: routariopass
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - ./routario/postgres:/var/lib/postgresql/data
     networks:
       - routario-net
     healthcheck:
@@ -54,9 +56,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --save 60 1 --loglevel warning
-    volumes:
-      - redis-data:/data
+    command: redis-server --loglevel warning
     networks:
       - routario-net
     healthcheck:
@@ -77,7 +77,7 @@ services:
     image: ghcr.io/valhalla/valhalla-scripted:latest
     restart: unless-stopped
     volumes:
-      - valhalla-data:/custom_files
+      - ./routario/valhalla:/custom_files
     environment:
       - tile_urls=https://download.geofabrik.de/europe/greece-latest.osm.pbf
       - build_admins=True
@@ -92,11 +92,6 @@ services:
       timeout: 10s
       retries: 5
       start_period: 300s   # allow up to 5 min for tile build on first run
-
-volumes:
-  postgres-data:
-  redis-data:
-  valhalla-data:
 
 networks:
   routario-net:

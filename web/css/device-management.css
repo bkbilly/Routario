@@ -242,11 +242,16 @@ h1 {
     animation: slideInRight 0.3s ease-out;
     min-width: 300px;
 }
-.toast-icon { font-size: 1.25rem; }
+.toast-icon    { font-size: 1.25rem; flex-shrink: 0; }
+.toast-content { flex: 1; min-width: 0; }
+.toast-title   { font-weight: 600; margin-bottom: 0.25rem; font-size: 0.9375rem; }
+.toast-message { font-size: 0.8125rem; color: var(--text-secondary); }
 .toast-success { border-left: 4px solid var(--accent-success); }
 .toast-error   { border-left: 4px solid var(--accent-danger); }
 .toast-warning { border-left: 4px solid var(--accent-warning); }
 .toast-info    { border-left: 4px solid var(--accent-primary); }
+.toast-close { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0.25rem; margin-left: auto; font-size: 1rem; line-height: 1; flex-shrink: 0; opacity: 0.6; transition: opacity 0.15s; }
+.toast-close:hover { opacity: 1; }
 
 /* ── Loading Spinner ───────────────────────────────────────────── */
 

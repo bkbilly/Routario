@@ -114,6 +114,7 @@ function _buildAlertItem(alert, { dimmed = false, clickable = true } = {}) {
         power_cut:      'mdi-power-plug-off',
         sos:            'mdi-alarm-light',
         tampering:      'mdi-alert',
+        notification:   'mdi-message-badge',
     };
     const icon = `<i class="mdi ${ICON_MAP[alert.alert_type] || 'mdi-bell'}"></i>`;
 
@@ -121,6 +122,9 @@ function _buildAlertItem(alert, { dimmed = false, clickable = true } = {}) {
     if (alert.alert_type === 'custom' && alert.alert_metadata?.rule_name) {
         title       = alert.alert_metadata.rule_name;
         messageText = alert.alert_metadata.rule_condition || alert.message;
+    } else if (alert.alert_type === 'notification' && alert.alert_metadata?.title) {
+        title       = alert.alert_metadata.title;
+        messageText = alert.message;
     } else {
         title       = alert.alert_type.replace(/_/g, ' ').toUpperCase();
         messageText = alert.message;
@@ -316,30 +320,3 @@ async function loadMoreAlertHistory() {
 }
 
 // ── Toast / Generic Alert ─────────────────────────────────────────────────────
-function showAlert(data) {
-    const message = typeof data === 'string' ? data : data.message;
-    const title   = data.title || 'Notification';
-    const type    = data.type  || 'info';
-
-    const container = document.getElementById('toastContainer');
-    const toast     = document.createElement('div');
-    toast.className = `toast`;
-
-    const icons = { success: 'mdi-check', error: 'mdi-close', warning: 'mdi-alert', info: 'mdi-information' };
-    toast.innerHTML = `
-        <div class="toast-icon"><i class="mdi ${icons[type] || 'mdi-information'}"></i></div>
-        <div class="toast-content">
-            <div class="toast-title">${title}</div>
-            <div class="toast-message">${message}</div>
-        </div>
-        <button class="toast-close" onclick="this.closest('.toast').remove()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0 0 0 0.5rem;font-size:1rem;line-height:1;flex-shrink:0;"><i class="mdi mdi-close"></i></button>
-    `;
-
-    container.appendChild(toast);
-    const duration = (typeof data === 'object' && data.duration) ? data.duration : 3000;
-    setTimeout(() => {
-        if (!toast.isConnected) return;
-        toast.style.animation = 'slideInRight 0.3s reverse forwards';
-        setTimeout(() => toast.remove(), 300);
-    }, duration);
-}

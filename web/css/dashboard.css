@@ -1007,6 +1007,24 @@ body::before {
     color: var(--text-secondary);
 }
 
+.toast-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem;
+    margin-left: auto;
+    font-size: 1rem;
+    line-height: 1;
+    flex-shrink: 0;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+}
+
+.toast-close:hover {
+    opacity: 1;
+}
+
 @keyframes slideInRight {
     from { transform: translateX(100%); opacity: 0; }
     to { transform: translateX(0); opacity: 1; }

@@ -380,7 +380,7 @@ async function generateShareLink() {
 
     let minutes = activeBtn ? parseInt(activeBtn.dataset.minutes) : parseInt(customVal);
     if (!minutes || minutes < 1) {
-        showToast('Please select or enter a duration.', 'warning');
+        showAlert('Please select or enter a duration.', 'warning');
         return;
     }
 
@@ -399,11 +399,11 @@ async function generateShareLink() {
 
         // Auto-copy the link
         await navigator.clipboard.writeText(fullUrl);
-        showToast('Link copied to clipboard!', 'success');
+        showAlert('Link copied to clipboard!', 'success');
 
         loadActiveShareLinks(deviceId);
     } catch (e) {
-        showToast('Failed to generate share link.', 'error');
+        showAlert('Failed to generate share link.', 'error');
     }
 }
 
@@ -413,7 +413,7 @@ function openShareInMaps() {
     const deviceId = parseInt(modal.dataset.deviceId);
     const device = devices.find(d => d.id === deviceId);
     if (!device?.last_latitude || !device?.last_longitude) {
-        showToast('No location available for this device.', 'warning');
+        showAlert('No location available for this device.', 'warning');
         return;
     }
     const { last_latitude: lat, last_longitude: lng, name } = device;
@@ -429,11 +429,11 @@ function copyShareCoords() {
     const deviceId = parseInt(modal.dataset.deviceId);
     const device = devices.find(d => d.id === deviceId);
     if (!device?.last_latitude) {
-        showToast('No location available.', 'warning');
+        showAlert('No location available.', 'warning');
         return;
     }
     const coords = `${device.last_latitude.toFixed(6)}, ${device.last_longitude.toFixed(6)}`;
-    navigator.clipboard.writeText(coords).then(() => showToast(`Copied: ${coords}`, 'success'));
+    navigator.clipboard.writeText(coords).then(() => showAlert(`Copied: ${coords}`, 'success'));
 }
 
 // §3 active links
@@ -512,10 +512,10 @@ async function renewShareLink(token) {
         });
         if (!res.ok) throw new Error();
         const label = minutes >= 60 ? `${Math.round(minutes / 60)}h` : `${minutes}m`;
-        showToast(`Link renewed for ${label}`, 'success');
+        showAlert(`Link renewed for ${label}`, 'success');
         loadActiveShareLinks(deviceId);
     } catch (e) {
-        showToast('Failed to renew link.', 'error');
+        showAlert('Failed to renew link.', 'error');
     }
 }
 
@@ -530,8 +530,8 @@ async function revokeShareLink(token) {
         if (!document.getElementById('shareActiveLinksList').children.length) {
             document.getElementById('shareActiveLinks').style.display = 'none';
         }
-        showToast('Link revoked.', 'success');
+        showAlert('Link revoked.', 'success');
     } catch (e) {
-        showToast('Failed to revoke link.', 'error');
+        showAlert('Failed to revoke link.', 'error');
     }
 }

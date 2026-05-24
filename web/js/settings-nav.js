@@ -3,6 +3,7 @@
  * Shared settings gear-menu for device-management, company-management, and user-settings.
  * Matches the dashboard dropdown style exactly.
  */
+
 (function () {
     const path        = window.location.pathname;
     const isDevices   = path.includes('device-management');

@@ -1,9 +1,7 @@
 /**
  * dashboard-auth.js
- * Authentication and user session functions.
+ * Dashboard-specific auth: overrides checkLogin to also set currentUser.
  */
-
-// Login Check Function
 function checkLogin() {
     const token = localStorage.getItem('auth_token');
     const userId = localStorage.getItem('user_id');
@@ -15,16 +13,4 @@ function checkLogin() {
     }
 }
 
-// Logout Function
-function handleLogout() {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('user_id');
-    localStorage.removeItem('username');
-    localStorage.removeItem('is_admin');
-    localStorage.removeItem('units');
-    localStorage.removeItem('impersonating_admin_token');
-    localStorage.removeItem('impersonating_admin_user_id');
-    localStorage.removeItem('impersonating_admin_username');
-    window.location.href = 'login.html';
-}
 

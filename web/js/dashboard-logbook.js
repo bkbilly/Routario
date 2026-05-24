@@ -119,13 +119,13 @@ function _renderLogbookTable() {
                 const ext  = dot !== -1 ? raw.slice(dot) : '';
                 const base = dot !== -1 ? raw.slice(0, dot) : raw;
                 const label = base.length > 16 ? base.slice(0, 5) + '…' + ext : raw;
-                return `<a href="${d}" target="_blank" class="lb-doc-badge" title="${_escHtml(raw)}"><i class="mdi mdi-paperclip"></i> ${_escHtml(label)}</a>`;
+                return `<a href="${d}" target="_blank" class="lb-doc-badge" title="${_esc(raw)}"><i class="mdi mdi-paperclip"></i> ${_esc(label)}</a>`;
               }).join('')
             : '—';
 
         return `<tr>
             <td style="white-space:nowrap;">${date}</td>
-            <td>${_escHtml(e.description)}</td>
+            <td>${_esc(e.description)}</td>
             <td style="font-family:var(--font-mono);white-space:nowrap;">${odo}</td>
             <td style="white-space:nowrap;">${price}</td>
             <td class="lb-docs-cell">${docHtml}</td>
@@ -234,9 +234,3 @@ async function deleteLogbookEntry(entryId) {
     }
 }
 
-// ── Utils ─────────────────────────────────────────────────────────────────────
-function _escHtml(str) {
-    return String(str)
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}

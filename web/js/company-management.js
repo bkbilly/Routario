@@ -15,18 +15,6 @@ let companyUserIds         = new Set();
 let companyDeviceIds       = new Set();
 let companyAdminUserIds    = new Set();
 
-function checkLogin() {
-    const token   = localStorage.getItem('auth_token');
-    const isAdmin = localStorage.getItem('is_admin') === 'true';
-    if (!token || !isAdmin) window.location.href = 'login.html';
-}
-
-function _esc(str) {
-    return String(str ?? '')
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
 function formatDate(str) {
     if (!str) return '—';
     if (!str.includes('Z') && !str.includes('+')) str += 'Z';
@@ -35,6 +23,7 @@ function formatDate(str) {
 
 document.addEventListener('DOMContentLoaded', async () => {
     checkLogin();
+    if (localStorage.getItem('is_admin') !== 'true') window.location.href = 'login.html';
     await Promise.all([loadCompanies(), loadAllUsers(), loadAllDevices()]);
     document.addEventListener('keydown', e => {
         if (e.key === 'Escape') closeCompanyModal();
@@ -398,14 +387,3 @@ async function toggleDeviceMembership(deviceId, add) {
 
 // ── Toast ─────────────────────────────────────────────────────────
 
-function showAlert(message, type) {
-    const icons = { success: 'mdi-check', error: 'mdi-close', warning: 'mdi-alert', info: 'mdi-information' };
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type || 'info'}`;
-    toast.innerHTML = `<span class="toast-icon"><i class="mdi ${icons[type] || 'mdi-information'}"></i></span><span>${message}</span>`;
-    document.getElementById('toastContainer').appendChild(toast);
-    setTimeout(() => {
-        toast.style.animation = 'slideInRight 0.3s reverse forwards';
-        setTimeout(() => toast.remove(), 300);
-    }, 3500);
-}

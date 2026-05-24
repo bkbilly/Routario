@@ -193,6 +193,9 @@ class WebSocketManager:
                 "created_at":     alert.created_at.isoformat(),
             },
         }
+        if alert.device_id is None:
+            await self._send_to_user(alert.user_id, json.dumps(message))
+            return
         if redis_pubsub.available:
             await redis_pubsub.publish(f"device:{alert.device_id}", message)
         else:
