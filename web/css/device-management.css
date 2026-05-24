@@ -1002,6 +1002,23 @@ h1 {
 .command-status.failed,
 .command-status.timeout { background: rgba(239, 68, 68, 0.15);  color: var(--accent-danger); }
 
+.btn-cancel-command {
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    font-size: 0.8rem;
+    line-height: 1;
+    transition: all 0.15s;
+}
+.btn-cancel-command:hover {
+    border-color: var(--accent-danger);
+    color: var(--accent-danger);
+    background: rgba(239, 68, 68, 0.1);
+}
+
 .command-payload {
     font-family: var(--font-mono);
     font-size: 0.8125rem;
