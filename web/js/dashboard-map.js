@@ -117,7 +117,7 @@ function initMap() {
     map.on('popupclose', () => { popupWasOpen = true; setTimeout(() => { popupWasOpen = false; }, 0); });
     map.on('click', () => {
         closeAllMapFlyouts();
-        if (window.innerWidth <= 1024) {
+        if (window.innerWidth <= 630) {
             if (popupWasOpen) return;
             const dashboard = document.querySelector('.dashboard');
             if (!dashboard.classList.contains('sidebar-hidden')) {
