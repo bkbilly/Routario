@@ -189,7 +189,7 @@ class AlertHistory(Base):
 
     id:               Mapped[int]           = mapped_column(Integer, primary_key=True)
     user_id:          Mapped[int]           = mapped_column(Integer, ForeignKey('users.id',   ondelete='CASCADE'), index=True)
-    device_id:        Mapped[int]           = mapped_column(Integer, ForeignKey('devices.id', ondelete='CASCADE'), index=True)
+    device_id:        Mapped[Optional[int]]  = mapped_column(Integer, ForeignKey('devices.id', ondelete='CASCADE'), nullable=True, index=True)
     alert_type:       Mapped[str]           = mapped_column(String(50), nullable=False)
     severity:         Mapped[str]           = mapped_column(String(20), default='info')
     message:          Mapped[str]           = mapped_column(Text, nullable=False)

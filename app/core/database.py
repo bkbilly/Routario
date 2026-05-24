@@ -168,6 +168,7 @@ class DatabaseService:
         ]
         if self._is_postgres:
             migrations.append("ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)")
+            migrations.append("ALTER TABLE alert_history ALTER COLUMN device_id DROP NOT NULL")
 
         for stmt in migrations:
             try:
@@ -175,6 +176,45 @@ class DatabaseService:
                     await conn.execute(text(stmt))
             except Exception:
                 pass  # column/change already applied
+
+        # SQLite does not support ALTER COLUMN, so recreate alert_history to
+        # make device_id nullable (needed for admin notifications without a device).
+        if self._is_sqlite:
+            try:
+                async with self.engine.begin() as conn:
+                    # Check if device_id is still NOT NULL by attempting a dry-run insert
+                    result = await conn.execute(text(
+                        "SELECT COUNT(*) FROM pragma_table_info('alert_history') "
+                        "WHERE name='device_id' AND \"notnull\"=1"
+                    ))
+                    if result.scalar():
+                        await conn.execute(text("""
+                            CREATE TABLE alert_history_new (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                                device_id INTEGER REFERENCES devices(id) ON DELETE CASCADE,
+                                alert_type VARCHAR(50) NOT NULL,
+                                severity VARCHAR(20) DEFAULT 'info',
+                                message TEXT NOT NULL,
+                                latitude FLOAT,
+                                longitude FLOAT,
+                                address VARCHAR(500),
+                                alert_metadata JSON DEFAULT '{}',
+                                is_read BOOLEAN DEFAULT 0,
+                                read_at DATETIME,
+                                is_acknowledged BOOLEAN DEFAULT 0,
+                                created_at DATETIME
+                            )
+                        """))
+                        await conn.execute(text(
+                            "INSERT INTO alert_history_new SELECT * FROM alert_history"
+                        ))
+                        await conn.execute(text("DROP TABLE alert_history"))
+                        await conn.execute(text(
+                            "ALTER TABLE alert_history_new RENAME TO alert_history"
+                        ))
+            except Exception:
+                pass
 
         # Clean up orphaned rows from devices that were deleted while
         # SQLite foreign-key enforcement was off (pre-fix databases).

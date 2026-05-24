@@ -3,15 +3,6 @@
  * Shared utility and formatting helpers.
  */
 
-// Helper to format dates to local time for display
-function formatDateToLocal(dateString) {
-    if (!dateString) return 'N/A';
-    if (dateString.indexOf('Z') === -1 && dateString.indexOf('+') === -1) {
-        dateString += 'Z';
-    }
-    return new Date(dateString).toLocaleString();
-}
-
 // Helper to format duration in minutes to "Xh Ym" format
 function formatDuration(minutes) {
     if (!minutes || minutes <= 0) return '0 min';
@@ -61,25 +52,3 @@ function formatDistance(meters) {
     return `${parseFloat(meters).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
 }
 
-// ── Toast notifications ───────────────────────────────────────────────────────
-
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toastContainer');
-    if (!container) return;
-
-    const icons = { success: 'mdi-check', error: 'mdi-close', warning: 'mdi-alert', info: 'mdi-information' };
-
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.innerHTML = `
-        <span class="toast-icon"><i class="mdi ${icons[type] || 'mdi-information'}"></i></span>
-        <span>${message}</span>
-    `;
-
-    container.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.animation = 'slideInRight 0.3s reverse forwards';
-        setTimeout(() => toast.remove(), 300);
-    }, 3500);
-}

@@ -44,3 +44,70 @@ async function apiFetch(url, options = {}) {
 
     return response;
 }
+
+/**
+ * Show a toast notification.
+ * Accepts either showAlert(message, type, duration)
+ * or showAlert({ title, message, type, duration }).
+ */
+function showAlert(messageOrData, type = 'info', duration = 3000) {
+    let title = null, message, resolvedType = type, resolvedDuration = duration;
+
+    if (messageOrData && typeof messageOrData === 'object') {
+        message         = messageOrData.message || '';
+        title           = messageOrData.title   || null;
+        resolvedType    = messageOrData.type     || type;
+        resolvedDuration = messageOrData.duration || duration;
+    } else if (Array.isArray(messageOrData)) {
+        message = messageOrData.map(e => e.msg || JSON.stringify(e)).join(', ');
+    } else {
+        message = String(messageOrData ?? '');
+    }
+
+    const icons = { success: 'mdi-check-circle', error: 'mdi-close-circle', warning: 'mdi-alert', info: 'mdi-information' };
+    const icon  = icons[resolvedType] || 'mdi-information';
+
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${resolvedType}`;
+    toast.innerHTML = `
+        <div class="toast-icon"><i class="mdi ${icon}"></i></div>
+        <div class="toast-content">
+            ${title ? `<div class="toast-title">${title}</div>` : ''}
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="this.closest('.toast').remove()" aria-label="Dismiss"><i class="mdi mdi-close"></i></button>
+    `;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        if (!toast.isConnected) return;
+        toast.style.animation = 'slideInRight 0.3s reverse forwards';
+        setTimeout(() => toast.remove(), 300);
+    }, resolvedDuration);
+}
+
+function handleLogout() {
+    ['auth_token','user_id','username','is_admin','units','is_company_admin','company_id',
+     'impersonating_admin_token','impersonating_admin_user_id','impersonating_admin_username']
+        .forEach(k => localStorage.removeItem(k));
+    window.location.href = 'login.html';
+}
+
+function checkLogin() {
+    if (!localStorage.getItem('auth_token')) window.location.href = 'login.html';
+}
+
+function _esc(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function formatDateToLocal(str) {
+    if (!str) return 'N/A';
+    if (!str.includes('Z') && !str.includes('+')) str += 'Z';
+    return new Date(str).toLocaleString();
+}

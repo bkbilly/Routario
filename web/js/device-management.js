@@ -47,23 +47,8 @@ const isCompanyAdmin   = localStorage.getItem('is_company_admin') === 'true';
 const hasAdminAccess   = isAdmin || isCompanyAdmin;
 
 // ── Helpers ───────────────────────────────────────────────────────
-function checkLogin() {
-    if (!localStorage.getItem('auth_token')) window.location.href = 'login.html';
-}
 function nextUid() { return ++uidCounter; }
 function pad(n)    { return String(n).padStart(2, '0'); }
-
-function formatDateToLocal(str) {
-    if (!str) return 'Never';
-    if (!str.includes('Z') && !str.includes('+')) str += 'Z';
-    return new Date(str).toLocaleString();
-}
-
-function _esc(str) {
-    return String(str ?? '')
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
 
 function protoBadgeHtml(protocol) {
     const hue = [...protocol].reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
@@ -1403,23 +1388,3 @@ async function clearAllAlerts() {
     showAlert('All alerts cleared', 'success');
 }
 
-function showAlert(message, type) {
-    if (typeof message === 'object' && message !== null) {
-        type    = message.type;
-        message = message.message;
-    }
-    if (Array.isArray(message)) {
-        message = message.map(e => e.msg || JSON.stringify(e)).join(', ');
-    } else if (typeof message === 'object' && message !== null) {
-        message = JSON.stringify(message);
-    }
-    const icons = { success: 'mdi-check', error: 'mdi-close', warning: 'mdi-alert', info: 'mdi-information' };
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type || 'info'}`;
-    toast.innerHTML = `<span class="toast-icon"><i class="mdi ${icons[type] || 'mdi-information'}"></i></span><span>${message}</span>`;
-    document.getElementById('toastContainer').appendChild(toast);
-    setTimeout(() => {
-        toast.style.animation = 'slideInRight 0.3s reverse forwards';
-        setTimeout(() => toast.remove(), 300);
-    }, 3500);
-}

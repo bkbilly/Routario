@@ -23,6 +23,7 @@ class AlertType(str, Enum):
     HARSH_ACCEL = "harsh_accel"
     UNAUTHORIZED_DRIVER = "unauthorized_driver"
     CUSTOM = "custom"
+    NOTIFICATION = "notification"
 
 
 class Severity(str, Enum):
@@ -361,7 +362,7 @@ class GeofenceResponse(BaseModel):
 
 class AlertCreate(BaseModel):
     user_id: int
-    device_id: int
+    device_id: Optional[int] = None
     alert_type: str
     severity: str = "info"
     message: str
@@ -376,7 +377,7 @@ class AlertResponse(BaseModel):
     
     id: int
     user_id: int
-    device_id: int
+    device_id: Optional[int] = None
     alert_type: str
     severity: str
     message: str

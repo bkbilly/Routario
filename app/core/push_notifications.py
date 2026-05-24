@@ -46,6 +46,44 @@ class PushNotificationService:
     def _enabled(self) -> bool:
         return bool(self._private_key and self._public_key)
 
+    async def notify_user_direct(
+        self,
+        db_service,
+        user_id: int,
+        title: str,
+        message: str,
+    ) -> bool:
+        if not self._enabled:
+            return False
+        subscription = await self._get_subscription(db_service, user_id)
+        if not subscription:
+            return False
+        payload = json.dumps({
+            "title":    title,
+            "body":     message,
+            "severity": "info",
+            "tag":      "admin-notification",
+            "icon":     "/icons/icon-192.png",
+            "badge":    "/icons/icon-192.png",
+            "data":     {"url": "/gps-dashboard.html"},
+        })
+        try:
+            from pywebpush import webpush
+            webpush(
+                subscription_info=subscription,
+                data=payload,
+                vapid_private_key=self._private_key,
+                vapid_claims={"sub": self._mailto},
+            )
+            return True
+        except Exception as ex:
+            resp = getattr(ex, "response", None)
+            if resp and resp.status_code in (404, 410):
+                logger.info("[Push] Subscription expired (%s)", resp.status_code)
+            else:
+                logger.error("[Push] Send failed: %s", ex)
+            return False
+
     async def notify_user(
         self,
         db_service,

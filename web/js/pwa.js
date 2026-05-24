@@ -356,29 +356,5 @@ function hidePWABanner() {
 // ── Toast helper ──────────────────────────────────────────────────────────────
 
 function showPWAToast(message, type = 'info') {
-  // Use the dashboard's showAlert if available
-  if (typeof showAlert === 'function') {
-    showAlert({ title: '', message, type });
-    return;
-  }
-  // Or the shared showToast
-  if (typeof showToast === 'function') {
-    showToast(message, type);
-    return;
-  }
-  // Fallback: plain toast
-  const container = document.getElementById('toastContainer');
-  if (!container) return;
-  const icons = { success: 'mdi-check', error: 'mdi-close', warning: 'mdi-alert', info: 'mdi-information' };
-  const toast = document.createElement('div');
-  toast.className = 'toast';
-  toast.innerHTML = `
-    <div class="toast-icon"><i class="mdi ${icons[type] || 'mdi-information'}"></i></div>
-    <div class="toast-message">${message}</div>
-  `;
-  container.appendChild(toast);
-  setTimeout(() => {
-    toast.style.animation = 'slideIn 0.3s reverse forwards';
-    setTimeout(() => toast.remove(), 300);
-  }, 3500);
+  showAlert(message, type);
 }
