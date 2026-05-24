@@ -271,13 +271,13 @@ function renderUserTab() {
         const inCompany  = companyUserIds.has(u.id);
         const isCoAdmin  = companyAdminUserIds.has(u.id);
         const div = document.createElement('div');
-        div.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.8rem;background:var(--bg-tertiary);border-radius:8px;gap:0.75rem;';
+        div.className = 'co-user-row';
         div.innerHTML = `
-            <div style="flex:1;min-width:0;">
-                <div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_esc(u.username)}</div>
-                <div style="font-size:0.8rem;color:var(--text-muted);">${_esc(u.email || '')}</div>
+            <div class="co-user-info">
+                <div class="co-user-name">${_esc(u.username)}</div>
+                <div class="co-user-email">${_esc(u.email || '')}</div>
             </div>
-            <div style="display:flex;align-items:center;gap:0.6rem;flex-shrink:0;">
+            <div class="co-user-actions">
                 <button type="button"
                     class="co-admin-pill${isCoAdmin && inCompany ? ' active' : ''}"
                     ${!inCompany ? 'disabled' : ''}

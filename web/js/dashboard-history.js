@@ -988,7 +988,7 @@ window.addEventListener('resize', () => {
 function applyHistoryControlsPadding() {
     const footer = document.getElementById('historyControls');
     const details = document.getElementById('sidebarHistoryDetails');
-    if (!footer || !details || window.innerWidth > 1024) return;
+    if (!footer || !details) return;
     const height = footer.offsetHeight;
     const bottomOffset = parseInt(getComputedStyle(footer).bottom) || 16;
     details.style.paddingBottom = (height + bottomOffset + 8) + 'px';

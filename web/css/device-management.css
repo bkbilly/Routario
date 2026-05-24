@@ -164,6 +164,55 @@ h1 {
     margin: 0 1px;
 }
 
+/* ── Company user list row ─────────────────────────────────────── */
+
+.co-user-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.8rem;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    gap: 0.75rem;
+}
+
+.co-user-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.co-user-name {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.co-user-email {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.co-user-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+    .co-user-row {
+        flex-wrap: wrap;
+    }
+    .co-user-info {
+        width: 100%;
+    }
+    .co-user-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+
 /* ── Co-Admin Pill Toggle ──────────────────────────────────────── */
 
 .co-admin-pill {
@@ -1078,9 +1127,54 @@ h1 {
     }
 }
 
-/* ── Responsive Modal Footer ──────────────────────────────────── */
+/* ── Responsive Modal ─────────────────────────────────────────── */
+
+@media (max-width: 550px) {
+    .command-tab {
+        padding: 0.75rem 1.25rem;
+        font-size: 0.875rem;
+    }
+    .command-subtab {
+        padding: 0.5rem 0.875rem;
+        font-size: 0.8rem;
+    }
+    .command-tab-content .form-actions .btn {
+        padding: 0.6rem 1rem;
+        font-size: 0.8rem;
+    }
+}
 
 @media (max-width: 480px) {
+    .command-tab {
+        padding: 0.6rem 0.875rem;
+        font-size: 0.8rem;
+    }
+    .command-subtab {
+        padding: 0.45rem 0.75rem;
+        font-size: 0.775rem;
+    }
+    .command-tab-content .form-actions .btn {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.775rem;
+    }
+}
+
+@media (max-width: 550px) {
+    .modal-header {
+        padding: 1.1rem 1.25rem 0.875rem;
+    }
+    .modal-scrollable {
+        padding: 1.25rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .modal-header {
+        padding: 0.875rem 1rem 0.75rem;
+    }
+    .modal-scrollable {
+        padding: 1rem;
+    }
     .modal-footer {
         padding: 0.875rem 1rem;
         flex-direction: column;
