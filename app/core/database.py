@@ -934,6 +934,21 @@ class DatabaseService:
             )
             return True
 
+    async def cancel_command(self, command_id: int, device_id: int) -> bool:
+        async with self.get_session() as session:
+            result = await session.execute(
+                update(CommandQueue)
+                .where(
+                    and_(
+                        CommandQueue.id == command_id,
+                        CommandQueue.device_id == device_id,
+                        CommandQueue.status == "pending",
+                    )
+                )
+                .values(status="failed", response="Cancelled by user")
+            )
+            return result.rowcount > 0
+
     async def get_device_commands(
         self, device_id: int, status: Optional[str] = None
     ) -> List[CommandQueue]:

@@ -125,6 +125,20 @@ async def preview_command_for_protocol(
         raise HTTPException(status_code=400, detail=f"Command encoding failed: {str(e)}")
 
 
+@router.delete("/{device_id}/commands/{command_id}")
+async def cancel_command(
+    device_id: int,
+    command_id: int,
+    caller: User = Depends(verify_device_access),
+):
+    """Cancel a pending command."""
+    db = get_db()
+    cancelled = await db.cancel_command(command_id, device_id)
+    if not cancelled:
+        raise HTTPException(status_code=404, detail="Command not found or already sent")
+    return {"ok": True}
+
+
 @router.get("/{device_id}/commands")
 async def get_device_commands(
     device_id: int,

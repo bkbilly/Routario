@@ -412,6 +412,10 @@ function renderCommandHistory(commands) {
             response = response.substring(0, 50) + '...';
         }
         
+        const cancelBtn = cmd.status === 'pending'
+            ? `<button type="button" class="btn-cancel-command" onclick="cancelCommand(${cmd.id})" title="Cancel command"><i class="mdi mdi-close"></i></button>`
+            : '';
+
         return `
             <tr>
                 <td style="font-family: var(--font-mono); font-size: 0.8125rem;">${createdTime}</td>
@@ -419,8 +423,23 @@ function renderCommandHistory(commands) {
                 <td class="command-payload" title="${cmd.payload || ''}">${displayPayload}</td>
                 <td><span class="command-status ${statusClass}">${cmd.status}</span></td>
                 <td style="font-family: var(--font-mono); font-size: 0.8125rem;" title="${cmd.response || ''}">${response}</td>
+                <td>${cancelBtn}</td>
             </tr>
         `;
     }).join('');
+}
+
+async function cancelCommand(commandId) {
+    try {
+        const res = await apiFetch(`${API_BASE}/devices/${currentCommandDeviceId}/commands/${commandId}`, { method: 'DELETE' });
+        if (res.ok) {
+            loadCommandHistory();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showAlert(err.detail || 'Failed to cancel command.', 'error');
+        }
+    } catch {
+        showAlert('Failed to cancel command.', 'error');
+    }
 }
 
