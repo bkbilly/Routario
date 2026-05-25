@@ -4,7 +4,7 @@
  * Place this file at: /web/sw.js  (root of your web directory)
  */
 
-const CACHE_NAME = 'gps-dashboard-v68';
+const CACHE_NAME = 'gps-dashboard-v69';
 const STATIC_ASSETS = [
   '/gps-dashboard.html',
   '/device-management.html',
@@ -95,7 +95,7 @@ self.addEventListener('push', (event) => {
     title: 'GPS Alert',
     body: 'A new alert has been triggered.',
     icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    badge: '/icons/badge-96.png',
     tag: 'gps-alert',
     data: {}
   };
@@ -112,7 +112,7 @@ self.addEventListener('push', (event) => {
   const options = {
     body: data.body,
     icon: data.icon || '/icons/icon-192.png',
-    badge: data.badge || '/icons/icon-192.png',
+    badge: data.badge || '/icons/badge-96.png',
     tag: data.tag || 'gps-alert',
     data: data.data || {},
     requireInteraction: data.severity === 'critical' || data.severity === 'high',
