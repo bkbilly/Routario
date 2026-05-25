@@ -804,7 +804,7 @@ async function confirmRestore() {
             throw new Error(err.detail || 'Restore failed');
         }
         const data = await res.json();
-        showAlert(`Restore complete. Backup from ${data.created_at}. Please restart the server.`, 'success');
+        showAlert(`Restore complete. Backup from ${data.created_at}. Please restart the server.`, 'success', 8000);
 
         // Reset UI
         _restoreFile = null;
