@@ -179,11 +179,12 @@ class WebSocketManager:
         else:
             await self._broadcast_direct(device.id, message)
 
-    async def broadcast_alert(self, alert: AlertHistory):
+    async def broadcast_alert(self, alert: AlertHistory, notify_user_ids=None):
         message = {
-            "type":      WSMessageType.ALERT.value,
-            "device_id": alert.device_id,
-            "timestamp": alert.created_at.isoformat(),
+            "type":           WSMessageType.ALERT.value,
+            "device_id":      alert.device_id,
+            "timestamp":      alert.created_at.isoformat(),
+            "notify_user_ids": notify_user_ids,
             "data": {
                 "id":             alert.id,
                 "type":           alert.alert_type,
@@ -195,6 +196,12 @@ class WebSocketManager:
         }
         if alert.device_id is None:
             await self._send_to_user(alert.user_id, json.dumps(message))
+            return
+        if notify_user_ids is not None:
+            # Send only to the specified users (direct, no broadcast)
+            raw = json.dumps(message)
+            for uid in notify_user_ids:
+                await self._send_to_user(uid, raw)
             return
         if redis_pubsub.available:
             await redis_pubsub.publish(f"device:{alert.device_id}", message)
@@ -305,9 +312,9 @@ async def ack_callback(imei: str, response_text: str = "") -> None:
         logger.error("ACK callback error: %s", exc, exc_info=True)
 
 
-async def handle_new_alert(alert: AlertHistory):
+async def handle_new_alert(alert: AlertHistory, notify_user_ids=None):
     try:
-        await ws_manager.broadcast_alert(alert)
+        await ws_manager.broadcast_alert(alert, notify_user_ids=notify_user_ids)
     except Exception as exc:
         logger.error("Failed to broadcast alert: %s", exc)
 
@@ -494,6 +501,10 @@ async def _websocket_redis_loop(websocket: WebSocket, user_id: int):
                 async for message in pubsub.listen():
                     if message["type"] == "message":
                         try:
+                            data = json.loads(message["data"])
+                            nids = data.get("notify_user_ids")
+                            if nids is not None and user_id not in nids:
+                                continue
                             await websocket.send_text(message["data"])
                         except Exception:
                             break

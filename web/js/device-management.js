@@ -626,6 +626,7 @@ function addSelectedAlert() {
     if (val.startsWith('__native__:')) {
         try {
             const eventDef = JSON.parse(val.slice('__native__:'.length));
+            const _curUid = parseInt(localStorage.getItem('user_id'), 10);
             alertRows.push({
                 uid:      nextUid(),
                 alertKey: 'device_event',
@@ -639,6 +640,7 @@ function addSelectedAlert() {
                 },
                 channels: [],
                 schedule: null,
+                notify_user_ids: [_curUid],
             });
         } catch(e) {
             console.error('Failed to parse native event def', e);
@@ -652,7 +654,8 @@ function addSelectedAlert() {
     if (!def) return;
     const params = {};
     (def.fields || []).forEach(f => { params[f.key] = f.default; });
-    alertRows.push({ uid: nextUid(), alertKey: val, params, channels: [], schedule: null });
+    const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
+    alertRows.push({ uid: nextUid(), alertKey: val, params, channels: [], schedule: null, notify_user_ids: [currentUserId] });
     renderAlertsTable();
     sel.value = '';
 }
@@ -672,7 +675,8 @@ function addCustomRule() {
         }, 1500);
         return;
     }
-    alertRows.push({ uid: nextUid(), alertKey: '__custom__', name, rule, channels: [], schedule: null, duration: null });
+    const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
+    alertRows.push({ uid: nextUid(), alertKey: '__custom__', name, rule, channels: [], schedule: null, duration: null, notify_user_ids: [currentUserId] });
     nameEl.value = '';
     ruleEl.value = '';
     // Reset dropdown and hide custom fields
@@ -716,11 +720,28 @@ function renderAlertsTable() {
     const tbody    = document.getElementById('alertsTableBody');
     const emptyRow = document.getElementById('alertsEmptyRow');
     if (!tbody) return;
+    const notifyHdr = document.getElementById('alertsNotifyUsersHeader');
+    if (notifyHdr) notifyHdr.style.display = hasAdminAccess ? '' : 'none';
     tbody.querySelectorAll('tr.alert-data-row').forEach(r => r.remove());
     if (!alertRows.length) { if (emptyRow) emptyRow.style.display = ''; return; }
+
+    const _uid = parseInt(localStorage.getItem('user_id'), 10);
+    let visibleRows;
+    if (isAdmin) {
+        visibleRows = alertRows;
+    } else if (isCompanyAdmin) {
+        const companyUserIds = new Set(allUsers.map(u => u.id));
+        visibleRows = alertRows.filter(r =>
+            !r.notify_user_ids || r.notify_user_ids.some(id => companyUserIds.has(id))
+        );
+    } else {
+        visibleRows = alertRows.filter(r => !r.notify_user_ids || r.notify_user_ids.includes(_uid));
+    }
+
+    if (!visibleRows.length) { if (emptyRow) emptyRow.style.display = ''; return; }
     if (emptyRow) emptyRow.style.display = 'none';
 
-    alertRows.forEach((row, idx) => {
+    visibleRows.forEach((row, idx) => {
         const isCustom = row.alertKey === '__custom__';
         const def      = isCustom ? null : ALERT_TYPES[row.alertKey];
 
@@ -800,6 +821,22 @@ function renderAlertsTable() {
                <small>${pad(sched.hourStart ?? 0)}:00–${pad(sched.hourEnd ?? 23)}:59</small></span>`
             : `<span style="color:var(--text-muted);font-size:0.8rem;">Always</span>`;
 
+        let notifyUsersCell = '';
+        if (hasAdminAccess) {
+            const ids = row.notify_user_ids;
+            if (!ids || ids.length === 0) {
+                notifyUsersCell = `<td><span style="color:var(--text-muted);font-size:0.8rem;">${!ids ? 'All' : 'None'}</span></td>`;
+            } else {
+                const names = ids.map(id => {
+                    const u = allUsers.find(u => u.id === id);
+                    return u ? _esc(u.username) : `#${id}`;
+                });
+                notifyUsersCell = `<td><div style="display:flex;flex-wrap:wrap;gap:0.3rem;">${
+                    names.map(n => `<span class="channel-pill active" style="pointer-events:none;font-size:0.75rem;">${n}</span>`).join('')
+                }</div></td>`;
+            }
+        }
+
         const tr       = document.createElement('tr');
         tr.className   = 'alert-data-row';
         tr.dataset.uid = row.uid;
@@ -810,6 +847,7 @@ function renderAlertsTable() {
             <td><span class="alert-type-label ${isCustom ? 'custom' : 'system'}">${label}</span></td>
             <td><div style="display:flex;flex-wrap:wrap;gap:0.3rem;">${thresh}</div></td>
             <td><div style="display:flex;flex-wrap:wrap;gap:0.3rem;">${chHtml}</div></td>
+            ${notifyUsersCell}
             <td>${schedHtml}</td>
             <td style="text-align:center;white-space:nowrap;">
                 <button type="button" class="btn btn-secondary tbl-btn" onclick="openAlertEditor(${row.uid})"><i class="mdi mdi-pencil"></i></button>
@@ -993,31 +1031,87 @@ async function openAlertEditor(uid) {
             </label>`).join('')
         : '<span style="color:var(--text-muted);font-size:0.875rem;">No notification channels configured.</span>';
 
+    let notifyUsersHtml = '';
+    if (hasAdminAccess && editingDeviceId) {
+        try {
+            const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
+            let deviceUsers = [];
+            let allFetched = [];
+
+            if (isAdmin) {
+                const device = devices.find(d => d.id === editingDeviceId);
+                const res = await apiFetch(`${API_BASE}/users`);
+                allFetched = res.ok ? await res.json() : [];
+                if (device?.company_id) {
+                    deviceUsers = allFetched.filter(u => u.company_id === device.company_id && !u.is_admin);
+                }
+            } else {
+                const res = await apiFetch(`${API_BASE}/devices/${editingDeviceId}/users`);
+                deviceUsers = res.ok ? await res.json() : [];
+                deviceUsers = deviceUsers.filter(u => !u.is_admin);
+            }
+
+            // Always include the current user
+            if (!deviceUsers.some(u => u.id === currentUserId)) {
+                deviceUsers.unshift({ id: currentUserId, username: localStorage.getItem('username') || 'me' });
+            }
+
+            // Always include users already in notify_user_ids (e.g. creator outside the company filter)
+            const existingIds = row.notify_user_ids ?? [];
+            for (const uid of existingIds) {
+                if (!deviceUsers.some(u => u.id === uid)) {
+                    const known = allFetched.find(u => u.id === uid);
+                    if (known) deviceUsers.push(known);
+                }
+            }
+
+            // Default selection: existing notify_user_ids, no fallback to current user
+            const selectedIds = new Set(existingIds);
+            const pills = deviceUsers.map(u =>
+                `<label class="channel-pill${selectedIds.has(u.id) ? ' active' : ''}">
+                    <input type="checkbox" class="editor-notify-user-cb" value="${u.id}"${selectedIds.has(u.id) ? ' checked' : ''}>
+                    ${_esc(u.username)}${u.id === currentUserId ? ' (you)' : ''}
+                </label>`
+            ).join('');
+            notifyUsersHtml = `<div class="form-group">
+                <label class="form-label">Notify Users</label>
+                <div style="display:flex;flex-wrap:wrap;gap:0.4rem;">${pills}</div>
+            </div>`;
+        } catch (e) { console.error('Failed to load device users:', e); }
+    }
+
     document.getElementById('alertEditorBody').innerHTML = `
-        <div style="display:flex;flex-direction:column;gap:0.25rem;">
-            ${def?.description ? `<p style="color:var(--text-muted);font-size:0.85rem;margin:0 0 1rem;">${_esc(def.description)}</p>` : ''}
-            ${fieldsHtml}
-        </div>
-        <div class="form-group" style="margin-top:1.25rem;">
-            <label class="form-label">Notify Via</label>
-            <div style="display:flex;flex-wrap:wrap;gap:0.4rem;">${chHtml}</div>
-        </div>
-        <div class="form-group">
-            <label class="form-label">Schedule
-                <span style="font-weight:400;color:var(--text-muted);"> (no days = always active)</span>
-            </label>
-            <div style="margin-bottom:0.75rem;">
-                <div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:0.5rem;font-weight:600;">Active Days</div>
-                <div class="day-picker" id="editor-day-picker">${dayPickerHtml}</div>
-            </div>
-            <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-                <div>
-                    <label class="form-label" style="font-size:0.78rem;">From</label>
-                    <select class="form-input" id="editor-hour-start" style="width:100px;">${hourOpts(hourStart)}</select>
+        <div class="alert-editor-grid">
+            <div class="alert-editor-left">
+                <div style="display:flex;flex-direction:column;gap:0.25rem;">
+                    ${def?.description ? `<p style="color:var(--text-muted);font-size:0.85rem;margin:0 0 1rem;">${_esc(def.description)}</p>` : ''}
+                    ${fieldsHtml}
                 </div>
-                <div>
-                    <label class="form-label" style="font-size:0.78rem;">Until</label>
-                    <select class="form-input" id="editor-hour-end"   style="width:100px;">${hourEndOpts}</select>
+            </div>
+            <div class="alert-editor-right">
+                <div class="form-group">
+                    <label class="form-label">Notify Via</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:0.4rem;">${chHtml}</div>
+                </div>
+                ${notifyUsersHtml}
+                <div class="form-group" style="margin-top:1.25rem;">
+                    <label class="form-label">Schedule
+                        <span style="font-weight:400;color:var(--text-muted);"> (no days = always active)</span>
+                    </label>
+                    <div style="margin-bottom:0.75rem;">
+                        <div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:0.5rem;font-weight:600;">Active Days</div>
+                        <div class="day-picker" id="editor-day-picker">${dayPickerHtml}</div>
+                    </div>
+                    <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+                        <div>
+                            <label class="form-label" style="font-size:0.78rem;">From</label>
+                            <select class="form-input" id="editor-hour-start" style="width:100px;">${hourOpts(hourStart)}</select>
+                        </div>
+                        <div>
+                            <label class="form-label" style="font-size:0.78rem;">Until</label>
+                            <select class="form-input" id="editor-hour-end"   style="width:100px;">${hourEndOpts}</select>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>`;
@@ -1026,12 +1120,12 @@ async function openAlertEditor(uid) {
         const cb = pill.querySelector('input');
         if (!cb) return;
         pill.classList.toggle('active', cb.checked);
-        pill.addEventListener('click', () => { cb.checked = !cb.checked; pill.classList.toggle('active', cb.checked); });
+        pill.addEventListener('click', (e) => { e.preventDefault(); cb.checked = !cb.checked; pill.classList.toggle('active', cb.checked); });
     });
     document.querySelectorAll('#alertEditorBody .channel-pill').forEach(pill => {
         const cb = pill.querySelector('input');
         if (!cb) return;
-        pill.addEventListener('click', () => { cb.checked = !cb.checked; pill.classList.toggle('active', cb.checked); });
+        pill.addEventListener('click', (e) => { e.preventDefault(); cb.checked = !cb.checked; pill.classList.toggle('active', cb.checked); });
     });
     document.querySelectorAll('#alertEditorBody .alert-param-input[data-updates-field]').forEach(sel => {
         sel.addEventListener('change', () => {
@@ -1112,6 +1206,12 @@ function saveAlertFromEditor() {
 
     row.channels = [];
     document.querySelectorAll('.editor-channel-cb:checked').forEach(cb => row.channels.push(cb.value));
+
+    const notifyUserCbs = document.querySelectorAll('.editor-notify-user-cb');
+    if (notifyUserCbs.length > 0) {
+        row.notify_user_ids = [];
+        notifyUserCbs.forEach(cb => { if (cb.checked) row.notify_user_ids.push(parseInt(cb.value, 10)); });
+    }
 
     const activeDays = [];
     document.querySelectorAll('#editor-day-picker input:checked').forEach(cb => activeDays.push(parseInt(cb.value)));

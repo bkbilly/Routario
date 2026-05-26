@@ -513,6 +513,10 @@ function handleWebSocketMessage(message) {
         }
         updateStats();
     } else if (message.type === 'alert') {
+        const nids = message.notify_user_ids;
+        const myId = parseInt(localStorage.getItem('user_id'), 10);
+        loadAlerts();
+        if (nids && !nids.includes(myId)) return;
         let title, toastMessage;
         if (message.data.type === 'custom' && message.data.alert_metadata?.rule_name) {
             title        = message.data.alert_metadata.rule_name;
@@ -522,7 +526,6 @@ function handleWebSocketMessage(message) {
             toastMessage = message.data.message;
         }
         showAlert({ title, message: toastMessage, type: message.data.severity || 'info' });
-        loadAlerts();
     }
 }
 

@@ -15,6 +15,16 @@ from sqlalchemy import select, delete
 from core.database import get_db
 from core.auth import get_current_user, verify_device_access
 from models import User, LocationShare, Device, DeviceState
+
+
+async def _can_manage_share(current_user: User, share: LocationShare) -> bool:
+    """Creator, super admin, or company admin of the creator's company."""
+    if current_user.id == share.created_by or current_user.is_admin:
+        return True
+    if current_user.is_company_admin and current_user.company_id is not None:
+        creator = await get_db().get_user(share.created_by)
+        return creator is not None and creator.company_id == current_user.company_id
+    return False
 from models.schemas import DeviceStateResponse
 
 router = APIRouter(prefix="/api/share", tags=["share"])
@@ -51,12 +61,8 @@ async def create_share(
     current_user: User = Depends(get_current_user),
 ):
     """Generate a unique share token for a device. User must have access to the device."""
-    # Verify device access
+    await verify_device_access(payload.device_id, current_user)
     db = get_db()
-    if not current_user.is_admin:
-        user_devices = await db.get_user_devices(current_user.id)
-        if not any(d.id == payload.device_id for d in user_devices):
-            raise HTTPException(status_code=403, detail="You do not have access to this device")
 
     # Validate duration (1 min to 7 days)
     if payload.duration_minutes < 1 or payload.duration_minutes > 10080:
@@ -106,7 +112,7 @@ async def revoke_share(token: str, current_user: User = Depends(get_current_user
         share = result.scalar_one_or_none()
         if not share:
             raise HTTPException(status_code=404, detail="Share not found")
-        if share.created_by != current_user.id and not current_user.is_admin:
+        if not await _can_manage_share(current_user, share):
             raise HTTPException(status_code=403, detail="Not allowed")
         share.is_active = False
         await session.flush()
@@ -120,21 +126,19 @@ async def list_shares(
     current_user: User = Depends(get_current_user),
 ):
     """List all active, non-expired share links for a device."""
+    await verify_device_access(device_id, current_user)
     db = get_db()
+    elevated = current_user.is_admin or current_user.is_company_admin
     async with db.get_session() as session:
-        if not current_user.is_admin:
-            user_devices = await db.get_user_devices(current_user.id)
-            if not any(d.id == device_id for d in user_devices):
-                raise HTTPException(status_code=403, detail="Access denied")
+        filters = [
+            LocationShare.device_id == device_id,
+            LocationShare.is_active == True,
+            LocationShare.expires_at > datetime.utcnow(),
+        ]
+        if not elevated:
+            filters.append(LocationShare.created_by == current_user.id)
 
-        result = await session.execute(
-            select(LocationShare).where(
-                LocationShare.device_id == device_id,
-                LocationShare.created_by == current_user.id,
-                LocationShare.is_active == True,
-                LocationShare.expires_at > datetime.utcnow(),
-            )
-        )
+        result = await session.execute(select(LocationShare).where(*filters))
         shares = result.scalars().all()
 
     return [
@@ -168,7 +172,7 @@ async def renew_share(
         share = result.scalar_one_or_none()
         if not share:
             raise HTTPException(status_code=404, detail="Share not found")
-        if share.created_by != current_user.id and not current_user.is_admin:
+        if not await _can_manage_share(current_user, share):
             raise HTTPException(status_code=403, detail="Not allowed")
 
         share.expires_at = datetime.utcnow() + timedelta(minutes=payload.duration_minutes)

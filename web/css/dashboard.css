@@ -1651,8 +1651,8 @@ body::before {
 
 /* Alert highlight — shown when device has unread alerts */
 .device-card.has-alert {
-    border-color: rgba(239, 68, 68, 0.6);
-    background: rgba(239, 68, 68, 0.05);
+    border-color: var(--accent-danger);
+    background: color-mix(in srgb, var(--accent-danger) 5%, var(--bg-tertiary));
 }
 
 .device-card.has-alert::before {
@@ -1662,7 +1662,7 @@ body::before {
 
 .device-card.has-alert:hover {
     border-color: var(--accent-danger);
-    background: rgba(239, 68, 68, 0.1);
+    background: color-mix(in srgb, var(--accent-danger) 10%, var(--bg-tertiary));
 }
 
 .alert-pulse {

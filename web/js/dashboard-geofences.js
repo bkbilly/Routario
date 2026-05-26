@@ -59,6 +59,11 @@ function _polylineBufferPolygon(latlngs, bufferMeters) {
     return [...left, ...endCap, ...right.reverse(), ...startCap];
 }
 
+// ── Role helpers ──────────────────────────────────────────────────────────────
+const _isAdmin        = () => localStorage.getItem('is_admin') === 'true';
+const _isCompanyAdmin = () => localStorage.getItem('is_company_admin') === 'true';
+const _canAssignOwner = () => _isAdmin() || _isCompanyAdmin();
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let _map = null;
 let _geofenceLayer = null;        // L.FeatureGroup holding all rendered shapes
@@ -68,6 +73,7 @@ let _editingGeofenceId = null;    // ID of geofence being edited (null = new)
 let _pendingCoords = null;        // Coords of a freshly drawn shape waiting to be saved
 let _pendingType = 'polygon';     // 'polygon' | 'polyline'
 let _geofences = [];              // Local cache [{id, name, color, coords, type}, ...]
+let _showAllUsersGeofences = false;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 function initGeofences(mapInstance) {
@@ -75,6 +81,11 @@ function initGeofences(mapInstance) {
 
     // Feature group that Leaflet.draw uses for edit toolbar
     _geofenceLayer = new L.FeatureGroup().addTo(_map);
+
+    if (_canAssignOwner()) {
+        const wrap = document.getElementById('geofenceAllUsersToggleWrap');
+        if (wrap) wrap.style.display = '';
+    }
 
     reloadGeofences();
 }
@@ -95,10 +106,25 @@ async function reloadGeofences() {
 function _renderAll() {
     _geofenceLayer.clearLayers();
 
+    const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
     _geofences.forEach(gf => {
         if (!gf.coordinates || gf.coordinates.length === 0) return;
+        if (_canAssignOwner() && !_showAllUsersGeofences && gf.user_id !== currentUserId) return;
         _addLayerToMap(gf);
     });
+}
+
+function toggleAllUsersGeofences() {
+    _showAllUsersGeofences = !_showAllUsersGeofences;
+
+    const btn = document.getElementById('geofenceAllUsersToggleBtn');
+    if (btn) {
+        btn.innerHTML = _showAllUsersGeofences
+            ? '<i class="mdi mdi-eye-outline"></i> Hide other users\' geofences'
+            : '<i class="mdi mdi-eye-off-outline"></i> Show other users\' geofences';
+    }
+
+    _renderAll();
 }
 
 function _addLayerToMap(gf) {
@@ -128,7 +154,10 @@ function _addLayerToMap(gf) {
                 fillOpacity: 0.12,
                 weight: 0,
             });
-            corridorLayer.bindTooltip(gf.name, {
+            const corridorTooltip = (_canAssignOwner() && gf.owner_username)
+                ? `${gf.name}<br><span style="font-size:0.8em;opacity:0.7">${gf.owner_username}</span>`
+                : gf.name;
+            corridorLayer.bindTooltip(corridorTooltip, {
                 permanent: false,
                 direction: 'center',
                 className: 'geofence-tooltip',
@@ -150,7 +179,10 @@ function _addLayerToMap(gf) {
     layer._geofenceData = gf;
 
     // Label tooltip
-    layer.bindTooltip(gf.name, {
+    const tooltipContent = (_canAssignOwner() && gf.owner_username)
+        ? `${gf.name}<br><span style="font-size:0.8em;opacity:0.7">${gf.owner_username}</span>`
+        : gf.name;
+    layer.bindTooltip(tooltipContent, {
         permanent: false,
         direction: 'center',
         className: 'geofence-tooltip',
@@ -237,6 +269,9 @@ function _enterEditMode(layer, geofenceId) {
 
     // Show the floating edit toolbar
     _showEditToolbar(geofenceId);
+
+    // Cancel on next map click outside the shape
+    setTimeout(() => _map.once('click', cancelGeofenceEdit), 0);
 }
 
 function _cancelEdit() {
@@ -245,6 +280,7 @@ function _cancelEdit() {
         _editingLayer = null;
         _editingGeofenceId = null;
     }
+    _map.off('click', cancelGeofenceEdit);
     _hideEditToolbar();
 }
 
@@ -270,7 +306,16 @@ function _showEditToolbar(geofenceId) {
     const gf = _geofences.find(g => g.id === geofenceId);
     const toolbar = document.getElementById('geofenceEditToolbar');
     const nameEl = document.getElementById('geofenceEditName');
+    const ownerEl = document.getElementById('geofenceEditOwner');
     if (nameEl && gf) nameEl.textContent = gf.name;
+    if (ownerEl) {
+        if (_canAssignOwner() && gf?.owner_username) {
+            ownerEl.textContent = gf.owner_username;
+            ownerEl.style.display = '';
+        } else {
+            ownerEl.style.display = 'none';
+        }
+    }
     if (toolbar) toolbar.style.display = 'flex';
 }
 
@@ -313,7 +358,7 @@ function cancelGeofenceEdit() {
 }
 
 // ── Save / Name Modal ─────────────────────────────────────────────────────────
-function _openGeofenceModal(id, gf, type) {
+async function _openGeofenceModal(id, gf, type) {
     document.getElementById('geofenceModalId').value = id || '';
     document.getElementById('geofenceModalType').value = type || 'polygon';
     document.getElementById('geofenceModalName').value = gf?.name || '';
@@ -324,11 +369,49 @@ function _openGeofenceModal(id, gf, type) {
     const bufferGroup = document.getElementById('geofenceBufferGroup');
     if (bufferGroup) bufferGroup.style.display = type === 'polyline' ? '' : 'none';
 
+    const ownerGroup = document.getElementById('geofenceOwnerGroup');
+    if (ownerGroup) {
+        if (_canAssignOwner()) {
+            ownerGroup.style.display = '';
+            await _populateOwnerDropdown(gf?.user_id ?? null);
+        } else {
+            ownerGroup.style.display = 'none';
+        }
+    }
+
     const titleEl = document.getElementById('geofenceModalTitle');
     if (titleEl) titleEl.textContent = id ? 'Edit Geofence' : 'Save Geofence';
 
     document.getElementById('geofenceModal').classList.add('active');
     setTimeout(() => document.getElementById('geofenceModalName').focus(), 100);
+}
+
+async function _populateOwnerDropdown(selectedUserId) {
+    const select = document.getElementById('geofenceModalOwner');
+    if (!select) return;
+
+    const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
+    select.innerHTML = '';
+
+    try {
+        const res = await apiFetch(`${API_BASE}/users`);
+        if (!res.ok) throw new Error();
+        const users = await res.json();
+
+        users.forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u.id;
+            opt.textContent = u.username + (u.id === currentUserId ? ' (you)' : '');
+            if (u.id === (selectedUserId ?? currentUserId)) opt.selected = true;
+            select.appendChild(opt);
+        });
+    } catch {
+        const opt = document.createElement('option');
+        opt.value = currentUserId;
+        opt.textContent = 'me';
+        opt.selected = true;
+        select.appendChild(opt);
+    }
 }
 
 function closeGeofenceModal() {
@@ -369,6 +452,12 @@ async function submitGeofenceModal() {
         geometry_type: type,
         buffer_meters: type === 'polyline' ? bufferMeters : 50,
     };
+
+    const ownerGroup = document.getElementById('geofenceOwnerGroup');
+    if (ownerGroup && ownerGroup.style.display !== 'none') {
+        const ownerSelect = document.getElementById('geofenceModalOwner');
+        if (ownerSelect?.value) payload.user_id = parseInt(ownerSelect.value, 10);
+    }
 
     try {
         let res;

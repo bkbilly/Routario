@@ -83,14 +83,15 @@ class AlertSchedule(BaseModel):
 
 class AlertRow(BaseModel):
     """One row from the frontend alert table."""
-    uid:      int
-    alertKey: str
-    params:   Dict[str, Any]          = Field(default_factory=dict)
-    name:     Optional[str]           = None
-    rule:     Optional[str]           = None
-    channels: List[str]               = Field(default_factory=list)
-    schedule: Optional[AlertSchedule] = None
-    duration: Optional[int]           = Field(None, ge=1)  # seconds; None = disabled
+    uid:             int
+    alertKey:        str
+    params:          Dict[str, Any]          = Field(default_factory=dict)
+    name:            Optional[str]           = None
+    rule:            Optional[str]           = None
+    channels:        List[str]               = Field(default_factory=list)
+    schedule:        Optional[AlertSchedule] = None
+    duration:        Optional[int]           = Field(None, ge=1)  # seconds; None = disabled
+    notify_user_ids: Optional[List[int]]     = None
 
 
 class CustomRule(BaseModel):
@@ -322,6 +323,7 @@ class TripGeoJSON(BaseModel):
 
 class GeofenceCreate(BaseModel):
     device_id: Optional[int] = None
+    user_id: Optional[int] = None
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
     polygon: List[List[float]]
@@ -332,6 +334,7 @@ class GeofenceCreate(BaseModel):
     buffer_meters: int = 50
 
 class GeofenceUpdate(BaseModel):
+    user_id: Optional[int] = None
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = None
     polygon: Optional[List[List[float]]] = None
