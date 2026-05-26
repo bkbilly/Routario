@@ -168,6 +168,7 @@ class Geofence(Base):
     __tablename__ = 'geofences'
 
     id:             Mapped[int]           = mapped_column(Integer, primary_key=True)
+    user_id:        Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     device_id:      Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('devices.id', ondelete='CASCADE'), nullable=True)
     name:           Mapped[str]           = mapped_column(String(100), nullable=False)
     description:    Mapped[Optional[str]] = mapped_column(Text, nullable=True)

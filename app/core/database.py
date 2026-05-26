@@ -165,6 +165,7 @@ class DatabaseService:
             "ALTER TABLE users ADD COLUMN company_id INTEGER",
             "ALTER TABLE users ADD COLUMN is_company_admin BOOLEAN DEFAULT FALSE",
             "ALTER TABLE devices ADD COLUMN company_id INTEGER",
+            "ALTER TABLE geofences ADD COLUMN user_id INTEGER",
         ]
         if self._is_postgres:
             migrations.append("ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)")
@@ -298,9 +299,10 @@ class DatabaseService:
 
     # ── Geofence CRUD ─────────────────────────────────────────────
 
-    async def create_geofence(self, geofence_data: Dict[str, Any]) -> Geofence:
+    async def create_geofence(self, geofence_data: Dict[str, Any], user_id: int) -> Geofence:
         async with self.get_session() as session:
             geofence = Geofence(
+                user_id=user_id,
                 device_id=geofence_data.get("device_id"),
                 name=geofence_data["name"],
                 description=geofence_data.get("description"),
@@ -319,7 +321,7 @@ class DatabaseService:
             return geofence
 
     async def update_geofence(
-        self, geofence_id: int, update_data: dict
+        self, geofence_id: int, update_data: dict, user_id: Optional[int] = None
     ) -> Optional[Geofence]:
         async with self.get_session() as session:
             result = await session.execute(
@@ -328,9 +330,11 @@ class DatabaseService:
             gf = result.scalar_one_or_none()
             if not gf:
                 return None
+            if user_id is not None and gf.user_id != user_id:
+                return "forbidden"
 
             for field in ("name", "description", "color", "alert_on_enter",
-                          "alert_on_exit", "geometry_type", "buffer_meters"):
+                          "alert_on_exit", "geometry_type", "buffer_meters", "user_id"):
                 if field in update_data and update_data[field] is not None:
                     setattr(gf, field, update_data[field])
 
@@ -342,20 +346,32 @@ class DatabaseService:
             return gf
 
     async def get_geofences(
-        self, device_id: Optional[int] = None
+        self, device_id: Optional[int] = None, user_id: Optional[int] = None,
+        company_id: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         async with self.get_session() as session:
-            query = select(Geofence).where(Geofence.is_active == True)
+            query = (
+                select(Geofence, User.username)
+                .outerjoin(User, Geofence.user_id == User.id)
+                .where(Geofence.is_active == True)
+            )
+            if company_id is not None:
+                company_user_ids = select(User.id).where(User.company_id == company_id)
+                query = query.where(Geofence.user_id.in_(company_user_ids))
+            elif user_id is not None:
+                query = query.where(Geofence.user_id == user_id)
             if device_id is not None:
                 query = query.where(
                     or_(Geofence.device_id == device_id, Geofence.device_id.is_(None))
                 )
             result = await session.execute(query)
-            geofences = result.scalars().all()
+            rows = result.all()
 
         return [
             {
                 "id":             gf.id,
+                "user_id":        gf.user_id,
+                "owner_username": username,
                 "device_id":      gf.device_id,
                 "name":           gf.name,
                 "description":    gf.description,
@@ -370,15 +386,21 @@ class DatabaseService:
                     gf.polygon_wkt, gf.geometry_type or "polygon"
                 ),
             }
-            for gf in geofences
+            for gf, username in rows
         ]
 
-    async def delete_geofence(self, geofence_id: int) -> bool:
+    async def delete_geofence(self, geofence_id: int, user_id: Optional[int] = None):
         async with self.get_session() as session:
             result = await session.execute(
-                delete(Geofence).where(Geofence.id == geofence_id)
+                select(Geofence).where(Geofence.id == geofence_id)
             )
-            return result.rowcount > 0
+            gf = result.scalar_one_or_none()
+            if not gf:
+                return False
+            if user_id is not None and gf.user_id != user_id:
+                return "forbidden"
+            await session.execute(delete(Geofence).where(Geofence.id == geofence_id))
+            return True
 
     # ── User CRUD ─────────────────────────────────────────────────
 

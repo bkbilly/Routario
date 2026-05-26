@@ -118,6 +118,10 @@ class AlertEngine:
                     params = row.get("params", {})
 
                 results = await alert_cls().check_many(position, device, state, params)
+                notify_ids = row.get('notify_user_ids')
+                if notify_ids is not None:
+                    for r in results:
+                        r.setdefault('notify_user_ids', notify_ids)
                 alerts.extend(results)
 
             if state.alert_states is not None:
@@ -137,8 +141,13 @@ class AlertEngine:
         Handles database creation, real-time broadcasting, and external notifications.
         Ensures WebSocket broadcast only happens ONCE per alert event.
         """
+        notify_ids = alert_data.get('notify_user_ids')
+        if notify_ids is not None:
+            notify_set = set(notify_ids)
+            users = [u for u in users if u.id in notify_set]
+
         broadcasted = False
-        
+
         for user in users:
             db = get_db()
             # 1. Create personal alert history record
@@ -155,7 +164,7 @@ class AlertEngine:
             
             # 2. Real-time broadcast (ONLY ONCE)
             if not broadcasted and self.alert_callback:
-                await self.alert_callback(alert)
+                await self.alert_callback(alert, notify_user_ids=notify_ids)
                 broadcasted = True
                 
             # 3. External notifications (Email, Telegram, SIP call, etc. per user)
@@ -165,7 +174,7 @@ class AlertEngine:
         try:
             metadata = alert_data.get('alert_metadata', {})
             selected_names = None
-            
+
             # 1. Determine which channel names are selected
             if 'selected_channels' in metadata:
                 # Direct selection (usually from custom rules)
@@ -298,6 +307,9 @@ async def periodic_alert_task():
                         if result:
                             result.setdefault('latitude',  state.last_latitude)
                             result.setdefault('longitude', state.last_longitude)
+                            notify_ids = row.get('notify_user_ids')
+                            if notify_ids is not None:
+                                result.setdefault('notify_user_ids', notify_ids)
                             await engine._dispatch_alert(device.users, device, result)
                     except Exception as e:
                         logger.error(f"Periodic alert check error ({alert_key}): {e}")

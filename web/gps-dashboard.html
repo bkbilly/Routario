@@ -296,6 +296,11 @@
                     <div class="map-ctrl-flyout" id="geofenceCtrlFlyout">
                         <button onclick="startDrawType('polygon'); closeAllMapFlyouts();">⬡ Draw Zone (Polygon)</button>
                         <button onclick="startDrawType('polyline'); closeAllMapFlyouts();">〰 Draw Path (Polyline)</button>
+                        <div id="geofenceAllUsersToggleWrap" style="display:none; border-top: 1px solid var(--border-color); margin-top: 4px; padding-top: 4px;">
+                            <button id="geofenceAllUsersToggleBtn" onclick="toggleAllUsersGeofences()">
+                                <i class="mdi mdi-eye-off-outline"></i> Show other users' geofences
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -317,9 +322,14 @@
                        z-index: 1000; background: var(--bg-card); border: 1px solid var(--border-color);
                        border-radius: 12px; padding: 0.75rem 1.25rem; box-shadow: 0 4px 24px rgba(0,0,0,0.4);
                        align-items: center; gap: 1rem; white-space: nowrap;">
-                <span id="geofenceEditName"
-                    style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem; max-width: 180px;
-                           overflow: hidden; text-overflow: ellipsis;">Geofence</span>
+                <div style="display: flex; flex-direction: column; gap: 0.1rem; max-width: 180px;">
+                    <span id="geofenceEditName"
+                        style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;
+                               overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Geofence</span>
+                    <span id="geofenceEditOwner"
+                        style="display: none; font-size: 0.75rem; color: var(--text-muted);
+                               overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+                </div>
                 <div style="width: 1px; height: 24px; background: var(--border-color);"></div>
                 <button onclick="saveEditedGeofence()"
                     style="background: var(--accent-primary); border: none; color: #fff; padding: 0.45rem 1rem;
@@ -429,6 +439,11 @@
                             Choose the zone outline and fill colour
                         </span>
                     </div>
+                </div>
+
+                <div class="form-group" id="geofenceOwnerGroup" style="margin-bottom: 0; display: none;">
+                    <label class="form-label">Owner</label>
+                    <select id="geofenceModalOwner" class="form-input"></select>
                 </div>
 
                 <div class="form-group" id="geofenceBufferGroup" style="margin-bottom: 0; display: none;">

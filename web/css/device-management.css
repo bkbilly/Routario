@@ -697,6 +697,19 @@ h1 {
     padding: 1.5rem 2rem;
 }
 
+.alert-editor-right > .form-group:first-child { margin-top: 0; }
+
+@media (min-width: 860px) {
+    #alertEditorModal .modal-content { max-width: 960px; }
+    .alert-editor-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0 2.5rem;
+        align-items: start;
+    }
+    .alert-editor-right > .form-group:first-child { margin-top: 1.25rem; }
+}
+
 /* ── Alerts Tab ────────────────────────────────────────────────── */
 
 .alerts-add-row {
