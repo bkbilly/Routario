@@ -64,7 +64,7 @@ class PushNotificationService:
             "severity": "info",
             "tag":      "admin-notification",
             "icon":     "/icons/icon-192.png",
-            "badge":    "/icons/icon-192.png",
+            "badge":    "/icons/badge-96.png",
             "data":     {"url": "/gps-dashboard.html"},
         })
         try:
@@ -182,7 +182,7 @@ class PushNotificationService:
             "severity": severity,
             "tag":      f"gps-alert-{alert_type}",
             "icon":     "/icons/icon-192.png",
-            "badge":    "/icons/icon-192.png",
+            "badge":    "/icons/badge-96.png",
             "data":     {"url": "/gps-dashboard.html", "alert_id": alert_id},
         })
 
