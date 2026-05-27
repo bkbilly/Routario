@@ -154,6 +154,7 @@ class DeviceResponse(BaseModel):
     created_at: datetime
     config: Optional[Dict[str, Any]] = None
     company_id: Optional[int] = None
+    state: Optional["DeviceStateResponse"] = None
 
 
 class DeviceStateResponse(BaseModel):
@@ -172,6 +173,8 @@ class DeviceStateResponse(BaseModel):
     total_odometer: float
     last_update: Optional[datetime]
     sensors: Optional[Dict[str, Any]] = None
+    current_driver_id: Optional[int] = None
+    current_driver_name: Optional[str] = None
 
 
 # ==================== User Schemas ====================
@@ -313,6 +316,8 @@ class TripResponse(BaseModel):
     duration_minutes: float
     start_address: Optional[str]
     end_address: Optional[str]
+    driver_id: Optional[int] = None
+    driver_name: Optional[str] = None
 
 
 class TripGeoJSON(BaseModel):
@@ -449,3 +454,93 @@ class DeviceStatistics(BaseModel):
     total_driving_time_minutes: int
     period_start: datetime
     period_end: datetime
+
+
+# ==================== Driver Schemas ====================
+
+class DriverCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    phone: Optional[str] = None
+    license_number: Optional[str] = None
+    notes: Optional[str] = None
+
+class DriverUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    phone: Optional[str] = None
+    license_number: Optional[str] = None
+    notes: Optional[str] = None
+    company_id: Optional[int] = None
+
+class DriverResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    company_id: Optional[int]
+    name: str
+    phone: Optional[str]
+    license_number: Optional[str]
+    notes: Optional[str]
+    created_at: datetime
+
+
+# ==================== Fuel Schemas ====================
+
+class FuelLogCreate(BaseModel):
+    date: datetime
+    liters: float = Field(..., gt=0)
+    odometer_km: Optional[float] = None
+    price_per_liter: Optional[float] = None
+    full_tank: bool = True
+    notes: Optional[str] = None
+
+class FuelLogUpdate(BaseModel):
+    date: Optional[datetime] = None
+    liters: Optional[float] = Field(None, gt=0)
+    odometer_km: Optional[float] = None
+    price_per_liter: Optional[float] = None
+    full_tank: Optional[bool] = None
+    notes: Optional[str] = None
+
+class FuelLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    device_id: int
+    date: datetime
+    liters: float
+    odometer_km: Optional[float]
+    price_per_liter: Optional[float]
+    full_tank: bool
+    notes: Optional[str]
+    created_at: datetime
+
+
+# ==================== Report Schemas ====================
+
+class FleetReportRow(BaseModel):
+    device_id: int
+    device_name: str
+    license_plate: Optional[str]
+    driver_name: Optional[str] = None
+    trips: int
+    distance_km: float
+    driving_minutes: float
+    max_speed: float
+    avg_speed: float
+
+class FleetReport(BaseModel):
+    start_date: datetime
+    end_date: datetime
+    rows: List[FleetReportRow]
+
+class TripReportRow(BaseModel):
+    device_id: int
+    device_name: str
+    license_plate: Optional[str]
+    driver_name: Optional[str]
+    start_time: str
+    end_time: Optional[str]
+    distance_km: float
+    duration_minutes: float
+    avg_speed: float
+    max_speed: float
+    start_address: Optional[str]
+    end_address: Optional[str]

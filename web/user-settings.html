@@ -100,7 +100,7 @@
             </div>
 
             <!-- Account Info -->
-            <div class="card">
+            <div class="card" id="accountInfoCard" style="display:none;">
                 <div class="card-header">
                     <div class="card-icon"><i class="mdi mdi-account"></i></div>
                     <h2 class="card-title">Account Information</h2>
@@ -142,56 +142,6 @@
                         <p class="card-subtitle">Manage users, devices and system data</p>
                     </div>
                     <a href="company-management.html" id="companyMgmtLink" class="btn btn-secondary" style="display:none;"><i class="mdi mdi-briefcase"></i> Companies</a>
-                </div>
-
-                <!-- Section: Users -->
-                <div class="admin-section">
-                    <div class="admin-section-header">
-                        <span class="admin-section-icon"><i class="mdi mdi-account-group"></i></span>
-                        <div class="admin-section-info">
-                            <div class="admin-section-title">Users</div>
-                            <div class="admin-section-subtitle">Manage accounts and device access</div>
-                        </div>
-                        <div class="admin-section-count" id="userCountLabel"></div>
-                    </div>
-
-                    <div class="admin-section-content" id="userList"></div>
-
-                    <div class="admin-section-divider"></div>
-
-                    <div class="admin-section-form">
-                        <div class="admin-form-label">Add New User</div>
-                        <div class="admin-user-form-grid">
-                            <div class="form-group" id="newUserRoleGroup">
-                                <label class="form-label">Role</label>
-                                <select id="newUserRole" class="form-input" onchange="onNewUserRoleChange()">
-                                    <option value="user">Regular User</option>
-                                    <option value="company_admin">Company Admin</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Username *</label>
-                                <input type="text" id="newUserName" class="form-input" placeholder="e.g. john_doe">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Email *</label>
-                                <input type="email" id="newUserEmail" class="form-input" placeholder="john@example.com">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Password *</label>
-                                <input type="password" id="newUserPass" class="form-input" placeholder="Min. 8 characters">
-                            </div>
-                            <div class="form-group" id="newUserCompanyGroup" style="display:none;">
-                                <label class="form-label">Company *</label>
-                                <select id="newUserCompany" class="form-input">
-                                    <option value="">— Select Company —</option>
-                                </select>
-                            </div>
-                            <button type="button" class="btn btn-primary admin-form-btn" onclick="addNewUser()">
-                                + Add User
-                            </button>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- Section: Backup & Restore (super admin only) -->
@@ -243,79 +193,6 @@
                 </div>
             </div>
         </form>
-    </div>
-
-    <!-- Device Assignment Modal -->
-    <div class="modal" id="assignModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">Manage Devices for <span id="assignUserName" class="modal-highlight"></span></h2>
-                <button class="modal-close" onclick="closeAssignModal()"><i class="mdi mdi-close"></i></button>
-            </div>
-            <div class="form-group">
-                <input type="text" class="form-input" id="deviceSearch" placeholder="Search devices..." onkeyup="filterDeviceList()">
-            </div>
-            <div class="device-assign-list" id="deviceAssignList">
-                <!-- Populated dynamically -->
-            </div>
-        </div>
-    </div>
-
-    <!-- Role picker popup (for super admin) -->
-    <div id="rolePopup" class="role-popup" style="display:none;">
-        <div class="role-popup-header" id="rolePopupHeader"></div>
-        <div id="rolePopupOptions"></div>
-    </div>
-
-    <!-- Company Select Modal (for Make Co.Admin) -->
-    <div class="modal" id="companySelectModal">
-        <div class="modal-content" style="max-width:420px;">
-            <div class="modal-header">
-                <h2 class="modal-title">Assign Company</h2>
-                <button class="modal-close" onclick="closeCompanySelectModal()"><i class="mdi mdi-close"></i></button>
-            </div>
-            <div style="padding:1.25rem 1.5rem 0.5rem;">
-                <p style="margin:0 0 1rem;color:var(--text-secondary);">Select a company for <strong id="coAdminUsername"></strong></p>
-                <select id="coAdminCompanySelect" class="form-input">
-                    <option value="">— Select Company —</option>
-                </select>
-            </div>
-            <div style="padding:1rem 1.5rem 1.25rem;display:flex;justify-content:flex-end;gap:0.75rem;">
-                <button type="button" class="btn btn-secondary" onclick="closeCompanySelectModal()">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="confirmMakeCoAdmin()">Confirm</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Notify User Modal -->
-    <div class="modal" id="notifyUserModal">
-        <div class="modal-content notify-modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title">Send Notification</h3>
-                <button class="modal-close" onclick="closeNotifyModal()">&times;</button>
-            </div>
-            <div class="notify-modal-body">
-                <div class="form-group notify-modal-users">
-                    <label class="form-label">To <span id="notifySelectedCount" class="notify-selected-count"></span></label>
-                    <input type="text" id="notifyUserSearch" class="form-input" placeholder="Search users..." oninput="filterNotifyUsers()">
-                    <div id="notifyUserList" style="overflow-y:auto;margin-top:0.4rem;flex:1;min-height:0;"></div>
-                </div>
-                <div class="notify-modal-fields">
-                    <div class="form-group">
-                        <label class="form-label">Title</label>
-                        <input type="text" id="notifyTitle" class="form-input" placeholder="Notification title" maxlength="100">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Message</label>
-                        <textarea id="notifyMessage" class="form-input" rows="4" placeholder="Notification message" maxlength="500" style="resize:vertical"></textarea>
-                    </div>
-                    <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:0.5rem;">
-                        <button type="button" class="btn btn-secondary" onclick="closeNotifyModal()">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="notifySendBtn" onclick="sendNotification()">Send</button>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <div class="toast-container" id="toastContainer"></div>

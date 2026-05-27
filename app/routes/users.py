@@ -100,14 +100,19 @@ async def delete_user(user_id: int, caller: User = Depends(require_company_admin
 
 
 @router.post("/{user_id}/impersonate")
-async def impersonate_user(user_id: int, admin: User = Depends(require_admin)):
-    """Issue a token for another user. Admin only."""
+async def impersonate_user(user_id: int, admin: User = Depends(require_company_admin)):
+    """Issue a token for another user. Super admin can impersonate anyone; company admin can impersonate regular users in their company."""
     if admin.id == user_id:
         raise HTTPException(status_code=400, detail="Cannot impersonate yourself")
     db = get_db()
     target = await db.get_user(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    if not admin.is_admin:
+        if target.company_id != admin.company_id:
+            raise HTTPException(status_code=403, detail="Cannot impersonate a user outside your company")
+        if target.is_admin:
+            raise HTTPException(status_code=403, detail="Cannot impersonate a super admin")
 
     settings = get_settings()
     token = jwt.encode(

@@ -168,6 +168,8 @@ class DatabaseService:
             "ALTER TABLE geofences ADD COLUMN user_id INTEGER",
             "ALTER TABLE device_states ADD COLUMN last_trip_id INTEGER",
             "ALTER TABLE devices ADD COLUMN custom_attributes JSON DEFAULT '{}'",
+            "ALTER TABLE device_states ADD COLUMN current_driver_id INTEGER",
+            "ALTER TABLE trips ADD COLUMN driver_id INTEGER",
         ]
         if self._is_postgres:
             migrations.append("ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)")
@@ -545,7 +547,10 @@ class DatabaseService:
             result = await session.execute(
                 select(Device)
                 .where(Device.imei == imei)
-                .options(selectinload(Device.state), selectinload(Device.users))
+                .options(
+                    selectinload(Device.state).selectinload(DeviceState.current_driver),
+                    selectinload(Device.users),
+                )
             )
             return result.scalar_one_or_none()
 
@@ -554,7 +559,10 @@ class DatabaseService:
             result = await session.execute(
                 select(Device)
                 .where(Device.id == device_id)
-                .options(selectinload(Device.state), selectinload(Device.users))
+                .options(
+                    selectinload(Device.state).selectinload(DeviceState.current_driver),
+                    selectinload(Device.users),
+                )
             )
             return result.scalar_one_or_none()
 
@@ -564,7 +572,7 @@ class DatabaseService:
                 select(Device)
                 .join(Device.users)
                 .where(User.id == user_id)
-                .options(selectinload(Device.state))
+                .options(selectinload(Device.state).selectinload(DeviceState.current_driver))
             )
             return result.scalars().all()
 
@@ -573,21 +581,25 @@ class DatabaseService:
     ) -> Optional[Device]:
         async with self.get_session() as session:
             result = await session.execute(
-                select(Device).where(Device.id == device_id)
+                select(Device)
+                .where(Device.id == device_id)
+                .options(
+                    selectinload(Device.state).selectinload(DeviceState.current_driver),
+                    selectinload(Device.users),
+                )
             )
             device = result.scalar_one_or_none()
             if not device:
                 return None
-            device.name          = device_data.name
-            device.imei          = device_data.imei
-            device.protocol      = device_data.protocol
-            device.vehicle_type  = device_data.vehicle_type
-            device.license_plate       = device_data.license_plate
-            device.custom_attributes   = device_data.custom_attributes or {}
-            device.config        = device_data.config.model_dump()
-            device.company_id    = device_data.company_id
+            device.name              = device_data.name
+            device.imei              = device_data.imei
+            device.protocol          = device_data.protocol
+            device.vehicle_type      = device_data.vehicle_type
+            device.license_plate     = device_data.license_plate
+            device.custom_attributes = device_data.custom_attributes or {}
+            device.config            = device_data.config.model_dump()
+            device.company_id        = device_data.company_id
             await session.flush()
-            await session.refresh(device)
             return device
 
     async def delete_device(self, device_id: int) -> bool:
@@ -643,6 +655,10 @@ class DatabaseService:
             state.total_odometer += distance_km
             if state.active_trip_id:
                 state.trip_odometer += distance_km
+                if position.speed and position.speed > 0:
+                    trip = await session.get(Trip, state.active_trip_id)
+                    if trip and position.speed > trip.max_speed:
+                        trip.max_speed = position.speed
 
             state.last_latitude  = position.latitude
             state.last_longitude = position.longitude
@@ -740,6 +756,7 @@ class DatabaseService:
                 start_latitude=position.latitude,
                 start_longitude=position.longitude,
                 distance_km=0.0,
+                driver_id=state.current_driver_id,
             )
             session.add(trip)
             await session.flush()

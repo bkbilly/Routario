@@ -67,6 +67,21 @@ class User(Base):
     alert_history: Mapped[List["AlertHistory"]] = relationship(back_populates="user")
 
 
+class Driver(Base):
+    __tablename__ = 'drivers'
+
+    id:             Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_id:     Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), nullable=True, index=True)
+    name:           Mapped[str]           = mapped_column(String(100), nullable=False)
+    phone:          Mapped[Optional[str]] = mapped_column(String(30),  nullable=True)
+    license_number: Mapped[Optional[str]] = mapped_column(String(50),  nullable=True)
+    notes:          Mapped[Optional[str]] = mapped_column(Text,        nullable=True)
+    created_at:     Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
+
+    company: Mapped[Optional["Company"]] = relationship("Company")
+    trips:   Mapped[List["Trip"]]        = relationship(back_populates="driver")
+
+
 class Device(Base):
     __tablename__ = 'devices'
 
@@ -90,6 +105,7 @@ class Device(Base):
     geofences:     Mapped[List["Geofence"]]        = relationship(back_populates="device")
     alert_history: Mapped[List["AlertHistory"]]    = relationship(back_populates="device")
     commands:      Mapped[List["CommandQueue"]]    = relationship(back_populates="device")
+    fuel_logs:     Mapped[List["FuelLog"]]         = relationship(back_populates="device")
 
 
 class DeviceState(Base):
@@ -115,8 +131,14 @@ class DeviceState(Base):
     last_trip_id:      Mapped[Optional[int]]      = mapped_column(Integer, ForeignKey('trips.id', ondelete='SET NULL'), nullable=True)
     last_ignition_on:  Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_ignition_off: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    current_driver_id: Mapped[Optional[int]]      = mapped_column(Integer, ForeignKey('drivers.id', ondelete='SET NULL'), nullable=True)
 
-    device: Mapped["Device"] = relationship(back_populates="state")
+    device:         Mapped["Device"]           = relationship(back_populates="state")
+    current_driver: Mapped[Optional["Driver"]] = relationship("Driver", foreign_keys=[current_driver_id])
+
+    @property
+    def current_driver_name(self) -> "Optional[str]":
+        return self.current_driver.name if self.current_driver else None
 
 
 class PositionRecord(Base):
@@ -155,8 +177,10 @@ class Trip(Base):
     duration_minutes: Mapped[float]          = mapped_column(Float, default=0.0)
     start_address:    Mapped[Optional[str]]  = mapped_column(String(500), nullable=True)
     end_address:      Mapped[Optional[str]]  = mapped_column(String(500), nullable=True)
+    driver_id:        Mapped[Optional[int]]  = mapped_column(Integer, ForeignKey('drivers.id', ondelete='SET NULL'), nullable=True)
 
-    device: Mapped["Device"] = relationship(back_populates="trips")
+    device: Mapped["Device"]           = relationship(back_populates="trips")
+    driver: Mapped[Optional["Driver"]] = relationship(back_populates="trips")
 
 
 class Geofence(Base):
@@ -224,6 +248,22 @@ class CommandQueue(Base):
     response:     Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     device: Mapped["Device"] = relationship(back_populates="commands")
+
+
+class FuelLog(Base):
+    __tablename__ = 'fuel_logs'
+
+    id:              Mapped[int]            = mapped_column(Integer, primary_key=True, autoincrement=True)
+    device_id:       Mapped[int]            = mapped_column(Integer, ForeignKey('devices.id', ondelete='CASCADE'), index=True)
+    date:            Mapped[datetime]       = mapped_column(DateTime, nullable=False)
+    liters:          Mapped[float]          = mapped_column(Float, nullable=False)
+    odometer_km:     Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    price_per_liter: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    full_tank:       Mapped[bool]           = mapped_column(Boolean, default=True)
+    notes:           Mapped[Optional[str]]  = mapped_column(String(500), nullable=True)
+    created_at:      Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
+
+    device: Mapped["Device"] = relationship(back_populates="fuel_logs")
 
 
 class LocationShare(Base):
