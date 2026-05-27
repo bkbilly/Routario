@@ -1150,6 +1150,18 @@ h1 {
     .devices-table td:last-child {
         width: auto;
     }
+
+    /* Users table has different columns — reset generic hiding, hide Created instead */
+    #usersTable th:nth-child(3),
+    #usersTable td:nth-child(3),
+    #usersTable th:nth-child(4),
+    #usersTable td:nth-child(4) {
+        display: table-cell;
+    }
+    #usersTable th:nth-last-child(2),
+    #usersTable td:nth-last-child(2) {
+        display: none;
+    }
 }
 
 @media (max-width: 480px) {
