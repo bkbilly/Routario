@@ -133,6 +133,11 @@ function getDeviceCardContent(device, icon) {
                 <span class="info-value" id="last-seen-${device.id}"
                       title="${lastSeenFull}">${lastSeen}</span>
             </div>
+            ${device.current_driver_name ? `
+            <div class="device-info-row">
+                <span class="info-label">Driver</span>
+                <span class="info-value"><i class="mdi mdi-account" style="font-size:0.8rem;"></i> ${device.current_driver_name}</span>
+            </div>` : ''}
             <div class="device-info-row">
                 <span class="info-label">IMEI</span>
                 <span class="info-value" id="imei-${device.id}" style="font-family:var(--font-mono);font-size:0.72rem;">${device.imei || '—'}</span>

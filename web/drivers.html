@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drivers - Routario</title>
+    <script>window.location.replace('management.html#drivers');</script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="icon" href="/icons/favicon.ico">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+    <link rel="stylesheet" href="css/device-management.css">
+    <script src="js/settings-nav.js"></script>
+    <style>
+        .driver-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .driver-avatar {
+            width: 42px; height: 42px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.1rem; font-weight: 700; color: #fff;
+            flex-shrink: 0;
+        }
+        .driver-info { flex: 1; min-width: 0; }
+        .driver-name { font-weight: 600; font-size: 0.95rem; }
+        .driver-meta { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem; }
+        .driver-assignment {
+            font-size: 0.78rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            background: rgba(99,102,241,0.15);
+            color: var(--accent-primary);
+            white-space: nowrap;
+        }
+        .drivers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 0.75rem;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;">
+        <div>
+            <h1 style="font-size:1.5rem;font-weight:700;margin:0;">Drivers</h1>
+            <p style="color:var(--text-muted);font-size:0.875rem;margin:0.25rem 0 0;">Manage driver profiles and vehicle assignments</p>
+        </div>
+        <button class="btn btn-primary" onclick="openDriverModal()">
+            <i class="mdi mdi-plus"></i> Add Driver
+        </button>
+    </div>
+
+    <div class="devices-search-bar" style="margin-bottom:1rem;">
+        <div class="search-input-wrap">
+            <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+            <input type="text" id="driverSearch" class="search-input"
+                placeholder="Search by name, phone or licence…"
+                oninput="filterDrivers()">
+        </div>
+        <span class="devices-count" id="driverCount"></span>
+    </div>
+
+    <div class="drivers-grid" id="driversGrid">
+        <p style="color:var(--text-muted);padding:2rem 0;">Loading…</p>
+    </div>
+
+</div>
+
+<!-- Driver modal -->
+<div class="modal" id="driverModal">
+    <div class="modal-content" style="max-width:480px;">
+        <div class="modal-header">
+            <h2 class="modal-title" id="driverModalTitle">Add Driver</h2>
+            <button type="button" class="modal-close" onclick="closeDriverModal()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div class="modal-scrollable" style="padding:1.25rem;">
+            <div class="form-group">
+                <label class="form-label">Full Name *</label>
+                <input type="text" id="driverName" class="form-input" placeholder="John Smith">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Phone</label>
+                <input type="text" id="driverPhone" class="form-input" placeholder="+1 555 000 0000">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Licence Number</label>
+                <input type="text" id="driverLicence" class="form-input" placeholder="DL-12345678">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Notes</label>
+                <textarea id="driverNotes" class="form-input" rows="3" placeholder="Optional notes…" style="resize:vertical;"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-danger" id="deleteDriverBtn" onclick="deleteDriver()" style="display:none;">
+                <i class="mdi mdi-delete"></i> Delete
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="closeDriverModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="saveDriver()">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Assign driver modal -->
+<div class="modal" id="assignModal">
+    <div class="modal-content" style="max-width:420px;">
+        <div class="modal-header">
+            <h2 class="modal-title">Assign to Vehicle</h2>
+            <button type="button" class="modal-close" onclick="closeAssignModal()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div style="padding:1.25rem;">
+            <p style="color:var(--text-muted);font-size:0.875rem;margin:0 0 1rem;">
+                Assigning driver: <strong id="assignDriverName"></strong>
+            </p>
+            <div class="form-group">
+                <label class="form-label">Vehicle</label>
+                <select id="assignDeviceSelect" class="form-input">
+                    <option value="">— Unassign —</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeAssignModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="confirmAssign()">Assign</button>
+        </div>
+    </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/drivers.js"></script>
+</body>
+</html>

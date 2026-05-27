@@ -1,4 +1,5 @@
 :root {
+    color-scheme: dark;
     /* Dark theme with vibrant accents */
     --bg-primary: #0a0e1a;
     --bg-secondary: #131825;
@@ -208,6 +209,15 @@ body::before {
     background: var(--bg-hover);
     border-color: var(--accent-primary);
     color: var(--accent-primary);
+}
+
+.btn-danger {
+    background: var(--accent-danger);
+    color: white;
+}
+.btn-danger:hover {
+    background: #dc2626;
+    transform: translateY(-2px);
 }
 
 .history-quick-grid {
@@ -1975,13 +1985,39 @@ body::before {
     display: none;
 }
 
-/* Logbook table rows */
-#logbookTableBody tr {
-    border-bottom: 1px solid var(--border-color);
-    transition: background 0.15s;
+/* Logbook shared table style */
+.lb-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
 }
-#logbookTableBody tr:hover { background: var(--bg-tertiary); }
-#logbookTableBody td { padding: 0.65rem 0.75rem; vertical-align: middle; }
+.lb-table th,
+.lb-table td {
+    padding: 0.875rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+.lb-table thead th {
+    background: var(--bg-tertiary);
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.lb-table tbody tr:last-child td { border-bottom: none; }
+.lb-table tbody tr.lb-row { transition: background var(--transition-base); cursor: pointer; }
+.lb-table tbody tr.lb-row:hover td { background: var(--bg-hover); }
+.lb-row-name { font-weight: 600; font-size: 0.925rem; }
+.lb-tbl-btn {
+    padding: 0.6rem 0.7rem !important;
+    font-size: 0.8rem !important;
+    margin: 0 1px;
+}
 
 /* Document badge pills */
 .lb-doc-badge {
@@ -2007,9 +2043,98 @@ body::before {
 /* Docs cell wraps badges */
 .lb-docs-cell { max-width: 180px; }
 
-/* Responsive: stack date grid on small screens */
-@media (max-width: 630px) {
-    #logbookFormPanel > div[style*="grid-template-columns"] {
+/* Modal footer — sticky action bar */
+.modal-footer {
+    display: flex;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
+    gap: 0.5rem;
+    background: var(--bg-secondary);
+}
+
+/* Logbook modal tabs */
+.lb-tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: color 0.15s, border-color 0.15s;
+    margin-bottom: -1px;
+    white-space: nowrap;
+}
+.lb-tab:hover { color: var(--text-primary); }
+.lb-tab.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
+
+/* Logbook tab bar — tabs scroll, action button right-aligned */
+.lb-tab-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.25rem;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border-color);
+}
+.lb-tabs-scroll {
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.lb-tabs-scroll::-webkit-scrollbar { display: none; }
+.lb-tab-actions {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    flex-shrink: 0;
+}
+
+/* Responsive: on narrow screens stack tabs + button */
+.lb-maint-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 0.9rem 1.1rem;
+}
+.lb-maint-body {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 0;
+}
+@media (max-width: 400px) {
+    .lb-maint-card { flex-direction: column; align-items: stretch; }
+}
+
+@media (max-width: 500px) {
+    .lb-tab-bar {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 0;
+    }
+    .lb-tabs-scroll {
+        padding: 0 0.75rem;
+    }
+    .lb-tab-actions {
+        padding: 0.5rem 0.75rem;
+        border-top: 1px solid var(--border-color);
+    }
+    /* Stack two-column grids inside modals on very small screens */
+    #lbEntryModal div[style*="grid-template-columns"],
+    #lbFuelModal div[style*="grid-template-columns"] {
         grid-template-columns: 1fr !important;
     }
 }
@@ -2244,8 +2369,5 @@ body::before {
     }
     #logbookBody {
         padding: 0.5rem 0.5rem 0.75rem !important;
-    }
-    #logbookFormPanel {
-        padding: 0.75rem !important;
     }
 }

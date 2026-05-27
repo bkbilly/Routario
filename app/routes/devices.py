@@ -18,12 +18,14 @@ from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy import select, update, and_
+from sqlalchemy.orm import selectinload
 
 from core.database import get_db
 from core.auth import get_current_user, require_admin, require_company_admin, verify_device_access
 from integrations.engine import clear_device_state, evict_auth_cache
 from integrations.integration_model import IntegrationAccount
 from models import User, Device, DeviceState, user_device_association
+from models.models import Driver
 from models.schemas import DeviceCreate, DeviceResponse, DeviceStateResponse, TripResponse, UserResponse
 
 router = APIRouter(prefix="/api/devices", tags=["devices"])
@@ -34,10 +36,10 @@ async def get_all_devices(caller: User = Depends(require_company_admin)):
     """Return devices. Super admin sees all; company admin sees their company's."""
     db = get_db()
     async with db.get_session() as session:
-        if caller.is_admin:
-            result = await session.execute(select(Device))
-        else:
-            result = await session.execute(select(Device).where(Device.company_id == caller.company_id))
+        q = select(Device).options(selectinload(Device.state).selectinload(DeviceState.current_driver))
+        if not caller.is_admin:
+            q = q.where(Device.company_id == caller.company_id)
+        result = await session.execute(q)
         return result.scalars().all()
 
 
@@ -47,12 +49,16 @@ async def get_devices(current_user: User = Depends(get_current_user)):
     db = get_db()
     if current_user.is_admin:
         async with db.get_session() as session:
-            result = await session.execute(select(Device))
+            result = await session.execute(
+                select(Device).options(selectinload(Device.state).selectinload(DeviceState.current_driver))
+            )
             return result.scalars().all()
     if current_user.is_company_admin and current_user.company_id is not None:
         async with db.get_session() as session:
             result = await session.execute(
-                select(Device).where(Device.company_id == current_user.company_id)
+                select(Device)
+                .where(Device.company_id == current_user.company_id)
+                .options(selectinload(Device.state).selectinload(DeviceState.current_driver))
             )
             return result.scalars().all()
     return await db.get_user_devices(current_user.id)

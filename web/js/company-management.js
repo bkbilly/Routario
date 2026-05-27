@@ -3,9 +3,9 @@
 // ================================================================
 
 let companies    = [];
-let allCompanies = [];
-let allUsers     = [];
-let allDevices   = [];
+let cmpAllCompanies = [];
+let cmpAllUsers     = [];
+let cmpAllDevices   = [];
 
 let companySortCol         = 'name';
 let companySortDir         = 1;
@@ -23,7 +23,7 @@ function formatDate(str) {
 
 document.addEventListener('DOMContentLoaded', async () => {
     checkLogin();
-    if (localStorage.getItem('is_admin') !== 'true') window.location.href = 'login.html';
+    if (localStorage.getItem('is_admin') !== 'true') return;
     await Promise.all([loadCompanies(), loadAllUsers(), loadAllDevices()]);
     document.addEventListener('keydown', e => {
         if (e.key === 'Escape') closeCompanyModal();
@@ -37,7 +37,7 @@ async function loadCompanies() {
         const res = await apiFetch(`${API_BASE}/companies`);
         if (!res.ok) throw new Error(`${res.status}`);
         companies    = await res.json();
-        allCompanies = [...companies];
+        cmpAllCompanies = [...companies];
         filterCompanies();
     } catch (e) {
         showAlert('Failed to load companies', 'error');
@@ -48,14 +48,14 @@ async function loadCompanies() {
 async function loadAllUsers() {
     try {
         const res = await apiFetch(`${API_BASE}/users`);
-        if (res.ok) allUsers = (await res.json()).filter(u => !u.is_admin);
+        if (res.ok) cmpAllUsers = (await res.json()).filter(u => !u.is_admin);
     } catch (e) { console.error(e); }
 }
 
 async function loadAllDevices() {
     try {
         const res = await apiFetch(`${API_BASE}/devices/all`);
-        if (res.ok) allDevices = await res.json();
+        if (res.ok) cmpAllDevices = await res.json();
     } catch (e) { console.error(e); }
 }
 
@@ -91,7 +91,7 @@ function _companySortValue(c, col) {
 
 function filterCompanies() {
     const q = (document.getElementById('companySearch').value || '').toLowerCase().trim();
-    const filtered = q ? allCompanies.filter(c => c.name.toLowerCase().includes(q)) : allCompanies;
+    const filtered = q ? cmpAllCompanies.filter(c => c.name.toLowerCase().includes(q)) : cmpAllCompanies;
     const sorted = [...filtered].sort((a, b) => {
         const av = _companySortValue(a, companySortCol);
         const bv = _companySortValue(b, companySortCol);
@@ -121,7 +121,6 @@ function renderTable(list) {
             <td style="font-size:0.85rem;color:var(--text-secondary);">${formatDate(c.created_at)}</td>
             <td style="text-align:right;white-space:nowrap;">
                 <button class="btn btn-secondary tbl-btn" onclick="openEditModal(${c.id})"><i class="mdi mdi-pencil"></i> Edit</button>
-                <button class="btn btn-danger tbl-btn" onclick="confirmDelete(${c.id}, '${_esc(c.name)}')"><i class="mdi mdi-delete"></i></button>
             </td>
         </tr>`).join('');
 }
@@ -129,21 +128,22 @@ function renderTable(list) {
 // ── Modal ─────────────────────────────────────────────────────────
 
 function switchTab(tabId, btn) {
-    document.querySelectorAll('.modal-tab-content').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.modal-tab').forEach(el => el.classList.remove('active'));
-    document.getElementById(`tab-${tabId}`)?.classList.add('active');
-    (btn || document.querySelector(`.modal-tab[data-tab="${tabId}"]`))?.classList.add('active');
+    const modal = document.getElementById('companyModal');
+    modal.querySelectorAll('.modal-tab-content').forEach(el => el.classList.remove('active'));
+    modal.querySelectorAll('.modal-tab').forEach(el => el.classList.remove('active'));
+    document.getElementById(`tab-cmp-${tabId}`)?.classList.add('active');
+    (btn || modal.querySelector(`.modal-tab[data-tab="cmp-${tabId}"]`))?.classList.add('active');
     if (tabId === 'users')   renderUserTab();
     if (tabId === 'devices') renderDeviceTab();
 }
 
 function openAddCompanyModal() {
     editingCompanyId = null;
-    document.getElementById('modalTitle').textContent     = 'Add Company';
+    document.getElementById('cmpModalTitle').textContent     = 'Add Company';
     document.getElementById('companyName').value          = '';
     document.getElementById('deleteCompanyBtn').style.display = 'none';
-    document.getElementById('usersTabBtn').style.display  = 'none';
-    document.getElementById('devicesTabBtn').style.display = 'none';
+    document.getElementById('cmpUsersTabBtn').style.display  = 'none';
+    document.getElementById('cmpDevicesTabBtn').style.display = 'none';
     switchTab('general');
     document.getElementById('companyModal').classList.add('active');
 }
@@ -153,11 +153,11 @@ async function openEditModal(companyId) {
     const c = companies.find(x => x.id === companyId);
     if (!c) return;
 
-    document.getElementById('modalTitle').textContent     = `Edit — ${c.name}`;
+    document.getElementById('cmpModalTitle').textContent     = `Edit — ${c.name}`;
     document.getElementById('companyName').value          = c.name;
     document.getElementById('deleteCompanyBtn').style.display = 'inline-flex';
-    document.getElementById('usersTabBtn').style.display  = '';
-    document.getElementById('devicesTabBtn').style.display = '';
+    document.getElementById('cmpUsersTabBtn').style.display  = '';
+    document.getElementById('cmpDevicesTabBtn').style.display = '';
 
     // Load current company memberships
     const [userRes, deviceRes] = await Promise.all([
@@ -257,7 +257,7 @@ function filterUserTab() { renderUserTab(); }
 function renderUserTab() {
     const list  = document.getElementById('userTabList');
     const query = (document.getElementById('userTabSearch')?.value || '').toLowerCase().trim();
-    const filtered = allUsers.filter(u =>
+    const filtered = cmpAllUsers.filter(u =>
         !query ||
         (u.username || '').toLowerCase().includes(query) ||
         (u.email    || '').toLowerCase().includes(query)
@@ -338,7 +338,7 @@ function filterDeviceTab() { renderDeviceTab(); }
 function renderDeviceTab() {
     const list  = document.getElementById('deviceTabList');
     const query = (document.getElementById('deviceTabSearch')?.value || '').toLowerCase().trim();
-    const filtered = allDevices.filter(d =>
+    const filtered = cmpAllDevices.filter(d =>
         !query ||
         (d.name          || '').toLowerCase().includes(query) ||
         (d.imei          || '').toLowerCase().includes(query) ||

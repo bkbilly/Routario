@@ -6,11 +6,19 @@
 
 (function () {
     const path        = window.location.pathname;
-    const isDevices   = path.includes('device-management');
-    const isCompanies = path.includes('company-management');
+    const hash        = window.location.hash;
+    const isManagement = path.includes('management');
+    const isUsers     = isManagement && hash.includes('users');
+    const isDrivers   = path.includes('drivers') || (isManagement && hash.includes('drivers') && !isUsers);
+    const isCompanies = path.includes('company-management') || (isManagement && hash.includes('companies'));
+    const isReports   = path.includes('reports');
+    const isDevices   = path.includes('device-management') || (isManagement && !isCompanies && !isDrivers && !isUsers);
     const isSettings  = path.includes('user-settings');
 
-    const pageTitle = isDevices ? 'Device Management' : isCompanies ? 'Company Management' : 'User Settings';
+    const pageTitle = isManagement ? 'Management'
+                    : isReports ? 'Fleet Reports'
+                    : isSettings ? 'User Settings'
+                    : 'Management';
 
     const isAdmin        = localStorage.getItem('is_admin') === 'true';
     const isCompanyAdmin = localStorage.getItem('is_company_admin') === 'true';
@@ -316,7 +324,7 @@
                     ${chevron}
                 </button>
 
-                <a href="device-management.html" class="header-menu-item${isDevices ? ' active-page' : ''}">
+                <a href="management.html" class="header-menu-item${isManagement ? ' active-page' : ''}">
                     <span class="header-menu-item-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
                              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -324,24 +332,19 @@
                             <line x1="12" y1="18" x2="12" y2="18"/>
                         </svg>
                     </span>
-                    <span>Device Management</span>
+                    <span>Management</span>
                     ${chevron}
                 </a>
 
-                ${isAdmin ? `
-                <a href="company-management.html" class="header-menu-item${isCompanies ? ' active-page' : ''}">
+                <a href="reports.html" class="header-menu-item${isReports ? ' active-page' : ''}">
                     <span class="header-menu-item-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="2" y="7" width="20" height="14" rx="2"/>
-                            <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
-                        </svg>
+                        <i class="mdi mdi-chart-bar" style="font-size:15px;"></i>
                     </span>
-                    <span>Companies</span>
+                    <span>Fleet Reports</span>
                     ${chevron}
-                </a>` : ''}
+                </a>
 
-                <a href="user-settings.html" class="header-menu-item${!isDevices && !isCompanies ? ' active-page' : ''}">
+                <a href="user-settings.html" class="header-menu-item${isSettings ? ' active-page' : ''}">
                     <span class="header-menu-item-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
                              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -361,29 +364,7 @@
                     ${chevron}
                 </a>
 
-                ${isDevices || isCompanies ? `<div class="header-menu-divider"></div>` : ''}
-
-                ${isDevices ? `
-                <button class="header-menu-item" onclick="openAddDeviceModal(); document.getElementById('snDropdown').classList.remove('open'); document.getElementById('snGearBtn').classList.remove('active');">
-                    <span class="header-menu-item-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                        </svg>
-                    </span>
-                    <span>Add Device</span>
-                </button>` : ''}
-
-                ${isCompanies ? `
-                <button class="header-menu-item" onclick="openAddCompanyModal(); document.getElementById('snDropdown').classList.remove('open'); document.getElementById('snGearBtn').classList.remove('active');">
-                    <span class="header-menu-item-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                        </svg>
-                    </span>
-                    <span>Add Company</span>
-                </button>` : ''}
+                ${isManagement ? `<div class="header-menu-divider"></div><div id="snAddAction"></div><div id="snNotifyAction"></div>` : ''}
 
                 <div class="header-menu-divider"></div>
 
