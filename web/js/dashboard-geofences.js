@@ -74,10 +74,14 @@ let _pendingCoords = null;        // Coords of a freshly drawn shape waiting to 
 let _pendingType = 'polygon';     // 'polygon' | 'polyline'
 let _geofences = [];              // Local cache [{id, name, color, coords, type}, ...]
 let _showAllUsersGeofences = false;
+let _mapDraggedRecently = false;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 function initGeofences(mapInstance) {
     _map = mapInstance;
+
+    _map.on('dragstart', () => { _mapDraggedRecently = true; });
+    _map.on('dragend',   () => { setTimeout(() => { _mapDraggedRecently = false; }, 250); });
 
     // Feature group that Leaflet.draw uses for edit toolbar
     _geofenceLayer = new L.FeatureGroup().addTo(_map);
@@ -163,6 +167,7 @@ function _addLayerToMap(gf) {
                 className: 'geofence-tooltip',
             });
             corridorLayer.on('click', (e) => {
+                if (_drawControl || _mapDraggedRecently) return;
                 L.DomEvent.stopPropagation(e);
                 _enterEditMode(layer, gf.id);
             });
@@ -190,6 +195,7 @@ function _addLayerToMap(gf) {
 
     // Click → enter edit mode
     layer.on('click', (e) => {
+        if (_drawControl || _mapDraggedRecently) return;
         L.DomEvent.stopPropagation(e);
         _enterEditMode(layer, gf.id);
     });

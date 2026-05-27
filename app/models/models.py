@@ -76,7 +76,7 @@ class Device(Base):
     protocol:      Mapped[str]           = mapped_column(String(50),  nullable=False)
     vehicle_type:  Mapped[Optional[str]] = mapped_column(String(50),  nullable=True)
     license_plate: Mapped[Optional[str]] = mapped_column(String(20),  nullable=True)
-    vin:           Mapped[Optional[str]] = mapped_column(String(17),  nullable=True)
+    custom_attributes: Mapped[Dict]      = mapped_column(JsonType, default={})
     is_active:     Mapped[bool]           = mapped_column(Boolean, default=True)
     config:        Mapped[Dict]           = mapped_column(JsonType, default={})
     created_at:    Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
@@ -112,6 +112,7 @@ class DeviceState(Base):
     sensors:        Mapped[Dict]            = mapped_column(JsonType, default={})
 
     active_trip_id:    Mapped[Optional[int]]      = mapped_column(Integer, ForeignKey('trips.id', ondelete='SET NULL'), nullable=True)
+    last_trip_id:      Mapped[Optional[int]]      = mapped_column(Integer, ForeignKey('trips.id', ondelete='SET NULL'), nullable=True)
     last_ignition_on:  Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_ignition_off: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 

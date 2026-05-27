@@ -248,7 +248,8 @@ class AlertEngine:
             "device_name":   device.name,
             "imei":          device.imei,
             "vehicle_type":  device.vehicle_type,
-            "license_plate": device.license_plate,
+            "license_plate":     device.license_plate,
+            "custom_attributes": device.custom_attributes or {},
             "alert_type":    alert_data['type'].value,
             "severity":      alert_data.get('severity', Severity.WARNING).value
                              if hasattr(alert_data.get('severity'), 'value')

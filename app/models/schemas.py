@@ -122,7 +122,7 @@ class DeviceCreate(BaseModel):
     protocol: str = "teltonika"
     vehicle_type: Optional[str] = "car"
     license_plate: Optional[str] = None
-    vin: Optional[str] = None
+    custom_attributes: Optional[Dict[str, str]] = Field(default_factory=dict)
     company_id: Optional[int] = None
     config: DeviceConfig = Field(
         default_factory=lambda: DeviceConfig(
@@ -149,6 +149,7 @@ class DeviceResponse(BaseModel):
     protocol: str
     vehicle_type: Optional[str]
     license_plate: Optional[str]
+    custom_attributes: Optional[Dict[str, Any]] = None
     is_active: bool
     created_at: datetime
     config: Optional[Dict[str, Any]] = None
