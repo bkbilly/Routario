@@ -166,6 +166,8 @@ class DatabaseService:
             "ALTER TABLE users ADD COLUMN is_company_admin BOOLEAN DEFAULT FALSE",
             "ALTER TABLE devices ADD COLUMN company_id INTEGER",
             "ALTER TABLE geofences ADD COLUMN user_id INTEGER",
+            "ALTER TABLE device_states ADD COLUMN last_trip_id INTEGER",
+            "ALTER TABLE devices ADD COLUMN custom_attributes JSON DEFAULT '{}'",
         ]
         if self._is_postgres:
             migrations.append("ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)")
@@ -526,7 +528,7 @@ class DatabaseService:
                 protocol=device_data.protocol,
                 vehicle_type=device_data.vehicle_type,
                 license_plate=device_data.license_plate,
-                vin=device_data.vin,
+                custom_attributes=device_data.custom_attributes or {},
                 config=device_data.config.model_dump(),
                 company_id=device_data.company_id,
             )
@@ -580,8 +582,8 @@ class DatabaseService:
             device.imei          = device_data.imei
             device.protocol      = device_data.protocol
             device.vehicle_type  = device_data.vehicle_type
-            device.license_plate = device_data.license_plate
-            device.vin           = device_data.vin
+            device.license_plate       = device_data.license_plate
+            device.custom_attributes   = device_data.custom_attributes or {}
             device.config        = device_data.config.model_dump()
             device.company_id    = device_data.company_id
             await session.flush()
@@ -709,13 +711,29 @@ class DatabaseService:
         if position.ignition is None:
             return
 
+        merge_gap_seconds = (device.config.get('trip_merge_gap_minutes') or 0) * 60
+
         if position.ignition and not state.active_trip_id:
             if state.last_ignition_off:
                 off = state.last_ignition_off
                 if off.tzinfo and not device_time.tzinfo:
                     off = off.replace(tzinfo=None)
-                if 0 < (device_time - off).total_seconds() < 30:
+                gap = (device_time - off).total_seconds()
+                if 0 < gap < 30:
                     return
+                # Merge into the previous trip if within the configured gap
+                if merge_gap_seconds > 0 and 0 < gap <= merge_gap_seconds and state.last_trip_id:
+                    prev_trip = await session.get(Trip, state.last_trip_id)
+                    if prev_trip:
+                        prev_trip.end_time = None
+                        prev_trip.end_latitude = None
+                        prev_trip.end_longitude = None
+                        prev_trip.duration_minutes = 0
+                        prev_trip.avg_speed = 0.0
+                        state.active_trip_id  = prev_trip.id
+                        state.last_ignition_on = device_time
+                        state.trip_odometer   = prev_trip.distance_km
+                        return
             trip = Trip(
                 device_id=device.id,
                 start_time=device_time,
@@ -743,6 +761,7 @@ class DatabaseService:
                 trip.duration_minutes = mins
                 if mins > 0:
                     trip.avg_speed = (trip.distance_km / mins) * 60
+            state.last_trip_id     = state.active_trip_id
             state.active_trip_id   = None
             state.last_ignition_off = device_time
 

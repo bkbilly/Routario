@@ -108,8 +108,11 @@
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label class="form-label">VIN</label>
-                                <input type="text" class="form-input" id="vin" placeholder="17-character VIN">
+                                <label class="form-label">Custom Attributes</label>
+                                <div id="customAttributesList" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+                                <button type="button" class="btn btn-secondary" style="margin-top:0.5rem;font-size:0.8rem;" onclick="addCustomAttribute()">
+                                    <i class="mdi mdi-plus"></i> Add attribute
+                                </button>
                             </div>
                             <div class="form-group" id="deviceCompanyGroup" style="display:none;">
                                 <label class="form-label">Company</label>
@@ -130,6 +133,13 @@
                                     <span style="font-size:0.8rem;color:var(--text-muted);font-weight:normal;display:block;margin-top:0.25rem;">Hours without data before vehicle is considered offline</span>
                                 </label>
                                 <input type="number" id="offlineTimeoutHours" class="form-input" placeholder="24" step="1" min="1" value="24">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">
+                                    Trip Merge Gap (minutes)
+                                    <span style="font-size:0.8rem;color:var(--text-muted);font-weight:normal;display:block;margin-top:0.25rem;">Merge consecutive trips separated by an ignition-off gap shorter than this. 0 = disabled.</span>
+                                </label>
+                                <input type="number" id="tripMergeGapMinutes" class="form-input" placeholder="0" step="1" min="0" value="0">
                             </div>
                         </div>
                     </div>

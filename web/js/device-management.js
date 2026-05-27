@@ -38,6 +38,9 @@ let deviceAssignedUserIds   = new Set();
 // Companies
 let allCompanies            = [];
 
+// Unsaved-changes guard
+let _deviceModalSnapshot    = null;
+
 // ── Constants ────────────────────────────────────────────────────
 const DAYS             = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DEFAULT_PROTOCOL = 'teltonika';
@@ -86,9 +89,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.addEventListener('keydown', e => {
         if (e.key !== 'Escape') return;
-        ['deviceModal', 'alertEditorModal'].forEach(id => {
-            document.getElementById(id)?.classList.remove('active');
-        });
+        if (document.getElementById('deviceModal')?.classList.contains('active')) {
+            closeDeviceModal();
+        } else {
+            document.getElementById('alertEditorModal')?.classList.remove('active');
+        }
     });
 });
 
@@ -376,12 +381,14 @@ function openDeviceModal(deviceId, startTab = 'general') {
     document.getElementById('deviceImei').value          = d.imei;
     document.getElementById('deviceProtocol').value      = d.protocol || DEFAULT_PROTOCOL;
     document.getElementById('licensePlate').value        = d.license_plate || '';
-    document.getElementById('vin').value                 = d.vin || '';
+    renderCustomAttributes(d.custom_attributes || {});
     if (isAdmin) populateDeviceCompanySelect(d.company_id);
     document.getElementById('currentOdometer').value     =
         d.state?.total_odometer != null ? toDisplayDist(d.state.total_odometer) : '0.0';
     document.getElementById('offlineTimeoutHours').value =
         d.config?.offline_timeout_hours ?? 24;
+    document.getElementById('tripMergeGapMinutes').value =
+        d.config?.trip_merge_gap_minutes ?? 0;
 
     const imeiEl     = document.getElementById('deviceImei');
     const protocolEl = document.getElementById('deviceProtocol');
@@ -401,9 +408,29 @@ function openDeviceModal(deviceId, startTab = 'general') {
     switchModalTab(startTab);
     refreshNativeEventAlerts();
     document.getElementById('deviceModal').classList.add('active');
+    _deviceModalSnapshot = _snapshotDeviceModal();
 }
 
-function closeDeviceModal() {
+function _snapshotDeviceModal() {
+    return JSON.stringify({
+        name:         document.getElementById('deviceName')?.value,
+        imei:         document.getElementById('deviceImei')?.value,
+        protocol:     document.getElementById('deviceProtocol')?.value,
+        plate:        document.getElementById('licensePlate')?.value,
+        vehicleType:  document.getElementById('vehicleType')?.value,
+        odometer:     document.getElementById('currentOdometer')?.value,
+        offline:      document.getElementById('offlineTimeoutHours')?.value,
+        mergeGap:     document.getElementById('tripMergeGapMinutes')?.value,
+        customAttrs:  readCustomAttributes(),
+        alertRows:    alertRows,
+    });
+}
+
+function closeDeviceModal(force = false) {
+    if (!force && _deviceModalSnapshot && _snapshotDeviceModal() !== _deviceModalSnapshot) {
+        if (!confirm('You have unsaved changes. Discard them?')) return;
+    }
+    _deviceModalSnapshot = null;
     document.getElementById('deviceModal').classList.remove('active');
     clearInterval(commandHistoryInterval);
     commandHistoryInterval = null;
@@ -415,6 +442,48 @@ function openRawDataModal(id) { openDeviceModal(id, 'rawdata'); }
 // ── Commands Tab ──────────────────────────────────────────────────
 function openCommandModal(deviceId) {
     openDeviceModal(deviceId, 'commands');
+}
+
+// ── Custom Attributes ─────────────────────────────────────────────
+function renderCustomAttributes(attrs) {
+    const list = document.getElementById('customAttributesList');
+    if (!list) return;
+    list.innerHTML = '';
+    Object.entries(attrs).forEach(([k, v]) => _addCustomAttributeRow(k, v));
+}
+
+function addCustomAttribute() {
+    _addCustomAttributeRow('', '');
+}
+
+function _addCustomAttributeRow(key, value) {
+    const list = document.getElementById('customAttributesList');
+    if (!list) return;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:0.4rem;align-items:center;';
+    row.innerHTML = `
+        <input type="text" class="form-input custom-attr-key"   placeholder="Key"   value="${_escAttr(key)}"   style="flex:1;">
+        <input type="text" class="form-input custom-attr-value" placeholder="Value" value="${_escAttr(value)}" style="flex:2;">
+        <button type="button" class="btn btn-danger" style="padding:0.35rem 0.6rem;" onclick="this.closest('div').remove()"><i class="mdi mdi-close"></i></button>`;
+    list.appendChild(row);
+    row.querySelector('.custom-attr-key').focus();
+}
+
+function _escAttr(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+}
+function _escAttrJson(v) {
+    return JSON.stringify(v).replace(/"/g,'&quot;');
+}
+
+function readCustomAttributes() {
+    const result = {};
+    document.querySelectorAll('#customAttributesList > div').forEach(row => {
+        const k = row.querySelector('.custom-attr-key')?.value.trim();
+        const v = row.querySelector('.custom-attr-value')?.value.trim();
+        if (k) result[k] = v ?? '';
+    });
+    return result;
 }
 
 // ── Form Submit ───────────────────────────────────────────────────
@@ -437,6 +506,7 @@ async function handleSubmit(event) {
         newConfig.maintenance            = existingConfig.maintenance || {};
         newConfig.speed_duration_seconds = existingConfig.speed_duration_seconds || 30;
         newConfig.offline_timeout_hours  = parseInt(document.getElementById('offlineTimeoutHours').value) || 24;
+        newConfig.trip_merge_gap_minutes = parseInt(document.getElementById('tripMergeGapMinutes').value) || 0;
 
         const isIntg     = _isIntegrationSelected();
         const providerId = document.getElementById('deviceProtocol').value;
@@ -483,8 +553,8 @@ async function handleSubmit(event) {
             imei,
             protocol:      providerId,
             vehicle_type:  document.getElementById('vehicleType').value    || DEFAULT_TYPE,
-            license_plate: document.getElementById('licensePlate').value   || null,
-            vin:           document.getElementById('vin').value            || null,
+            license_plate:     document.getElementById('licensePlate').value || null,
+            custom_attributes: readCustomAttributes(),
             config:        newConfig,
         };
         if (isAdmin) {
@@ -512,7 +582,8 @@ async function handleSubmit(event) {
 
         if (response.ok) {
             showAlert(editingDeviceId ? 'Device updated' : 'Device added', 'success');
-            closeDeviceModal();
+            _deviceModalSnapshot = null;
+            closeDeviceModal(true);
             await loadDevices();
         } else {
             const err = await response.json();
@@ -827,12 +898,12 @@ function renderAlertsTable() {
             if (!ids || ids.length === 0) {
                 notifyUsersCell = `<td><span style="color:var(--text-muted);font-size:0.8rem;">${!ids ? 'All' : 'None'}</span></td>`;
             } else {
-                const names = ids.map(id => {
-                    const u = allUsers.find(u => u.id === id);
-                    return u ? _esc(u.username) : `#${id}`;
-                });
+                const _myId = parseInt(localStorage.getItem('user_id'), 10);
+                const visibleUsers = ids
+                    .map(id => allUsers.find(u => u.id === id))
+                    .filter(u => u && (isAdmin || u.id === _myId || (!u.is_admin && !u.is_company_admin)));
                 notifyUsersCell = `<td><div style="display:flex;flex-wrap:wrap;gap:0.3rem;">${
-                    names.map(n => `<span class="channel-pill active" style="pointer-events:none;font-size:0.75rem;">${n}</span>`).join('')
+                    visibleUsers.map(u => `<span class="channel-pill active" style="pointer-events:none;font-size:0.75rem;">${_esc(u.username)}</span>`).join('')
                 }</div></td>`;
             }
         }
@@ -1067,6 +1138,8 @@ async function openAlertEditor(uid) {
 
             // Default selection: existing notify_user_ids, no fallback to current user
             const selectedIds = new Set(existingIds);
+            // IDs not shown as checkboxes (out-of-scope admins, etc.) — preserve on save
+            const hiddenIds = existingIds.filter(id => !deviceUsers.some(u => u.id === id));
             const pills = deviceUsers.map(u =>
                 `<label class="channel-pill${selectedIds.has(u.id) ? ' active' : ''}">
                     <input type="checkbox" class="editor-notify-user-cb" value="${u.id}"${selectedIds.has(u.id) ? ' checked' : ''}>
@@ -1075,6 +1148,7 @@ async function openAlertEditor(uid) {
             ).join('');
             notifyUsersHtml = `<div class="form-group">
                 <label class="form-label">Notify Users</label>
+                <input type="hidden" id="alertEditorHiddenNotifyIds" value="${_escAttrJson(hiddenIds)}">
                 <div style="display:flex;flex-wrap:wrap;gap:0.4rem;">${pills}</div>
             </div>`;
         } catch (e) { console.error('Failed to load device users:', e); }
@@ -1209,8 +1283,11 @@ function saveAlertFromEditor() {
 
     const notifyUserCbs = document.querySelectorAll('.editor-notify-user-cb');
     if (notifyUserCbs.length > 0) {
-        row.notify_user_ids = [];
-        notifyUserCbs.forEach(cb => { if (cb.checked) row.notify_user_ids.push(parseInt(cb.value, 10)); });
+        const selected = [];
+        notifyUserCbs.forEach(cb => { if (cb.checked) selected.push(parseInt(cb.value, 10)); });
+        const hiddenEl = document.getElementById('alertEditorHiddenNotifyIds');
+        const preserved = hiddenEl ? JSON.parse(hiddenEl.value || '[]') : [];
+        row.notify_user_ids = [...new Set([...selected, ...preserved])];
     }
 
     const activeDays = [];
