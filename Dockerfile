@@ -19,18 +19,20 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     espeak \
     ffmpeg \
+    su-exec \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /install /usr/local
 COPY app/  ./app/
 COPY web/  ./web/
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 RUN addgroup --system routario && adduser --system --ingroup routario routario
 RUN chown -R routario:routario /app
-USER routario
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app
 
-CMD ["python", "app/main.py"]
+ENTRYPOINT ["/entrypoint.sh"]
