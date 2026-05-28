@@ -326,6 +326,7 @@ function switchModalTab(tabId, btn) {
     if (commandTabsBar) commandTabsBar.style.display = tabId === 'commands' ? 'flex' : 'none';
     if (tabId !== 'commands') { clearInterval(commandHistoryInterval); commandHistoryInterval = null; }
     if (tabId === 'rawdata'  && editingDeviceId) loadRawDataForModal(editingDeviceId);
+    if (tabId === 'clips'    && editingDeviceId) loadClipsForDevice(editingDeviceId);
     if (tabId === 'users'    && editingDeviceId) loadUsersForDevice(editingDeviceId);
     if (tabId === 'commands' && editingDeviceId) {
         currentCommandDeviceId = editingDeviceId;
@@ -391,6 +392,8 @@ function openDeviceModal(deviceId, startTab = 'general') {
     if (rawDataTabBtnEdit) rawDataTabBtnEdit.style.display = hasPermission('view_history') ? '' : 'none';
     const alertsTabBtnEdit = document.querySelector('.modal-tab[data-tab="alerts"]');
     if (alertsTabBtnEdit) alertsTabBtnEdit.style.display = hasPermission('manage_alerts') ? '' : 'none';
+    const clipsTabBtn = document.getElementById('clipsTabBtn');
+    if (clipsTabBtn) clipsTabBtn.style.display = hasPermission('view_history') ? '' : 'none';
     deviceAssignedUserIds = new Set();
 
     document.getElementById('deviceName').value          = d.name;
@@ -1586,5 +1589,102 @@ async function clearAllAlerts() {
     }
     loadAlerts();
     showAlert('All alerts cleared', 'success');
+}
+
+// ── Dashcam Clips ─────────────────────────────────────────────────────────────
+
+const EVENT_TYPE_LABELS = {
+    manual: { label: 'Manual', color: '#6b7280' },
+    harsh_brake: { label: 'Harsh Brake', color: '#f59e0b' },
+    harsh_accel: { label: 'Harsh Accel', color: '#f59e0b' },
+    harsh_corner: { label: 'Harsh Corner', color: '#f59e0b' },
+    collision: { label: 'Collision', color: '#ef4444' },
+    overspeeding: { label: 'Overspeeding', color: '#3b82f6' },
+    jamming: { label: 'Jamming', color: '#8b5cf6' },
+};
+
+let _allClips = [];
+
+async function loadClipsForDevice(deviceId) {
+    const grid = document.getElementById('clipsGrid');
+    grid.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">Loading clips…</div>';
+    try {
+        const res = await apiFetch(`${API_BASE}/dashcam/clips?device_id=${deviceId}`);
+        if (!res.ok) throw new Error();
+        _allClips = await res.json();
+        renderClipsGrid(_allClips);
+    } catch {
+        grid.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--accent-danger);">Failed to load clips.</div>';
+    }
+}
+
+function applyClipsFilter() {
+    const et = document.getElementById('clipsEventFilter').value;
+    const cam = document.getElementById('clipsCameraFilter').value;
+    const filtered = _allClips.filter(c =>
+        (!et || c.event_type === et) && (!cam || c.camera === cam)
+    );
+    renderClipsGrid(filtered);
+}
+
+function renderClipsGrid(clips) {
+    const grid = document.getElementById('clipsGrid');
+    if (!clips.length) {
+        grid.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);"><i class="mdi mdi-video-off" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>No clips found</div>';
+        return;
+    }
+    grid.innerHTML = clips.map(c => {
+        const ev = EVENT_TYPE_LABELS[c.event_type] || { label: c.event_type, color: '#6b7280' };
+        const thumb = c.thumbnail_path
+            ? `<img src="/api/dashcam/clips/${c.id}/thumbnail" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<i class=\\'mdi mdi-video\\' style=\\'font-size:2rem;color:var(--text-muted)\\'></i>'">`
+            : '<i class="mdi mdi-video" style="font-size:2rem;color:var(--text-muted);"></i>';
+        const speed = c.speed != null ? `${Number(c.speed).toFixed(0)} km/h` : '';
+        const size = c.file_size ? `${(c.file_size / 1024 / 1024).toFixed(1)} MB` : '';
+        return `
+            <div class="clip-card" onclick="openClipPlayer(${c.id}, '${ev.label}', '${formatDateToLocal(c.timestamp)}', '${c.camera}', '${speed}')">
+                <div class="clip-thumb">${thumb}</div>
+                <div class="clip-info">
+                    <span class="clip-event-badge" style="background:${ev.color}20;color:${ev.color};border-color:${ev.color}40;">${ev.label}</span>
+                    <span class="clip-camera-badge">${c.camera}</span>
+                    <div class="clip-time">${formatDateToLocal(c.timestamp)}</div>
+                    ${speed ? `<div class="clip-meta">${speed}${size ? ' · ' + size : ''}</div>` : ''}
+                </div>
+                ${hasAdminAccess ? `<button class="clip-delete-btn" onclick="event.stopPropagation();deleteClip(${c.id})" title="Delete"><i class="mdi mdi-delete"></i></button>` : ''}
+            </div>`;
+    }).join('');
+}
+
+async function openClipPlayer(clipId, eventLabel, time, camera, speed) {
+    const modal = document.getElementById('clipPlayerModal');
+    const video = document.getElementById('clipPlayerVideo');
+    const meta  = document.getElementById('clipPlayerMeta');
+    document.getElementById('clipPlayerTitle').textContent = eventLabel;
+    video.src = `/api/dashcam/clips/${clipId}/video`;
+    meta.innerHTML = [
+        `<span><i class="mdi mdi-clock-outline"></i> ${time}</span>`,
+        `<span><i class="mdi mdi-video"></i> ${camera}</span>`,
+        speed ? `<span><i class="mdi mdi-speedometer"></i> ${speed}</span>` : '',
+    ].filter(Boolean).join('');
+    modal.style.display = 'flex';
+    video.play().catch(() => {});
+}
+
+function closeClipPlayer() {
+    const modal = document.getElementById('clipPlayerModal');
+    const video = document.getElementById('clipPlayerVideo');
+    video.pause();
+    video.src = '';
+    modal.style.display = 'none';
+}
+
+async function deleteClip(clipId) {
+    if (!confirm('Delete this clip?')) return;
+    const res = await apiFetch(`${API_BASE}/dashcam/clips/${clipId}`, { method: 'DELETE' });
+    if (res.ok || res.status === 204) {
+        _allClips = _allClips.filter(c => c.id !== clipId);
+        applyClipsFilter();
+    } else {
+        showAlert({ title: 'Error', message: 'Failed to delete clip.', type: 'error' });
+    }
 }
 

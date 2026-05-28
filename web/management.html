@@ -237,6 +237,7 @@
                 <button type="button" class="modal-tab" data-tab="rawdata" onclick="switchModalTab('rawdata',this)"><i class="mdi mdi-chart-bar"></i> Raw Data</button>
                 <button type="button" class="modal-tab" data-tab="users"     id="usersTabBtn"    onclick="switchModalTab('users',this)"    style="display:none;"><i class="mdi mdi-account-group"></i> Users</button>
                 <button type="button" class="modal-tab" data-tab="commands" id="commandsTabBtn" onclick="switchModalTab('commands',this)" style="display:none;"><i class="mdi mdi-antenna"></i> Commands</button>
+                <button type="button" class="modal-tab" data-tab="clips"    id="clipsTabBtn"    onclick="switchModalTab('clips',this)"    style="display:none;"><i class="mdi mdi-video"></i> Clips</button>
             </div>
 
             <div class="modal-scrollable">
@@ -460,6 +461,28 @@
                     </div>
                 </div>
 
+                <!-- TAB: CLIPS -->
+                <div class="modal-tab-content" id="tab-clips">
+                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;">
+                        <select class="form-input" id="clipsEventFilter" onchange="applyClipsFilter()" style="width:auto;flex:1;min-width:130px;">
+                            <option value="">All Events</option>
+                            <option value="manual">Manual</option>
+                            <option value="harsh_brake">Harsh Brake</option>
+                            <option value="harsh_accel">Harsh Accel</option>
+                            <option value="harsh_corner">Harsh Corner</option>
+                            <option value="collision">Collision</option>
+                            <option value="overspeeding">Overspeeding</option>
+                        </select>
+                        <select class="form-input" id="clipsCameraFilter" onchange="applyClipsFilter()" style="width:auto;flex:1;min-width:110px;">
+                            <option value="">All Cameras</option>
+                            <option value="front">Front</option>
+                            <option value="rear">Rear</option>
+                            <option value="interior">Interior</option>
+                        </select>
+                    </div>
+                    <div id="clipsGrid" class="clips-grid"></div>
+                </div>
+
             </div><!-- /.modal-scrollable -->
 
             <div class="modal-footer">
@@ -490,6 +513,22 @@
         <div class="modal-footer">
             <button type="button" class="btn btn-secondary" onclick="closeAlertEditor()">Cancel</button>
             <button type="button" class="btn btn-primary" onclick="saveAlertFromEditor()">Save Alert</button>
+        </div>
+    </div>
+</div>
+
+<!-- =============================================================
+     VIDEO CLIP PLAYER MODAL
+============================================================= -->
+<div class="modal" id="clipPlayerModal">
+    <div class="modal-content" style="max-width:720px;">
+        <div class="modal-header">
+            <h2 class="modal-title" id="clipPlayerTitle">Video Clip</h2>
+            <button type="button" class="modal-close" onclick="closeClipPlayer()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div style="padding:1rem;">
+            <video id="clipPlayerVideo" controls style="width:100%;border-radius:8px;background:#000;"></video>
+            <div id="clipPlayerMeta" style="margin-top:0.75rem;font-size:0.8rem;color:var(--text-muted);display:flex;gap:1rem;flex-wrap:wrap;"></div>
         </div>
     </div>
 </div>

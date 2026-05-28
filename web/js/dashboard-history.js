@@ -4,6 +4,7 @@
  */
 
 let historyLineMode = 'static'; // 'static' | 'ant'
+let historyClips = [];
 
 const PLAYBACK_SPEEDS = [1, 2, 5, 10];
 let playbackSpeedIdx = 0;
@@ -231,6 +232,7 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
         _updateSpeedBtn();
         _updateSliderGradient();
         requestAnimationFrame(applyHistoryControlsPadding);
+        _loadHistoryClips(deviceId, startTime, endTime);
 
         if (allLayers.length > 0) {
             requestAnimationFrame(() => {
@@ -399,6 +401,8 @@ function exitHistoryMode() {
     document.querySelector('.sidebar').classList.remove('history-active');
 
     document.getElementById('historySlider')?.style.removeProperty('--track-gradient');
+    historyClips = [];
+    _renderClipMarkers();
     historyTrips = [];
     historyBatchOffset = 0;
     historyHasNext = false;
@@ -1087,4 +1091,80 @@ function applyHistoryControlsPadding() {
     const height = footer.offsetHeight;
     const bottomOffset = parseInt(getComputedStyle(footer).bottom) || 16;
     details.style.paddingBottom = (height + bottomOffset + 8) + 'px';
+}
+
+// ── Dashcam clip markers ──────────────────────────────────────────────────────
+
+async function _loadHistoryClips(deviceId, startTime, endTime) {
+    try {
+        const res = await apiFetch(
+            `${API_BASE}/dashcam/clips?device_id=${deviceId}&start=${startTime.toISOString()}&end=${endTime.toISOString()}`
+        );
+        if (!res.ok) return;
+        historyClips = await res.json();
+    } catch {
+        historyClips = [];
+    }
+    _renderClipMarkers();
+}
+
+function _renderClipMarkers() {
+    const row = document.querySelector('.history-slider-row');
+    document.querySelectorAll('.history-clip-marker').forEach(el => el.remove());
+    if (!row || !historyClips.length || historyData.length < 2) return;
+
+    const total = historyData.length - 1;
+    historyClips.forEach(clip => {
+        const clipTs = new Date(clip.timestamp).getTime();
+        // find nearest history point index
+        let nearest = 0, minDiff = Infinity;
+        historyData.forEach((f, i) => {
+            const diff = Math.abs(new Date(f.properties.time).getTime() - clipTs);
+            if (diff < minDiff) { minDiff = diff; nearest = i; }
+        });
+        const pct = (nearest / total) * 100;
+        const btn = document.createElement('button');
+        btn.className = 'history-clip-marker';
+        btn.style.left = `${pct}%`;
+        btn.title = `${clip.event_type.replace(/_/g, ' ')} · ${formatDateToLocal(clip.timestamp)}`;
+        btn.innerHTML = '<i class="mdi mdi-video"></i>';
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            seekHistory(nearest);
+            _openHistoryClipPlayer(clip);
+        };
+        row.appendChild(btn);
+    });
+}
+
+function _openHistoryClipPlayer(clip) {
+    let modal = document.getElementById('historyClipModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'historyClipModal';
+        modal.className = 'modal';
+        modal.style.zIndex = '3001';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width:640px;">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="historyClipTitle">Video Clip</h2>
+                    <button type="button" class="modal-close" onclick="document.getElementById('historyClipModal').style.display='none';document.getElementById('historyClipVideo').pause();"><i class="mdi mdi-close"></i></button>
+                </div>
+                <div style="padding:1rem;">
+                    <video id="historyClipVideo" controls style="width:100%;border-radius:8px;background:#000;"></video>
+                    <div id="historyClipMeta" style="margin-top:0.75rem;font-size:0.8rem;color:var(--text-muted);display:flex;gap:1rem;flex-wrap:wrap;"></div>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+    }
+    const ev = clip.event_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    document.getElementById('historyClipTitle').textContent = ev;
+    document.getElementById('historyClipVideo').src = `${API_BASE}/dashcam/clips/${clip.id}/video`;
+    document.getElementById('historyClipMeta').innerHTML = [
+        `<span><i class="mdi mdi-clock-outline"></i> ${formatDateToLocal(clip.timestamp)}</span>`,
+        `<span><i class="mdi mdi-video"></i> ${clip.camera}</span>`,
+        clip.speed != null ? `<span><i class="mdi mdi-speedometer"></i> ${Number(clip.speed).toFixed(0)} km/h</span>` : '',
+    ].filter(Boolean).join('');
+    modal.style.display = 'flex';
+    document.getElementById('historyClipVideo').play().catch(() => {});
 }
