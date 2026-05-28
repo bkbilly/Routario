@@ -87,7 +87,27 @@ Access via **Admin Panel → Users**.
 
 ### Managing users (company admin)
 
-Company admins can promote or demote users within their own company between the Company Admin and Regular User roles. They cannot create new users, access other companies, or change super admin accounts.
+Company admins can create and manage users within their own company. They cannot access other companies or change super admin accounts.
+
+---
+
+## Permissions
+
+On top of the three-tier role hierarchy, users can be granted fine-grained permissions that control exactly which parts of the platform they can access.
+
+| Group | Permissions |
+|---|---|
+| **Devices** | View Devices, Edit Devices, Manage Alerts, Send Commands, Manage Integrations |
+| **History & Reports** | View History, View Reports |
+| **Fleet Operations** | Manage Drivers, Manage Fuel, Manage Maintenance, Manage Logbook |
+| **Zones** | Manage Geofences |
+| **Communication & Sharing** | Voice PTT, Live Share |
+| **Administration** | View Management, Manage Users |
+
+- **Super Admins** always have all permissions and cannot be restricted.
+- **Permission capping** — a user can only grant permissions they hold themselves; they cannot escalate another user beyond their own access level.
+
+Permissions are configured per user via **Admin Panel → Users → Edit**.
 
 ---
 

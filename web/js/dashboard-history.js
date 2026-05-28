@@ -3,6 +3,11 @@
  * History modal, playback controls, trip display, sensor graph, and CSV export.
  */
 
+let historyLineMode = 'static'; // 'static' | 'ant'
+
+const PLAYBACK_SPEEDS = [1, 2, 5, 10];
+let playbackSpeedIdx = 0;
+
 const SENSOR_COLORS = [
     '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
     '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'
@@ -216,74 +221,26 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
         document.getElementById('historySlider').max = historyData.length - 1;
         document.getElementById('historySlider').value = 0;
 
-        // Draw trip polylines — each contiguous run of the same trip_id gets its own color.
-        // Points between trips (trip_id: null) are drawn as a subtle dashed grey line.
-        const allLayers = [];
         tripColorMap = {}; // reset shared state
-        let tripColorIdx = 0;
-        let currentTripId = undefined;
-        let currentSegment = [];
-
-        const flushSegment = () => {
-            if (currentSegment.length < 2) { currentSegment = []; return; }
-            if (currentTripId) {
-                if (!(currentTripId in tripColorMap)) {
-                    tripColorMap[currentTripId] = tripColors[tripColorIdx++ % tripColors.length];
-                }
-                const color = tripColorMap[currentTripId];
-                const pl = L.polyline.antPath(currentSegment, {
-                    color:     color,
-                    weight:    4,
-                    opacity:   0.85,
-                    delay:     2000,
-                    dashArray: [5, 80],
-                    pulseColor: '#ffffff',
-                }).addTo(map);
-                allLayers.push(pl);
-            } else {
-                const pl = L.polyline.antPath(currentSegment, {
-                    color:     '#ef4444',
-                    weight:    4,
-                    opacity:   0.85,
-                    delay:     2000,
-                    dashArray: [5, 80],
-                    pulseColor: '#ffffff',
-                }).addTo(map);
-                allLayers.push(pl);
-            }
-            currentSegment = [];
-        };
-
-        historyData.forEach(f => {
-            const tripId = f.properties?.trip_id ?? null;
-            const latlng = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
-            if (tripId !== currentTripId) {
-                const lastPoint = currentSegment.length > 0 ? currentSegment[currentSegment.length - 1] : null;
-                flushSegment();
-                currentTripId = tripId;
-                // Draw a thick red bridge between the two segments
-                if (lastPoint) {
-                    const bridge = L.polyline.antPath([lastPoint, latlng], {
-                        color:     '#ef4444',
-                        weight:    4,
-                        opacity:   0.85,
-                        delay:     2000,
-                        dashArray: [5, 80],
-                        pulseColor: '#ffffff',
-                    }).addTo(map);
-                    allLayers.push(bridge);
-                }
-            }
-            currentSegment.push(latlng);
-        });
-        flushSegment();
-
+        const allLayers = _buildHistoryLayers();
         polylines['history'] = L.featureGroup(allLayers);
-        if (allLayers.length > 0) map.fitBounds(polylines['history'].getBounds(), { paddingTopLeft: [getSidebarOffset(), 0] });
 
         const footer = document.getElementById('historyControls');
         if (footer) footer.style.display = 'flex';
+        _updateLineModeBtn();
+        _updateSpeedBtn();
+        _updateSliderGradient();
         requestAnimationFrame(applyHistoryControlsPadding);
+
+        if (allLayers.length > 0) {
+            requestAnimationFrame(() => {
+                const bottomPad = (footer?.offsetHeight ?? 0) + 48; // 48 ≈ 2rem offset + gap
+                map.fitBounds(polylines['history'].getBounds(), {
+                    paddingTopLeft: [getSidebarOffset(), 16],
+                    paddingBottomRight: [16, bottomPad],
+                });
+            });
+        }
         document.querySelector('.sidebar').classList.add('history-active');
 
         // Hide regular list
@@ -306,6 +263,103 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
             if (accuracyCircles[d.id] && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
         });
     }
+}
+
+function _buildHistoryLayers() {
+    const ant = historyLineMode === 'ant';
+    const allLayers = [];
+    let tripColorIdx = 0;
+    let currentTripId = undefined;
+    let currentSegment = [];
+
+    const makeLine = (coords, color, isBridge) => {
+        if (ant) {
+            return L.polyline.antPath(coords, {
+                color, weight: 4, opacity: 0.85,
+                delay: 2000, dashArray: [5, 80], pulseColor: '#ffffff',
+            }).addTo(map);
+        }
+        if (isBridge) {
+            return L.polyline(coords, { color, weight: 2, opacity: 0.45, dashArray: '6 10' }).addTo(map);
+        }
+        return L.polyline(coords, { color, weight: 4, opacity: 0.85 }).addTo(map);
+    };
+
+    const flushSegment = () => {
+        if (currentSegment.length < 2) { currentSegment = []; return; }
+        let color;
+        if (currentTripId) {
+            if (!(currentTripId in tripColorMap)) {
+                tripColorMap[currentTripId] = tripColors[tripColorIdx++ % tripColors.length];
+            }
+            color = tripColorMap[currentTripId];
+        } else {
+            color = '#ef4444';
+        }
+        allLayers.push(makeLine(currentSegment, color, false));
+        currentSegment = [];
+    };
+
+    historyData.forEach(f => {
+        const tripId = f.properties?.trip_id ?? null;
+        const latlng = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
+        if (tripId !== currentTripId) {
+            const lastPoint = currentSegment.length > 0 ? currentSegment[currentSegment.length - 1] : null;
+            flushSegment();
+            currentTripId = tripId;
+            if (lastPoint) allLayers.push(makeLine([lastPoint, latlng], '#ef4444', true));
+        }
+        currentSegment.push(latlng);
+    });
+    flushSegment();
+
+    return allLayers;
+}
+
+function _redrawHistoryPolylines() {
+    if (polylines['history']) {
+        polylines['history'].eachLayer(l => map.removeLayer(l));
+        delete polylines['history'];
+    }
+    tripColorMap = {};
+    polylines['history'] = L.featureGroup(_buildHistoryLayers());
+    _updateLineModeBtn();
+    _updateSliderGradient();
+}
+
+function toggleHistoryLineMode() {
+    historyLineMode = historyLineMode === 'static' ? 'ant' : 'static';
+    if (historyData.length > 0) _redrawHistoryPolylines();
+    else _updateLineModeBtn();
+}
+
+function _updateSliderGradient() {
+    const slider = document.getElementById('historySlider');
+    if (!slider) return;
+    if (historyData.length < 2) { slider.style.removeProperty('--track-gradient'); return; }
+
+    const total = historyData.length - 1;
+    const stops = [];
+    let i = 0;
+    while (i < historyData.length) {
+        const tripId = historyData[i].properties?.trip_id ?? null;
+        const color = tripId ? (tripColorMap[tripId] || '#6b7280') : '#6b7280';
+        let j = i + 1;
+        while (j < historyData.length && (historyData[j].properties?.trip_id ?? null) === tripId) j++;
+        const s = (i / total * 100).toFixed(1);
+        const e = ((j - 1) / total * 100).toFixed(1);
+        stops.push(`${color} ${s}%`, `${color} ${e}%`);
+        i = j;
+    }
+    slider.style.setProperty('--track-gradient', `linear-gradient(to right, ${stops.join(', ')})`);
+}
+
+function _updateLineModeBtn() {
+    const btn = document.getElementById('historyLineModeBtn');
+    if (!btn) return;
+    const isAnt = historyLineMode === 'ant';
+    btn.classList.toggle('active', isAnt);
+    btn.title = isAnt ? 'Switch to static lines' : 'Switch to animated lines';
 }
 
 function exitHistoryMode() {
@@ -344,6 +398,7 @@ function exitHistoryMode() {
     if (details) details.style.paddingBottom = '';
     document.querySelector('.sidebar').classList.remove('history-active');
 
+    document.getElementById('historySlider')?.style.removeProperty('--track-gradient');
     historyTrips = [];
     historyBatchOffset = 0;
     historyHasNext = false;
@@ -386,11 +441,26 @@ function startPlayback() {
     if (historyData.length === 0) return;
     document.getElementById('playbackBtn').innerHTML = '<i class="mdi mdi-pause"></i>';
     if (!markers['history_pos']) createHistoryMarker();
+    const interval = Math.round(100 / PLAYBACK_SPEEDS[playbackSpeedIdx]);
     playbackInterval = setInterval(() => {
         if (historyIndex >= historyData.length - 1) { stopPlayback(); return; }
         historyIndex++;
         updatePlaybackUI();
-    }, 100);
+    }, interval);
+}
+
+function cyclePlaybackSpeed() {
+    playbackSpeedIdx = (playbackSpeedIdx + 1) % PLAYBACK_SPEEDS.length;
+    _updateSpeedBtn();
+    if (playbackInterval) { stopPlayback(); startPlayback(); }
+}
+
+function _updateSpeedBtn() {
+    const btn = document.getElementById('historySpeedBtn');
+    if (!btn) return;
+    const speed = PLAYBACK_SPEEDS[playbackSpeedIdx];
+    btn.textContent = `${speed}×`;
+    btn.classList.toggle('active', speed > 1);
 }
 
 function stopPlayback() {
@@ -398,6 +468,24 @@ function stopPlayback() {
 }
 
 function seekHistory(value) { historyIndex = parseInt(value); stopPlayback(); updatePlaybackUI(); }
+
+let _stepHoldTimer = null;
+let _stepHoldInterval = null;
+
+function _startStepHold(delta) {
+    stepHistory(delta);
+    _stepHoldTimer = setTimeout(() => {
+        const interval = Math.round(100 / PLAYBACK_SPEEDS[playbackSpeedIdx]);
+        _stepHoldInterval = setInterval(() => stepHistory(delta), interval);
+    }, 350);
+}
+
+function _stopStepHold() {
+    clearTimeout(_stepHoldTimer);
+    clearInterval(_stepHoldInterval);
+    _stepHoldTimer = null;
+    _stepHoldInterval = null;
+}
 
 function stepHistory(delta) {
     stopPlayback();
@@ -475,9 +563,16 @@ function updatePlaybackUI() {
         if (currentTrip) {
             const tripIndex = historyTrips.length - historyTrips.indexOf(currentTrip);
             const dist = currentTrip.distance_km != null ? ` · ${fmtDist(currentTrip.distance_km)}` : '';
+            const color = tripColorMap[currentTrip.id] || 'var(--accent-secondary)';
             tripLabel.textContent = `Trip ${tripIndex}${dist}`;
+            tripLabel.style.background = `color-mix(in srgb, ${color} 20%, transparent)`;
+            tripLabel.style.borderColor = `color-mix(in srgb, ${color} 40%, transparent)`;
+            tripLabel.style.color = color;
         } else {
             tripLabel.textContent = historyTrips.length ? 'Between trips' : '';
+            tripLabel.style.background = '';
+            tripLabel.style.borderColor = '';
+            tripLabel.style.color = '';
         }
     }
 
