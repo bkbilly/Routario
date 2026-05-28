@@ -556,6 +556,23 @@ class FleetReport(BaseModel):
     end_date: datetime
     rows: List[FleetReportRow]
 
+
+class VideoClipResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    device_id: int
+    timestamp: datetime
+    event_type: str
+    camera: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    speed: Optional[float] = None
+    file_path: Optional[str] = None
+    thumbnail_path: Optional[str] = None
+    file_size: Optional[int] = None
+    duration: Optional[int] = None
+    created_at: datetime
+
 class TripReportRow(BaseModel):
     device_id: int
     device_name: str

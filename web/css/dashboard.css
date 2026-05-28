@@ -1627,10 +1627,36 @@ body::before {
     display: flex;
     align-items: center;
     gap: 0.6rem;
+    position: relative;
 }
 
 .history-slider-row .history-slider {
     flex: 1;
+}
+
+.history-clip-marker {
+    position: absolute;
+    top: -18px;
+    transform: translateX(-50%);
+    background: #ef4444;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    width: 20px;
+    height: 16px;
+    font-size: 0.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    z-index: 10;
+    transition: transform 0.1s, background 0.1s;
+}
+
+.history-clip-marker:hover {
+    background: #dc2626;
+    transform: translateX(-50%) scale(1.2);
 }
 
 .history-slider-counter {
@@ -2146,6 +2172,101 @@ body::before {
 @media (max-width: 400px) {
     .lb-maint-card { flex-direction: column; align-items: stretch; }
 }
+
+/* ── Dashcam Clips ──────────────────────────────────────────────── */
+
+.clips-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.75rem;
+}
+
+.clip-card {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    position: relative;
+    transition: border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.clip-card:hover {
+    border-color: var(--accent-primary);
+    transform: translateY(-2px);
+}
+
+.clip-thumb {
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #0a0e1a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.clip-info {
+    padding: 0.5rem 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.clip-event-badge, .clip-camera-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    border: 1px solid;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.clip-camera-badge {
+    background: rgba(107,114,128,0.15);
+    color: var(--text-muted);
+    border-color: rgba(107,114,128,0.3);
+    margin-left: 0.25rem;
+}
+
+.clip-time {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+}
+
+.clip-meta {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.clip-delete-btn {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    background: rgba(0,0,0,0.6);
+    border: none;
+    color: #fff;
+    border-radius: 6px;
+    width: 26px;
+    height: 26px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.clip-card:hover .clip-delete-btn {
+    display: flex;
+    opacity: 1;
+}
+
+.clip-delete-btn:hover { background: var(--accent-danger); }
 
 @media (max-width: 500px) {
     .lb-tab-bar {

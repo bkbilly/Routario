@@ -107,6 +107,7 @@ class Device(Base):
     alert_history: Mapped[List["AlertHistory"]]    = relationship(back_populates="device")
     commands:      Mapped[List["CommandQueue"]]    = relationship(back_populates="device")
     fuel_logs:     Mapped[List["FuelLog"]]         = relationship(back_populates="device")
+    clips:         Mapped[List["VideoClip"]]       = relationship(back_populates="device", cascade="all, delete-orphan")
 
 
 class DeviceState(Base):
@@ -303,3 +304,23 @@ class LocationShare(Base):
 
     device:  Mapped["Device"] = relationship("Device")
     creator: Mapped["User"]   = relationship("User")
+
+
+class VideoClip(Base):
+    __tablename__ = 'video_clips'
+
+    id:             Mapped[int]            = mapped_column(Integer, primary_key=True, autoincrement=True)
+    device_id:      Mapped[int]            = mapped_column(Integer, ForeignKey('devices.id', ondelete='CASCADE'), index=True)
+    timestamp:      Mapped[datetime]       = mapped_column(DateTime, nullable=False, index=True)
+    event_type:     Mapped[str]            = mapped_column(String(50), nullable=False, default='manual')
+    camera:         Mapped[str]            = mapped_column(String(20), nullable=False, default='front')
+    latitude:       Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    longitude:      Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    speed:          Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    file_path:      Mapped[Optional[str]]  = mapped_column(String(500), nullable=True)
+    thumbnail_path: Mapped[Optional[str]]  = mapped_column(String(500), nullable=True)
+    file_size:      Mapped[Optional[int]]  = mapped_column(Integer, nullable=True)
+    duration:       Mapped[Optional[int]]  = mapped_column(Integer, nullable=True)
+    created_at:     Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
+
+    device: Mapped["Device"] = relationship(back_populates="clips")
