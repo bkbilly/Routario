@@ -1,4 +1,4 @@
-from .models import Base, Company, User, Device, DeviceState, PositionRecord, Trip, Geofence, AlertHistory, CommandQueue, user_device_association, LocationShare, Driver, FuelLog
+from .models import Base, Company, User, Device, DeviceState, PositionRecord, Trip, Geofence, AlertHistory, CommandQueue, user_device_association, LocationShare, Driver, FuelLog, VoiceMessage, VoiceMessageRead
 from .schemas import (
     NormalizedPosition, DeviceCreate, DeviceResponse, DeviceStateResponse,
     UserCreate, UserUpdate, UserResponse, UserLogin, Token,

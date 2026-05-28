@@ -4,7 +4,7 @@
  * Place this file at: /web/sw.js  (root of your web directory)
  */
 
-const CACHE_NAME = 'gps-dashboard-v79';
+const CACHE_NAME = 'gps-dashboard-v80';
 const STATIC_ASSETS = [
   '/gps-dashboard.html',
   '/device-management.html',
@@ -28,6 +28,8 @@ const STATIC_ASSETS = [
   '/js/company-management.js',
   '/js/user-settings.js',
   '/js/pwa.js',
+  '/js/voice-ptt.js',
+  '/css/voice-ptt.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 ];
