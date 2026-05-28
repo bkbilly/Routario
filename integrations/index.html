@@ -1,0 +1,2056 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="High-performance self-hosted GPS tracking and fleet management platform">
+      
+      
+      
+        <link rel="canonical" href="https://bkbilly.github.io/routario/integrations/">
+      
+      
+        <link rel="prev" href="../alerts/">
+      
+      
+        <link rel="next" href="../notifications/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/logo.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Cloud Integrations - Routario Docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Outfit:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Outfit";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#cloud-integrations" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Routario Docs" class="md-header__button md-logo" aria-label="Routario Docs" data-md-component="logo">
+      
+  <img src="../assets/logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Routario Docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Cloud Integrations
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bkbilly/routario" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bkbilly/routario
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Routario Docs" class="md-nav__button md-logo" aria-label="Routario Docs" data-md-component="logo">
+      
+  <img src="../assets/logo.png" alt="logo">
+
+    </a>
+    Routario Docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bkbilly/routario" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bkbilly/routario
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../devices/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supported Devices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../alerts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Integrations
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud Integrations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-cloud-integrations-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Cloud Integrations Work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wialon-gurtam" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wialon (Gurtam)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Wialon (Gurtam)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-connect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to connect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-synced" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is synced
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#flespi-cloud" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flespi Cloud
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Flespi Cloud">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-connect_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to connect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-synced_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is synced
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#message-fetch-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Message fetch strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#traccar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Traccar
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Traccar">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-connect_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to connect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-synced_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is synced
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authentication_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3d-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3D Tracking
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3D Tracking">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-connect_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to connect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-synced_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is synced
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authentication_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poll-interval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Poll interval
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gps-servernet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GPS-Server.net
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GPS-Server.net">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-connect_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to connect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-synced_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is synced
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authentication_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#google-find-hub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Google Find Hub
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Google Find Hub">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-obtain-secretsjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to obtain secrets.json
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-synced_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is synced
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authentication_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poll-interval_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Poll interval
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gps-simulator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GPS Simulator
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GPS Simulator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#waypoint-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Waypoint format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-connect_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to connect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-reported" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is reported
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poll-interval_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Poll interval
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-new-integration-providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding New Integration Providers
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../administration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Administration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../extending/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Extending Routario
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-cloud-integrations-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Cloud Integrations Work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wialon-gurtam" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wialon (Gurtam)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Wialon (Gurtam)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-connect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to connect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-synced" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is synced
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#flespi-cloud" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flespi Cloud
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Flespi Cloud">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-connect_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to connect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-synced_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is synced
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#message-fetch-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Message fetch strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#traccar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Traccar
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Traccar">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-connect_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to connect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-synced_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is synced
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authentication_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3d-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3D Tracking
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3D Tracking">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-connect_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to connect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-synced_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is synced
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authentication_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poll-interval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Poll interval
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gps-servernet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GPS-Server.net
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GPS-Server.net">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-connect_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to connect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-synced_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is synced
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authentication_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#google-find-hub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Google Find Hub
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Google Find Hub">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-obtain-secretsjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to obtain secrets.json
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-synced_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is synced
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authentication_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poll-interval_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Poll interval
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gps-simulator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GPS Simulator
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GPS Simulator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#waypoint-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Waypoint format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-connect_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to connect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-reported" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is reported
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#poll-interval_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Poll interval
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-new-integration-providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding New Integration Providers
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/bkbilly/routario/edit/main/docs/integrations.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="cloud-integrations">Cloud Integrations<a class="headerlink" href="#cloud-integrations" title="Permanent link">&para;</a></h1>
+<p>Routario can pull live positions from third-party GPS cloud platforms alongside devices connected directly. This lets you manage devices from multiple vendors and platforms in a single unified dashboard.</p>
+<hr />
+<h2 id="how-cloud-integrations-work">How Cloud Integrations Work<a class="headerlink" href="#how-cloud-integrations-work" title="Permanent link">&para;</a></h2>
+<p>Cloud integrations run as background polling tasks. On each cycle, Routario authenticates with the remote platform (reusing cached sessions where possible), fetches new position messages for each linked device, and feeds them through the same normalisation pipeline as native devices — so all alerts, history, and WebSocket updates work identically.</p>
+<div class="admonition info">
+<p class="admonition-title">Smart polling</p>
+<p>Each cycle tracks a per-device cursor (last-seen timestamp) so only genuinely new messages are fetched — not the entire history.</p>
+</div>
+<hr />
+<h2 id="wialon-gurtam">Wialon (Gurtam)<a class="headerlink" href="#wialon-gurtam" title="Permanent link">&para;</a></h2>
+<p>Wialon is one of the world's most widely used fleet management platforms. Routario integrates with both <strong>Wialon Hosting</strong> (cloud) and <strong>Wialon Local</strong> (on-premise) installations.</p>
+<h3 id="credentials">Credentials<a class="headerlink" href="#credentials" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>token</code></td>
+<td>Yes</td>
+<td>API token from Wialon User Settings → API. Requires <em>Online Tracking</em> and <em>General Information</em> access.</td>
+</tr>
+<tr>
+<td><code>server_url</code></td>
+<td>No</td>
+<td>Override for on-premise Wialon. Default: <code>https://hst-api.wialon.com</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="how-to-connect">How to connect<a class="headerlink" href="#how-to-connect" title="Permanent link">&para;</a></h3>
+<ol>
+<li>In Wialon, go to <strong>User Settings → API</strong> and generate a new API token.</li>
+<li>In Routario, open <strong>Device Management → Add New Device</strong>.</li>
+<li>Select <strong>Wialon (Gurtam)</strong> from the protocol dropdown under <em>External Integrations</em>.</li>
+<li>Enter the API token (and server URL for on-premise).</li>
+<li>Click <strong>Test Connection</strong> to verify, then save.</li>
+<li>Use <strong>Import Devices</strong> to automatically create device entries for all units visible on your Wialon account.</li>
+</ol>
+<h3 id="what-is-synced">What is synced<a class="headerlink" href="#what-is-synced" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Real-time position (latitude, longitude, altitude, speed, course, satellites)</li>
+<li>Sensor data from Wialon's parameter payload (<code>p</code> field) — fuel, temperature, digital I/O, custom counters</li>
+<li>Device name and license plate from Wialon unit properties</li>
+</ul>
+<h3 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h3>
+<p>Wialon uses session-based authentication (<code>eid</code> session ID). Routario caches the session for the token's lifetime and automatically re-authenticates if the session is rejected mid-cycle. Positions are polled every <strong>30 seconds</strong>.</p>
+<hr />
+<h2 id="flespi-cloud">Flespi Cloud<a class="headerlink" href="#flespi-cloud" title="Permanent link">&para;</a></h2>
+<p>Flespi is an IoT middleware platform that normalises data from hundreds of GPS tracker models into a unified parameter schema. Connecting Routario to Flespi Cloud lets you receive data from any device Flespi supports — even if Routario has no native decoder for it.</p>
+<h3 id="credentials_1">Credentials<a class="headerlink" href="#credentials_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>token</code></td>
+<td>Yes</td>
+<td>Standard or ACL token with read access to <code>gw/devices</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="how-to-connect_1">How to connect<a class="headerlink" href="#how-to-connect_1" title="Permanent link">&para;</a></h3>
+<ol>
+<li>In your <a href="https://flespi.io">Flespi account</a>, go to <strong>Tokens</strong> and create a token with <code>gw/devices</code> read access.</li>
+<li>In Routario, open <strong>Device Management → Add New Device</strong>.</li>
+<li>Select <strong>Flespi Cloud</strong> from the External Integrations group.</li>
+<li>Paste your token and click <strong>Test Connection</strong>.</li>
+<li>Use <strong>Import Devices</strong> to pull in all devices registered on your Flespi account.</li>
+</ol>
+<h3 id="what-is-synced_1">What is synced<a class="headerlink" href="#what-is-synced_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Position, speed, altitude, course, satellites, validity from Flespi's unified parameter names (<code>position.*</code>)</li>
+<li>Ignition state (<code>engine.ignition.status</code>)</li>
+<li>All additional parameters passed through to the sensors dict: battery voltage, fuel level, RPM, odometer, HDOP, GSM cell info, and any device-specific custom parameters</li>
+</ul>
+<h3 id="message-fetch-strategy">Message fetch strategy<a class="headerlink" href="#message-fetch-strategy" title="Permanent link">&para;</a></h3>
+<p>Routario first tries the <code>/gw/devices/{id}/messages</code> endpoint with a time window from the last-seen timestamp to now. If that returns empty (due to TTL settings), it falls back to <code>/gw/devices/{id}/telemetry/all</code> — which stores the last known value of every parameter for up to 370 days — ensuring devices appear on the map immediately after being added. Positions are polled every <strong>30 seconds</strong>.</p>
+<hr />
+<h2 id="traccar">Traccar<a class="headerlink" href="#traccar" title="Permanent link">&para;</a></h2>
+<p><a href="https://www.traccar.org/">Traccar</a> is a popular open-source GPS tracking server that supports hundreds of device protocols. Connecting Routario to a Traccar instance lets you mirror devices already managed there without reconfiguring them.</p>
+<h3 id="credentials_2">Credentials<a class="headerlink" href="#credentials_2" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>server_url</code></td>
+<td>Yes</td>
+<td>Full URL of your Traccar server, e.g. <code>https://demo.traccar.org</code></td>
+</tr>
+<tr>
+<td><code>username</code></td>
+<td>Yes</td>
+<td>Traccar account email or username</td>
+</tr>
+<tr>
+<td><code>password</code></td>
+<td>Yes</td>
+<td>Traccar account password</td>
+</tr>
+</tbody>
+</table>
+<h3 id="how-to-connect_2">How to connect<a class="headerlink" href="#how-to-connect_2" title="Permanent link">&para;</a></h3>
+<ol>
+<li>In Routario, open <strong>Device Management → Add New Device</strong>.</li>
+<li>Select <strong>Traccar</strong> from the External Integrations group.</li>
+<li>Enter your Traccar server URL, username, and password.</li>
+<li>Click <strong>Test Connection</strong> to verify, then save.</li>
+<li>Use <strong>Import Devices</strong> to pull all devices visible to that account.</li>
+</ol>
+<h3 id="what-is-synced_2">What is synced<a class="headerlink" href="#what-is-synced_2" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Real-time position (latitude, longitude, altitude, speed, course, satellites)</li>
+<li>Ignition state and sensor attributes from the Traccar device <code>attributes</code> payload</li>
+<li>Device name from Traccar unit properties</li>
+</ul>
+<h3 id="authentication_1">Authentication<a class="headerlink" href="#authentication_1" title="Permanent link">&para;</a></h3>
+<p>Traccar uses HTTP Basic Auth per-request — no session token is cached. Routario passes credentials on every API call, so token expiry is not a concern. Positions are polled every <strong>30 seconds</strong>.</p>
+<hr />
+<h2 id="3d-tracking">3D Tracking<a class="headerlink" href="#3d-tracking" title="Permanent link">&para;</a></h2>
+<p><a href="https://www.3dtracking.com/">3D Tracking</a> is a fleet management platform used across Europe. Routario polls its REST API to mirror device positions in real time.</p>
+<h3 id="credentials_3">Credentials<a class="headerlink" href="#credentials_3" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>username</code></td>
+<td>Yes</td>
+<td>3D Tracking account username (usually your email)</td>
+</tr>
+<tr>
+<td><code>password</code></td>
+<td>Yes</td>
+<td>3D Tracking account password</td>
+</tr>
+</tbody>
+</table>
+<h3 id="how-to-connect_3">How to connect<a class="headerlink" href="#how-to-connect_3" title="Permanent link">&para;</a></h3>
+<ol>
+<li>In Routario, open <strong>Device Management → Add New Device</strong>.</li>
+<li>Select <strong>3D Tracking</strong> from the External Integrations group.</li>
+<li>Enter your credentials and click <strong>Test Connection</strong>.</li>
+<li>Use <strong>Import Devices</strong> to import all units from your account.</li>
+</ol>
+<h3 id="what-is-synced_3">What is synced<a class="headerlink" href="#what-is-synced_3" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Real-time position, speed, altitude, course, and satellite count</li>
+<li>Digital I/O states and additional sensor parameters from the unit payload</li>
+</ul>
+<h3 id="authentication_2">Authentication<a class="headerlink" href="#authentication_2" title="Permanent link">&para;</a></h3>
+<p>3D Tracking uses session-based authentication. Routario authenticates on first use and caches the <code>SessionId</code> for up to 23.5 hours, then re-authenticates automatically.</p>
+<h3 id="poll-interval">Poll interval<a class="headerlink" href="#poll-interval" title="Permanent link">&para;</a></h3>
+<p>3D Tracking polls every <strong>30 seconds</strong> when any linked device was recently active, and every <strong>120 seconds</strong> during quiet periods to reduce API load.</p>
+<hr />
+<h2 id="gps-servernet">GPS-Server.net<a class="headerlink" href="#gps-servernet" title="Permanent link">&para;</a></h2>
+<p><a href="https://gps-server.net">GPS-Server.net</a> is a hosted GPS tracking service with white-label support. Routario integrates with the public cloud service and self-hosted installations alike.</p>
+<h3 id="credentials_4">Credentials<a class="headerlink" href="#credentials_4" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>email</code></td>
+<td>Yes</td>
+<td>Email address used to log in to GPS-Server.net</td>
+</tr>
+<tr>
+<td><code>password</code></td>
+<td>Yes</td>
+<td>Account password</td>
+</tr>
+<tr>
+<td><code>server_url</code></td>
+<td>No</td>
+<td>Leave blank for the hosted service. Enter the base URL for white-label / self-hosted instances.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="how-to-connect_4">How to connect<a class="headerlink" href="#how-to-connect_4" title="Permanent link">&para;</a></h3>
+<ol>
+<li>In Routario, open <strong>Device Management → Add New Device</strong>.</li>
+<li>Select <strong>GPS-Server.net</strong> from the External Integrations group.</li>
+<li>Enter your email and password (and server URL for self-hosted).</li>
+<li>Click <strong>Test Connection</strong>, then save.</li>
+<li>Use <strong>Import Devices</strong> to import your fleet — device names, IMEIs, and license plates are synced automatically.</li>
+</ol>
+<h3 id="what-is-synced_4">What is synced<a class="headerlink" href="#what-is-synced_4" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Real-time position, speed, altitude, course, and satellites</li>
+<li>License plate and vehicle type from GPS-Server.net device properties</li>
+<li>Ignition state and additional sensor data</li>
+</ul>
+<h3 id="authentication_3">Authentication<a class="headerlink" href="#authentication_3" title="Permanent link">&para;</a></h3>
+<p>GPS-Server.net returns a Bearer token on login. Routario caches it and honours the expiry time returned by the API, re-authenticating transparently before the token lapses. Positions are polled every <strong>30 seconds</strong>.</p>
+<hr />
+<h2 id="google-find-hub">Google Find Hub<a class="headerlink" href="#google-find-hub" title="Permanent link">&para;</a></h2>
+<p>Google Find Hub is Google's device-finding network. Routario can pull locations for devices enrolled in Find Hub — including Bluetooth trackers and Android phones set to share location.</p>
+<div class="admonition warning">
+<p class="admonition-title">Non-standard setup</p>
+<p>This integration requires running <a href="https://github.com/leonboe1/GoogleFindMyTools">GoogleFindMyTools</a> separately to obtain the authentication secrets. It is not a simple username/password flow.</p>
+</div>
+<h3 id="credentials_5">Credentials<a class="headerlink" href="#credentials_5" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>secrets_json</code></td>
+<td>Yes</td>
+<td>Full JSON contents of the <code>Auth/secrets.json</code> file generated by GoogleFindMyTools</td>
+</tr>
+</tbody>
+</table>
+<h3 id="how-to-obtain-secretsjson">How to obtain secrets.json<a class="headerlink" href="#how-to-obtain-secretsjson" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Clone and run <a href="https://github.com/leonboe1/GoogleFindMyTools">GoogleFindMyTools</a> on any machine.</li>
+<li>Follow its authentication flow (Google account login + device pairing).</li>
+<li>After completing the location flow, copy the contents of <code>Auth/secrets.json</code>.</li>
+<li>Paste the entire JSON blob into the <strong>secrets.json contents</strong> field in Routario.</li>
+</ol>
+<p>The <code>secrets.json</code> file must contain <code>aas_token</code> at minimum. If it also contains <code>owner_key</code>, Routario will use it to decrypt end-to-end encrypted location payloads.</p>
+<h3 id="what-is-synced_5">What is synced<a class="headerlink" href="#what-is-synced_5" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Real-time location of all devices visible in your Find Hub account</li>
+<li>E2EE location decryption when <code>owner_key</code> is present in secrets</li>
+</ul>
+<h3 id="authentication_4">Authentication<a class="headerlink" href="#authentication_4" title="Permanent link">&para;</a></h3>
+<p>Routario exchanges the <code>aas_token</code> for a short-lived OAuth token using the Google Play Services auth endpoint. Tokens are refreshed automatically as they expire.</p>
+<h3 id="poll-interval_1">Poll interval<a class="headerlink" href="#poll-interval_1" title="Permanent link">&para;</a></h3>
+<p>Google Find Hub polls every <strong>120 seconds</strong> when a device was recently active, and every <strong>300 seconds</strong> during quiet periods. This is intentionally slower than other integrations to stay within Google's rate limits.</p>
+<hr />
+<h2 id="gps-simulator">GPS Simulator<a class="headerlink" href="#gps-simulator" title="Permanent link">&para;</a></h2>
+<p>The GPS Simulator is a built-in integration that drives a virtual vehicle along a configurable route in real time — no hardware or external account required. It is useful for testing dashboards, alerts, geofences, and webhooks without a physical device.</p>
+<h3 id="credentials_6">Credentials<a class="headerlink" href="#credentials_6" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>waypoints</code></td>
+<td>Yes</td>
+<td>Route definition — one waypoint per line (see format below)</td>
+</tr>
+<tr>
+<td><code>speed_kmh</code></td>
+<td>No</td>
+<td>Default travel speed in km/h used for waypoints that don't specify their own. Default: <code>50</code></td>
+</tr>
+<tr>
+<td><code>loop</code></td>
+<td>No</td>
+<td><code>true</code> to repeat the route continuously, <code>false</code> to stop at the last waypoint. Default: <code>true</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="waypoint-format">Waypoint format<a class="headerlink" href="#waypoint-format" title="Permanent link">&para;</a></h3>
+<p>Each line defines one waypoint:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>lat,lng[,key=value,...]
+</span></code></pre></div>
+<p>Supported keys:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Example</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>wait=N</code></td>
+<td><code>wait=30</code></td>
+<td>Pause N seconds at this point before continuing</td>
+</tr>
+<tr>
+<td><code>speed=N</code></td>
+<td><code>speed=110</code></td>
+<td>Travel speed (km/h) from this point to the next</td>
+</tr>
+<tr>
+<td><code>heading=N</code></td>
+<td><code>heading=45</code></td>
+<td>Override the reported course in degrees instead of auto-calculating the bearing</td>
+</tr>
+<tr>
+<td><code>ignition=true\|false</code></td>
+<td><code>ignition=false</code></td>
+<td>Set ignition state from this point onward; persists until changed by a later waypoint</td>
+</tr>
+<tr>
+<td><code>sat=N</code></td>
+<td><code>sat=8</code></td>
+<td>Reported satellite count at this point</td>
+</tr>
+<tr>
+<td><code>&lt;any&gt;=&lt;value&gt;</code></td>
+<td><code>fuel_level=0.75</code></td>
+<td>Any other key is added directly to the sensors dict</td>
+</tr>
+</tbody>
+</table>
+<p>Lines starting with <code>#</code> are treated as comments. A bare number as the third field is a shorthand for <code>wait</code> (e.g. <code>48.85,2.35,10</code> = wait 10 seconds).</p>
+<p><strong>Example:</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a># Depot — engine off, waiting
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>48.8566,2.3522,wait=30,ignition=false,sat=5,fuel_level=0.90
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a># Pull out and start driving
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>48.8600,2.3600,speed=30,ignition=true,sat=8,fuel_level=0.89
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a># Main road
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>48.8800,2.4000,speed=60,sat=10
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a># Destination — park and wait
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>48.9000,2.4200,wait=120,ignition=false,sat=12,fuel_level=0.85
+</span></code></pre></div>
+<h3 id="how-to-connect_5">How to connect<a class="headerlink" href="#how-to-connect_5" title="Permanent link">&para;</a></h3>
+<ol>
+<li>In Routario, open <strong>Device Management → Add New Device</strong>.</li>
+<li>Select <strong>GPS Simulator</strong> from the External Integrations group.</li>
+<li>Enter a label (e.g. <code>Test Vehicle</code>), paste your waypoints, and optionally set a default speed.</li>
+<li>Click <strong>Test Connection</strong> — it will report the number of waypoints, total route length, and loop mode.</li>
+<li>Enter any value for the Remote Device ID (e.g. <code>sim-1</code>) and save.</li>
+</ol>
+<div class="admonition info">
+<p class="admonition-title">No Browse button</p>
+<p>The GPS Simulator has no remote device list to query, so the Browse button is not shown.</p>
+</div>
+<h3 id="what-is-reported">What is reported<a class="headerlink" href="#what-is-reported" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Position interpolated smoothly between waypoints at the configured speed</li>
+<li>Speed (0 while waiting or stopped, travel speed otherwise)</li>
+<li>Auto-calculated course/bearing between waypoints (overridable with <code>heading=</code>)</li>
+<li>Ignition state (persists from the last waypoint that set it)</li>
+<li>Satellite count and any extra sensor values defined in the waypoints</li>
+<li><code>sensors.simulated: true</code> on every position</li>
+</ul>
+<h3 id="poll-interval_2">Poll interval<a class="headerlink" href="#poll-interval_2" title="Permanent link">&para;</a></h3>
+<p>The GPS Simulator polls every <strong>5 seconds</strong>, advancing the vehicle in real time based on elapsed wall-clock time.</p>
+<hr />
+<h2 id="adding-new-integration-providers">Adding New Integration Providers<a class="headerlink" href="#adding-new-integration-providers" title="Permanent link">&para;</a></h2>
+<p>See <a href="../extending/#adding-a-cloud-integration">Extending Routario → Adding a Cloud Integration</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../alerts/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Alerts">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Alerts
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../notifications/" class="md-footer__link md-footer__link--next" aria-label="Next: Notifications">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Notifications
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; Routario Contributors
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/bkbilly/routario" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.top", "navigation.footer", "search.highlight", "search.suggest", "content.code.copy", "content.action.edit", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
