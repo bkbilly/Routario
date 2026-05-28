@@ -189,6 +189,7 @@ class UserCreate(BaseModel):
     is_admin: bool = False
     company_id: Optional[int] = None
     is_company_admin: bool = False
+    permissions: Optional[List[str]] = None
 
 
 class UserUpdate(BaseModel):
@@ -202,6 +203,7 @@ class UserUpdate(BaseModel):
     is_company_admin: Optional[bool] = None
     company_id: Optional[int] = None
     webhook_urls: Optional[List[str]] = None
+    permissions: Optional[List[str]] = None
 
 
 class UserLogin(BaseModel):
@@ -218,6 +220,7 @@ class Token(BaseModel):
     is_company_admin: bool = False
     company_id: Optional[int] = None
     units: str = "metric"
+    permissions: List[str] = Field(default_factory=list)
 
 
 class UserResponse(BaseModel):
@@ -234,12 +237,20 @@ class UserResponse(BaseModel):
     notification_channels: List[Dict[str, str]] = Field(default_factory=list)
     created_at: datetime
     webhook_urls: List[str] = Field(default_factory=list)
+    permissions: List[str] = Field(default_factory=list)
 
     @field_validator('notification_channels', mode='before')
     @classmethod
     def validate_channels(cls, v):
         if isinstance(v, dict):
             return []
+        if v is None:
+            return []
+        return v
+
+    @field_validator('permissions', mode='before')
+    @classmethod
+    def validate_permissions(cls, v):
         if v is None:
             return []
         return v

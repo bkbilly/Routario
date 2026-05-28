@@ -101,3 +101,18 @@ async def verify_device_access(
             detail="You do not have access to this device",
         )
     return current_user
+
+
+def require_permission(perm: str):
+    """Return a FastAPI Depends factory that enforces a named permission.
+    Super admins bypass all permission checks."""
+    async def checker(current_user: User = Depends(get_current_user)) -> User:
+        if current_user.is_admin:
+            return current_user
+        if perm not in (current_user.permissions or []):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission required: {perm}",
+            )
+        return current_user
+    return checker

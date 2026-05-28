@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, delete
 
 from core.database import get_db
-from core.auth import get_current_user, verify_device_access
+from core.auth import get_current_user, verify_device_access, require_permission
 from models import User, LocationShare, Device, DeviceState
 
 
@@ -58,7 +58,7 @@ class ShareRenewRequest(BaseModel):
 @router.post("", response_model=ShareCreateResponse)
 async def create_share(
     payload: ShareCreateRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("live_share")),
 ):
     """Generate a unique share token for a device. User must have access to the device."""
     await verify_device_access(payload.device_id, current_user)
@@ -102,7 +102,7 @@ async def create_share(
 # ── Revoke a share token (authenticated) ─────────────────────────────────────
 
 @router.delete("/{token}")
-async def revoke_share(token: str, current_user: User = Depends(get_current_user)):
+async def revoke_share(token: str, current_user: User = Depends(require_permission("live_share"))):
     """Revoke a share token early. Only the creator or an admin can revoke."""
     db = get_db()
     async with db.get_session() as session:
@@ -123,7 +123,7 @@ async def revoke_share(token: str, current_user: User = Depends(get_current_user
 @router.get("", response_model=List[ShareListItem])
 async def list_shares(
     device_id: int = Query(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("live_share")),
 ):
     """List all active, non-expired share links for a device."""
     await verify_device_access(device_id, current_user)
@@ -158,7 +158,7 @@ async def list_shares(
 async def renew_share(
     token: str,
     payload: ShareRenewRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("live_share")),
 ):
     """Extend the expiry of a share link from now."""
     if payload.duration_minutes < 1 or payload.duration_minutes > 10080:

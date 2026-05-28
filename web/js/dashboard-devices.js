@@ -145,9 +145,9 @@ function getDeviceCardContent(device, icon) {
         </div>
         ${vs.cls !== 'pending' ? `
         <div class="device-actions">
-            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openLogbookModal(${device.id})" title="Service logbook"><i class="mdi mdi-clipboard-list"></i> Logbook</button>
-            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openShareModal(${device.id})" title="Share live location"><i class="mdi mdi-share"></i> Share</button>
-            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openHistoryModal(${device.id})"><i class="mdi mdi-history"></i> History</button>
+            ${(hasPermission('manage_logbook') || hasPermission('manage_fuel') || hasPermission('manage_maintenance')) ? `<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openLogbookModal(${device.id})" title="Service logbook"><i class="mdi mdi-clipboard-list"></i> Logbook</button>` : ''}
+            ${hasPermission('live_share') ? `<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openShareModal(${device.id})" title="Share live location"><i class="mdi mdi-share"></i> Share</button>` : ''}
+            ${hasPermission('view_history') ? `<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); openHistoryModal(${device.id})"><i class="mdi mdi-history"></i> History</button>` : ''}
         </div>` : ''}
     `;
 }

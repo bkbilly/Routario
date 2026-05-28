@@ -23,10 +23,10 @@ function onProtocolChange(existingIntg = null) {
         if (imeiInput) imeiInput.required = !isIntg;
     }
 
-    // Show/hide Commands tab based on protocol command support
+    // Show/hide Commands tab based on protocol command support and permission
     const commandsBtn = document.getElementById('commandsTabBtn');
     if (commandsBtn) {
-        const supportsCommands = protocolInfo[selected]?.supports_commands || false;
+        const supportsCommands = (protocolInfo[selected]?.supports_commands || false) && hasPermission('send_commands');
         commandsBtn.style.display = supportsCommands ? '' : 'none';
         const activeTab = document.querySelector('.modal-tab.active');
         if (!supportsCommands && activeTab?.dataset?.tab === 'commands') {
@@ -62,8 +62,8 @@ function _isIntegrationSelected() {
 // ── Render credential form for a provider ────────────────────────
 
 function _renderIntegrationFields(provider, existingIntg = null) {
-    // Regular users cannot see or edit integration credentials — show a read-only badge
-    if (!hasAdminAccess) {
+    // Regular users (or users without manage_integrations) see a read-only badge
+    if (!hasAdminAccess || !hasPermission('manage_integrations')) {
         const label = existingIntg?.account_label || provider.display_name;
         return `
             <div style="background:var(--bg-tertiary); border:1px solid var(--accent-primary);

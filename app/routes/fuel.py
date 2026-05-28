@@ -7,7 +7,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import select
 
-from core.auth import get_current_user, verify_device_access
+from core.auth import get_current_user, verify_device_access, require_permission
 from core.database import get_db
 from models import FuelLog, User
 from models.schemas import FuelLogCreate, FuelLogUpdate, FuelLogResponse
@@ -19,6 +19,7 @@ router = APIRouter(prefix="/api/devices", tags=["fuel"])
 async def list_fuel_logs(
     device_id: int,
     current_user: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("manage_fuel")),
 ):
     db = get_db()
     async with db.get_session() as session:
@@ -35,6 +36,7 @@ async def create_fuel_log(
     device_id: int,
     data: FuelLogCreate,
     current_user: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("manage_fuel")),
 ):
     db = get_db()
     async with db.get_session() as session:
@@ -59,6 +61,7 @@ async def update_fuel_log(
     log_id: int,
     data: FuelLogUpdate,
     current_user: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("manage_fuel")),
 ):
     db = get_db()
     async with db.get_session() as session:
@@ -85,6 +88,7 @@ async def delete_fuel_log(
     device_id: int,
     log_id: int,
     current_user: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("manage_fuel")),
 ):
     db = get_db()
     async with db.get_session() as session:

@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from core.database import get_db
-from core.auth import get_current_user, verify_device_access
+from core.auth import get_current_user, verify_device_access, require_permission
 from models import User
 from models.logbook import LogbookEntry
 
@@ -65,6 +65,7 @@ async def _get_entry_or_404(session, device_id: int, entry_id: int) -> LogbookEn
 async def list_logbook(
     device_id: int,
     current_user: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("manage_logbook")),
 ):
     db = get_db()
     async with db.get_session() as session:
@@ -85,6 +86,7 @@ async def create_logbook_entry(
     price: Optional[float] = Form(None),
     documents: List[UploadFile] = File(default=[]),
     current_user: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("manage_logbook")),
 ):
     import os, uuid, aiofiles
 
@@ -127,6 +129,7 @@ async def update_logbook_entry(
     date: datetime = Form(...),
     price: Optional[float] = Form(None),
     current_user: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("manage_logbook")),
 ):
     db = get_db()
     async with db.get_session() as session:
@@ -145,6 +148,7 @@ async def delete_logbook_entry(
     device_id: int,
     entry_id: int,
     current_user: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("manage_logbook")),
 ):
     import os, logging
     db = get_db()

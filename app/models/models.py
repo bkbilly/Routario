@@ -55,6 +55,7 @@ class User(Base):
 
     notification_channels: Mapped[Dict] = mapped_column(JsonType, default={})
     webhook_urls:          Mapped[Optional[list]] = mapped_column(JsonType, nullable=True, default=list)
+    permissions:           Mapped[Optional[list]] = mapped_column(JsonType, nullable=True, default=None)
 
     timezone:   Mapped[str] = mapped_column(String(50),  default='UTC')
     language:   Mapped[str] = mapped_column(String(10),  default='en')

@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
-from core.auth import get_current_user
+from core.auth import get_current_user, require_permission
 from core.database import get_db
 from models import Device, Driver, Trip, User, user_device_association
 from models.models import DeviceState
@@ -42,7 +42,7 @@ async def fleet_report(
     start_date: datetime = Query(...),
     end_date: datetime   = Query(...),
     device_ids: Optional[str] = Query(None, description="Comma-separated device IDs; omit for all"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("view_reports")),
 ):
     db = get_db()
     async with db.get_session() as session:
@@ -99,7 +99,7 @@ async def fleet_report_csv(
     start_date: datetime = Query(...),
     end_date: datetime   = Query(...),
     device_ids: Optional[str] = Query(None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("view_reports")),
 ):
     report = await fleet_report(start_date, end_date, device_ids, current_user)
 
@@ -124,7 +124,7 @@ async def trips_report(
     start_date: datetime = Query(...),
     end_date: datetime   = Query(...),
     device_ids: Optional[str] = Query(None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("view_reports")),
 ):
     db = get_db()
     async with db.get_session() as session:

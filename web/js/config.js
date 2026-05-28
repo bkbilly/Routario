@@ -89,8 +89,16 @@ function showAlert(messageOrData, type = 'info', duration = 3000) {
     }, resolvedDuration);
 }
 
+function hasPermission(perm) {
+    if (localStorage.getItem('is_admin') === 'true') return true;
+    try {
+        return JSON.parse(localStorage.getItem('permissions') || '[]').includes(perm);
+    } catch { return false; }
+}
+
 function handleLogout() {
     ['auth_token','user_id','username','is_admin','units','is_company_admin','company_id',
+     'permissions',
      'impersonating_admin_token','impersonating_admin_user_id','impersonating_admin_username']
         .forEach(k => localStorage.removeItem(k));
     window.location.href = 'login.html';
@@ -111,3 +119,30 @@ function formatDateToLocal(str) {
     if (!str.includes('Z') && !str.includes('+')) str += 'Z';
     return new Date(str).toLocaleString();
 }
+
+// Refresh permissions from the server on every page load so changes take
+// effect without requiring a logout.  Resolves immediately when not logged in.
+const permissionsReady = (function () {
+    const token  = localStorage.getItem('auth_token');
+    const userId = localStorage.getItem('user_id');
+    if (!token || !userId) return Promise.resolve();
+    return fetch(`${API_BASE}/users/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    })
+    .then(r => {
+        if (r.status === 401) { handleLogout(); return null; }
+        return r.ok ? r.json() : null;
+    })
+    .then(user => {
+        if (!user) return;
+        if (Array.isArray(user.permissions))
+            localStorage.setItem('permissions', JSON.stringify(user.permissions));
+        if (user.is_admin !== undefined)
+            localStorage.setItem('is_admin', user.is_admin);
+        if (user.is_company_admin !== undefined)
+            localStorage.setItem('is_company_admin', user.is_company_admin);
+        if (user.units)
+            localStorage.setItem('units', user.units);
+    })
+    .catch(() => {}); // network failure: use cached value
+})();

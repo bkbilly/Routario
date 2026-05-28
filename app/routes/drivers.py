@@ -8,7 +8,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import select, update
 
-from core.auth import get_current_user
+from core.auth import get_current_user, require_permission
 from core.database import get_db
 from models import Driver, Device, DeviceState, User
 from models.schemas import DriverCreate, DriverUpdate, DriverResponse
@@ -28,7 +28,7 @@ def _check_driver_access(driver: Driver, user: User):
 
 
 @router.get("", response_model=List[DriverResponse])
-async def list_drivers(current_user: User = Depends(get_current_user)):
+async def list_drivers(current_user: User = Depends(require_permission("manage_drivers"))):
     db = get_db()
     async with db.get_session() as session:
         q = select(Driver)
@@ -41,7 +41,7 @@ async def list_drivers(current_user: User = Depends(get_current_user)):
 @router.post("", response_model=DriverResponse)
 async def create_driver(
     data: DriverCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("manage_drivers")),
 ):
     _require_admin_access(current_user)
     db = get_db()
@@ -63,7 +63,7 @@ async def create_driver(
 async def update_driver(
     driver_id: int,
     data: DriverUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("manage_drivers")),
 ):
     _require_admin_access(current_user)
     db = get_db()
@@ -90,7 +90,7 @@ async def update_driver(
 @router.delete("/{driver_id}")
 async def delete_driver(
     driver_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("manage_drivers")),
 ):
     _require_admin_access(current_user)
     db = get_db()
@@ -107,7 +107,7 @@ async def delete_driver(
 async def assign_driver(
     device_id: int,
     driver_id: Optional[int] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("manage_drivers")),
 ):
     """Assign (or unassign) a driver to a device's active state."""
     db = get_db()

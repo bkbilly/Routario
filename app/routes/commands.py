@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Depends
 
 from core.database import get_db
-from core.auth import get_current_user, verify_device_access
+from core.auth import get_current_user, verify_device_access, require_permission
 from models import User
 from models.schemas import CommandCreate
 from protocols import ProtocolRegistry
@@ -20,6 +20,7 @@ async def send_command(
     device_id: int,
     command: CommandCreate,
     caller: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("send_commands")),
 ):
     """Queue a command to be sent to the device."""
     db = get_db()
@@ -59,6 +60,7 @@ async def preview_command(
     device_id: int,
     command_data: dict,
     caller: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("send_commands")),
 ):
     """Preview hex encoding of a command before sending."""
     db = get_db()
@@ -96,7 +98,7 @@ async def preview_command(
 async def preview_command_for_protocol(
     protocol: str,
     command_data: dict,
-    caller: User = Depends(get_current_user),
+    caller: User = Depends(require_permission("send_commands")),
 ):
     """Preview hex encoding of a command for a given protocol (no device required)."""
     decoder = ProtocolRegistry.get_decoder(protocol)
@@ -130,6 +132,7 @@ async def cancel_command(
     device_id: int,
     command_id: int,
     caller: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("send_commands")),
 ):
     """Cancel a pending command."""
     db = get_db()
@@ -144,6 +147,7 @@ async def get_device_commands(
     device_id: int,
     status: Optional[str] = Query(None),
     caller: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("send_commands")),
 ):
     """Get command history for a device."""
     db = get_db()

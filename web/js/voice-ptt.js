@@ -628,8 +628,10 @@
 
     // ── Init ──────────────────────────────────────────────────────
 
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
         if (!localStorage.getItem('auth_token')) return;
+        await permissionsReady;
+        if (typeof hasPermission === 'function' && !hasPermission('voice_ptt')) return;
         _injectCss();
         _injectButton();
         _injectModal();

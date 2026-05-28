@@ -15,6 +15,19 @@
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
     checkLogin();
+    await permissionsReady;
+
+    // Hide elements the current user has no permission to access
+    if (!hasPermission('manage_geofences')) {
+        document.getElementById('drawGeofenceBtn')?.style.setProperty('display', 'none', 'important');
+    }
+    if (!hasPermission('view_reports')) {
+        document.getElementById('dashReportsLink')?.remove();
+    }
+    if (!hasPermission('view_management')) {
+        document.getElementById('dashManagementLink')?.remove();
+    }
+
     // Restore saved sort (fixes the bug where sort was highlighted but not active)
     const savedSort = localStorage.getItem('vehicleSortMode') || 'name';
     currentSort = savedSort;

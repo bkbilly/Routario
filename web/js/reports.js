@@ -9,6 +9,10 @@ let _sensorsHistoryMode  = false;
 let _tripRows            = []; // sorted trip rows, for map button index lookup
 
 document.addEventListener('DOMContentLoaded', async () => {
+    checkLogin();
+    await permissionsReady;
+    if (!hasPermission('view_reports')) { window.location.href = 'gps-dashboard.html'; return; }
+
     const now   = new Date();
     const start = new Date(now);
     start.setDate(start.getDate() - 30);
@@ -128,14 +132,14 @@ async function generateReport() {
         _sensorsHistoryMode = document.getElementById('historyCheck').checked;
         try {
             const devRes = await apiFetch(`${API_BASE}/devices`);
-            if (!devRes.ok) { alert('Failed to load devices.'); return; }
+            if (!devRes.ok) { showAlert('Failed to load devices.', 'error'); return; }
             const devices = await devRes.json();
             const filtered = _selectedIds.size ? devices.filter(d => _selectedIds.has(d.id)) : devices;
 
             if (_sensorsHistoryMode) {
                 const start = document.getElementById('startDate').value;
                 const end   = document.getElementById('endDate').value;
-                if (!start || !end) { alert('Please select a date range.'); return; }
+                if (!start || !end) { showAlert('Please select a date range.', 'warning'); return; }
                 const results = await Promise.all(filtered.map(async d => {
                     try {
                         const r = await apiFetch(`${API_BASE}/positions/history`, {
@@ -154,13 +158,13 @@ async function generateReport() {
             }
             _sortCol = null;
             _sensorsHistoryMode ? _renderSensorsHistory() : _renderSensors();
-        } catch (e) { console.error(e); alert('Error generating report.'); }
+        } catch (e) { console.error(e); showAlert('Error generating report.', 'error'); }
         return;
     }
 
     const start = document.getElementById('startDate').value;
     const end   = document.getElementById('endDate').value;
-    if (!start || !end) { alert('Please select a date range.'); return; }
+    if (!start || !end) { showAlert('Please select a date range.', 'warning'); return; }
 
     const deviceParam = _selectedIds.size ? `&device_ids=${[..._selectedIds].join(',')}` : '';
 
@@ -170,7 +174,7 @@ async function generateReport() {
 
     try {
         const res = await apiFetch(endpoint);
-        if (!res.ok) { alert('Failed to load report.'); return; }
+        if (!res.ok) { showAlert('Failed to load report.', 'error'); return; }
         const data = await res.json();
         _reportData = type === 'summary' ? data.rows : data;
         _sortCol = null;

@@ -6,7 +6,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends
 
 from core.database import get_db
-from core.auth import get_current_user, verify_device_access
+from core.auth import get_current_user, verify_device_access, require_permission
 from core.spatial import calculate_distance_km
 from models import User
 from models.schemas import PositionHistoryRequest, PositionHistoryResponse, PositionGeoJSON
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/positions", tags=["positions"])
 @router.post("/history", response_model=PositionHistoryResponse)
 async def get_position_history(
     request: PositionHistoryRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("view_history")),
 ):
     db = get_db()
     await verify_device_access(request.device_id, current_user)
