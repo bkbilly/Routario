@@ -239,12 +239,19 @@ class UserResponse(BaseModel):
     webhook_urls: List[str] = Field(default_factory=list)
     permissions: List[str] = Field(default_factory=list)
 
-    @field_validator('notification_channels', mode='before')
+    @field_validator('notification_channels', 'webhook_urls', mode='before')
     @classmethod
-    def validate_channels(cls, v):
-        if isinstance(v, dict):
-            return []
+    def validate_json_list(cls, v):
         if v is None:
+            return []
+        if isinstance(v, str):
+            import json
+            try:
+                parsed = json.loads(v)
+                return parsed if isinstance(parsed, list) else []
+            except (json.JSONDecodeError, ValueError):
+                return []
+        if isinstance(v, dict):
             return []
         return v
 
@@ -253,6 +260,13 @@ class UserResponse(BaseModel):
     def validate_permissions(cls, v):
         if v is None:
             return []
+        if isinstance(v, str):
+            import json
+            try:
+                parsed = json.loads(v)
+                return parsed if isinstance(parsed, list) else []
+            except (json.JSONDecodeError, ValueError):
+                return []
         return v
 
 
