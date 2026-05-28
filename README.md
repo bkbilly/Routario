@@ -40,6 +40,9 @@ Routario connects directly to your GPS hardware over TCP/UDP and gives you a liv
 | 💾 | **Backup & restore** — one-click database and file backup from the admin UI, no shell access needed | |
 | 📥 | **CSV export** — download full position history with all sensor columns included | |
 | 📱 | **PWA** — installs on Android and iOS, push notifications even when the tab is closed | |
+| 🚗 | **Driver management** — create driver profiles, assign to vehicles, track who drove which trip | |
+| 📊 | **Fleet reports** — summary, trips, daily aggregates, and sensor history with CSV export per report type | |
+| 🎙️ | **Voice PTT** — push-to-talk voice messages over WebSocket; read receipts, push notifications to offline users, message history | |
 
 ---
 
