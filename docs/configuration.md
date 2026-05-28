@@ -60,6 +60,15 @@ Redis is **optional**. When not available, Routario falls back to in-process Web
 
 ---
 
+## Logging
+
+| Variable | Default | Description |
+|---|---|---|
+| `LOG_LEVEL` | `INFO` | Python logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `LOG_FORMAT` | `%(asctime)s - %(name)s - %(levelname)s - %(message)s` | Python logging format string |
+
+---
+
 ## Default Admin User
 
 On first startup, Routario creates an admin account using these values. If the username already exists, these settings are ignored.

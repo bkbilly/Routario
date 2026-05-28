@@ -69,6 +69,7 @@ Routario evaluates alert rules continuously as positions arrive. Supported alert
 ## User Management & Multi-Tenancy
 
 - **Three-tier roles** — Super Admin, Company Admin, and Regular User. Company Admins manage users and devices scoped to their company without visibility into other companies.
+- **Fine-grained permissions** — on top of roles, each user can be granted specific permissions (view devices, send commands, manage drivers, voice PTT, manage users, etc.) grouped by feature area. A user can only grant permissions they hold themselves.
 - **Company management** — group users and devices into companies. Super admins manage all companies; company admins are self-contained within theirs.
 - **Device assignment** — grant or revoke access to specific devices per user. Regular users only see their assigned devices.
 - **Per-user notification channels** — each user independently configures their alert delivery URLs (Telegram, email, Slack, webhooks, etc.).
@@ -96,10 +97,52 @@ The dashboard maintains a persistent WebSocket connection. Whenever a device sen
 
 ---
 
-## Maintenance Logbook & Sharing
+## Driver Management
 
-- **Maintenance logbook** — per-device log of service events (oil changes, tyre changes, repairs, etc.) with date, odometer reading, cost, description, and file attachments (invoices, photos).
+- **Driver profiles** — create drivers with name, contact details, and notes.
+- **Vehicle assignment** — assign a driver to a vehicle; each trip records who was driving.
+- **Trip attribution** — history and reports link trips to the assigned driver for accountability.
+
+---
+
+## Fleet Reports
+
+Generate reports across your fleet for any time window:
+
+- **Fleet summary** — totals per device: distance driven, trips made, engine hours, and top speed.
+- **Trips report** — each trip with start/end time, distance, duration, and a map view of the route.
+- **Daily aggregates** — per-device totals rolled up by calendar day.
+- **Sensor history** — graph any sensor attribute (fuel level, temperature, voltage, etc.) over time.
+- **CSV export** — download data for each report type.
+
+---
+
+## Voice PTT
+
+Push-to-talk voice messaging for direct communication with drivers and team members:
+
+- **Push-to-talk recording** — hold to record a voice message, transmitted live over WebSocket.
+- **Read receipts** — see which users have listened to each message.
+- **Offline delivery** — users who are offline receive a browser push notification and hear the message when they reconnect.
+- **Message history** — searchable log of all voice messages with timestamps and sender info.
+
+---
+
+## Logbook
+
+Per-vehicle records across three tabs:
+
+- **Service entries** — log repairs, tyre changes, inspections, and any other work with date, odometer reading, cost, description, and file attachments (invoices, photos).
+- **Fuel fill-ups** — record each refuel with litres, cost, and odometer to track consumption over time.
+- **Maintenance intervals** — define service schedules by distance (km) or time (days); completed services automatically advance the next due date and odometer target.
+
+---
+
+## Live Sharing
+
 - **Share live location** — generate a public share link for a device so external users can view its current position without logging in.
+- **Time-limited links** — set expiry from 15 minutes up to 7 days, or a custom duration.
+- **Multiple active shares** — create several independent links for the same device simultaneously.
 
 ---
 

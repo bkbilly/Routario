@@ -712,13 +712,26 @@ body::before {
     transform: scale(1.05);
 }
 
+.btn-icon.active {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: #fff;
+}
+
 .history-slider {
     width: 100%;
     height: 6px;
     -webkit-appearance: none;
-    background: var(--bg-hover);
+    appearance: none;
+    background: var(--track-gradient, var(--bg-hover));
     border-radius: 3px;
     outline: none;
+}
+
+.history-slider::-moz-range-track {
+    background: var(--track-gradient, var(--bg-hover));
+    height: 6px;
+    border-radius: 3px;
 }
 
 .history-slider::-webkit-slider-thumb {
@@ -1099,6 +1112,7 @@ body::before {
     font-family: var(--font-mono);
     color: var(--accent-secondary);
     overflow: hidden;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
     text-overflow: ellipsis;
     min-width: 80px;
 }
@@ -1131,6 +1145,20 @@ body::before {
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
+    position: relative;
+}
+
+.history-controls-buttons #historyLineModeBtn {
+    position: absolute;
+    right: 0;
+}
+
+.history-controls-buttons #historySpeedBtn {
+    position: absolute;
+    left: 0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-family: var(--font-display);
 }
 
 .btn-icon-play {

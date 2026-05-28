@@ -26,23 +26,23 @@ Routario connects directly to your GPS hardware over TCP/UDP and gives you a liv
 | | Feature | |
 |---|---|---|
 | 🗺️ | **Live map** — real-time positions with smooth movement and heading rotation | |
+| 🕒 | **History & playback** — scrub through routes, replay trips, graph any sensor over time | |
+| 📊 | **Fleet reports** — summary, trips, daily aggregates, and sensor history with CSV export per report type | |
 | 🔔 | **Smart alerts** — speeding, geofence, idling, towing, low battery, maintenance, and custom rules | |
 | 📣 | **Notifications** — Telegram, Discord, Email, Slack, browser push, and SIP voice calls. Route each alert to specific channels, schedule alerts by day and hour | |
-| 🕒 | **History & playback** — scrub through routes, replay trips, graph any sensor over time | |
+| 🚗 | **Driver management** — create driver profiles, assign to vehicles, track who drove which trip | |
+| 📋 | **Logbook** — service records, fuel fill-ups with consumption stats, and maintenance intervals per vehicle; with odometer, cost, date, and file attachments | |
+| ⚙️ | **Remote commands** — reboot, request position, set interval, and more from the dashboard | |
 | 🔗 | **Live sharing** — send a time-limited link; recipients see the live map with no login required | |
-| 📋 | **Logbook** — per-vehicle service records with odometer, cost, date, and file attachments | |
+| 🎙️ | **Voice PTT** — push-to-talk voice messages over WebSocket; read receipts, push notifications to offline users, message history | |
 | 📡 | **8 native protocols** — Teltonika, GT06, Queclink, H02, TK103, Meitrack, Flespi, OsmAnd | |
 | 🔌 | **Cloud integrations** — pull live data from Traccar, Wialon, 3D Tracking, Flespi Cloud, GPS Server, and Google Find Hub alongside native devices | |
 | 🪝 | **Webhooks** — push live position data to any HTTP endpoint on every update | |
-| ⚙️ | **Remote commands** — reboot, request position, set interval, and more from the dashboard | |
-| 👥 | **Multi-user & multi-tenant** — three-tier roles (super admin → company admin → user), company-scoped device and user management | |
+| 👥 | **Multi-user & multi-tenant** — three-tier roles (super admin → company admin → user), fine-grained per-user permissions, company-scoped device and user management | |
 | 🌍 | **Unit systems** — switch between metric (km, km/h, m) and imperial (mi, mph, ft) per user | |
+| 📱 | **PWA** — installs on Android and iOS, push notifications even when the tab is closed | |
 | 💾 | **Backup & restore** — one-click database and file backup from the admin UI, no shell access needed | |
 | 📥 | **CSV export** — download full position history with all sensor columns included | |
-| 📱 | **PWA** — installs on Android and iOS, push notifications even when the tab is closed | |
-| 🚗 | **Driver management** — create driver profiles, assign to vehicles, track who drove which trip | |
-| 📊 | **Fleet reports** — summary, trips, daily aggregates, and sensor history with CSV export per report type | |
-| 🎙️ | **Voice PTT** — push-to-talk voice messages over WebSocket; read receipts, push notifications to offline users, message history | |
 
 ---
 

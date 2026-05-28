@@ -68,7 +68,7 @@ Routario runs as a single Python/FastAPI application managing three concurrent r
 3. **Alert & Integration Engine** — runs background tasks that evaluate alert rules per device, poll cloud integrations, and dispatch notifications.
 
 !!! info "Stack"
-    Python 3.11+ · FastAPI · SQLAlchemy 2 (async) · SQLite *(default)* or PostgreSQL · Redis *(optional)* · Valhalla *(optional, for road speed limits)*
+    Python 3.10+ · FastAPI · SQLAlchemy 2 (async) · SQLite *(default)* or PostgreSQL · Redis *(optional)* · Valhalla *(optional, for road speed limits)*
 
 ---
 

@@ -351,9 +351,17 @@
                 </div>
                 <!-- Row 2: playback buttons -->
                 <div class="history-controls-buttons">
-                    <button class="btn-icon" onclick="stepHistory(-1)" title="Previous Event"><i class="mdi mdi-skip-previous"></i></button>
+                    <button class="btn-icon" id="historySpeedBtn" onclick="cyclePlaybackSpeed()" title="Playback speed">1×</button>
+                    <button class="btn-icon"
+                        onmousedown="_startStepHold(-1)" onmouseup="_stopStepHold()" onmouseleave="_stopStepHold()"
+                        ontouchstart="event.preventDefault();_startStepHold(-1)" ontouchend="_stopStepHold()"
+                        title="Previous Event"><i class="mdi mdi-skip-previous"></i></button>
                     <button class="btn-icon btn-icon-play" onclick="togglePlayback()" id="playbackBtn" title="Play/Pause"><i class="mdi mdi-play"></i></button>
-                    <button class="btn-icon" onclick="stepHistory(1)" title="Next Event"><i class="mdi mdi-skip-next"></i></button>
+                    <button class="btn-icon"
+                        onmousedown="_startStepHold(1)" onmouseup="_stopStepHold()" onmouseleave="_stopStepHold()"
+                        ontouchstart="event.preventDefault();_startStepHold(1)" ontouchend="_stopStepHold()"
+                        title="Next Event"><i class="mdi mdi-skip-next"></i></button>
+                    <button class="btn-icon" id="historyLineModeBtn" onclick="toggleHistoryLineMode()" title="Switch to animated lines"><i class="mdi mdi-waves"></i></button>
                 </div>
                 <!-- Row 3: slider -->
                 <div class="history-slider-row">
