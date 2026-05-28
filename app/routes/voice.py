@@ -86,18 +86,33 @@ class _VoiceManager:
 _mgr = _VoiceManager()
 
 
-async def _notify_offline(sender: User, online_ids: List[int], dur_str: str):
-    """Send push notifications to recipients who have no active voice WS connection."""
-    push    = get_push_service()
-    db      = get_db()
-    offline = [uid for uid in online_ids if uid not in _mgr._ws]
-    for uid in offline:
-        await push.notify_user_direct(
-            db,
-            uid,
-            title=f"🎙 Voice message from {sender.username}",
-            message=f"{dur_str} — tap to listen",
-        )
+async def _all_intended_recipients(sender: User, recipients: List[int]) -> List[int]:
+    """Return all user IDs who should receive this message (connected or not)."""
+    if recipients:
+        return [uid for uid in recipients if uid != sender.id]
+    # Broadcast — query all users in scope from DB
+    db = get_db()
+    async with db.get_session() as sess:
+        q = select(User).where(User.id != sender.id)
+        if not sender.is_admin:
+            q = q.where(User.company_id == sender.company_id)
+        result = await sess.execute(q)
+        return [u.id for u in result.scalars().all()]
+
+
+async def _notify_offline(sender: User, all_ids: List[int], live_ids: List[int], dur_str: str):
+    """Push to intended recipients who did NOT receive the live WS audio."""
+    push     = get_push_service()
+    db       = get_db()
+    live_set = set(live_ids)
+    for uid in all_ids:
+        if uid not in live_set:
+            await push.notify_user_direct(
+                db,
+                uid,
+                title=f"🎙 Voice message from {sender.username}",
+                message=f"{dur_str} — tap to listen",
+            )
 
 
 async def _authenticate_ws(token: str) -> Optional[User]:
@@ -165,18 +180,29 @@ async def voice_ws(websocket: WebSocket, token: str = Query(...)):
                     if buf:
                         fname = f"{session_id}.webm"
                         (AUDIO_DIR / fname).write_bytes(bytes(buf))
+                        all_ids = await _all_intended_recipients(user, recipients)
+                        # Derive company_id from recipients when sender has none (super admin)
+                        msg_company_id = user.company_id
+                        if not msg_company_id and recipients:
+                            db = get_db()
+                            async with db.get_session() as sess:
+                                r = await sess.execute(
+                                    select(User.company_id)
+                                    .where(User.id.in_(recipients))
+                                    .limit(1)
+                                )
+                                msg_company_id = r.scalar_one_or_none()
                         db = get_db()
                         async with db.get_session() as sess:
                             vm = VoiceMessage(
                                 sender_id=user.id,
-                                company_id=user.company_id,
+                                company_id=msg_company_id,
                                 recipient_ids=recipients,
                                 file_path=fname,
                                 duration_seconds=round(duration, 1),
                             )
                             sess.add(vm)
-                        # Push notifications to offline recipients
-                        await _notify_offline(user, tgts, dur_str)
+                        await _notify_offline(user, all_ids, tgts, dur_str)
                     session_id = None
                     buf = bytearray()
                     recipients = []
@@ -236,7 +262,13 @@ async def list_messages(current_user: User = Depends(get_current_user)):
             .limit(100)
         )
         if not current_user.is_admin:
-            q = q.where(VoiceMessage.company_id == current_user.company_id)
+            from sqlalchemy import or_
+            q = q.where(
+                or_(
+                    VoiceMessage.company_id == current_user.company_id,
+                    VoiceMessage.company_id.is_(None),
+                )
+            )
         result = await sess.execute(q)
         msgs = result.scalars().all()
 
