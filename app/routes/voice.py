@@ -23,7 +23,10 @@ from models.models import User, VoiceMessage, VoiceMessageRead
 router = APIRouter(prefix="/api/voice", tags=["voice"])
 
 AUDIO_DIR = Path(__file__).parent.parent.parent / "web" / "uploads" / "voice"
-AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _ensure_audio_dir():
+    AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ── Connection Manager ────────────────────────────────────────────────────────
@@ -165,6 +168,7 @@ async def voice_ws(websocket: WebSocket, token: str = Query(...)):
                     })
                     if buf:
                         fname = f"{session_id}.webm"
+                        _ensure_audio_dir()
                         (AUDIO_DIR / fname).write_bytes(bytes(buf))
                         db = get_db()
                         async with db.get_session() as sess:
