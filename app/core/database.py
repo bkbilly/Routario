@@ -170,6 +170,22 @@ class DatabaseService:
             "ALTER TABLE devices ADD COLUMN custom_attributes JSON DEFAULT '{}'",
             "ALTER TABLE device_states ADD COLUMN current_driver_id INTEGER",
             "ALTER TABLE trips ADD COLUMN driver_id INTEGER",
+            """CREATE TABLE IF NOT EXISTS voice_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
+                recipient_ids TEXT DEFAULT '[]',
+                file_path VARCHAR(256) NOT NULL,
+                duration_seconds REAL DEFAULT 0.0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )""",
+            """CREATE TABLE IF NOT EXISTS voice_message_reads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id INTEGER NOT NULL REFERENCES voice_messages(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                read_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(message_id, user_id)
+            )""",
         ]
         if self._is_postgres:
             migrations.append("ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)")

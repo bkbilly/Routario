@@ -266,6 +266,29 @@ class FuelLog(Base):
     device: Mapped["Device"] = relationship(back_populates="fuel_logs")
 
 
+class VoiceMessage(Base):
+    __tablename__ = 'voice_messages'
+
+    id:               Mapped[int]            = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sender_id:        Mapped[Optional[int]]  = mapped_column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    company_id:       Mapped[Optional[int]]  = mapped_column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), nullable=True)
+    recipient_ids:    Mapped[Optional[list]] = mapped_column(JsonType, default=list)
+    file_path:        Mapped[str]            = mapped_column(String(256), nullable=False)
+    duration_seconds: Mapped[float]          = mapped_column(Float, default=0.0)
+    created_at:       Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    sender: Mapped[Optional["User"]] = relationship("User", foreign_keys=[sender_id])
+
+
+class VoiceMessageRead(Base):
+    __tablename__ = 'voice_message_reads'
+
+    id:         Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    message_id: Mapped[int]      = mapped_column(Integer, ForeignKey('voice_messages.id', ondelete='CASCADE'), nullable=False)
+    user_id:    Mapped[int]      = mapped_column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    read_at:    Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class LocationShare(Base):
     __tablename__ = 'location_shares'
 
