@@ -542,6 +542,7 @@ async def _websocket_direct_loop(websocket: WebSocket, user_id: int):
 
 # Static files — must be last
 os.makedirs("web/uploads", exist_ok=True)
+os.makedirs("web/uploads/voice", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="web/uploads"), name="uploads")
 app.mount("/", StaticFiles(directory="web"), name="static")
 
