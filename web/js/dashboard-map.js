@@ -283,9 +283,9 @@ function updateDeviceMarker(deviceId, state) {
                 </div>
             </div>` : ''}
             <div class="vp-actions">
-                <button class="vp-action-btn" onclick="openLogbookModal(${deviceId}); if(map) map.closePopup();"><i class="mdi mdi-clipboard-list"></i> Logbook</button>
-                <button class="vp-action-btn" onclick="openShareModal(${deviceId}); if(map) map.closePopup();"><i class="mdi mdi-share"></i> Share</button>
-                <button class="vp-action-btn" onclick="openHistoryModal(${deviceId}); if(map) map.closePopup();"><i class="mdi mdi-history"></i> History</button>
+                ${(hasPermission('manage_logbook') || hasPermission('manage_fuel') || hasPermission('manage_maintenance')) ? `<button class="vp-action-btn" onclick="openLogbookModal(${deviceId}); if(map) map.closePopup();"><i class="mdi mdi-clipboard-list"></i> Logbook</button>` : ''}
+                ${hasPermission('live_share')     ? `<button class="vp-action-btn" onclick="openShareModal(${deviceId}); if(map) map.closePopup();"><i class="mdi mdi-share"></i> Share</button>` : ''}
+                ${hasPermission('view_history')   ? `<button class="vp-action-btn" onclick="openHistoryModal(${deviceId}); if(map) map.closePopup();"><i class="mdi mdi-history"></i> History</button>` : ''}
             </div>
         </div>`;
 

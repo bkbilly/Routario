@@ -164,6 +164,7 @@ class DatabaseService:
             "ALTER TABLE users ADD COLUMN units VARCHAR(10) DEFAULT 'metric'",
             "ALTER TABLE users ADD COLUMN company_id INTEGER",
             "ALTER TABLE users ADD COLUMN is_company_admin BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT NULL",
             "ALTER TABLE devices ADD COLUMN company_id INTEGER",
             "ALTER TABLE geofences ADD COLUMN user_id INTEGER",
             "ALTER TABLE device_states ADD COLUMN last_trip_id INTEGER",
@@ -197,6 +198,18 @@ class DatabaseService:
                     await conn.execute(text(stmt))
             except Exception:
                 pass  # column/change already applied
+
+        # Grant all permissions to existing users who have never had permissions set.
+        # NULL means "pre-permissions-feature" — give them full access so nothing breaks.
+        try:
+            from core.permissions import ALL_PERMISSIONS
+            async with self.engine.begin() as conn:
+                await conn.execute(
+                    text("UPDATE users SET permissions = :p WHERE permissions IS NULL"),
+                    {"p": json.dumps(ALL_PERMISSIONS)},
+                )
+        except Exception:
+            pass
 
         # SQLite does not support ALTER COLUMN, so recreate alert_history to
         # make device_id nullable (needed for admin notifications without a device).
@@ -437,6 +450,7 @@ class DatabaseService:
                 company_id=user_data.company_id,
                 is_company_admin=user_data.is_company_admin,
                 notification_channels=user_data.notification_channels,
+                permissions=user_data.permissions if user_data.permissions is not None else [],
             )
             session.add(user)
             await session.flush()
@@ -483,6 +497,8 @@ class DatabaseService:
                 user.is_company_admin = user_data.is_company_admin
             if user_data.company_id is not None:
                 user.company_id = user_data.company_id
+            if user_data.permissions is not None:
+                user.permissions = user_data.permissions
             await session.flush()
             await session.refresh(user)
             return user

@@ -27,6 +27,7 @@ async def login(form_data: UserLogin):
     }
     token = jwt.encode(token_data, settings.secret_key, algorithm=settings.algorithm)
 
+    from core.permissions import ALL_PERMISSIONS
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -36,4 +37,5 @@ async def login(form_data: UserLogin):
         "is_company_admin": getattr(user, "is_company_admin", False) or False,
         "company_id": getattr(user, "company_id", None),
         "units": getattr(user, "units", "metric") or "metric",
+        "permissions": ALL_PERMISSIONS if user.is_admin else (user.permissions or []),
     }

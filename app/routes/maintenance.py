@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
-from core.auth import get_current_user, verify_device_access
+from core.auth import get_current_user, verify_device_access, require_permission
 from core.database import get_db
 from models import User
 
@@ -25,6 +25,7 @@ async def log_service(
     device_id: int,
     req: ServiceLogRequest,
     current_user: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("manage_maintenance")),
 ):
     """
     Mark a maintenance alert row as just serviced.

@@ -21,7 +21,7 @@ from sqlalchemy import select, update, and_
 from sqlalchemy.orm import selectinload
 
 from core.database import get_db
-from core.auth import get_current_user, require_admin, require_company_admin, verify_device_access
+from core.auth import get_current_user, require_admin, require_company_admin, verify_device_access, require_permission
 from integrations.engine import clear_device_state, evict_auth_cache
 from integrations.integration_model import IntegrationAccount
 from models import User, Device, DeviceState, user_device_association
@@ -32,7 +32,7 @@ router = APIRouter(prefix="/api/devices", tags=["devices"])
 
 
 @router.get("/all", response_model=List[DeviceResponse])
-async def get_all_devices(caller: User = Depends(require_company_admin)):
+async def get_all_devices(caller: User = Depends(require_company_admin), _: User = Depends(require_permission("view_devices"))):
     """Return devices. Super admin sees all; company admin sees their company's."""
     db = get_db()
     async with db.get_session() as session:
@@ -44,7 +44,7 @@ async def get_all_devices(caller: User = Depends(require_company_admin)):
 
 
 @router.get("", response_model=List[DeviceResponse])
-async def get_devices(current_user: User = Depends(get_current_user)):
+async def get_devices(current_user: User = Depends(require_permission("view_devices"))):
     """Return devices for the caller. Company admins see all company devices."""
     db = get_db()
     if current_user.is_admin:
@@ -69,6 +69,7 @@ async def create_device(
     device_data: DeviceCreate,
     assign_to: Optional[int] = Query(None, description="User ID to assign device to"),
     caller: User = Depends(require_company_admin),
+    _: User = Depends(require_permission("edit_devices")),
 ):
     """Create a new device. Super admin or company admin."""
     if not caller.is_admin:
@@ -89,6 +90,7 @@ async def create_device(
 async def get_device(
     device_id: int,
     caller: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("view_devices")),
 ):
     db = get_db()
     device = await db.get_device_by_id(device_id)
@@ -131,7 +133,7 @@ async def update_device(
 
 
 @router.delete("/{device_id}")
-async def delete_device(device_id: int, admin: User = Depends(require_company_admin)):
+async def delete_device(device_id: int, admin: User = Depends(require_company_admin), _: User = Depends(require_permission("edit_devices"))):
     """Delete a device and all associated data. Admin only."""
     db = get_db()
 
@@ -184,6 +186,7 @@ async def delete_device(device_id: int, admin: User = Depends(require_company_ad
 async def get_device_state(
     device_id: int,
     caller: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("view_devices")),
 ):
     db = get_db()
     device = await db.get_device_by_id(device_id)
@@ -198,6 +201,7 @@ async def get_device_statistics(
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
     caller: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("view_devices")),
 ):
     db = get_db()
     if not start_date:
@@ -213,6 +217,7 @@ async def get_device_trips(
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
     caller: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("view_history")),
 ):
     db = get_db()
     if not start_date:
@@ -273,6 +278,7 @@ async def assign_user_to_device(
 async def check_command_support(
     device_id: int,
     caller: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("send_commands")),
 ):
     from protocols import ProtocolRegistry
     db = get_db()
@@ -337,6 +343,6 @@ def _command_support_for_protocol(protocol: str) -> dict:
 @router.get("/protocol/{protocol}/command-support")
 async def check_protocol_command_support(
     protocol: str,
-    caller: User = Depends(get_current_user),
+    caller: User = Depends(require_permission("send_commands")),
 ):
     return _command_support_for_protocol(protocol)

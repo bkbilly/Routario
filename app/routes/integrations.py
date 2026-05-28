@@ -34,7 +34,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select, update
 
-from core.auth import get_current_user
+from core.auth import get_current_user, require_permission
 from core.database import get_db
 from integrations.integration_model import IntegrationAccount
 from integrations.registry import IntegrationRegistry
@@ -79,7 +79,7 @@ async def list_providers():
 
 
 @router.get("/accounts", response_model=List[AccountResponse])
-async def list_accounts(current_user: User = Depends(get_current_user)):
+async def list_accounts(current_user: User = Depends(require_permission("manage_integrations"))):
     db = get_db()
     async with db.get_session() as session:
         query = select(IntegrationAccount).where(IntegrationAccount.is_active == True)
@@ -92,7 +92,7 @@ async def list_accounts(current_user: User = Depends(get_current_user)):
 @router.post("/accounts", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
 async def create_account(
     body: AccountCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("manage_integrations")),
 ):
     """
     Create a new IntegrationAccount or return the existing one if credentials
@@ -139,7 +139,7 @@ async def create_account(
 @router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_account(
     account_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("manage_integrations")),
 ):
     db = get_db()
     async with db.get_session() as session:
@@ -160,7 +160,7 @@ async def delete_account(
 @router.post("/accounts/test")
 async def test_credentials(
     body: TestCredentialsRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("manage_integrations")),
 ):
     """Test credentials without saving them."""
     provider = IntegrationRegistry.get(body.provider_id)
@@ -174,7 +174,7 @@ async def test_credentials(
 @router.get("/accounts/{account_id}/devices")
 async def list_account_devices(
     account_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("manage_integrations")),
 ):
     """List remote devices available on an integration account."""
     db = get_db()

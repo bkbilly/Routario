@@ -132,6 +132,7 @@
                     localStorage.setItem('is_company_admin', data.is_company_admin || false);
                     localStorage.setItem('company_id', data.company_id ?? '');
                     localStorage.setItem('units', data.units || 'metric');
+                    localStorage.setItem('permissions', JSON.stringify(data.permissions || []));
                     window.location.href = 'gps-dashboard.html';
                 } else {
                     err.textContent = 'Invalid username or password';

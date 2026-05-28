@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select, delete as sql_delete
 from sqlalchemy.orm import selectinload
 
-from core.auth import get_current_user, require_company_admin
+from core.auth import get_current_user, require_company_admin, require_permission
 from core.config import get_settings
 from core.database import get_db
 from core.push_notifications import get_push_service
@@ -133,6 +133,9 @@ async def voice_ws(websocket: WebSocket, token: str = Query(...)):
     if not user:
         await websocket.close(code=4001)
         return
+    if not user.is_admin and "voice_ptt" not in (user.permissions or []):
+        await websocket.close(code=4003)
+        return
 
     await websocket.accept()
     _mgr.connect(user, websocket)
@@ -224,7 +227,7 @@ async def voice_ws(websocket: WebSocket, token: str = Query(...)):
 # ── REST endpoints ────────────────────────────────────────────────────────────
 
 @router.get("/users")
-async def voice_users(current_user: User = Depends(get_current_user)):
+async def voice_users(current_user: User = Depends(require_permission("voice_ptt"))):
     db = get_db()
     async with db.get_session() as sess:
         result = await sess.execute(select(User))
@@ -252,7 +255,7 @@ async def voice_users(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/messages")
-async def list_messages(current_user: User = Depends(get_current_user)):
+async def list_messages(current_user: User = Depends(require_permission("voice_ptt"))):
     db = get_db()
     async with db.get_session() as sess:
         q = (
@@ -283,7 +286,7 @@ async def list_messages(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/messages/read-all")
-async def mark_all_read(current_user: User = Depends(get_current_user)):
+async def mark_all_read(current_user: User = Depends(require_permission("voice_ptt"))):
     db = get_db()
     async with db.get_session() as sess:
         q = select(VoiceMessage.id)
@@ -304,7 +307,7 @@ async def mark_all_read(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/messages/{message_id}/read")
-async def mark_read(message_id: int, current_user: User = Depends(get_current_user)):
+async def mark_read(message_id: int, current_user: User = Depends(require_permission("voice_ptt"))):
     db = get_db()
     async with db.get_session() as sess:
         existing = await sess.execute(
@@ -318,7 +321,7 @@ async def mark_read(message_id: int, current_user: User = Depends(get_current_us
 
 
 @router.get("/messages/{message_id}/audio")
-async def get_audio(message_id: int, current_user: User = Depends(get_current_user)):
+async def get_audio(message_id: int, current_user: User = Depends(require_permission("voice_ptt"))):
     db = get_db()
     async with db.get_session() as sess:
         result = await sess.execute(select(VoiceMessage).where(VoiceMessage.id == message_id))

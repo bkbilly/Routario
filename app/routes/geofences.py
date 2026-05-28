@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Depends
 
 from core.database import get_db
-from core.auth import get_current_user
+from core.auth import get_current_user, require_permission
 from models import User
 from models.schemas import GeofenceCreate, GeofenceUpdate, GeofenceResponse
 
@@ -53,7 +53,7 @@ async def get_geofences(
 @router.post("", response_model=GeofenceResponse)
 async def create_geofence(
     geofence: GeofenceCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("manage_geofences")),
 ):
     db = get_db()
     owner_id = await _resolve_owner(geofence.user_id, current_user)
@@ -65,7 +65,7 @@ async def create_geofence(
 async def update_geofence(
     geofence_id: int,
     update: GeofenceUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("manage_geofences")),
 ):
     db = get_db()
     caller_user_id = None if (current_user.is_admin or current_user.is_company_admin) else current_user.id
@@ -86,7 +86,7 @@ async def update_geofence(
 @router.delete("/{geofence_id}")
 async def delete_geofence(
     geofence_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("manage_geofences")),
 ):
     db = get_db()
     user_id = None if (current_user.is_admin or current_user.is_company_admin) else current_user.id

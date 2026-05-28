@@ -167,7 +167,7 @@ function _addLayerToMap(gf) {
                 className: 'geofence-tooltip',
             });
             corridorLayer.on('click', (e) => {
-                if (_drawControl || _mapDraggedRecently) return;
+                if (_drawControl || _mapDraggedRecently || !hasPermission('manage_geofences')) return;
                 L.DomEvent.stopPropagation(e);
                 _enterEditMode(layer, gf.id);
             });
@@ -193,9 +193,9 @@ function _addLayerToMap(gf) {
         className: 'geofence-tooltip',
     });
 
-    // Click → enter edit mode
+    // Click → enter edit mode (only if user can manage geofences)
     layer.on('click', (e) => {
-        if (_drawControl || _mapDraggedRecently) return;
+        if (_drawControl || _mapDraggedRecently || !hasPermission('manage_geofences')) return;
         L.DomEvent.stopPropagation(e);
         _enterEditMode(layer, gf.id);
     });

@@ -15,7 +15,20 @@ let _usrAssignUserId    = null;
 let _usrAssignCompanyId = null;
 let _usrAssignedDevices = new Set();
 
+// Permission groups definition (mirrors backend PERMISSION_GROUPS)
+const PERMISSION_GROUPS = [
+    { label: 'Devices',               perms: [['view_devices','View Devices'],['edit_devices','Edit Devices'],['manage_alerts','Manage Alerts'],['send_commands','Send Commands'],['manage_integrations','Manage Integrations']] },
+    { label: 'History & Reports',     perms: [['view_history','View History'],['view_reports','View Reports']] },
+    { label: 'Fleet Operations',      perms: [['manage_drivers','Manage Drivers'],['manage_fuel','Manage Fuel'],['manage_maintenance','Manage Maintenance'],['manage_logbook','Manage Logbook']] },
+    { label: 'Zones',                 perms: [['manage_geofences','Manage Geofences']] },
+    { label: 'Communication & Sharing', perms: [['voice_ptt','Voice PTT'],['live_share','Live Share']] },
+    { label: 'Administration',        perms: [['view_management','View Management'],['manage_users','Manage Users']] },
+];
+const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap(g => g.perms.map(p => p[0]));
+
 document.addEventListener('DOMContentLoaded', async () => {
+    await permissionsReady;
+    if (!hasPermission('manage_users')) return;
     if (_usrIsAdmin) await _usrLoadCompanies();
     await Promise.all([_usrLoad(), _usrLoadDevices()]);
 });
@@ -40,6 +53,13 @@ async function _usrLoadCompanies() {
         const res = await apiFetch(`${API_BASE}/companies`);
         if (res.ok) _usrCompanies = await res.json();
     } catch (e) { console.error(e); }
+}
+
+/** Return the set of permissions the currently-logged-in user can grant. */
+function _callerPermissions() {
+    if (_usrIsAdmin) return new Set(ALL_PERMISSIONS);
+    const me = _usrUsers.find(u => u.id === _usrMyId);
+    return new Set(me?.permissions || []);
 }
 
 function _usrRender() {
@@ -166,17 +186,71 @@ function openUserModal(userId = null) {
         });
     }
     onUserRoleChange();
+    _usrRenderPermissions();
 
     document.getElementById('userDeleteBtn').style.display =
         (isNew || _usrEditing?.id === _usrMyId) ? 'none' : 'inline-flex';
     document.getElementById('userModal').classList.add('active');
 }
 
+function _usrRenderPermissions() {
+    const container = document.getElementById('userModalPermissions');
+    const hintEl    = document.getElementById('userModalPermHint');
+    const role      = document.getElementById('userModalRole')?.value;
+
+    const fieldsCol = document.getElementById('userModalBody')?.firstElementChild;
+    // Super admins have implicit full access — no checklist needed
+    if (role === 'admin') {
+        document.getElementById('userModalPermissionsGroup').style.display = 'none';
+        if (fieldsCol) fieldsCol.style.gridColumn = '1 / -1';
+        return;
+    }
+    document.getElementById('userModalPermissionsGroup').style.display = '';
+    if (fieldsCol) fieldsCol.style.gridColumn = '';
+
+    const callerPerms = _callerPermissions();
+    const editPerms   = new Set(_usrEditing?.permissions || (_usrEditing ? [] : [...callerPerms]));
+
+    if (_usrIsAdmin) {
+        hintEl.textContent = '';
+    } else {
+        hintEl.textContent = 'Limited to your own permissions';
+    }
+
+    // Permissions that don't apply to regular users
+    const adminOnlyPerms = new Set(['manage_users', 'edit_devices', 'manage_integrations', 'view_management']);
+    const isUserRole = role === 'user';
+
+    container.innerHTML = PERMISSION_GROUPS.map(group => {
+        const rows = group.perms
+            .filter(([key]) => !(isUserRole && adminOnlyPerms.has(key)))
+            .map(([key, label]) => {
+                const canGrant  = callerPerms.has(key);
+                const isChecked = editPerms.has(key);
+                const disabled  = !canGrant ? 'disabled' : '';
+                const opacity   = !canGrant ? 'opacity:0.4;' : '';
+                return `<label style="display:flex;align-items:center;gap:0.5rem;cursor:${canGrant ? 'pointer' : 'default'};${opacity}">
+                    <input type="checkbox" class="usr-perm-cb" data-perm="${key}"
+                        ${isChecked ? 'checked' : ''} ${disabled}
+                        style="accent-color:var(--accent-primary);width:14px;height:14px;flex-shrink:0;">
+                    <span style="font-size:0.85rem;">${label}</span>
+                </label>`;
+            }).join('');
+
+        if (!rows) return '';
+        return `<div>
+            <div style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:0.35rem;">${group.label}</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.2rem 0.5rem;">${rows}</div>
+        </div>`;
+    }).join('');
+}
+
 function onUserRoleChange() {
     if (!_usrIsAdmin) return;
-    const role = document.getElementById('userModalRole').value;
+    const role  = document.getElementById('userModalRole').value;
     const group = document.getElementById('userModalCompanyGroup');
     if (group) group.style.display = role === 'admin' ? 'none' : '';
+    _usrRenderPermissions();
 }
 
 function closeUserModal() {
@@ -203,11 +277,19 @@ async function saveUser() {
 
     const isMe = !isNew && _usrEditing?.id === _usrMyId;
     const units = document.getElementById('userModalUnits').value;
+
+    // Collect permissions from checkboxes (only when not super admin role)
+    let permissions = null;
+    if (role !== 'admin') {
+        permissions = [...document.querySelectorAll('.usr-perm-cb:checked:not(:disabled)')].map(cb => cb.dataset.perm);
+    }
+
     const payload = {
         email,
         units,
         ...(!isMe && { is_admin: role === 'admin', is_company_admin: role === 'company_admin' }),
         company_id: companyId,
+        ...(permissions !== null && { permissions }),
     };
     if (password) payload.password = password;
     if (isNew)    payload.username = username;
@@ -220,15 +302,38 @@ async function saveUser() {
             isNew ? `${API_BASE}/users` : `${API_BASE}/users/${_usrEditing.id}`,
             { method: isNew ? 'POST' : 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
         );
-        if (!res.ok) throw new Error((await res.json()).detail || 'Save failed');
-        closeUserModal();
-        await _usrLoad();
+        if (!res.ok) {
+            const data   = await res.json();
+            const detail = data.detail;
+            if (Array.isArray(detail)) {
+                detail.forEach(e => showAlert(_usrFmtError(e), 'error', 6000));
+            } else {
+                showAlert(detail || 'Save failed', 'error');
+            }
+        } else {
+            closeUserModal();
+            await _usrLoad();
+        }
     } catch (e) {
-        alert(e.message);
+        showAlert(e.message || 'Save failed', 'error');
     } finally {
         btn.disabled = false;
         btn.textContent = 'Save';
     }
+}
+
+function _usrFmtError(e) {
+    const fieldLabels = {
+        email: 'Email', password: 'Password', username: 'Username',
+        company_id: 'Company', permissions: 'Permissions',
+        is_admin: 'Role', is_company_admin: 'Role',
+    };
+    const field = e.loc ? fieldLabels[e.loc[e.loc.length - 1]] || e.loc[e.loc.length - 1] : null;
+    let msg = e.msg || 'Invalid value';
+    if (/pattern/i.test(msg))          msg = 'Invalid format';
+    else if (/at least (\d+) char/i.test(msg)) msg = msg.replace(/String should have at least (\d+) characters?/i, 'Must be at least $1 characters');
+    else if (msg === 'Field required')  msg = 'Required';
+    return field ? `${field}: ${msg}` : msg;
 }
 
 async function usrDelete(userId) {
@@ -239,7 +344,7 @@ async function usrDelete(userId) {
         if (!res.ok) throw new Error((await res.json()).detail || 'Delete failed');
         if (_usrEditing?.id === userId) closeUserModal();
         await _usrLoad();
-    } catch (e) { alert(e.message); }
+    } catch (e) { showAlert(e.message || 'Delete failed', 'error'); }
 }
 
 async function usrImpersonate(userId) {
@@ -258,8 +363,9 @@ async function usrImpersonate(userId) {
         localStorage.setItem('is_admin',         data.is_admin);
         localStorage.setItem('is_company_admin', data.is_company_admin || false);
         localStorage.setItem('company_id',       data.company_id ?? '');
+        localStorage.setItem('permissions',      JSON.stringify(data.permissions || []));
         window.location.href = 'gps-dashboard.html';
-    } catch (e) { alert(e.message); }
+    } catch (e) { showAlert(e.message || 'Impersonation failed', 'error'); }
 }
 
 // ── Device Assignment ─────────────────────────────────────────────
@@ -411,7 +517,7 @@ async function usrSendNotification() {
     const title   = document.getElementById('userNotifyTitle').value.trim();
     const message = document.getElementById('userNotifyMessage').value.trim();
     const userIds = [..._usrNotifySelected];
-    if (!userIds.length) { alert('Select at least one recipient.'); return; }
+    if (!userIds.length) { showAlert('Select at least one recipient.', 'warning'); return; }
     if (!title || !message) return;
     const btn = document.getElementById('userNotifySendBtn');
     btn.disabled    = true;
@@ -425,9 +531,9 @@ async function usrSendNotification() {
             }).then(r => r.json()).catch(() => ({ error: true }))
         ));
         const failed = results.filter(r => r.error).length;
-        if (failed) alert(`Sent to ${userIds.length - failed} user(s). ${failed} failed.`);
+        if (failed) showAlert(`Sent to ${userIds.length - failed} user(s). ${failed} failed.`, 'warning');
         usrCloseNotifyModal();
-    } catch (e) { alert(e.message); }
+    } catch (e) { showAlert(e.message || 'Send failed', 'error'); }
     finally {
         btn.disabled    = false;
         btn.textContent = 'Send';

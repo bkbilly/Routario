@@ -24,7 +24,19 @@ function openLogbookModal(deviceId) {
     closeEntryModal();
     document.getElementById('logbookModal').classList.add('active');
 
-    switchLbTab('entries');
+    // Show/hide tabs based on permissions
+    const entriesTabBtn = document.getElementById('lbTabEntries');
+    const fuelTabBtn    = document.getElementById('lbTabFuel');
+    const maintTabBtn   = document.getElementById('lbTabMaintenance');
+    if (entriesTabBtn) entriesTabBtn.style.display = hasPermission('manage_logbook')     ? '' : 'none';
+    if (fuelTabBtn)    fuelTabBtn.style.display    = hasPermission('manage_fuel')        ? '' : 'none';
+    if (maintTabBtn)   maintTabBtn.style.display   = hasPermission('manage_maintenance') ? '' : 'none';
+
+    // Open to the first available tab
+    const firstTab = hasPermission('manage_logbook') ? 'entries'
+                   : hasPermission('manage_fuel')    ? 'fuel'
+                   : 'maintenance';
+    switchLbTab(firstTab);
     _lbUpdateMaintenanceTabVisibility(device);
 }
 

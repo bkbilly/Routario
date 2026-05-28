@@ -66,9 +66,10 @@ function protoBadgeHtml(protocol) {
 // ── Boot ─────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
     checkLogin();
+    await permissionsReady;
 
     document.querySelectorAll('button[onclick*="openAddDeviceModal"]').forEach(btn => {
-        btn.style.display = hasAdminAccess ? '' : 'none';
+        btn.style.display = (hasAdminAccess && hasPermission('edit_devices')) ? '' : 'none';
     });
 
     const usersTabBtn = document.getElementById('usersTabBtn');
@@ -84,7 +85,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadAvailableProtocols();
     await loadUserChannels();
     await loadDevices();
-    if (hasAdminAccess) loadAllUsers();
+    if (hasAdminAccess && hasPermission('manage_users')) loadAllUsers();
     populateAddAlertDropdown();
 
     document.addEventListener('keydown', e => {
@@ -110,16 +111,17 @@ async function loadAlertTypes() {
 
 async function loadAvailableProtocols() {
     try {
-        const [protoRes, intgRes, accountsRes] = await Promise.all([
+        const fetchList = [
             apiFetch(`${API_BASE}/protocols`),
             apiFetch(`${API_BASE}/integrations/providers`),
-            apiFetch(`${API_BASE}/integrations/accounts`),
-        ]);
+            ...(hasPermission('manage_integrations') ? [apiFetch(`${API_BASE}/integrations/accounts`)] : []),
+        ];
+        const [protoRes, intgRes, accountsRes] = await Promise.all(fetchList);
 
         const data           = protoRes.ok    ? await protoRes.json()    : { protocols: [], protocol_info: {} };
         protocolInfo         = data.protocol_info || {};
         integrationProviders = intgRes.ok      ? await intgRes.json()     : [];
-        integrationAccounts  = accountsRes.ok  ? await accountsRes.json() : [];
+        integrationAccounts  = (accountsRes?.ok)  ? await accountsRes.json() : [];
         availableProtocols   = data.protocols || [];
 
         const sel = document.getElementById('deviceProtocol');
@@ -146,6 +148,7 @@ async function loadAvailableProtocols() {
         sel.appendChild(nativeGroup);
 
         if (integrationProviders.length) {
+            const canManage = hasPermission('manage_integrations');
             const intgGroup = document.createElement('optgroup');
             intgGroup.label = 'External Integrations';
             integrationProviders.forEach(p => {
@@ -153,6 +156,7 @@ async function loadAvailableProtocols() {
                 opt.value               = p.provider_id;
                 opt.textContent         = p.display_name;
                 opt.dataset.integration = 'true';
+                opt.disabled            = !canManage;
                 intgGroup.appendChild(opt);
             });
             sel.appendChild(intgGroup);
@@ -192,10 +196,14 @@ async function loadDevices() {
                 const sr = await apiFetch(`${API_BASE}/devices/${device.id}/state`);
                 if (sr.ok) device.state = await sr.json();
             } catch { /* ignore */ }
-            try {
-                const cr = await apiFetch(`${API_BASE}/devices/${device.id}/command-support`);
-                device.supports_commands = cr.ok ? (await cr.json()).supports_commands : false;
-            } catch { device.supports_commands = false; }
+            if (hasPermission('send_commands')) {
+                try {
+                    const cr = await apiFetch(`${API_BASE}/devices/${device.id}/command-support`);
+                    device.supports_commands = cr.ok ? (await cr.json()).supports_commands : false;
+                } catch { device.supports_commands = false; }
+            } else {
+                device.supports_commands = false;
+            }
         }));
 
         devices.sort((a, b) => a.name.localeCompare(b.name));
@@ -285,7 +293,7 @@ function renderDeviceTable(list) {
         const lastSeen    = d.state?.last_update ? formatDateToLocal(d.state.last_update) : '—';
         const odometer    = d.state?.total_odometer != null ? fmtOdometer(d.state.total_odometer) : '—';
         const plate       = d.license_plate || '—';
-        const cmds        = d.supports_commands !== false;
+        const cmds        = d.supports_commands !== false && hasPermission('send_commands');
         const companyName = allCompanies.find(c => c.id === d.company_id)?.name || '—';
 
         return `
@@ -329,7 +337,7 @@ function switchModalTab(tabId, btn) {
 
 // ── Open / Close Device Modal ─────────────────────────────────────
 function openAddDeviceModal() {
-    if (!hasAdminAccess) return;
+    if (!hasAdminAccess || !hasPermission('edit_devices')) return;
     editingDeviceId = null;
 
     document.getElementById('modalTitle').textContent        = 'Add New Device';
@@ -340,6 +348,10 @@ function openAddDeviceModal() {
     if (usersTabBtnAdd) usersTabBtnAdd.style.display = 'none';
     const commandsTabBtnAdd = document.getElementById('commandsTabBtn');
     if (commandsTabBtnAdd) commandsTabBtnAdd.style.display = 'none';
+    const rawDataTabBtnAdd = document.querySelector('.modal-tab[data-tab="rawdata"]');
+    if (rawDataTabBtnAdd) rawDataTabBtnAdd.style.display = hasPermission('view_history') ? '' : 'none';
+    const alertsTabBtnAdd = document.querySelector('.modal-tab[data-tab="alerts"]');
+    if (alertsTabBtnAdd) alertsTabBtnAdd.style.display = hasPermission('manage_alerts') ? '' : 'none';
     document.getElementById('deviceForm').reset();
     document.getElementById('deviceProtocol').value          = '';
     document.getElementById('currentOdometer').value         = '0.0';
@@ -372,9 +384,13 @@ function openDeviceModal(deviceId, startTab = 'general') {
     document.getElementById('submitIcon').className         = 'mdi mdi-content-save';
     document.getElementById('deleteDeviceBtn').style.display = hasAdminAccess ? 'inline-flex' : 'none';
     const usersTabBtnEdit = document.getElementById('usersTabBtn');
-    if (usersTabBtnEdit) usersTabBtnEdit.style.display = (isCompanyAdmin || (isAdmin && d.company_id)) ? '' : 'none';
+    if (usersTabBtnEdit) usersTabBtnEdit.style.display = ((isCompanyAdmin || (isAdmin && d.company_id)) && hasPermission('manage_users')) ? '' : 'none';
     const commandsTabBtnEdit = document.getElementById('commandsTabBtn');
-    if (commandsTabBtnEdit) commandsTabBtnEdit.style.display = d.supports_commands ? '' : 'none';
+    if (commandsTabBtnEdit) commandsTabBtnEdit.style.display = (d.supports_commands && hasPermission('send_commands')) ? '' : 'none';
+    const rawDataTabBtnEdit = document.querySelector('.modal-tab[data-tab="rawdata"]');
+    if (rawDataTabBtnEdit) rawDataTabBtnEdit.style.display = hasPermission('view_history') ? '' : 'none';
+    const alertsTabBtnEdit = document.querySelector('.modal-tab[data-tab="alerts"]');
+    if (alertsTabBtnEdit) alertsTabBtnEdit.style.display = hasPermission('manage_alerts') ? '' : 'none';
     deviceAssignedUserIds = new Set();
 
     document.getElementById('deviceName').value          = d.name;
@@ -392,8 +408,15 @@ function openDeviceModal(deviceId, startTab = 'general') {
 
     const imeiEl     = document.getElementById('deviceImei');
     const protocolEl = document.getElementById('deviceProtocol');
-    imeiEl.disabled     = !hasAdminAccess;
-    protocolEl.disabled = !hasAdminAccess;
+    imeiEl.disabled     = !hasAdminAccess || !hasPermission('edit_devices');
+    protocolEl.disabled = !hasAdminAccess || !hasPermission('edit_devices');
+    // Lock protocol when it is an integration and the user can't manage integrations
+    if (!hasPermission('manage_integrations') && integrationProviders.some(p => p.provider_id === d.protocol)) {
+        protocolEl.disabled = true;
+    }
+
+    document.getElementById('deleteDeviceBtn').style.display = (hasAdminAccess && hasPermission('edit_devices')) ? 'inline-flex' : 'none';
+    document.getElementById('submitBtn').style.display       = '';
 
     populateVehicleTypeSelect(document.getElementById('vehicleType'), d.vehicle_type || DEFAULT_TYPE);
 
@@ -801,7 +824,7 @@ function renderAlertsTable() {
     if (isAdmin) {
         visibleRows = alertRows;
     } else if (isCompanyAdmin) {
-        const companyUserIds = new Set(allUsers.map(u => u.id));
+        const companyUserIds = new Set([_uid, ...allUsers.map(u => u.id)]);
         visibleRows = alertRows.filter(r =>
             !r.notify_user_ids || r.notify_user_ids.some(id => companyUserIds.has(id))
         );

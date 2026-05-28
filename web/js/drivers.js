@@ -11,6 +11,8 @@ let _drvSortCol    = 'name';
 let _drvSortDir    = 1;
 
 document.addEventListener('DOMContentLoaded', async () => {
+    await permissionsReady;
+    if (!hasPermission('manage_drivers')) return;
     await _loadDevices();
     if (_drvIsAdmin) {
         await _loadCompanies();
@@ -87,11 +89,11 @@ function _render() {
             <td><span class="device-row-name">${_esc(d.name)}</span></td>
             <td style="color:var(--text-secondary);">${_esc(d.phone || '—')}</td>
             <td style="font-family:var(--font-mono);font-size:0.85rem;">${_esc(d.license_number || '—')}</td>
-            ${_drvIsAdmin ? `<td style="color:var(--text-secondary);font-size:0.85rem;">${_esc(company)}</td>` : ''}
+            ${_drvIsAdmin ? `<td style="color:var(--text-secondary);font-size:0.85rem;">${_esc(company)}</td>` : '<td style="display:none;"></td>'}
             <td>${assigned ? `<span style="font-size:0.85rem;">${assignedEmoji} ${_esc(assigned.name)}</span>` : '<span style="color:var(--text-muted);">—</span>'}</td>
             <td style="text-align:right;white-space:nowrap;">
-                <button class="btn btn-secondary tbl-btn" onclick="openAssignModal(${d.id})"><i class="mdi mdi-car-key"></i> Assign</button>
-                <button class="btn btn-secondary tbl-btn" onclick="openDriverModal(${d.id})"><i class="mdi mdi-pencil"></i> Edit</button>
+                <button class="btn btn-secondary tbl-btn" onclick="openAssignModal(${d.id})"><i class="mdi mdi-car-key"></i> <span class="drv-btn-label">Assign</span></button>
+                <button class="btn btn-secondary tbl-btn" onclick="openDriverModal(${d.id})"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Edit</span></button>
             </td>
         </tr>`;
     }).join('');
@@ -176,7 +178,7 @@ async function saveDriver() {
         if (!res.ok) throw new Error((await res.json()).detail || 'Save failed');
         closeDriverModal();
         await _loadDrivers();
-    } catch (e) { alert(e.message); }
+    } catch (e) { showAlert(e.message || 'Save failed', 'error'); }
 }
 
 async function deleteDriver() {
@@ -187,7 +189,7 @@ async function deleteDriver() {
         if (!res.ok) throw new Error('Delete failed');
         closeDriverModal();
         await _loadDrivers();
-    } catch (e) { alert(e.message); }
+    } catch (e) { showAlert(e.message || 'Delete failed', 'error'); }
 }
 
 // ── Assign Modal ──────────────────────────────────────────────────
@@ -237,7 +239,7 @@ async function confirmAssign() {
         closeAssignModal();
         await _loadDevices();
         await _loadDrivers();
-    } catch (e) { alert('Assignment failed.'); }
+    } catch (e) { showAlert('Assignment failed.', 'error'); }
 }
 
 function _esc(s) {

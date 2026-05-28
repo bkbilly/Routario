@@ -268,7 +268,8 @@
         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
         stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
 
-    // ── Nav HTML ──────────────────────────────────────────────────────────────
+    // ── Nav HTML (built in DOMContentLoaded so hasPermission() is available) ──
+    function _buildNav() {
     const nav = document.createElement('div');
     nav.className = 'settings-nav';
     nav.innerHTML = `
@@ -324,25 +325,26 @@
                     ${chevron}
                 </button>
 
-                <a href="management.html" class="header-menu-item${isManagement ? ' active-page' : ''}">
-                    <span class="header-menu-item-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="5" y="2" width="14" height="20" rx="2"/>
-                            <line x1="12" y1="18" x2="12" y2="18"/>
-                        </svg>
-                    </span>
-                    <span>Management</span>
-                    ${chevron}
-                </a>
+                ${(typeof hasPermission === 'undefined' || hasPermission('view_management'))
+                    ? `<a href="management.html" class="header-menu-item${isManagement ? ' active-page' : ''}">
+                        <span class="header-menu-item-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="5" y="2" width="14" height="20" rx="2"/>
+                                <line x1="12" y1="18" x2="12" y2="18"/>
+                            </svg>
+                        </span>
+                        <span>Management</span>${chevron}
+                       </a>`
+                    : ''
+                }
 
-                <a href="reports.html" class="header-menu-item${isReports ? ' active-page' : ''}">
-                    <span class="header-menu-item-icon">
-                        <i class="mdi mdi-chart-bar" style="font-size:15px;"></i>
-                    </span>
-                    <span>Fleet Reports</span>
-                    ${chevron}
-                </a>
+                ${(typeof hasPermission === 'function' && hasPermission('view_reports'))
+                    ? `<a href="reports.html" class="header-menu-item${isReports ? ' active-page' : ''}">
+                        <span class="header-menu-item-icon"><i class="mdi mdi-chart-bar" style="font-size:15px;"></i></span>
+                        <span>Fleet Reports</span>${chevron}
+                       </a>`
+                    : ''}
 
                 <a href="user-settings.html" class="header-menu-item${isSettings ? ' active-page' : ''}">
                     <span class="header-menu-item-icon">
@@ -383,9 +385,13 @@
         </div>
         </div>
     `;
+    return nav;
+    } // end _buildNav
 
     // ── Toggle logic ──────────────────────────────────────────────────────────
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
+        await permissionsReady;
+        const nav = _buildNav();
         const container = document.querySelector('.container');
         if (container) container.insertBefore(nav, container.firstChild);
 

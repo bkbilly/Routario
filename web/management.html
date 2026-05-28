@@ -44,6 +44,17 @@
             color: var(--accent-primary);
             border-bottom-color: var(--accent-primary);
         }
+        #userModalBody {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0 1.5rem;
+            align-items: start;
+        }
+        @media (max-width: 640px) {
+            #userModalBody { grid-template-columns: 1fr; }
+            #userModal .modal-content { max-width: 95vw; }
+            .drv-btn-label { display: none; }
+        }
     </style>
 </head>
 <body>
@@ -610,40 +621,53 @@
      USER MODAL
 ============================================================= -->
 <div class="modal" id="userModal">
-    <div class="modal-content" style="max-width:480px;height:auto;">
+    <div class="modal-content" style="max-width:860px;height:auto;max-height:90vh;">
         <div class="modal-header">
             <h2 class="modal-title" id="userModalTitle">Add User</h2>
             <button type="button" class="modal-close" onclick="closeUserModal()"><i class="mdi mdi-close"></i></button>
         </div>
-        <div class="modal-scrollable" style="padding:1.25rem;">
-            <div class="form-group">
-                <label class="form-label">Username *</label>
-                <input type="text" id="userModalUsername" class="form-input" placeholder="johndoe" autocomplete="off">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Email *</label>
-                <input type="email" id="userModalEmail" class="form-input" placeholder="john@example.com">
-            </div>
-            <div class="form-group">
-                <label class="form-label" id="userPasswordLabel">Password *</label>
-                <input type="password" id="userModalPassword" class="form-input" autocomplete="new-password">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Role *</label>
-                <select id="userModalRole" class="form-input" onchange="onUserRoleChange()"></select>
-            </div>
-            <div class="form-group" id="userModalCompanyGroup" style="display:none;">
-                <label class="form-label">Company *</label>
-                <select id="userModalCompany" class="form-input">
-                    <option value="">— Select company —</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Unit System</label>
-                <select id="userModalUnits" class="form-input">
-                    <option value="metric">Metric (km, km/h, m)</option>
-                    <option value="imperial">Imperial (mi, mph, ft)</option>
-                </select>
+        <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
+            <div id="userModalBody">
+                <!-- Left column: basic fields -->
+                <div>
+                    <div class="form-group">
+                        <label class="form-label">Username *</label>
+                        <input type="text" id="userModalUsername" class="form-input" placeholder="johndoe" autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Email *</label>
+                        <input type="email" id="userModalEmail" class="form-input" placeholder="john@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" id="userPasswordLabel">Password *</label>
+                        <input type="password" id="userModalPassword" class="form-input" autocomplete="new-password">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Role *</label>
+                        <select id="userModalRole" class="form-input" onchange="onUserRoleChange()"></select>
+                    </div>
+                    <div class="form-group" id="userModalCompanyGroup" style="display:none;">
+                        <label class="form-label">Company *</label>
+                        <select id="userModalCompany" class="form-input">
+                            <option value="">— Select company —</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Unit System</label>
+                        <select id="userModalUnits" class="form-input">
+                            <option value="metric">Metric (km, km/h, m)</option>
+                            <option value="imperial">Imperial (mi, mph, ft)</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- Right column: permissions -->
+                <div class="form-group" id="userModalPermissionsGroup">
+                    <label class="form-label" style="display:flex;align-items:center;justify-content:space-between;">
+                        <span>Permissions</span>
+                        <span id="userModalPermHint" style="font-size:0.75rem;color:var(--text-muted);font-weight:400;"></span>
+                    </label>
+                    <div id="userModalPermissions" style="border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;display:flex;flex-direction:column;gap:0.75rem;"></div>
+                </div>
             </div>
         </div>
         <div class="modal-footer">
@@ -737,11 +761,20 @@
     const _bellIcon = `<i class="mdi mdi-bell" style="font-size:15px;"></i>`;
     const _closeMenu = `document.getElementById('snDropdown').classList.remove('open'); document.getElementById('snGearBtn').classList.remove('active');`;
 
+    const _addPermissions = {
+        devices:   'edit_devices',
+        companies: null,
+        drivers:   'manage_drivers',
+        users:     'manage_users',
+    };
+
     function _updateAddAction(name) {
         const el = document.getElementById('snAddAction');
         if (!el) return;
-        const a = _addActions[name];
-        el.innerHTML = a ? `<button class="header-menu-item" onclick="${a.fn}; ${_closeMenu}"><span class="header-menu-item-icon">${_plusIcon}</span><span>${a.label}</span></button>` : '';
+        const a    = _addActions[name];
+        const perm = _addPermissions[name];
+        const allowed = !perm || hasPermission(perm);
+        el.innerHTML = (a && allowed) ? `<button class="header-menu-item" onclick="${a.fn}; ${_closeMenu}"><span class="header-menu-item-icon">${_plusIcon}</span><span>${a.label}</span></button>` : '';
 
         const notifyEl = document.getElementById('snNotifyAction');
         if (!notifyEl) return;
@@ -763,7 +796,9 @@
 
     window.switchMgmtSection = switchMgmtSection;
 
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
+        await permissionsReady;
+        if (!hasPermission('view_management')) { window.location.href = 'gps-dashboard.html'; return; }
         const isAdmin        = localStorage.getItem('is_admin') === 'true';
         const isCompanyAdmin = localStorage.getItem('is_company_admin') === 'true';
         if (isAdmin) {
@@ -772,9 +807,13 @@
             const ch = document.getElementById('userCompanyHeader');
             if (ch) ch.style.display = '';
         }
-        if (isAdmin || isCompanyAdmin) {
+        if ((isAdmin || isCompanyAdmin) && hasPermission('manage_users')) {
             const t = document.getElementById('mgmtTabUsers');
             if (t) t.style.display = '';
+        }
+        if (!hasPermission('manage_drivers')) {
+            const t = document.getElementById('mgmtTabDrivers');
+            if (t) t.style.display = 'none';
         }
 
         const hash = window.location.hash.replace('#', '');
