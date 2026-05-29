@@ -89,8 +89,8 @@ async def update_user(
     caller: User = Depends(require_self_or_admin),
 ):
     """Update user details. Permissions are capped to the editor's own permissions."""
-    if not caller.is_admin and user_data.is_admin is not None:
-        raise HTTPException(status_code=403, detail="Only admins can change admin status")
+    if not caller.is_admin and user_data.is_admin:
+        raise HTTPException(status_code=403, detail="Only admins can grant super admin status")
 
     # Editing another user requires manage_users
     if caller.id != user_id:
@@ -159,6 +159,13 @@ async def impersonate_user(user_id: int, admin: User = Depends(require_company_a
         algorithm=settings.algorithm,
     )
     from core.permissions import ALL_PERMISSIONS
+    import json as _json
+    raw_perms = target.permissions or []
+    if isinstance(raw_perms, str):
+        try:
+            raw_perms = _json.loads(raw_perms)
+        except Exception:
+            raw_perms = []
     return {
         "access_token":     token,
         "token_type":       "bearer",
@@ -167,7 +174,7 @@ async def impersonate_user(user_id: int, admin: User = Depends(require_company_a
         "is_admin":         target.is_admin,
         "is_company_admin": getattr(target, "is_company_admin", False) or False,
         "company_id":       getattr(target, "company_id", None),
-        "permissions":      ALL_PERMISSIONS if target.is_admin else (target.permissions or []),
+        "permissions":      ALL_PERMISSIONS if target.is_admin else raw_perms,
     }
 
 

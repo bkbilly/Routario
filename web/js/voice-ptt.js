@@ -24,6 +24,10 @@
     let _histSearch  = '';
     let _histSortCol = 'created_at';
     let _histSortDir = -1;   // -1 = newest first
+    let _histPage    = 1;
+    let _histPages   = 1;
+    let _histTotal   = 0;
+    const _PAGE_SIZE = 20;
 
     let _recording     = false;
     let _mediaRecorder = null;
@@ -121,6 +125,7 @@
                             <button class="ptt-read-all-btn" onclick="pttReadAll()" title="Mark all as read">
                                 <i class="mdi mdi-check-all"></i>
                             </button>
+                            ${_isAdmin ? `<button class="ptt-read-all-btn" onclick="pttDeleteAll()" title="Delete all messages" style="color:var(--accent-danger,#ef4444)"><i class="mdi mdi-delete-sweep"></i></button>` : ''}
                         </div>
                         <div id="pttUnreadChip" class="ptt-unread-chip" style="display:none;">
                             <i class="mdi mdi-filter"></i> Unread only
@@ -142,6 +147,11 @@
                                 <tr><td colspan="5" class="ptt-hist-empty">No messages yet</td></tr>
                             </tbody>
                         </table>
+                        <div id="pttPagination" style="display:none;flex-direction:row;justify-content:center;align-items:center;gap:0.5rem;padding:0.5rem 0.5rem 0;border-top:1px solid var(--border-color,#374151);">
+                            <button id="pttPagePrev" class="ptt-read-all-btn" title="Previous page"><i class="mdi mdi-chevron-left"></i></button>
+                            <span id="pttPageInfo" style="font-size:0.8rem;color:var(--text-secondary,#9ca3af);min-width:80px;text-align:center;"></span>
+                            <button id="pttPageNext" class="ptt-read-all-btn" title="Next page"><i class="mdi mdi-chevron-right"></i></button>
+                        </div>
                     </div>
                 </div>
             </div>`;
@@ -204,6 +214,7 @@
                 delete _incoming[data.session_id];
             }
             const prevIds = new Set(_messages.map(m => m.id));
+            _histPage = 1;
             _loadMessages().then(() => {
                 if (heardLive) {
                     // Mark any newly appeared messages as read (user heard them live)
@@ -298,6 +309,7 @@
         _modalOpen = true;
         const hadUnread = _unreadIds.size > 0;
         document.getElementById('pttModal').classList.add('active');
+        _histPage = 1;
         _loadUsers();
         _loadMessages().then(() => {
             if (hadUnread) {
@@ -395,7 +407,7 @@
             document.getElementById('pttTalkBtn')?.classList.remove('recording');
             document.getElementById('pttWave')?.classList.remove('active');
             _setStatus('Hold to Talk', '');
-            setTimeout(_loadMessages, 600);
+            setTimeout(() => { _histPage = 1; _loadMessages(); }, 600);
         }, 500);
     };
 
@@ -417,10 +429,13 @@
 
     async function _loadMessages(markLiveRead = null) {
         try {
-            const res = await apiFetch(`${API_BASE}/voice/messages`);
+            const res = await apiFetch(`${API_BASE}/voice/messages?page=${_histPage}&page_size=${_PAGE_SIZE}`);
             if (!res.ok) return;
-            const newList = await res.json();
-            // markLiveRead: Set of IDs the user just heard live — mark them read locally + on server
+            const data    = await res.json();
+            const newList = data.items;
+            _histPages = data.pages;
+            _histTotal = data.total;
+
             if (markLiveRead?.size) {
                 newList.forEach(m => { if (markLiveRead.has(m.id)) m.is_read = true; });
                 markLiveRead.forEach(id =>
@@ -428,7 +443,11 @@
                 );
             }
             _messages = newList;
-            _unreadIds = new Set(newList.filter(m => !m.is_read && m.sender_id !== _myId).map(m => m.id));
+            // Merge unread IDs: add newly seen unread, remove ones now marked read
+            newList.forEach(m => {
+                if (!m.is_read && m.sender_id !== _myId) _unreadIds.add(m.id);
+                else _unreadIds.delete(m.id);
+            });
             _updateBadge();
             _renderHistory();
         } catch (_) {}
@@ -445,20 +464,40 @@
     };
 
     window.pttReadAll = async function () {
-        try {
-            await apiFetch(`${API_BASE}/voice/messages/read-all`, { method: 'POST' });
-            _messages.forEach(m => { m.is_read = true; });
-            _unreadIds.clear();
-            _unreadFilter = false;
-            _updateBadge();
-            _renderHistory();
-        } catch (_) {}
+        _messages.forEach(m => { m.is_read = true; });
+        _unreadIds.clear();
+        _unreadFilter = false;
+        _updateBadge();
+        _renderHistory();
+        apiFetch(`${API_BASE}/voice/messages/read-all`, { method: 'POST' }).catch(() => {});
     };
 
     window.pttHistSort = function (col) {
         if (_histSortCol === col) { _histSortDir = -_histSortDir; }
         else { _histSortCol = col; _histSortDir = col === 'created_at' ? -1 : 1; }
         _renderHistory();
+    };
+
+    window.pttHistGotoPage = function (p) {
+        if (p < 1 || p > _histPages) return;
+        _histPage = p;
+        _loadMessages();
+    };
+
+    window.pttDeleteAll = async function () {
+        if (!confirm('Delete ALL voice messages? This cannot be undone.')) return;
+        try {
+            const res = await apiFetch(`${API_BASE}/voice/messages`, { method: 'DELETE' });
+            if (res.ok) {
+                _messages  = [];
+                _histPage  = 1;
+                _histPages = 1;
+                _histTotal = 0;
+                _unreadIds.clear();
+                _updateBadge();
+                _renderHistory();
+            }
+        } catch (_) {}
     };
 
     function _renderHistory() {
@@ -498,6 +537,16 @@
             const bv = b[_histSortCol] ?? '';
             return av < bv ? -_histSortDir : av > bv ? _histSortDir : 0;
         });
+
+        // Pagination controls
+        const pagEl  = document.getElementById('pttPagination');
+        const infoEl = document.getElementById('pttPageInfo');
+        const prevEl = document.getElementById('pttPagePrev');
+        const nextEl = document.getElementById('pttPageNext');
+        if (pagEl)  pagEl.style.display  = _histPages > 1 ? 'flex' : 'none';
+        if (infoEl) infoEl.textContent   = `Page ${_histPage} of ${_histPages}`;
+        if (prevEl) { prevEl.disabled = _histPage <= 1;          prevEl.onclick = () => pttHistGotoPage(_histPage - 1); }
+        if (nextEl) { nextEl.disabled = _histPage >= _histPages; nextEl.onclick = () => pttHistGotoPage(_histPage + 1); }
 
         if (!list.length) {
             tbody.innerHTML = `<tr><td colspan="5" class="ptt-hist-empty">${_histSearch ? 'No results' : 'No messages yet'}</td></tr>`;
