@@ -148,6 +148,7 @@
                 <option value="trips">Trip List</option>
                 <option value="daily">Daily Activity</option>
                 <option value="sensors">Vehicle Sensors</option>
+                <option value="alerts">Alerts</option>
             </select>
         </div>
         <div class="form-group" id="historyCheckGroup" style="display:none;">
@@ -179,6 +180,23 @@
                     </label>
                     <div class="veh-opt-divider"></div>
                     <div id="vehOptsList"></div>
+                </div>
+            </div>
+        </div>
+        <div class="form-group" id="userSelectGroup" style="display:none;">
+            <label class="form-label">Users</label>
+            <div class="veh-select-wrap" id="userSelectWrap">
+                <button type="button" class="form-input veh-select-btn" onclick="toggleUserDropdown(event)">
+                    <span id="userSelectLabel">All users</span>
+                    <i class="mdi mdi-chevron-down" style="font-size:1rem;flex-shrink:0;"></i>
+                </button>
+                <div class="veh-select-dropdown" id="userDropdown">
+                    <label class="veh-opt">
+                        <input type="checkbox" id="allUserCheck" checked onchange="toggleAllUsers(this)">
+                        <span>All users</span>
+                    </label>
+                    <div class="veh-opt-divider"></div>
+                    <div id="userOptsList"></div>
                 </div>
             </div>
         </div>

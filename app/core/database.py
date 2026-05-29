@@ -933,6 +933,50 @@ class DatabaseService:
             result = await session.execute(query)
             return result.scalars().all()
 
+    async def get_alerts_report(
+        self,
+        user_ids: List[int],
+        device_ids: List[int],
+        start_date: Optional[datetime],
+        end_date: Optional[datetime],
+        alert_type: Optional[str],
+        limit: int,
+        offset: int,
+    ) -> List[dict]:
+        async with self.get_session() as session:
+            query = (
+                select(AlertHistory, User.username, Device.name)
+                .join(User, AlertHistory.user_id == User.id, isouter=True)
+                .join(Device, AlertHistory.device_id == Device.id, isouter=True)
+            )
+            if user_ids:
+                query = query.where(AlertHistory.user_id.in_(user_ids))
+            if device_ids:
+                query = query.where(AlertHistory.device_id.in_(device_ids))
+            if start_date:
+                query = query.where(AlertHistory.created_at >= start_date)
+            if end_date:
+                query = query.where(AlertHistory.created_at <= end_date)
+            if alert_type:
+                query = query.where(AlertHistory.alert_type == alert_type)
+            query = query.order_by(AlertHistory.created_at.desc()).limit(limit).offset(offset)
+            result = await session.execute(query)
+            return [
+                {
+                    "id":          a.id,
+                    "user_id":     a.user_id,
+                    "username":    username,
+                    "device_id":   a.device_id,
+                    "device_name": device_name,
+                    "alert_type":  a.alert_type,
+                    "severity":    a.severity,
+                    "message":     a.message,
+                    "is_read":     a.is_read,
+                    "created_at":  a.created_at.isoformat() if a.created_at else None,
+                }
+                for a, username, device_name in result.all()
+            ]
+
     async def mark_alert_read(self, alert_id: int) -> bool:
         async with self.get_session() as session:
             result = await session.execute(

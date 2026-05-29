@@ -8,6 +8,13 @@ let _selectedIds         = new Set(); // empty = all
 let _sensorsHistoryMode  = false;
 let _tripRows            = []; // sorted trip rows, for map button index lookup
 
+let _allUsers            = [];
+let _selectedUserIds     = new Set(); // empty = all visible users
+
+const _IS_ADMIN         = localStorage.getItem('is_admin') === 'true';
+const _IS_COMPANY_ADMIN = localStorage.getItem('is_company_admin') === 'true';
+const _CAN_SEE_USERS    = _IS_ADMIN || _IS_COMPANY_ADMIN;
+
 document.addEventListener('DOMContentLoaded', async () => {
     checkLogin();
     await permissionsReady;
@@ -20,11 +27,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('startDate').value = _fmtDate(start);
 
     await _loadDevices();
+    if (_CAN_SEE_USERS) await _loadUsers();
     _updateDescription();
 
     document.addEventListener('click', e => {
         const wrap = document.getElementById('vehSelectWrap');
         if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
+        const uwrap = document.getElementById('userSelectWrap');
+        if (uwrap && !uwrap.contains(e.target)) uwrap.classList.remove('open');
     });
 
     document.addEventListener('keydown', e => {
@@ -50,6 +60,60 @@ async function _loadDevices() {
             list.appendChild(label);
         });
     } catch (e) { console.error(e); }
+}
+
+async function _loadUsers() {
+    try {
+        const res = await apiFetch(`${API_BASE}/users`);
+        if (!res.ok) return;
+        _allUsers = await res.json();
+        const list = document.getElementById('userOptsList');
+        list.innerHTML = '';
+        _allUsers.forEach(u => {
+            const label = document.createElement('label');
+            label.className = 'veh-opt';
+            label.innerHTML = `<input type="checkbox" data-id="${u.id}" onchange="onUserCheck(this)">
+                <span>${_esc(u.username)}${u.email ? ` <span style="color:var(--text-muted);font-size:0.8rem;">(${_esc(u.email)})</span>` : ''}</span>`;
+            list.appendChild(label);
+        });
+    } catch (e) { console.error(e); }
+}
+
+function toggleUserDropdown(e) {
+    e.stopPropagation();
+    document.getElementById('userSelectWrap').classList.toggle('open');
+}
+
+function onUserCheck(cb) {
+    const id = parseInt(cb.dataset.id);
+    if (cb.checked) _selectedUserIds.add(id);
+    else _selectedUserIds.delete(id);
+    _syncAllUserCheck();
+    _updateUserLabel();
+}
+
+function toggleAllUsers(cb) {
+    _selectedUserIds.clear();
+    document.querySelectorAll('#userOptsList input[type=checkbox]').forEach(el => { el.checked = false; });
+    cb.checked = true;
+    _updateUserLabel();
+}
+
+function _syncAllUserCheck() {
+    const checked = document.querySelectorAll('#userOptsList input[type=checkbox]:checked');
+    document.getElementById('allUserCheck').checked = checked.length === 0;
+}
+
+function _updateUserLabel() {
+    const label = document.getElementById('userSelectLabel');
+    if (_selectedUserIds.size === 0) {
+        label.textContent = 'All users';
+    } else if (_selectedUserIds.size === 1) {
+        const u = _allUsers.find(u => _selectedUserIds.has(u.id));
+        label.textContent = u ? u.username : '1 user';
+    } else {
+        label.textContent = `${_selectedUserIds.size} users`;
+    }
 }
 
 function toggleVehDropdown(e) {
@@ -99,11 +163,14 @@ function onReportTypeChange() {
     document.getElementById('noData').style.display = 'none';
     document.getElementById('summaryBar').style.display = 'none';
     document.getElementById('exportCsvBtn').style.display = 'none';
-    const isSensors = document.getElementById('reportType').value === 'sensors';
+    const type = document.getElementById('reportType').value;
+    const isSensors = type === 'sensors';
+    const isAlerts  = type === 'alerts';
     document.getElementById('historyCheckGroup').style.display = isSensors ? '' : 'none';
     document.getElementById('historyCheck').checked = false;
     document.getElementById('dateFromGroup').style.display = isSensors ? 'none' : '';
     document.getElementById('dateToGroup').style.display  = isSensors ? 'none' : '';
+    document.getElementById('userSelectGroup').style.display = (isAlerts && _CAN_SEE_USERS) ? '' : 'none';
     _updateDescription();
 }
 
@@ -112,6 +179,7 @@ const _REPORT_DESCRIPTIONS = {
     trips:   'Individual trips with start/end location, distance, duration, and driver. Click any row to view the route on a map.',
     daily:   'All trips aggregated by day — total trips, distance, and driving time per date.',
     sensors: 'Current sensor readings for all vehicles. Enable historical data to view sensor values over a date range.',
+    alerts:  'Alert history for the selected period. Admins can filter by user.',
 };
 
 function _updateDescription() {
@@ -127,6 +195,29 @@ function onHistoryCheckChange() {
 
 async function generateReport() {
     const type = document.getElementById('reportType').value;
+
+    if (type === 'alerts') {
+        const start = document.getElementById('startDate').value;
+        const end   = document.getElementById('endDate').value;
+        if (!start || !end) { showAlert('Please select a date range.', 'warning'); return; }
+
+        const params = new URLSearchParams({
+            start_date: `${start}T00:00:00`,
+            end_date:   `${end}T23:59:59`,
+            limit: 2000,
+        });
+        if (_selectedIds.size)     [..._selectedIds].forEach(id => params.append('device_ids', id));
+        if (_selectedUserIds.size) [..._selectedUserIds].forEach(id => params.append('user_ids', id));
+
+        try {
+            const res = await apiFetch(`${API_BASE}/alerts/report?${params}`);
+            if (!res.ok) { showAlert('Failed to load alerts.', 'error'); return; }
+            _reportData = await res.json();
+            _sortCol = null;
+            _renderAlerts();
+        } catch (e) { console.error(e); showAlert('Error generating report.', 'error'); }
+        return;
+    }
 
     if (type === 'sensors') {
         _sensorsHistoryMode = document.getElementById('historyCheck').checked;
@@ -200,6 +291,75 @@ function _renderReport() {
     if (type === 'summary')      _renderSummary();
     else if (type === 'trips')   _renderTripList();
     else if (type === 'daily')   _renderDaily();
+
+    table.style.display = '';
+    noData.style.display = 'none';
+    expBtn.style.display = '';
+}
+
+// ── Alerts Report ─────────────────────────────────────────────────
+
+const _SEV_COLOR = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#3b82f6', info: 'var(--text-muted)' };
+
+function _renderAlerts() {
+    const table  = document.getElementById('reportTable');
+    const head   = document.getElementById('reportHead');
+    const tbody  = document.getElementById('reportBody');
+    const noData = document.getElementById('noData');
+    const sumBar = document.getElementById('summaryBar');
+    const expBtn = document.getElementById('exportCsvBtn');
+
+    if (!_reportData.length) {
+        table.style.display = 'none';
+        noData.style.display = '';
+        sumBar.style.display = 'none';
+        expBtn.style.display = 'none';
+        return;
+    }
+
+    const rows = _sortedRows(_reportData, 'created_at', -1);
+
+    const total    = rows.length;
+    const unread   = rows.filter(r => !r.is_read).length;
+    const critical = rows.filter(r => r.severity === 'critical' || r.severity === 'high').length;
+    const byType   = {};
+    rows.forEach(r => { byType[r.alert_type] = (byType[r.alert_type] || 0) + 1; });
+    const topType  = Object.entries(byType).sort((a, b) => b[1] - a[1])[0];
+
+    sumBar.innerHTML = `
+        <div class="summary-card"><div class="val">${total}</div><div class="lbl">Total Alerts</div></div>
+        <div class="summary-card"><div class="val" style="color:var(--accent-warning,#eab308);">${unread}</div><div class="lbl">Unread</div></div>
+        <div class="summary-card"><div class="val" style="color:#ef4444;">${critical}</div><div class="lbl">Critical / High</div></div>
+        ${topType ? `<div class="summary-card"><div class="val" style="font-size:1rem;">${_esc(topType[0])}</div><div class="lbl">Most Frequent (${topType[1]})</div></div>` : ''}`;
+    sumBar.style.display = '';
+
+    const showUser = _CAN_SEE_USERS;
+    head.innerHTML = `<tr>
+        ${_th('created_at', 'Date / Time')}
+        ${showUser ? _th('username', 'User') : ''}
+        ${_th('device_name', 'Vehicle')}
+        ${_th('alert_type', 'Type')}
+        ${_th('severity', 'Severity')}
+        ${_th('message', 'Message')}
+        ${_th('is_read', 'Status')}
+    </tr>`;
+
+    tbody.innerHTML = rows.map(r => {
+        const color   = _SEV_COLOR[r.severity] || 'var(--text-muted)';
+        const sevBadge = `<span style="color:${color};font-weight:600;text-transform:capitalize;">${_esc(r.severity)}</span>`;
+        const status  = r.is_read
+            ? `<span style="color:var(--text-muted);">Read</span>`
+            : `<span style="color:var(--accent-primary);font-weight:600;">Unread</span>`;
+        return `<tr>
+            <td style="white-space:nowrap;font-family:var(--font-mono);font-size:0.82rem;">${_fmtDatetime(r.created_at)}</td>
+            ${showUser ? `<td>${_esc(r.username || '—')}</td>` : ''}
+            <td>${_esc(r.device_name || '—')}</td>
+            <td style="font-size:0.82rem;">${_esc(r.alert_type)}</td>
+            <td>${sevBadge}</td>
+            <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${_esc(r.message)}">${_esc(r.message)}</td>
+            <td>${status}</td>
+        </tr>`;
+    }).join('');
 
     table.style.display = '';
     noData.style.display = 'none';
@@ -361,6 +521,8 @@ function sortReport(col) {
     const type = document.getElementById('reportType').value;
     if (type === 'sensors') {
         _sensorsHistoryMode ? _renderSensorsHistory() : _renderSensors();
+    } else if (type === 'alerts') {
+        _renderAlerts();
     } else {
         _renderReport();
     }
@@ -565,6 +727,19 @@ function _sortedRows(data, defaultCol, defaultDir = 1) {
 
 async function exportCsv() {
     const type  = document.getElementById('reportType').value;
+
+    if (type === 'alerts') {
+        const start   = document.getElementById('startDate').value;
+        const end     = document.getElementById('endDate').value;
+        const headers = _CAN_SEE_USERS
+            ? ['Date/Time', 'User', 'Vehicle', 'Type', 'Severity', 'Message', 'Status']
+            : ['Date/Time', 'Vehicle', 'Type', 'Severity', 'Message', 'Status'];
+        const rowFn = r => _CAN_SEE_USERS
+            ? [_fmtDatetime(r.created_at), r.username || '', r.device_name || '', r.alert_type, r.severity, r.message, r.is_read ? 'Read' : 'Unread']
+            : [_fmtDatetime(r.created_at), r.device_name || '', r.alert_type, r.severity, r.message, r.is_read ? 'Read' : 'Unread'];
+        _downloadCsv(headers, _sortedRows(_reportData, 'created_at', -1), rowFn, `alerts_${start}_${end}.csv`);
+        return;
+    }
 
     if (type === 'sensors') {
         if (_sensorsHistoryMode) {
