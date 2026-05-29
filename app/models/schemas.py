@@ -114,6 +114,8 @@ class DeviceConfig(BaseModel):
     sensors:     Dict[str, str] = Field(default_factory=dict)
     maintenance: Dict[str, int] = Field(default_factory=dict)
     integration: Optional[Dict[str, Any]] = Field(None)
+    has_camera:        bool = False
+    auto_clear_driver: bool = False
 
 
 class DeviceCreate(BaseModel):
@@ -514,6 +516,7 @@ class DriverResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     company_id: Optional[int]
+    user_id: Optional[int] = None
     name: str
     phone: Optional[str]
     license_number: Optional[str]

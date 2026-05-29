@@ -71,11 +71,16 @@ document.addEventListener('keydown', (e) => {
     
     const modalIds = [
         'alertsModal',
-        'historyModal', 
+        'historyModal',
         'shareModal',
         'logbookModal',
         'geofenceModal',
     ];
+
+    if (document.getElementById('pttModal')?.classList.contains('active')) {
+        pttCloseModal();
+        return;
+    }
 
     for (const id of modalIds) {
         const modal = document.getElementById(id);

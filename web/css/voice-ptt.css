@@ -290,7 +290,7 @@
 
 .ptt-history {
     max-height: 300px;
-    overflow-y: auto;
+    overflow: auto;
     padding: 0.5rem 0 0;
 }
 
@@ -392,21 +392,8 @@
 .ptt-toast-sender { font-weight: 600; font-size: 0.82rem; }
 .ptt-toast-status { font-size: 0.7rem; color: var(--text-muted, #6b7280); }
 
-/* ── Responsive padding ──────────────────────────────────────────── */
-
-/* Covers any screen narrower than the modal's max-width (560px) */
-@media (max-width: 560px) {
-    #pttModal .modal-header  { padding: 1.1rem 1.25rem 0.875rem; }
-    #pttModal .modal-title   { font-size: 1.3rem; }
-    .ptt-to-section          { padding: 0.65rem 1rem 0; }
-    .ptt-center              { padding: 1.1rem 1rem; }
-    .ptt-hist-toolbar        { padding: 0.5rem 1rem 0; }
-    .ptt-hist-table thead th { padding: 0.28rem 0.5rem; }
-    .ptt-hist-table tbody td { padding: 0.38rem 0.5rem; }
-}
-
-@media (max-width: 480px) {
-    #pttModal .modal-content { padding: 0 !important; border-radius: 14px; }
+/* ── Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 550px) {
     #pttModal .modal-header  { padding: 0.75rem 0.875rem; }
     #pttModal .modal-title   { font-size: 1.1rem; }
     #pttModal .modal-close   { width: 32px; height: 32px; }
@@ -421,6 +408,5 @@
     .ptt-read-all-btn        { padding: 0.28rem 0.4rem; }
     .ptt-hist-table thead th { padding: 0.22rem 0.4rem; }
     .ptt-hist-table tbody td { padding: 0.3rem 0.4rem; }
-    .ptt-td-to               { display: none; }
 }
 

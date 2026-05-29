@@ -302,7 +302,7 @@
     // ── Modal open/close ──────────────────────────────────────────
 
     window.pttToggleModal = function () {
-        _modalOpen ? pttCloseModal() : _openModal();
+        _openModal();
     };
 
     function _openModal() {

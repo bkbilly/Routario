@@ -14,33 +14,46 @@ function _clearAlertHighlight() {
     if (alertHighlightMarker) { map.removeLayer(alertHighlightMarker); alertHighlightMarker = null; }
 }
 
-function _placeAlertHighlight(lat, lng, icon, title) {
+function _placeAlertHighlight(lat, lng, alertObj, iconHtml, title) {
     _clearAlertHighlight();
 
-    // Emoji pin — use a wrapper div with explicit size so Leaflet anchors correctly
     alertHighlightMarker = L.marker([lat, lng], {
         icon: L.divIcon({
-            html: `<span style="
-                position: absolute;
-                top: 50%; left: 50%;
-                transform: translate(-50%, -50%);
-                font-size: 1.5rem; line-height: 1;
-                display: block;
-                filter: drop-shadow(0 2px 6px rgba(0,0,0,0.7));
-                animation: alertBounce 0.6s ease-out;">${icon}</span>`,
-            className:   '',
-            iconSize:    [36, 36],
-            iconAnchor:  [18, 18],
-            popupAnchor: [0, -22],
+            html: `<div style="
+                width:36px; height:36px;
+                display:flex; align-items:center; justify-content:center;
+                font-size:1.4rem;
+                filter:drop-shadow(0 2px 6px rgba(0,0,0,0.7));
+                animation:alertBounce 0.6s ease-out;">${iconHtml}</div>`,
+            className: 'custom-marker',
+            iconSize:  [36, 36],
+            iconAnchor:[18, 18],
         }),
         zIndexOffset: 1000,
     }).addTo(map);
 
-    alertHighlightMarker.bindPopup(
-        `<div style="font-size:0.85rem; font-weight:600; white-space:nowrap;">${icon} ${title}</div>`,
-        { closeButton: false, offset: [0, -10] }
+    const device = devices.find(d => d.id === alertObj.device_id);
+    const meta   = alertObj.alert_metadata;
+    const ts     = alertObj.created_at.endsWith('Z') ? alertObj.created_at : alertObj.created_at + 'Z';
+    const dt     = new Date(ts);
+    const datePart = dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    const timePart = dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    const rows   = [];
+    if (device) rows.push(`<span class="vp-label">Device</span><span class="vp-value">${(VEHICLE_ICONS[device.vehicle_type] || VEHICLE_ICONS['other']).emoji} ${device.name}</span>`);
+    rows.push(`<span class="vp-label">Time</span><span class="vp-value vp-mono">${datePart}<br>${timePart}</span>`);
+    if (meta?.rule_condition) rows.push(`<span class="vp-label">Condition</span><span class="vp-value vp-mono">${meta.rule_condition}</span>`);
+    if (alertObj.address)     rows.push(`<span class="vp-label">Address</span><span class="vp-value">${alertObj.address}</span>`);
+
+    alertHighlightMarker.bindPopup(`
+        <div class="vp-popup" style="min-width:180px;">
+            <div class="vp-header">
+                <span class="vp-icon">${iconHtml}</span>
+                <span class="vp-name">${title}</span>
+            </div>
+            <div class="vp-grid">${rows.join('')}</div>
+        </div>`,
+        { closeButton: true, maxWidth: 220 }
     ).openPopup();
-    map.once('click', _clearAlertHighlight);
 }
 
 // ── Main jump-to-alert handler ────────────────────────────────────────────────
@@ -62,7 +75,7 @@ async function jumpToAlert(alert) {
         const device = devices.find(d => d.id === alert.device_id);
         if (device?.last_latitude && device?.last_longitude) {
             map.setView(applyLatLngOffset([device.last_latitude, device.last_longitude], 15), 15);
-            _placeAlertHighlight(device.last_latitude, device.last_longitude, icon, `${title} (last known)`);
+            _placeAlertHighlight(device.last_latitude, device.last_longitude, alert, icon, `${title} (last known)`);
         } else {
             showAlert({ title: 'No location', message: 'No GPS position available for this alert.', type: 'warning' });
         }
@@ -89,7 +102,8 @@ async function jumpToAlert(alert) {
         const alertMs = alertTime.getTime();
         let closestIdx = 0, closestDiff = Infinity;
         historyData.forEach((f, idx) => {
-            const diff = Math.abs(new Date(f.properties.time).getTime() - alertMs);
+            const t = f.properties.time;
+            const diff = Math.abs(new Date(t.endsWith('Z') ? t : t + 'Z').getTime() - alertMs);
             if (diff < closestDiff) { closestDiff = diff; closestIdx = idx; }
         });
         historyIndex = closestIdx;
@@ -99,11 +113,11 @@ async function jumpToAlert(alert) {
 
     // Drop the highlight pin and pan to it
     map.setView(applyLatLngOffset([alert.latitude, alert.longitude], 16), 16);
-    _placeAlertHighlight(alert.latitude, alert.longitude, icon, title);
+    _placeAlertHighlight(alert.latitude, alert.longitude, alert, icon, title);
 }
 
 // ── Build a single alert-item element ────────────────────────────────────────
-function _buildAlertItem(alert, { dimmed = false, clickable = true } = {}) {
+function _buildAlertItem(alert, { dimmed = false, clickable = true, dismissable = true } = {}) {
     const ICON_MAP = {
         speeding:       'mdi-speedometer',
         geofence_enter: 'mdi-map-marker-check',
@@ -172,7 +186,7 @@ function _buildAlertItem(alert, { dimmed = false, clickable = true } = {}) {
             <div class="alert-time">${formatDateToLocal(alert.created_at)}</div>
             ${jumpHint}
         </div>
-        ${clickable ? `<button class="alert-dismiss" onclick="dismissAlert(${alert.id})"><i class="mdi mdi-close"></i></button>` : ''}
+        ${dismissable ? `<button class="alert-dismiss" onclick="dismissAlert(${alert.id})"><i class="mdi mdi-close"></i></button>` : ''}
     `;
 
     return item;
@@ -302,7 +316,7 @@ async function loadAlertHistory() {
         if (historyOffset === 0 && toShow.length === 0) {
             list.innerHTML = '<div style="text-align:center; padding: 1.5rem; color: var(--text-muted); font-size: 0.875rem;">No cleared alerts yet.</div>';
         } else {
-            toShow.forEach(alert => list.appendChild(_buildAlertItem(alert, { dimmed: true })));
+            toShow.forEach(alert => list.appendChild(_buildAlertItem(alert, { dimmed: true, dismissable: false })));
         }
 
         historyOffset += toShow.length;

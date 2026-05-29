@@ -171,6 +171,7 @@ class DatabaseService:
             "ALTER TABLE devices ADD COLUMN custom_attributes JSON DEFAULT '{}'",
             "ALTER TABLE device_states ADD COLUMN current_driver_id INTEGER",
             "ALTER TABLE trips ADD COLUMN driver_id INTEGER",
+            "ALTER TABLE drivers ADD COLUMN user_id INTEGER",
             """CREATE TABLE IF NOT EXISTS voice_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 sender_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -813,6 +814,8 @@ class DatabaseService:
             state.last_trip_id     = state.active_trip_id
             state.active_trip_id   = None
             state.last_ignition_off = device_time
+            if device.config.get('auto_clear_driver'):
+                state.current_driver_id = None
 
     # ── Position history ──────────────────────────────────────────
 

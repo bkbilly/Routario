@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 class TeltonikaDecoder(BaseProtocolDecoder):
     PORT = 5027
     PROTOCOL_TYPES = ['tcp', 'udp']
+    SUPPORTS_CAMERA = True
 
     # ================================================================== #
     #  Command Registry (Mapping + Metadata merged)                      #

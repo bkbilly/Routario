@@ -88,8 +88,8 @@ async function initDeviceSection() {
         loadAvailableProtocols(),
         loadUserChannels(),
         loadDevices(),
+        ...(hasAdminAccess ? [loadAllUsers()] : []),
     ]);
-    if (hasAdminAccess && hasPermission('manage_users')) loadAllUsers();
     populateAddAlertDropdown();
 }
 
@@ -185,24 +185,14 @@ async function loadDevices() {
         if (!res.ok) throw new Error(`Server returned ${res.status}`);
         devices    = await res.json();
         allDevices = [...devices];
-
-        if (hasPermission('send_commands')) {
-            const uniqueProtocols = [...new Set(devices.map(d => d.protocol).filter(Boolean))];
-            const supportMap = {};
-            await Promise.all(uniqueProtocols.map(async proto => {
-                try {
-                    const cr = await apiFetch(`${API_BASE}/devices/protocol/${proto}/command-support`);
-                    supportMap[proto] = cr.ok ? (await cr.json()).supports_commands : false;
-                } catch { supportMap[proto] = false; }
-            }));
-            devices.forEach(d => { d.supports_commands = supportMap[d.protocol] ?? false; });
-        } else {
-            devices.forEach(d => { d.supports_commands = false; });
-        }
-
         devices.sort((a, b) => a.name.localeCompare(b.name));
         allDevices = [...devices];
+        const canSendCmds = hasPermission('send_commands');
+        devices.forEach(d => {
+            d.supports_commands = canSendCmds && (protocolInfo[d.protocol]?.supports_commands ?? false);
+        });
         renderDeviceTable(devices);
+        _updateClipsTabVisibility();
     } catch (e) {
         showAlert('Failed to load devices', 'error');
         console.error(e);
@@ -320,7 +310,6 @@ function switchModalTab(tabId, btn) {
     if (commandTabsBar) commandTabsBar.style.display = tabId === 'commands' ? 'flex' : 'none';
     if (tabId !== 'commands') { clearInterval(commandHistoryInterval); commandHistoryInterval = null; }
     if (tabId === 'rawdata'  && editingDeviceId) loadRawDataForModal(editingDeviceId);
-    if (tabId === 'clips'    && editingDeviceId) loadClipsForDevice(editingDeviceId);
     if (tabId === 'users'    && editingDeviceId) loadUsersForDevice(editingDeviceId);
     if (tabId === 'commands' && editingDeviceId) {
         currentCommandDeviceId = editingDeviceId;
@@ -386,8 +375,6 @@ function openDeviceModal(deviceId, startTab = 'general') {
     if (rawDataTabBtnEdit) rawDataTabBtnEdit.style.display = hasPermission('view_history') ? '' : 'none';
     const alertsTabBtnEdit = document.querySelector('.modal-tab[data-tab="alerts"]');
     if (alertsTabBtnEdit) alertsTabBtnEdit.style.display = hasPermission('manage_alerts') ? '' : 'none';
-    const clipsTabBtn = document.getElementById('clipsTabBtn');
-    if (clipsTabBtn) clipsTabBtn.style.display = hasPermission('view_history') ? '' : 'none';
     deviceAssignedUserIds = new Set();
 
     document.getElementById('deviceName').value          = d.name;
@@ -402,6 +389,10 @@ function openDeviceModal(deviceId, startTab = 'general') {
         d.config?.offline_timeout_hours ?? 24;
     document.getElementById('tripMergeGapMinutes').value =
         d.config?.trip_merge_gap_minutes ?? 0;
+    document.getElementById('deviceHasCamera').checked =
+        d.config?.has_camera ?? false;
+    document.getElementById('deviceAutoClearDriver').checked =
+        d.config?.auto_clear_driver ?? false;
 
     const imeiEl     = document.getElementById('deviceImei');
     const protocolEl = document.getElementById('deviceProtocol');
@@ -424,6 +415,12 @@ function openDeviceModal(deviceId, startTab = 'general') {
         cachedGeofenceOptions = opts;
         renderAlertsTable();
     });
+    // Ensure the current user is always resolvable in the notify-users lookup
+    const _myId = parseInt(localStorage.getItem('user_id'), 10);
+    const _myName = localStorage.getItem('username');
+    if (_myId && _myName && !allUsers.some(u => u.id === _myId)) {
+        allUsers.push({ id: _myId, username: _myName });
+    }
     loadAlertsFromConfig(d.config || {});
     switchModalTab(startTab);
     refreshNativeEventAlerts();
@@ -527,6 +524,8 @@ async function handleSubmit(event) {
         newConfig.speed_duration_seconds = existingConfig.speed_duration_seconds || 30;
         newConfig.offline_timeout_hours  = parseInt(document.getElementById('offlineTimeoutHours').value) || 24;
         newConfig.trip_merge_gap_minutes = parseInt(document.getElementById('tripMergeGapMinutes').value) || 0;
+        newConfig.has_camera             = document.getElementById('deviceHasCamera').checked;
+        newConfig.auto_clear_driver      = document.getElementById('deviceAutoClearDriver').checked;
 
         const isIntg     = _isIntegrationSelected();
         const providerId = document.getElementById('deviceProtocol').value;
@@ -918,10 +917,9 @@ function renderAlertsTable() {
             if (!ids || ids.length === 0) {
                 notifyUsersCell = `<td><span style="color:var(--text-muted);font-size:0.8rem;">${!ids ? 'All' : 'None'}</span></td>`;
             } else {
-                const _myId = parseInt(localStorage.getItem('user_id'), 10);
                 const visibleUsers = ids
                     .map(id => allUsers.find(u => u.id === id))
-                    .filter(u => u && (isAdmin || u.id === _myId || (!u.is_admin && !u.is_company_admin)));
+                    .filter(Boolean);
                 notifyUsersCell = `<td><div style="display:flex;flex-wrap:wrap;gap:0.3rem;">${
                     visibleUsers.map(u => `<span class="channel-pill active" style="pointer-events:none;font-size:0.75rem;">${_esc(u.username)}</span>`).join('')
                 }</div></td>`;
@@ -1069,11 +1067,6 @@ async function openAlertEditor(uid) {
                 <span style="color:var(--text-muted);">seconds</span>
             </div>
         </div>`;
-        setTimeout(() => {
-            const cb = document.getElementById('editor-duration-enabled');
-            const in_ = document.getElementById('editor-duration-input');
-            if (cb && in_) cb.addEventListener('change', () => { in_.disabled = !cb.checked; });
-        }, 0);
     } else if (isDeviceEvent) {
         const durEnabled = row.duration != null;
         const durVal     = row.duration ?? 30;
@@ -1093,11 +1086,6 @@ async function openAlertEditor(uid) {
                 <span style="color:var(--text-muted);">seconds</span>
             </div>
         </div>`;
-        setTimeout(() => {
-            const cb  = document.getElementById('editor-duration-enabled');
-            const inp = document.getElementById('editor-duration-input');
-            if (cb && inp) cb.addEventListener('change', () => { inp.disabled = !cb.checked; });
-        }, 0);
     }
 
     const activeDays = row.schedule?.days || [];
@@ -1131,8 +1119,13 @@ async function openAlertEditor(uid) {
 
             if (isAdmin) {
                 const device = devices.find(d => d.id === editingDeviceId);
-                const res = await apiFetch(`${API_BASE}/users`);
-                allFetched = res.ok ? await res.json() : [];
+                if (allUsers.length === 0) {
+                    const res = await apiFetch(`${API_BASE}/users`);
+                    allFetched = res.ok ? await res.json() : [];
+                    allUsers = allFetched;
+                } else {
+                    allFetched = allUsers;
+                }
                 if (device?.company_id) {
                     deviceUsers = allFetched.filter(u => u.company_id === device.company_id && !u.is_admin);
                 }
@@ -1155,6 +1148,12 @@ async function openAlertEditor(uid) {
                     if (known) deviceUsers.push(known);
                 }
             }
+
+            // Merge fetched users into allUsers so renderAlertsTable can show names
+            (allFetched.length ? allFetched : deviceUsers).forEach(u => {
+                if (!allUsers.some(a => a.id === u.id)) allUsers.push(u);
+            });
+            renderAlertsTable();
 
             // Default selection: existing notify_user_ids, no fallback to current user
             const selectedIds = new Set(existingIds);
@@ -1209,6 +1208,10 @@ async function openAlertEditor(uid) {
                 </div>
             </div>
         </div>`;
+
+    const durCb  = document.getElementById('editor-duration-enabled');
+    const durInp = document.getElementById('editor-duration-input');
+    if (durCb && durInp) durCb.addEventListener('change', () => { durInp.disabled = !durCb.checked; });
 
     document.querySelectorAll('#editor-day-picker .day-pill').forEach(pill => {
         const cb = pill.querySelector('input');
@@ -1341,7 +1344,12 @@ function buildConfigFromAlertRows(existing = {}) {
 async function loadAllUsers() {
     try {
         const res = await apiFetch(`${API_BASE}/users`);
-        if (res.ok) allUsers = await res.json();
+        if (res.ok) {
+            allUsers = await res.json();
+            if (document.getElementById('deviceModal')?.classList.contains('active')) {
+                renderAlertsTable();
+            }
+        }
     } catch (e) { console.error('Failed to load users:', e); }
 }
 
@@ -1598,6 +1606,34 @@ const EVENT_TYPE_LABELS = {
 };
 
 let _allClips = [];
+let _clipsDeviceId = null;
+
+function _updateClipsTabVisibility() {
+    const hasCamera = devices.some(d => d.config?.has_camera);
+    const btn = document.getElementById('mgmtTabClips');
+    if (btn) btn.style.display = (hasCamera && hasPermission('view_history')) ? '' : 'none';
+}
+
+function initClipsSection() {
+    const cameraDevices = devices.filter(d => d.config?.has_camera);
+    const sel = document.getElementById('clipsDeviceSelect');
+    if (!sel) return;
+    sel.innerHTML = cameraDevices.map(d => `<option value="${d.id}">${_esc(d.name)}</option>`).join('');
+    if (cameraDevices.length) {
+        _clipsDeviceId = cameraDevices[0].id;
+        loadClipsForDevice(_clipsDeviceId);
+    } else {
+        document.getElementById('clipsGrid').innerHTML =
+            '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No dashcam devices configured.</div>';
+    }
+}
+
+function loadClipsForSection() {
+    const sel = document.getElementById('clipsDeviceSelect');
+    if (!sel) return;
+    _clipsDeviceId = parseInt(sel.value, 10);
+    loadClipsForDevice(_clipsDeviceId);
+}
 
 async function loadClipsForDevice(deviceId) {
     const grid = document.getElementById('clipsGrid');
@@ -1681,4 +1717,5 @@ async function deleteClip(clipId) {
         showAlert({ title: 'Error', message: 'Failed to delete clip.', type: 'error' });
     }
 }
+
 

@@ -773,12 +773,15 @@ body::before {
     border: 1px solid var(--border-color);
     border-radius: 16px;
     padding: 2rem;
-    max-width: 900px; /* Increased from 600px */
-    width: 95%; /* Increased from 90% */
+    max-width: 900px;
+    width: 95%;
     max-height: 80vh;
     overflow-y: auto;
     box-shadow: var(--shadow-lg);
     animation: slideUp var(--transition-base);
+}
+@media (max-width: 550px) {
+    .modal-content { padding: 0.75rem; }
 }
 
 @keyframes slideUp {
@@ -2509,14 +2512,6 @@ body::before {
     }
 }
 
-/* ── Modal compact padding on small screens ─────────────────────── */
 @media (max-width: 550px) {
-    #logbookModal .modal-content,
-    #historyModal .modal-content,
-    #shareModal .modal-content {
-        padding: 0.75rem;
-    }
-    #logbookBody {
-        padding: 0.5rem 0.5rem 0.75rem !important;
-    }
+    #logbookBody { padding: 0.5rem 0.5rem 0.75rem !important; }
 }
