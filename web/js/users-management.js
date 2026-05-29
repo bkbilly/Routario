@@ -26,12 +26,15 @@ const PERMISSION_GROUPS = [
 ];
 const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap(g => g.perms.map(p => p[0]));
 
-document.addEventListener('DOMContentLoaded', async () => {
-    await permissionsReady;
+let _usrSectionInitialized = false;
+
+async function initUsersSection() {
+    if (_usrSectionInitialized) return;
+    _usrSectionInitialized = true;
     if (!hasPermission('manage_users')) return;
     if (_usrIsAdmin) await _usrLoadCompanies();
     await Promise.all([_usrLoad(), _usrLoadDevices()]);
-});
+}
 
 async function _usrLoad() {
     try {

@@ -64,9 +64,11 @@ function protoBadgeHtml(protocol) {
 }
 
 // ── Boot ─────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async () => {
-    checkLogin();
-    await permissionsReady;
+let _devSectionInitialized = false;
+
+async function initDeviceSection() {
+    if (_devSectionInitialized) return;
+    _devSectionInitialized = true;
 
     document.querySelectorAll('button[onclick*="openAddDeviceModal"]').forEach(btn => {
         btn.style.display = (hasAdminAccess && hasPermission('edit_devices')) ? '' : 'none';
@@ -81,22 +83,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadAllCompanies();
     }
 
-    await loadAlertTypes();
-    await loadAvailableProtocols();
-    await loadUserChannels();
-    await loadDevices();
+    await Promise.all([
+        loadAlertTypes(),
+        loadAvailableProtocols(),
+        loadUserChannels(),
+        loadDevices(),
+    ]);
     if (hasAdminAccess && hasPermission('manage_users')) loadAllUsers();
     populateAddAlertDropdown();
-
-    document.addEventListener('keydown', e => {
-        if (e.key !== 'Escape') return;
-        if (document.getElementById('deviceModal')?.classList.contains('active')) {
-            closeDeviceModal();
-        } else {
-            document.getElementById('alertEditorModal')?.classList.remove('active');
-        }
-    });
-});
+}
 
 // ── API Loaders ───────────────────────────────────────────────────
 async function loadAlertTypes() {
@@ -191,20 +186,19 @@ async function loadDevices() {
         devices    = await res.json();
         allDevices = [...devices];
 
-        await Promise.all(devices.map(async device => {
-            try {
-                const sr = await apiFetch(`${API_BASE}/devices/${device.id}/state`);
-                if (sr.ok) device.state = await sr.json();
-            } catch { /* ignore */ }
-            if (hasPermission('send_commands')) {
+        if (hasPermission('send_commands')) {
+            const uniqueProtocols = [...new Set(devices.map(d => d.protocol).filter(Boolean))];
+            const supportMap = {};
+            await Promise.all(uniqueProtocols.map(async proto => {
                 try {
-                    const cr = await apiFetch(`${API_BASE}/devices/${device.id}/command-support`);
-                    device.supports_commands = cr.ok ? (await cr.json()).supports_commands : false;
-                } catch { device.supports_commands = false; }
-            } else {
-                device.supports_commands = false;
-            }
-        }));
+                    const cr = await apiFetch(`${API_BASE}/devices/protocol/${proto}/command-support`);
+                    supportMap[proto] = cr.ok ? (await cr.json()).supports_commands : false;
+                } catch { supportMap[proto] = false; }
+            }));
+            devices.forEach(d => { d.supports_commands = supportMap[d.protocol] ?? false; });
+        } else {
+            devices.forEach(d => { d.supports_commands = false; });
+        }
 
         devices.sort((a, b) => a.name.localeCompare(b.name));
         allDevices = [...devices];

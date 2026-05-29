@@ -15,16 +15,16 @@ async function loadDevices() {
             }
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        devices = await response.json();
-
-        // Load state for each device before rendering, so sort fields
+        // Flatten device.state into the device object so sort fields
         // (last_update, speed, ignition) are available on the first render.
-        for (const device of devices) {
-            await loadDeviceState(device.id);
-        }
+        devices = (await response.json()).map(d => {
+            const { state, ...rest } = d;
+            return { ...rest, ...(state || {}) };
+        });
 
         // Single render after all states are present — sort is now correct
         renderDeviceList();
+        devices.forEach(device => updateDeviceMarker(device.id, device));
 
         updateStats();
         fitMapToMarkers();
@@ -341,8 +341,8 @@ function startPeriodicUpdate() {
         if (!ws || ws.readyState !== WebSocket.OPEN) {
             // Fallback to polling if WebSocket is down
             devices.forEach(device => loadDeviceState(device.id));
+            loadAlerts();
         }
-        loadAlerts();
     }, 30000); // Every 30 seconds
 }
 

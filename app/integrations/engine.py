@@ -197,8 +197,16 @@ async def _run_poll_cycle(
             account_label = intg.get("account_label", "")
             remote_id     = intg.get("remote_id", "")
 
-            if not provider_id or not remote_id:
+            if not provider_id:
                 continue
+            # Providers that don't browse remote devices (e.g. GPS simulator)
+            # identify devices by IMEI rather than a remote ID.
+            if not remote_id:
+                provider_cls = IntegrationRegistry.get(provider_id)
+                if provider_cls and not getattr(provider_cls, "SUPPORTS_BROWSE", True):
+                    remote_id = device.imei
+                else:
+                    continue
 
             # Skip devices that are not yet due for a poll
             if not _is_due(device.imei):
@@ -285,8 +293,10 @@ async def _run_poll_cycle(
             )
         # DB connection released here — fetch_positions() may do network I/O
 
-        # Seed persisted state from DB the first time this auth context is used
-        if "_persisted_state" not in auth_ctx.data:
+        # Seed persisted state from DB when the auth context has no live state yet.
+        # Use falsy check so providers that pre-populate an empty dict (like
+        # GPSSimulatorIntegration) still get their saved state loaded.
+        if not auth_ctx.data.get("_persisted_state"):
             auth_ctx.data["_persisted_state"] = account_state
 
         provider = IntegrationRegistry.get(provider_id)

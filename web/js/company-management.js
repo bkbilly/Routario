@@ -21,14 +21,14 @@ function formatDate(str) {
     return new Date(str).toLocaleDateString();
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-    checkLogin();
+let _cmpSectionInitialized = false;
+
+async function initCompanySection() {
+    if (_cmpSectionInitialized) return;
+    _cmpSectionInitialized = true;
     if (localStorage.getItem('is_admin') !== 'true') return;
     await Promise.all([loadCompanies(), loadAllUsers(), loadAllDevices()]);
-    document.addEventListener('keydown', e => {
-        if (e.key === 'Escape') closeCompanyModal();
-    });
-});
+}
 
 // ── Loaders ───────────────────────────────────────────────────────
 
