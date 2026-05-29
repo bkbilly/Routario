@@ -265,13 +265,10 @@ async function clearAllAlerts() {
     if (loadedAlerts.length === 0) return;
     if (!confirm('Mark all alerts as read?')) return;
 
-    for (const alert of loadedAlerts) {
-        try {
-            await apiFetch(`${API_BASE}/alerts/${alert.id}/read`, { method: 'POST' });
-        } catch (e) {
-            console.error('Failed to clear alert', alert.id, e);
-        }
-    }
+    await Promise.all(loadedAlerts.map(alert =>
+        apiFetch(`${API_BASE}/alerts/${alert.id}/read`, { method: 'POST' })
+            .catch(e => console.error('Failed to clear alert', alert.id, e))
+    ));
 
     await loadAlerts();
     devices.forEach(d => updateSidebarCard(d.id));

@@ -30,14 +30,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadSettings() {
     try {
-        const res = await apiFetch(`${API_BASE}/users/${USER_ID}`);
-        if (!res.ok) {
-            const error = await res.json();
-            throw new Error(error.detail || 'Failed to load user data');
+        let user = await permissionsReady;
+        if (!user) {
+            const res = await apiFetch(`${API_BASE}/users/${USER_ID}`);
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.detail || 'Failed to load user data');
+            }
+            user = await res.json();
         }
-        
-        const user = await res.json();
-        
+
         document.getElementById('username').value = user.username || '';
         document.getElementById('email').value = user.email || '';
         document.getElementById('unitSystem').value = user.units || 'metric';
@@ -46,7 +48,7 @@ async function loadSettings() {
 
         channels = user.notification_channels || [];
         renderChannels();
-        
+
     } catch (error) {
         console.error('Settings load error:', error);
         showAlert(error.message, 'error');

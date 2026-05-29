@@ -75,6 +75,7 @@ let _pendingType = 'polygon';     // 'polygon' | 'polyline'
 let _geofences = [];              // Local cache [{id, name, color, coords, type}, ...]
 let _showAllUsersGeofences = false;
 let _mapDraggedRecently = false;
+let _cachedUsers = null;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 function initGeofences(mapInstance) {
@@ -400,11 +401,13 @@ async function _populateOwnerDropdown(selectedUserId) {
     select.innerHTML = '';
 
     try {
-        const res = await apiFetch(`${API_BASE}/users`);
-        if (!res.ok) throw new Error();
-        const users = await res.json();
+        if (!_cachedUsers) {
+            const res = await apiFetch(`${API_BASE}/users`);
+            if (!res.ok) throw new Error();
+            _cachedUsers = await res.json();
+        }
 
-        users.forEach(u => {
+        _cachedUsers.forEach(u => {
             const opt = document.createElement('option');
             opt.value = u.id;
             opt.textContent = u.username + (u.id === currentUserId ? ' (you)' : '');

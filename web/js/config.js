@@ -121,11 +121,12 @@ function formatDateToLocal(str) {
 }
 
 // Refresh permissions from the server on every page load so changes take
-// effect without requiring a logout.  Resolves immediately when not logged in.
+// effect without requiring a logout.  Resolves with the user object (or null)
+// so callers can reuse the data without a second fetch.
 const permissionsReady = (function () {
     const token  = localStorage.getItem('auth_token');
     const userId = localStorage.getItem('user_id');
-    if (!token || !userId) return Promise.resolve();
+    if (!token || !userId) return Promise.resolve(null);
     return fetch(`${API_BASE}/users/${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
     })
@@ -134,7 +135,7 @@ const permissionsReady = (function () {
         return r.ok ? r.json() : null;
     })
     .then(user => {
-        if (!user) return;
+        if (!user) return null;
         if (Array.isArray(user.permissions))
             localStorage.setItem('permissions', JSON.stringify(user.permissions));
         if (user.is_admin !== undefined)
@@ -143,6 +144,7 @@ const permissionsReady = (function () {
             localStorage.setItem('is_company_admin', user.is_company_admin);
         if (user.units)
             localStorage.setItem('units', user.units);
+        return user;
     })
-    .catch(() => {}); // network failure: use cached value
+    .catch(() => null); // network failure: use cached value
 })();

@@ -822,6 +822,13 @@
             : '';
     }
 
+    const _sectionInits = {
+        devices:   () => initDeviceSection(),
+        companies: () => initCompanySection(),
+        drivers:   () => initDriversSection(),
+        users:     () => initUsersSection(),
+    };
+
     function switchMgmtSection(name, pushState) {
         if (!SECTIONS.includes(name)) name = 'devices';
         SECTIONS.forEach(s => {
@@ -831,11 +838,13 @@
         });
         _updateAddAction(name);
         if (pushState !== false) history.replaceState(null, '', '#' + name);
+        _sectionInits[name]?.();
     }
 
     window.switchMgmtSection = switchMgmtSection;
 
     document.addEventListener('DOMContentLoaded', async () => {
+        checkLogin();
         await permissionsReady;
         if (!hasPermission('view_management')) { window.location.href = 'gps-dashboard.html'; return; }
         const isAdmin        = localStorage.getItem('is_admin') === 'true';

@@ -10,8 +10,11 @@ let _assignDriver  = null;
 let _drvSortCol    = 'name';
 let _drvSortDir    = 1;
 
-document.addEventListener('DOMContentLoaded', async () => {
-    await permissionsReady;
+let _drvSectionInitialized = false;
+
+async function initDriversSection() {
+    if (_drvSectionInitialized) return;
+    _drvSectionInitialized = true;
     if (!hasPermission('manage_drivers')) return;
     await _loadDevices();
     if (_drvIsAdmin) {
@@ -20,7 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (hdr) hdr.style.display = '';
     }
     await _loadDrivers();
-});
+}
 
 async function _loadCompanies() {
     try {
