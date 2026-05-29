@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select, delete as sql_delete
 from sqlalchemy.orm import selectinload
 
-from core.auth import get_current_user, require_company_admin, require_permission
+from core.auth import get_current_user, require_admin, require_company_admin, require_permission
 from core.config import get_settings
 from core.database import get_db
 from core.push_notifications import get_push_service
@@ -90,14 +90,17 @@ async def _all_intended_recipients(sender: User, recipients: List[int]) -> List[
     """Return all user IDs who should receive this message (connected or not)."""
     if recipients:
         return [uid for uid in recipients if uid != sender.id]
-    # Broadcast — query all users in scope from DB
+    # Broadcast — query all PTT-enabled users in scope from DB
     db = get_db()
     async with db.get_session() as sess:
         q = select(User).where(User.id != sender.id)
         if not sender.is_admin:
             q = q.where(User.company_id == sender.company_id)
         result = await sess.execute(q)
-        return [u.id for u in result.scalars().all()]
+        return [
+            u.id for u in result.scalars().all()
+            if u.is_admin or "voice_ptt" in (u.permissions or [])
+        ]
 
 
 async def _notify_offline(sender: User, all_ids: List[int], live_ids: List[int], dur_str: str):
@@ -233,15 +236,17 @@ async def voice_users(current_user: User = Depends(require_permission("voice_ptt
         result = await sess.execute(select(User))
         all_users = result.scalars().all()
 
+    def _has_ptt(u: User) -> bool:
+        return u.is_admin or "voice_ptt" in (u.permissions or [])
+
     if current_user.is_admin:
-        users = [u for u in all_users if u.id != current_user.id]
+        users = [u for u in all_users if u.id != current_user.id and _has_ptt(u)]
     else:
         users = [
             u for u in all_users
-            if u.id != current_user.id and (
-                u.company_id == current_user.company_id
-                or u.is_admin
-            )
+            if u.id != current_user.id
+            and _has_ptt(u)
+            and (u.company_id == current_user.company_id or u.is_admin)
         ]
     return [
         {
@@ -255,34 +260,47 @@ async def voice_users(current_user: User = Depends(require_permission("voice_ptt
 
 
 @router.get("/messages")
-async def list_messages(current_user: User = Depends(require_permission("voice_ptt"))):
+async def list_messages(
+    current_user: User = Depends(require_permission("voice_ptt")),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    from sqlalchemy import func, or_
     db = get_db()
     async with db.get_session() as sess:
-        q = (
-            select(VoiceMessage)
-            .options(selectinload(VoiceMessage.sender))
-            .order_by(VoiceMessage.created_at.desc())
-            .limit(100)
-        )
-        if not current_user.is_admin:
-            from sqlalchemy import or_
-            q = q.where(
-                or_(
+        def _scope(q):
+            if not current_user.is_admin:
+                return q.where(or_(
                     VoiceMessage.company_id == current_user.company_id,
                     VoiceMessage.company_id.is_(None),
-                )
-            )
+                ))
+            return q
+
+        total = (await sess.execute(
+            _scope(select(func.count(VoiceMessage.id)))
+        )).scalar_one()
+
+        q = _scope(select(VoiceMessage)).options(
+            selectinload(VoiceMessage.sender)
+        ).order_by(VoiceMessage.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+
         result = await sess.execute(q)
         msgs = result.scalars().all()
 
-        # Fetch which messages this user has read
         read_result = await sess.execute(
             select(VoiceMessageRead.message_id)
             .where(VoiceMessageRead.user_id == current_user.id)
         )
         read_ids = {row[0] for row in read_result}
 
-    return [_to_dict(m, read_ids) for m in msgs]
+    pages = max(1, (total + page_size - 1) // page_size)
+    return {
+        "items": [_to_dict(m, read_ids) for m in msgs],
+        "total": total,
+        "page": page,
+        "pages": pages,
+        "page_size": page_size,
+    }
 
 
 @router.post("/messages/read-all")
@@ -291,7 +309,13 @@ async def mark_all_read(current_user: User = Depends(require_permission("voice_p
     async with db.get_session() as sess:
         q = select(VoiceMessage.id)
         if not current_user.is_admin:
-            q = q.where(VoiceMessage.company_id == current_user.company_id)
+            from sqlalchemy import or_
+            q = q.where(
+                or_(
+                    VoiceMessage.company_id == current_user.company_id,
+                    VoiceMessage.company_id.is_(None),
+                )
+            )
         result = await sess.execute(q)
         msg_ids = [row[0] for row in result]
         existing = await sess.execute(
@@ -328,12 +352,26 @@ async def get_audio(message_id: int, current_user: User = Depends(require_permis
         msg = result.scalar_one_or_none()
     if not msg:
         raise HTTPException(404)
-    if not current_user.is_admin and msg.company_id != current_user.company_id:
+    if not current_user.is_admin and msg.company_id is not None and msg.company_id != current_user.company_id:
         raise HTTPException(403)
     path = AUDIO_DIR / msg.file_path
     if not path.exists():
         raise HTTPException(404, "Audio file not found")
     return FileResponse(str(path), media_type="audio/webm")
+
+
+@router.delete("/messages")
+async def delete_all_messages(current_user: User = Depends(require_admin)):
+    """Delete every voice message and its audio file. Super admin only."""
+    db = get_db()
+    async with db.get_session() as sess:
+        result = await sess.execute(select(VoiceMessage.file_path))
+        for (fp,) in result:
+            path = AUDIO_DIR / fp
+            if path.exists():
+                path.unlink(missing_ok=True)
+        await sess.execute(sql_delete(VoiceMessage))
+    return {"ok": True}
 
 
 @router.delete("/messages/{message_id}")

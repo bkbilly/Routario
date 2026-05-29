@@ -208,11 +208,14 @@ function _usrRenderPermissions() {
     document.getElementById('userModalPermissionsGroup').style.display = '';
     if (fieldsCol) fieldsCol.style.gridColumn = '';
 
-    const callerPerms = _callerPermissions();
-    const editPerms   = new Set(_usrEditing?.permissions || (_usrEditing ? [] : [...callerPerms]));
+    const callerPerms   = _callerPermissions();
+    const editPerms     = new Set(_usrEditing?.permissions || (_usrEditing ? [] : [...callerPerms]));
+    const isEditingSelf = !_usrIsAdmin && _usrEditing?.id === _usrMyId;
 
     if (_usrIsAdmin) {
         hintEl.textContent = '';
+    } else if (isEditingSelf) {
+        hintEl.textContent = 'Your permissions are managed by your administrator';
     } else {
         hintEl.textContent = 'Limited to your own permissions';
     }
@@ -225,7 +228,7 @@ function _usrRenderPermissions() {
         const rows = group.perms
             .filter(([key]) => !(isUserRole && adminOnlyPerms.has(key)))
             .map(([key, label]) => {
-                const canGrant  = callerPerms.has(key);
+                const canGrant  = callerPerms.has(key) && !isEditingSelf;
                 const isChecked = editPerms.has(key);
                 const disabled  = !canGrant ? 'disabled' : '';
                 const opacity   = !canGrant ? 'opacity:0.4;' : '';
@@ -246,10 +249,11 @@ function _usrRenderPermissions() {
 }
 
 function onUserRoleChange() {
-    if (!_usrIsAdmin) return;
     const role  = document.getElementById('userModalRole').value;
-    const group = document.getElementById('userModalCompanyGroup');
-    if (group) group.style.display = role === 'admin' ? 'none' : '';
+    if (_usrIsAdmin) {
+        const group = document.getElementById('userModalCompanyGroup');
+        if (group) group.style.display = role === 'admin' ? 'none' : '';
+    }
     _usrRenderPermissions();
 }
 
@@ -279,8 +283,9 @@ async function saveUser() {
     const units = document.getElementById('userModalUnits').value;
 
     // Collect permissions from checkboxes (only when not super admin role)
+    // Company admins cannot change their own permissions — leave them untouched
     let permissions = null;
-    if (role !== 'admin') {
+    if (role !== 'admin' && !(isMe && !_usrIsAdmin)) {
         permissions = [...document.querySelectorAll('.usr-perm-cb:checked:not(:disabled)')].map(cb => cb.dataset.perm);
     }
 

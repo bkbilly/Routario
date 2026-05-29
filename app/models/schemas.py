@@ -222,6 +222,20 @@ class Token(BaseModel):
     units: str = "metric"
     permissions: List[str] = Field(default_factory=list)
 
+    @field_validator('permissions', mode='before')
+    @classmethod
+    def validate_permissions(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, str):
+            import json
+            try:
+                parsed = json.loads(v)
+                return parsed if isinstance(parsed, list) else []
+            except (json.JSONDecodeError, ValueError):
+                return []
+        return v
+
 
 class UserResponse(BaseModel):
     """Schema for returning user details"""
