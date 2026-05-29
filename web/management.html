@@ -74,6 +74,9 @@
         <button class="mgmt-tab" id="mgmtTabUsers" onclick="switchMgmtSection('users')" style="display:none;">
             <i class="mdi mdi-account-group"></i> Users
         </button>
+        <button class="mgmt-tab" id="mgmtTabClips" onclick="switchMgmtSection('clips')" style="display:none;">
+            <i class="mdi mdi-video"></i> Clips
+        </button>
     </div>
 
     <!-- ── DEVICES SECTION ──────────────────────────────────────────── -->
@@ -183,6 +186,29 @@
     </div>
 
     <!-- ── USERS SECTION ──────────────────────────────────────────── -->
+    <!-- ── CLIPS SECTION ───────────────────────────────────────────── -->
+    <div id="section-clips" style="display:none;">
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;flex-wrap:wrap;">
+            <select class="form-input" id="clipsDeviceSelect" onchange="loadClipsForSection()" style="width:auto;min-width:180px;"></select>
+            <select class="form-input" id="clipsEventFilter" onchange="applyClipsFilter()" style="width:auto;flex:1;min-width:130px;">
+                <option value="">All Events</option>
+                <option value="manual">Manual</option>
+                <option value="harsh_brake">Harsh Brake</option>
+                <option value="harsh_accel">Harsh Accel</option>
+                <option value="harsh_corner">Harsh Corner</option>
+                <option value="collision">Collision</option>
+                <option value="overspeeding">Overspeeding</option>
+            </select>
+            <select class="form-input" id="clipsCameraFilter" onchange="applyClipsFilter()" style="width:auto;flex:1;min-width:110px;">
+                <option value="">All Cameras</option>
+                <option value="front">Front</option>
+                <option value="rear">Rear</option>
+                <option value="interior">Interior</option>
+            </select>
+        </div>
+        <div id="clipsGrid" class="clips-grid"></div>
+    </div>
+
     <div id="section-users" style="display:none;">
         <div class="devices-search-bar">
             <div class="search-input-wrap">
@@ -237,7 +263,6 @@
                 <button type="button" class="modal-tab" data-tab="rawdata" onclick="switchModalTab('rawdata',this)"><i class="mdi mdi-chart-bar"></i> Raw Data</button>
                 <button type="button" class="modal-tab" data-tab="users"     id="usersTabBtn"    onclick="switchModalTab('users',this)"    style="display:none;"><i class="mdi mdi-account-group"></i> Users</button>
                 <button type="button" class="modal-tab" data-tab="commands" id="commandsTabBtn" onclick="switchModalTab('commands',this)" style="display:none;"><i class="mdi mdi-antenna"></i> Commands</button>
-                <button type="button" class="modal-tab" data-tab="clips"    id="clipsTabBtn"    onclick="switchModalTab('clips',this)"    style="display:none;"><i class="mdi mdi-video"></i> Clips</button>
             </div>
 
             <div class="modal-scrollable">
@@ -259,6 +284,26 @@
                                 <input type="text" class="form-input" id="deviceImei" required placeholder="Device identifier">
                             </div>
                             <div id="integrationFieldsPanel" style="display:none;"></div>
+                            <div class="form-group" id="deviceHasCameraGroup" style="display:none;">
+                                <label class="form-label">Dashcam</label>
+                                <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer;margin-top:0.25rem;">
+                                    <span class="toggle-switch">
+                                        <input type="checkbox" id="deviceHasCamera">
+                                        <span class="toggle-slider"></span>
+                                    </span>
+                                    <span style="font-size:0.875rem;color:var(--text-secondary);">This device has a dashcam</span>
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Driver</label>
+                                <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer;margin-top:0.25rem;">
+                                    <span class="toggle-switch">
+                                        <input type="checkbox" id="deviceAutoClearDriver">
+                                        <span class="toggle-slider"></span>
+                                    </span>
+                                    <span style="font-size:0.875rem;color:var(--text-secondary);">Remove driver on ignition off</span>
+                                </label>
+                            </div>
                         </div>
                         <div class="form-column">
                             <div class="form-row">
@@ -461,27 +506,6 @@
                     </div>
                 </div>
 
-                <!-- TAB: CLIPS -->
-                <div class="modal-tab-content" id="tab-clips">
-                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;">
-                        <select class="form-input" id="clipsEventFilter" onchange="applyClipsFilter()" style="width:auto;flex:1;min-width:130px;">
-                            <option value="">All Events</option>
-                            <option value="manual">Manual</option>
-                            <option value="harsh_brake">Harsh Brake</option>
-                            <option value="harsh_accel">Harsh Accel</option>
-                            <option value="harsh_corner">Harsh Corner</option>
-                            <option value="collision">Collision</option>
-                            <option value="overspeeding">Overspeeding</option>
-                        </select>
-                        <select class="form-input" id="clipsCameraFilter" onchange="applyClipsFilter()" style="width:auto;flex:1;min-width:110px;">
-                            <option value="">All Cameras</option>
-                            <option value="front">Front</option>
-                            <option value="rear">Rear</option>
-                            <option value="interior">Interior</option>
-                        </select>
-                    </div>
-                    <div id="clipsGrid" class="clips-grid"></div>
-                </div>
 
             </div><!-- /.modal-scrollable -->
 
@@ -613,6 +637,9 @@
             <div class="form-group">
                 <label class="form-label">Notes</label>
                 <textarea id="driverNotes" class="form-input" rows="3" placeholder="Optional notes&#8230;" style="resize:vertical;"></textarea>
+            </div>
+            <div id="driverUserNote" style="display:none;padding:0.6rem 0.75rem;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px;font-size:0.82rem;color:#818cf8;margin-bottom:0.75rem;">
+                <i class="mdi mdi-account"></i> This driver is linked to a user account. Name and licence are managed via the Users section.
             </div>
             <div class="form-group" id="driverCompanyGroup" style="display:none;">
                 <label class="form-label">Company</label>
@@ -787,7 +814,7 @@
 <script src="js/users-management.js"></script>
 <script>
 (function () {
-    const SECTIONS = ['devices', 'companies', 'drivers', 'users'];
+    const SECTIONS = ['devices', 'companies', 'drivers', 'users', 'clips'];
 
     const _plusIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
     const _addActions = {
@@ -827,6 +854,7 @@
         companies: () => initCompanySection(),
         drivers:   () => initDriversSection(),
         users:     () => initUsersSection(),
+        clips:     () => initClipsSection(),
     };
 
     function switchMgmtSection(name, pushState) {

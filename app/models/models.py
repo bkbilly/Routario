@@ -73,6 +73,7 @@ class Driver(Base):
 
     id:             Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
     company_id:     Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), nullable=True, index=True)
+    user_id:        Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, unique=True, index=True)
     name:           Mapped[str]           = mapped_column(String(100), nullable=False)
     phone:          Mapped[Optional[str]] = mapped_column(String(30),  nullable=True)
     license_number: Mapped[Optional[str]] = mapped_column(String(50),  nullable=True)
@@ -80,6 +81,7 @@ class Driver(Base):
     created_at:     Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
 
     company: Mapped[Optional["Company"]] = relationship("Company")
+    user:    Mapped[Optional["User"]]    = relationship("User")
     trips:   Mapped[List["Trip"]]        = relationship(back_populates="driver")
 
 

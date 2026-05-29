@@ -440,6 +440,7 @@ async def get_protocols():
             "port":              getattr(decoder, "PORT", None),
             "protocol_types":    getattr(decoder, "PROTOCOL_TYPES", ["tcp"]),
             "supports_commands": len(cmds) > 0,
+            "supports_camera":   getattr(decoder, "SUPPORTS_CAMERA", False),
         }
     return {
         "protocols":       ProtocolRegistry.list_protocols(),

@@ -87,9 +87,13 @@ function _render() {
         const assigned = _assignedDevice(d.id);
         const company  = _drvIsAdmin ? (_companies.find(c => c.id === d.company_id)?.name || '—') : null;
         const assignedEmoji = assigned ? (VEHICLE_ICONS[assigned.vehicle_type] || VEHICLE_ICONS['other']).emoji : '';
+        const isUser = !!d.user_id;
+        const nameBadge = isUser
+            ? `<span style="font-size:0.68rem;font-weight:600;padding:0.1rem 0.4rem;border-radius:4px;background:rgba(99,102,241,0.15);color:#818cf8;margin-left:0.4rem;">USER</span>`
+            : '';
         return `
         <tr class="device-row" ondblclick="openDriverModal(${d.id})" style="cursor:pointer;">
-            <td><span class="device-row-name">${_esc(d.name)}</span></td>
+            <td><span class="device-row-name">${_esc(d.name)}</span>${nameBadge}</td>
             <td style="color:var(--text-secondary);">${_esc(d.phone || '—')}</td>
             <td style="font-family:var(--font-mono);font-size:0.85rem;">${_esc(d.license_number || '—')}</td>
             ${_drvIsAdmin ? `<td style="color:var(--text-secondary);font-size:0.85rem;">${_esc(company)}</td>` : '<td style="display:none;"></td>'}
@@ -117,27 +121,37 @@ function sortDrivers(col) {
 
 function openDriverModal(driverId = null) {
     _editingDriver = driverId ? _drivers.find(d => d.id === driverId) : null;
-    const isNew = !_editingDriver;
+    const isNew    = !_editingDriver;
+    const isUser   = !!_editingDriver?.user_id;
 
     document.getElementById('driverModalTitle').textContent = isNew ? 'Add Driver' : 'Edit Driver';
     document.getElementById('driverName').value    = _editingDriver?.name    || '';
     document.getElementById('driverPhone').value   = _editingDriver?.phone   || '';
     document.getElementById('driverLicence').value = _editingDriver?.license_number || '';
     document.getElementById('driverNotes').value   = _editingDriver?.notes   || '';
-    document.getElementById('deleteDriverBtn').style.display = isNew ? 'none' : 'inline-flex';
+
+    // User-linked drivers: name and licence are read-only, no delete
+    document.getElementById('driverName').disabled    = isUser;
+    document.getElementById('driverLicence').disabled = isUser;
+    document.getElementById('deleteDriverBtn').style.display = (isNew || isUser) ? 'none' : 'inline-flex';
+
+    const userNote = document.getElementById('driverUserNote');
+    if (userNote) userNote.style.display = isUser ? '' : 'none';
 
     const companyGroup = document.getElementById('driverCompanyGroup');
     if (_drvIsAdmin && companyGroup) {
-        companyGroup.style.display = '';
-        const sel = document.getElementById('driverCompanySelect');
-        sel.innerHTML = '<option value="">— No company —</option>';
-        _companies.forEach(c => {
-            const opt = document.createElement('option');
-            opt.value = c.id;
-            opt.textContent = c.name;
-            if (c.id === _editingDriver?.company_id) opt.selected = true;
-            sel.appendChild(opt);
-        });
+        companyGroup.style.display = isUser ? 'none' : '';
+        if (!isUser) {
+            const sel = document.getElementById('driverCompanySelect');
+            sel.innerHTML = '<option value="">— No company —</option>';
+            _companies.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.name;
+                if (c.id === _editingDriver?.company_id) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        }
     }
 
     document.getElementById('driverModal').classList.add('active');
@@ -145,6 +159,8 @@ function openDriverModal(driverId = null) {
 
 function closeDriverModal() {
     document.getElementById('driverModal').classList.remove('active');
+    document.getElementById('driverName').disabled    = false;
+    document.getElementById('driverLicence').disabled = false;
     _editingDriver = null;
 }
 

@@ -23,6 +23,14 @@ function onProtocolChange(existingIntg = null) {
         if (imeiInput) imeiInput.required = !isIntg;
     }
 
+    // Show/hide dashcam toggle: only for native protocols that support camera
+    const cameraGroup = document.getElementById('deviceHasCameraGroup');
+    if (cameraGroup) {
+        const supportsCamera = !isIntg && (protocolInfo[selected]?.supports_camera || false);
+        cameraGroup.style.display = supportsCamera ? '' : 'none';
+        if (!supportsCamera) document.getElementById('deviceHasCamera').checked = false;
+    }
+
     // Show/hide Commands tab based on protocol command support and permission
     const commandsBtn = document.getElementById('commandsTabBtn');
     if (commandsBtn) {

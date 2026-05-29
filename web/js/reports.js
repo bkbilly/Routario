@@ -178,6 +178,7 @@ const _REPORT_DESCRIPTIONS = {
     summary: 'Totals per vehicle for the selected period — trips, distance, driving time, and top speed.',
     trips:   'Individual trips with start/end location, distance, duration, and driver. Click any row to view the route on a map.',
     daily:   'All trips aggregated by day — total trips, distance, and driving time per date.',
+    drivers: 'Activity per driver for the selected period — trips, distance, driving time, and top speed.',
     sensors: 'Current sensor readings for all vehicles. Enable historical data to view sensor values over a date range.',
     alerts:  'Alert history for the selected period. Admins can filter by user.',
 };
@@ -291,6 +292,7 @@ function _renderReport() {
     if (type === 'summary')      _renderSummary();
     else if (type === 'trips')   _renderTripList();
     else if (type === 'daily')   _renderDaily();
+    else if (type === 'drivers') _renderDrivers();
 
     table.style.display = '';
     noData.style.display = 'none';
@@ -434,17 +436,20 @@ function _renderTripList() {
         ${_th('distance_km','Distance (km)')}
         ${_th('duration_minutes','Duration')}
         ${_th('avg_speed','Avg Speed')}
+        ${_th('max_speed','Top Speed')}
         ${_th('driver_name','Driver')}
     </tr>`;
 
     const totalTrips = rows.length;
     const totalDist  = rows.reduce((s, r) => s + r.distance_km, 0);
     const totalMins  = rows.reduce((s, r) => s + r.duration_minutes, 0);
+    const topSpeed   = rows.length ? Math.max(...rows.map(r => r.max_speed)) : 0;
 
     sumBar.innerHTML = `
         <div class="summary-card"><div class="val">${totalTrips}</div><div class="lbl">Trips</div></div>
         <div class="summary-card"><div class="val">${totalDist.toFixed(1)}</div><div class="lbl">Total Distance (km)</div></div>
-        <div class="summary-card"><div class="val">${(totalMins/60).toFixed(1)}</div><div class="lbl">Driving Time (h)</div></div>`;
+        <div class="summary-card"><div class="val">${(totalMins/60).toFixed(1)}</div><div class="lbl">Driving Time (h)</div></div>
+        <div class="summary-card"><div class="val">${topSpeed.toFixed(1)} km/h</div><div class="lbl">Top Speed</div></div>`;
     sumBar.style.display = '';
 
     tbody.innerHTML = rows.map((r, i) => `<tr style="cursor:pointer;" onclick="showTripMap(${i})">
@@ -455,8 +460,83 @@ function _renderTripList() {
         <td>${r.distance_km.toFixed(1)}</td>
         <td>${_fmtDuration(r.duration_minutes)}</td>
         <td>${r.avg_speed.toFixed(1)} km/h</td>
+        <td>${r.max_speed.toFixed(1)} km/h</td>
         <td>${_esc(r.driver_name || '—')}</td>
     </tr>`).join('');
+}
+
+// ── Driver Activity ───────────────────────────────────────────────
+
+function _renderDrivers() {
+    const byDriver = {};
+    for (const r of _reportData) {
+        const key = r.driver_name || '— Unassigned —';
+        if (!byDriver[key]) byDriver[key] = { driver: key, trips: 0, distance_km: 0, driving_minutes: 0, max_speed: 0, total_avg_speed: 0, vehicles: new Set() };
+        byDriver[key].trips++;
+        byDriver[key].distance_km    += r.distance_km;
+        byDriver[key].driving_minutes += r.duration_minutes;
+        byDriver[key].max_speed       = Math.max(byDriver[key].max_speed, r.max_speed);
+        byDriver[key].total_avg_speed += r.avg_speed;
+        byDriver[key].vehicles.add(r.device_name);
+    }
+
+    const rawRows = Object.values(byDriver).map(d => ({
+        ...d,
+        avg_speed: d.trips ? d.total_avg_speed / d.trips : 0,
+        vehicle_count: d.vehicles.size,
+        vehicle_list: [...d.vehicles].join(', '),
+    }));
+
+    const sortKey = _sortCol || 'driver';
+    const rows = rawRows.sort((a, b) => {
+        const av = a[sortKey] ?? '', bv = b[sortKey] ?? '';
+        return typeof av === 'number' ? (av - bv) * _sortDir : String(av).localeCompare(String(bv)) * _sortDir;
+    });
+
+    const head   = document.getElementById('reportHead');
+    const tbody  = document.getElementById('reportBody');
+    const sumBar = document.getElementById('summaryBar');
+
+    head.innerHTML = `<tr>
+        ${_th('driver','Driver')}
+        ${_th('trips','Trips')}
+        ${_th('distance_km','Distance (km)')}
+        ${_th('driving_minutes','Drive Time')}
+        ${_th('avg_speed','Avg Speed')}
+        ${_th('max_speed','Top Speed')}
+        ${_th('vehicle_count','Vehicles')}
+    </tr>`;
+
+    const totalTrips = rows.reduce((s, r) => s + r.trips, 0);
+    const totalDist  = rows.reduce((s, r) => s + r.distance_km, 0);
+    const totalMins  = rows.reduce((s, r) => s + r.driving_minutes, 0);
+    const topSpeed   = rows.length ? Math.max(...rows.map(r => r.max_speed)) : 0;
+
+    sumBar.innerHTML = `
+        <div class="summary-card"><div class="val">${rows.length}</div><div class="lbl">Drivers</div></div>
+        <div class="summary-card"><div class="val">${totalTrips}</div><div class="lbl">Total Trips</div></div>
+        <div class="summary-card"><div class="val">${totalDist.toFixed(1)}</div><div class="lbl">Total Distance (km)</div></div>
+        <div class="summary-card"><div class="val">${(totalMins/60).toFixed(1)}</div><div class="lbl">Driving Time (h)</div></div>
+        <div class="summary-card"><div class="val">${topSpeed.toFixed(1)} km/h</div><div class="lbl">Top Speed</div></div>`;
+    sumBar.style.display = '';
+
+    tbody.innerHTML = rows.map(r => `<tr>
+        <td>${_esc(r.driver)}</td>
+        <td>${r.trips}</td>
+        <td>${r.distance_km.toFixed(1)}</td>
+        <td>${_fmtDuration(r.driving_minutes)}</td>
+        <td>${r.avg_speed.toFixed(1)} km/h</td>
+        <td>${r.max_speed.toFixed(1)} km/h</td>
+        <td title="${_esc(r.vehicle_list)}">${r.vehicle_count}</td>
+    </tr>`).join('') + `<tr class="total-row">
+        <td>Total</td>
+        <td>${totalTrips}</td>
+        <td>${totalDist.toFixed(1)}</td>
+        <td>${_fmtDuration(totalMins)}</td>
+        <td>—</td>
+        <td>${topSpeed.toFixed(1)} km/h</td>
+        <td>—</td>
+    </tr>`;
 }
 
 // ── Daily Activity ────────────────────────────────────────────────
@@ -798,10 +878,26 @@ async function exportCsv() {
 
     // Client-side CSV for trip list and daily
     let headers, rowFn;
-    if (type === 'trips') {
-        headers = ['Date','Vehicle','Plate','Driver','From','To','Distance (km)','Duration (min)','Avg Speed (km/h)'];
+    if (type === 'drivers') {
+        const byDriver = {};
+        for (const r of _reportData) {
+            const key = r.driver_name || '— Unassigned —';
+            if (!byDriver[key]) byDriver[key] = { driver: key, trips: 0, distance_km: 0, driving_minutes: 0, max_speed: 0, total_avg: 0, vehicles: new Set() };
+            byDriver[key].trips++; byDriver[key].distance_km += r.distance_km;
+            byDriver[key].driving_minutes += r.duration_minutes;
+            byDriver[key].max_speed = Math.max(byDriver[key].max_speed, r.max_speed);
+            byDriver[key].total_avg += r.avg_speed;
+            byDriver[key].vehicles.add(r.device_name);
+        }
+        headers = ['Driver','Trips','Distance (km)','Drive Time (min)','Avg Speed (km/h)','Top Speed (km/h)','Vehicles'];
+        const driverRows = Object.values(byDriver).map(d => ({ ...d, avg_speed: d.trips ? d.total_avg / d.trips : 0, vehicle_list: [...d.vehicles].join('; ') }));
+        rowFn = r => [r.driver, r.trips, r.distance_km.toFixed(2), r.driving_minutes.toFixed(1), r.avg_speed.toFixed(1), r.max_speed.toFixed(1), r.vehicle_list];
+        _downloadCsv(headers, driverRows, rowFn, `driver_activity_${start}_${end}.csv`);
+        return;
+    } else if (type === 'trips') {
+        headers = ['Date','Vehicle','Plate','Driver','From','To','Distance (km)','Duration (min)','Avg Speed (km/h)','Top Speed (km/h)'];
         rowFn = r => [_fmtDatetime(r.start_time), r.device_name, r.license_plate||'', r.driver_name||'', r.start_address||'', r.end_address||'',
-                      r.distance_km.toFixed(2), r.duration_minutes.toFixed(1), r.avg_speed.toFixed(1)];
+                      r.distance_km.toFixed(2), r.duration_minutes.toFixed(1), r.avg_speed.toFixed(1), r.max_speed.toFixed(1)];
     } else {
         headers = ['Date','Trips','Distance (km)','Drive Time (min)'];
         const byDate = {};

@@ -479,7 +479,7 @@ h1 {
 .form-main-layout {
     display: flex;
     flex-direction: column;
-    gap: 0;
+    gap: 1.25rem;
 }
 @media (min-width: 1024px) {
     .form-main-layout {

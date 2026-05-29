@@ -166,7 +166,9 @@ function _renderLogbookTable() {
     }
 
     tbody.innerHTML = _logbookEntries.map(e => {
-        const date    = new Date(e.date).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
+        const dt      = new Date(e.date);
+        const date    = dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        const time    = dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
         const odo     = e.odometer != null ? `${parseFloat(e.odometer).toLocaleString()} km` : '—';
         const price   = e.price    != null ? `€${parseFloat(e.price).toFixed(2)}` : '—';
         const docHtml = (e.documents || []).length
@@ -180,9 +182,8 @@ function _renderLogbookTable() {
               }).join('')
             : '—';
 
-        const fullDt = new Date(e.date).toLocaleString();
         return `<tr class="lb-row" ondblclick="openEntryModal(${e.id})">
-            <td style="white-space:nowrap;" title="${fullDt}">${date}</td>
+            <td style="white-space:nowrap;">${date}<br><span style="color:var(--text-muted);font-size:0.8rem;">${time}</span></td>
             <td><span class="lb-row-name">${_esc(e.description)}</span></td>
             <td style="font-family:var(--font-mono);white-space:nowrap;color:var(--text-secondary);">${odo}</td>
             <td style="white-space:nowrap;color:var(--text-secondary);">${price}</td>
@@ -308,15 +309,16 @@ function _renderFuelTable() {
     tbody.innerHTML = [..._fuelLogs]
         .sort((a, b) => new Date(b.date) - new Date(a.date))
         .map(log => {
-            const dt       = new Date(log.date).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
-            const fullDt   = new Date(log.date).toLocaleString();
+            const dtObj    = new Date(log.date);
+            const date     = dtObj.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+            const time     = dtObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
             const cons     = consumption[log.id] ? `${consumption[log.id]}` : '—';
             const total    = log.price_per_liter ? (log.liters * log.price_per_liter).toFixed(2) : '—';
             const fullIcon = log.full_tank
                 ? `<i class="mdi mdi-check-circle" style="color:var(--accent-success);" title="Full tank"></i>`
                 : `<i class="mdi mdi-minus" style="color:var(--text-muted);" title="Partial fill"></i>`;
             return `<tr class="lb-row" ondblclick="openFuelLogModal(${log.id})">
-                <td style="white-space:nowrap;" title="${fullDt}"><span class="lb-row-name">${_esc(dt)}</span></td>
+                <td style="white-space:nowrap;">${date}<br><span style="color:var(--text-muted);font-size:0.8rem;">${time}</span></td>
                 <td style="text-align:right;font-family:var(--font-mono);">${log.liters.toFixed(2)}</td>
                 <td style="text-align:right;font-family:var(--font-mono);color:var(--text-secondary);">${log.odometer_km != null ? Math.round(log.odometer_km).toLocaleString() : '—'}</td>
                 <td style="text-align:right;color:var(--text-secondary);">${log.price_per_liter != null ? log.price_per_liter.toFixed(3) : '—'}</td>
@@ -443,8 +445,9 @@ function _renderMaintenanceStatus() {
                 const daysLeft = Math.round((nextDate - new Date()) / 86400000);
                 const status   = daysLeft <= 0 ? 'due' : daysLeft <= parseInt(p.warning_days || 14) ? 'warn' : 'ok';
                 const colour   = status === 'due' ? 'var(--accent-danger)' : status === 'warn' ? '#f59e0b' : 'var(--accent-success)';
+                const humanDays = d => d === 1 ? '1 day' : d < 7 ? `${d} days` : d < 30 ? (w => w === 1 ? '1 week' : `${w} weeks`)(Math.round(d / 7)) : (m => m === 1 ? '1 month' : `${m} months`)(Math.round(d / 30));
                 parts.push(`<span style="color:${colour};font-weight:600;">
-                    ${daysLeft <= 0 ? 'OVERDUE' : daysLeft + ' days remaining'}
+                    ${daysLeft <= 0 ? 'OVERDUE' : humanDays(daysLeft) + ' remaining'}
                 </span> <span style="color:var(--text-muted);font-size:0.8rem;">(due ${nextDate.toLocaleDateString()})</span>`);
             }
         }
