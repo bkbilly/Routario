@@ -151,10 +151,12 @@ class WebSocketManager:
         state_data = {}
         if device.state:
             state_data = {
-                "total_odometer": device.state.total_odometer,
-                "trip_odometer":  device.state.trip_odometer,
-                "is_moving":      device.state.is_moving,
-                "is_online":      device.state.is_online,
+                "total_odometer":      device.state.total_odometer,
+                "trip_odometer":       device.state.trip_odometer,
+                "is_moving":           device.state.is_moving,
+                "is_online":           device.state.is_online,
+                "current_driver_id":   device.state.current_driver_id,
+                "current_driver_name": device.state.current_driver_name,
             }
         position.sensors = {**(position.sensors or {}), "last_gps_time": position.device_time.strftime("%Y-%m-%dT%H:%M:%S")}
         message = {
@@ -210,6 +212,10 @@ class WebSocketManager:
 
 
 ws_manager = WebSocketManager()
+
+
+def get_ws_manager() -> "WebSocketManager":
+    return ws_manager
 
 
 # ==================== Webhook Notifications ====================

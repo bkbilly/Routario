@@ -504,6 +504,11 @@ class DriverCreate(BaseModel):
     phone: Optional[str] = None
     license_number: Optional[str] = None
     notes: Optional[str] = None
+    assignment_rule: Optional[str] = None
+    assignment_vehicles: Optional[List[int]] = None
+    assignment_mode: Optional[str] = None
+    assignment_grace_period: Optional[int] = None
+    assignment_clear: Optional[str] = None
 
 class DriverUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -511,6 +516,11 @@ class DriverUpdate(BaseModel):
     license_number: Optional[str] = None
     notes: Optional[str] = None
     company_id: Optional[int] = None
+    assignment_rule: Optional[str] = None
+    assignment_vehicles: Optional[List[int]] = None
+    assignment_mode: Optional[str] = None
+    assignment_grace_period: Optional[int] = None
+    assignment_clear: Optional[str] = None
 
 class DriverResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -522,6 +532,11 @@ class DriverResponse(BaseModel):
     license_number: Optional[str]
     notes: Optional[str]
     created_at: datetime
+    assignment_rule: Optional[str] = None
+    assignment_vehicles: Optional[List[int]] = None
+    assignment_mode: Optional[str] = None
+    assignment_grace_period: Optional[int] = None
+    assignment_clear: Optional[str] = None
 
 
 # ==================== Fuel Schemas ====================

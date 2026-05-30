@@ -119,6 +119,80 @@ function sortDrivers(col) {
 
 // ── Driver Modal ──────────────────────────────────────────────────
 
+function _buildVehicleList(selectedVehicleIds) {
+    const list = document.getElementById('driverVehiclesList');
+    if (!list) return;
+    list.innerHTML = '';
+
+    // Filter devices by the editing driver's company when admin, or all devices for company admin
+    let visibleDevices = _devices;
+    if (_drvIsAdmin && _editingDriver?.company_id) {
+        visibleDevices = _devices.filter(d => d.company_id === _editingDriver.company_id);
+    } else if (_drvIsAdmin && !_editingDriver) {
+        // new driver — show all devices; company filter applied after company is selected
+        visibleDevices = _devices;
+    }
+
+    visibleDevices.forEach(d => {
+        const emoji = (VEHICLE_ICONS[d.vehicle_type] || VEHICLE_ICONS['other']).emoji;
+        const label = document.createElement('label');
+        label.style.cssText = 'display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;cursor:pointer;padding:0.2rem 0;';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = d.id;
+        cb.dataset.vehicleId = d.id;
+        cb.style.cursor = 'pointer';
+        cb.className = 'drv-vehicle-cb';
+        if (selectedVehicleIds && selectedVehicleIds.includes(d.id)) cb.checked = true;
+        const span = document.createElement('span');
+        span.style.color = 'var(--text-secondary)';
+        span.textContent = `${emoji} ${d.name}` + (d.license_plate ? ` (${d.license_plate})` : '');
+        label.appendChild(cb);
+        label.appendChild(span);
+        list.appendChild(label);
+    });
+}
+
+function _updateClearOptions(mode) {
+    const sel = document.getElementById('driverAssignClear');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = `
+        <option value="never">Never</option>
+        <option value="ignition_off">On ignition off</option>
+        <option value="trip_end">On trip end</option>
+        ${mode === 'continuous' ? '<option value="rule_stops">When rule stops matching</option>' : ''}
+    `;
+    // Restore previous selection if still valid
+    if ([...sel.options].some(o => o.value === current)) sel.value = current;
+    _updateGraceVisibility();
+}
+
+function _updateGraceVisibility() {
+    const mode  = document.getElementById('driverAssignMode')?.value;
+    const clear = document.getElementById('driverAssignClear')?.value;
+    const grp   = document.getElementById('driverGraceGroup');
+    if (grp) grp.style.display = (mode === 'continuous' && clear === 'rule_stops') ? '' : 'none';
+}
+
+function onDriverModeChange() {
+    const mode = document.getElementById('driverAssignMode')?.value;
+    _updateClearOptions(mode);
+}
+
+function onDriverClearChange() {
+    _updateGraceVisibility();
+}
+
+function onDriverVehiclesAllChange() {
+    const allCb = document.getElementById('driverVehiclesAll');
+    const cbs   = document.querySelectorAll('#driverVehiclesList .drv-vehicle-cb');
+    cbs.forEach(cb => {
+        cb.disabled = allCb.checked;
+        if (allCb.checked) cb.checked = false;
+    });
+}
+
 function openDriverModal(driverId = null) {
     _editingDriver = driverId ? _drivers.find(d => d.id === driverId) : null;
     const isNew    = !_editingDriver;
@@ -154,6 +228,34 @@ function openDriverModal(driverId = null) {
         }
     }
 
+    // ── Auto-assignment fields ────────────────────────────────────
+    const rule  = _editingDriver?.assignment_rule  || '';
+    const mode  = _editingDriver?.assignment_mode  || '';
+    const clear = _editingDriver?.assignment_clear || 'never';
+    const grace = _editingDriver?.assignment_grace_period ?? '';
+    const vehicles = _editingDriver?.assignment_vehicles || null; // null = all
+
+    document.getElementById('driverAssignRule').value  = rule;
+    document.getElementById('driverAssignMode').value  = mode;
+    document.getElementById('driverAssignGrace').value = grace;
+
+    // Build vehicle list
+    _buildVehicleList(vehicles);
+
+    // Set "All" checkbox: checked when vehicles is null/empty
+    const allCb = document.getElementById('driverVehiclesAll');
+    const hasSpecific = vehicles && vehicles.length > 0;
+    allCb.checked = !hasSpecific;
+    // Disable individual checkboxes if "All" is checked
+    document.querySelectorAll('#driverVehiclesList .drv-vehicle-cb').forEach(cb => {
+        cb.disabled = allCb.checked;
+    });
+
+    // Populate clear options for the current mode then set value
+    _updateClearOptions(mode);
+    document.getElementById('driverAssignClear').value = clear;
+    _updateGraceVisibility();
+
     document.getElementById('driverModal').classList.add('active');
 }
 
@@ -168,11 +270,30 @@ async function saveDriver() {
     const name = document.getElementById('driverName').value.trim();
     if (!name) { document.getElementById('driverName').focus(); return; }
 
+    // Collect assignment vehicles
+    const allCb   = document.getElementById('driverVehiclesAll');
+    let assignVehicles = null;
+    if (!allCb.checked) {
+        const checked = [...document.querySelectorAll('#driverVehiclesList .drv-vehicle-cb:checked')];
+        assignVehicles = checked.length > 0 ? checked.map(cb => parseInt(cb.value)) : null;
+    }
+
+    const assignMode  = document.getElementById('driverAssignMode').value || null;
+    const assignClear = document.getElementById('driverAssignClear').value || null;
+    const assignRule  = document.getElementById('driverAssignRule').value.trim() || null;
+    const graceRaw    = document.getElementById('driverAssignGrace').value;
+    const assignGrace = graceRaw !== '' ? parseInt(graceRaw) : null;
+
     const payload = {
         name,
-        phone:          document.getElementById('driverPhone').value.trim() || null,
-        license_number: document.getElementById('driverLicence').value.trim() || null,
-        notes:          document.getElementById('driverNotes').value.trim() || null,
+        phone:                 document.getElementById('driverPhone').value.trim() || null,
+        license_number:        document.getElementById('driverLicence').value.trim() || null,
+        notes:                 document.getElementById('driverNotes').value.trim() || null,
+        assignment_rule:       assignRule,
+        assignment_vehicles:   assignVehicles,
+        assignment_mode:       assignMode,
+        assignment_grace_period: assignGrace,
+        assignment_clear:      assignClear,
     };
     if (_drvIsAdmin) {
         const cid = parseInt(document.getElementById('driverCompanySelect')?.value);
