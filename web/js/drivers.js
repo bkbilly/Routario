@@ -205,8 +205,7 @@ function openDriverModal(driverId = null) {
     document.getElementById('driverNotes').value   = _editingDriver?.notes   || '';
 
     // User-linked drivers: name and licence are read-only, no delete
-    document.getElementById('driverName').disabled    = isUser;
-    document.getElementById('driverLicence').disabled = isUser;
+    document.getElementById('driverName').disabled = isUser;
     document.getElementById('deleteDriverBtn').style.display = (isNew || isUser) ? 'none' : 'inline-flex';
 
     const userNote = document.getElementById('driverUserNote');
@@ -261,8 +260,7 @@ function openDriverModal(driverId = null) {
 
 function closeDriverModal() {
     document.getElementById('driverModal').classList.remove('active');
-    document.getElementById('driverName').disabled    = false;
-    document.getElementById('driverLicence').disabled = false;
+    document.getElementById('driverName').disabled = false;
     _editingDriver = null;
 }
 

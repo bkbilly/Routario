@@ -7,6 +7,7 @@ records keyed by user_id).  These shadow drivers cannot be deleted or have
 their company changed through this interface — they are managed via Users.
 """
 from typing import List, Optional
+import json
 
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import select
@@ -112,9 +113,11 @@ async def update_driver(
             raise HTTPException(status_code=404, detail="Driver not found")
         _check_driver_access(driver, current_user)
         if driver.user_id:
-            # User-linked drivers: only phone/notes are editable here
+            # User-linked drivers: name and company are managed via Users
             if data.phone is not None:
                 driver.phone = data.phone
+            if data.license_number is not None:
+                driver.license_number = data.license_number
             if data.notes is not None:
                 driver.notes = data.notes
         else:
@@ -192,19 +195,22 @@ async def assign_driver(
 
         driver_name = driver.name if driver else None
 
-    from main import get_ws_manager
-    from models.schemas import WSMessageType
-    from datetime import datetime, timezone
-    ws = get_ws_manager()
-    message = {
-        "type":      WSMessageType.POSITION_UPDATE.value,
-        "device_id": device_id,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "data": {
-            "current_driver_id":   driver_id,
-            "current_driver_name": driver_name,
-        },
-    }
-    await ws._broadcast_direct(device_id, message)
+    try:
+        from main import get_ws_manager
+        from models.schemas import WSMessageType
+        from datetime import datetime, timezone
+        ws = get_ws_manager()
+        message = json.dumps({
+            "type":      WSMessageType.POSITION_UPDATE.value,
+            "device_id": device_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "data": {
+                "current_driver_id":   driver_id,
+                "current_driver_name": driver_name,
+            },
+        })
+        await ws._send_to_user(current_user.id, message)
+    except Exception:
+        pass
 
     return {"status": "ok", "driver_id": driver_id}
