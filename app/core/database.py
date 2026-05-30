@@ -50,6 +50,7 @@ from models.schemas import (
     UserCreate,
     UserUpdate,
 )
+from core.auto_assign import handle_ignition_off, handle_trip_end, evaluate as evaluate_auto_assign
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +173,12 @@ class DatabaseService:
             "ALTER TABLE device_states ADD COLUMN current_driver_id INTEGER",
             "ALTER TABLE trips ADD COLUMN driver_id INTEGER",
             "ALTER TABLE drivers ADD COLUMN user_id INTEGER",
+            "ALTER TABLE drivers ADD COLUMN assignment_rule TEXT",
+            "ALTER TABLE drivers ADD COLUMN assignment_vehicles TEXT",
+            "ALTER TABLE drivers ADD COLUMN assignment_mode VARCHAR(20)",
+            "ALTER TABLE drivers ADD COLUMN assignment_grace_period INTEGER",
+            "ALTER TABLE drivers ADD COLUMN assignment_clear VARCHAR(20)",
+            "ALTER TABLE position_records ADD COLUMN driver_id INTEGER REFERENCES drivers(id) ON DELETE SET NULL",
             """CREATE TABLE IF NOT EXISTS voice_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 sender_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -710,6 +717,8 @@ class DatabaseService:
                 state.sensors = {**(state.sensors or {}), "last_known_satellites": position.satellites}
             state.sensors = {**(state.sensors or {}), "last_gps_time": device_time.isoformat()}
 
+            await evaluate_auto_assign(session, device, state, position, device_time)
+
             rec = PositionRecord(
                 device_id=device.id,
                 latitude=position.latitude,
@@ -725,6 +734,7 @@ class DatabaseService:
                     position.server_time.replace(tzinfo=None)
                     if position.server_time else datetime.utcnow()
                 ),
+                driver_id=state.current_driver_id,
             )
             session.add(rec)
             await session.flush()
@@ -811,9 +821,11 @@ class DatabaseService:
                 trip.duration_minutes = mins
                 if mins > 0:
                     trip.avg_speed = (trip.distance_km / mins) * 60
+            handle_ignition_off(state)
             state.last_trip_id     = state.active_trip_id
             state.active_trip_id   = None
             state.last_ignition_off = device_time
+            handle_trip_end(state)
             if device.config.get('auto_clear_driver'):
                 state.current_driver_id = None
 

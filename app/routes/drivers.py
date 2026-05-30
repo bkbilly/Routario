@@ -86,6 +86,11 @@ async def create_driver(
             phone=data.phone,
             license_number=data.license_number,
             notes=data.notes,
+            assignment_rule=data.assignment_rule,
+            assignment_vehicles=data.assignment_vehicles,
+            assignment_mode=data.assignment_mode,
+            assignment_grace_period=data.assignment_grace_period,
+            assignment_clear=data.assignment_clear,
         )
         session.add(driver)
         await session.flush()
@@ -123,6 +128,16 @@ async def update_driver(
                 driver.notes = data.notes
             if data.company_id is not None and current_user.is_admin:
                 driver.company_id = data.company_id
+            if data.assignment_rule is not None:
+                driver.assignment_rule = data.assignment_rule
+            if data.assignment_vehicles is not None:
+                driver.assignment_vehicles = data.assignment_vehicles
+            if data.assignment_mode is not None:
+                driver.assignment_mode = data.assignment_mode
+            if data.assignment_grace_period is not None:
+                driver.assignment_grace_period = data.assignment_grace_period
+            if data.assignment_clear is not None:
+                driver.assignment_clear = data.assignment_clear
         await session.flush()
         await session.refresh(driver)
         return driver

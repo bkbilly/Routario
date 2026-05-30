@@ -78,6 +78,7 @@ async def get_position_history(
                 "satellites": pos.satellites,
                 "sensors":   pos.sensors,
                 "trip_id":   find_trip_id(pos.device_time),
+                "driver_id": pos.driver_id,
             },
         ))
 
