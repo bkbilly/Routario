@@ -616,34 +616,77 @@
      DRIVER MODAL
 ============================================================= -->
 <div class="modal" id="driverModal">
-    <div class="modal-content" style="max-width:480px;height:auto;">
+    <div class="modal-content" style="max-width:820px;height:auto;">
         <div class="modal-header">
             <h2 class="modal-title" id="driverModalTitle">Add Driver</h2>
             <button type="button" class="modal-close" onclick="closeDriverModal()"><i class="mdi mdi-close"></i></button>
         </div>
         <div class="modal-scrollable" style="padding:1.25rem;">
-            <div class="form-group">
-                <label class="form-label">Full Name *</label>
-                <input type="text" id="driverName" class="form-input" placeholder="John Smith">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Phone</label>
-                <input type="text" id="driverPhone" class="form-input" placeholder="+1 555 000 0000">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Licence Number</label>
-                <input type="text" id="driverLicence" class="form-input" placeholder="DL-12345678">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Notes</label>
-                <textarea id="driverNotes" class="form-input" rows="3" placeholder="Optional notes&#8230;" style="resize:vertical;"></textarea>
-            </div>
-            <div id="driverUserNote" style="display:none;padding:0.6rem 0.75rem;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px;font-size:0.82rem;color:#818cf8;margin-bottom:0.75rem;">
-                <i class="mdi mdi-account"></i> This driver is linked to a user account. Name and licence are managed via the Users section.
-            </div>
-            <div class="form-group" id="driverCompanyGroup" style="display:none;">
-                <label class="form-label">Company</label>
-                <select id="driverCompanySelect" class="form-input"></select>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+                <!-- LEFT: driver info -->
+                <div>
+                    <div class="form-group">
+                        <label class="form-label">Full Name *</label>
+                        <input type="text" id="driverName" class="form-input" placeholder="John Smith">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Phone</label>
+                        <input type="text" id="driverPhone" class="form-input" placeholder="+1 555 000 0000">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Licence Number</label>
+                        <input type="text" id="driverLicence" class="form-input" placeholder="DL-12345678">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Notes</label>
+                        <textarea id="driverNotes" class="form-input" rows="3" placeholder="Optional notes&#8230;" style="resize:vertical;"></textarea>
+                    </div>
+                    <div id="driverUserNote" style="display:none;padding:0.6rem 0.75rem;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px;font-size:0.82rem;color:#818cf8;margin-bottom:0.75rem;">
+                        <i class="mdi mdi-account"></i> This driver is linked to a user account. Name and licence are managed via the Users section.
+                    </div>
+                    <div class="form-group" id="driverCompanyGroup" style="display:none;">
+                        <label class="form-label">Company</label>
+                        <select id="driverCompanySelect" class="form-input"></select>
+                    </div>
+                </div>
+                <!-- RIGHT: auto-assignment -->
+                <div>
+                    <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--border-color);">Auto-Assignment</div>
+                    <div class="form-group">
+                        <label class="form-label">Rule</label>
+                        <input type="text" id="driverAssignRule" class="form-input" placeholder="e.g. authorized or speed > 0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Vehicles</label>
+                        <div style="border:1px solid var(--border-color);border-radius:6px;padding:0.5rem;max-height:150px;overflow-y:auto;background:var(--bg-card);">
+                            <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;cursor:pointer;padding:0.2rem 0;">
+                                <input type="checkbox" id="driverVehiclesAll" onchange="onDriverVehiclesAllChange()" style="cursor:pointer;">
+                                <span style="color:var(--text-secondary);">All company vehicles</span>
+                            </label>
+                            <div id="driverVehiclesList" style="margin-top:0.35rem;display:flex;flex-direction:column;gap:0.15rem;"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Mode</label>
+                        <select id="driverAssignMode" class="form-input" onchange="onDriverModeChange()">
+                            <option value="">— Disabled —</option>
+                            <option value="one_time">One-time</option>
+                            <option value="continuous">Continuous</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Clear When</label>
+                        <select id="driverAssignClear" class="form-input" onchange="onDriverClearChange()">
+                            <option value="never">Never</option>
+                            <option value="ignition_off">On ignition off</option>
+                            <option value="trip_end">On trip end</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="driverGraceGroup" style="display:none;">
+                        <label class="form-label">Grace Period (seconds)</label>
+                        <input type="number" id="driverAssignGrace" class="form-input" placeholder="0" min="0" step="1">
+                    </div>
+                </div>
             </div>
         </div>
         <div class="modal-footer">
