@@ -78,6 +78,11 @@ class Driver(Base):
     phone:          Mapped[Optional[str]] = mapped_column(String(30),  nullable=True)
     license_number: Mapped[Optional[str]] = mapped_column(String(50),  nullable=True)
     notes:          Mapped[Optional[str]] = mapped_column(Text,        nullable=True)
+    assignment_rule:         Mapped[Optional[str]]  = mapped_column(Text,        nullable=True)
+    assignment_vehicles:     Mapped[Optional[list]] = mapped_column(JsonType,    nullable=True)
+    assignment_mode:         Mapped[Optional[str]]  = mapped_column(String(20),  nullable=True)
+    assignment_grace_period: Mapped[Optional[int]]  = mapped_column(Integer,     nullable=True)
+    assignment_clear:        Mapped[Optional[str]]  = mapped_column(String(20),  nullable=True)
     created_at:     Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
 
     company: Mapped[Optional["Company"]] = relationship("Company")
@@ -160,6 +165,7 @@ class PositionRecord(Base):
     satellites:  Mapped[Optional[int]]  = mapped_column(Integer, nullable=True)
     ignition:    Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     sensors:     Mapped[Dict]           = mapped_column(JsonType, default={})
+    driver_id:   Mapped[Optional[int]]  = mapped_column(Integer, ForeignKey('drivers.id', ondelete='SET NULL'), nullable=True)
 
     device: Mapped["Device"] = relationship(back_populates="positions")
 
