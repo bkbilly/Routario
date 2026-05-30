@@ -15,13 +15,13 @@ from typing import List
 
 import jwt
 from fastapi import APIRouter, HTTPException, Query, Depends
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, update
 
 from core.database import get_db
 from core.config import get_settings
 from core.auth import get_current_user, require_admin, require_company_admin, require_self_or_admin, require_permission
 from core.permissions import cap_permissions, ALL_PERMISSIONS
-from models import User, user_device_association
+from models import User, Driver, user_device_association
 from models.schemas import UserCreate, UserUpdate, UserResponse, DeviceResponse
 from sqlalchemy import and_
 
@@ -130,6 +130,10 @@ async def delete_user(user_id: int, caller: User = Depends(require_company_admin
             raise HTTPException(status_code=403, detail="Cannot delete a user outside your company")
     db = get_db()
     async with db.get_session() as session:
+        # Convert any linked driver to a standalone driver before deleting the user
+        await session.execute(
+            update(Driver).where(Driver.user_id == user_id).values(user_id=None)
+        )
         result = await session.execute(delete(User).where(User.id == user_id))
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="User not found")

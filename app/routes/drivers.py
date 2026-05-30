@@ -174,6 +174,7 @@ async def assign_driver(
         if not device:
             raise HTTPException(status_code=404, detail="Device not found")
 
+        driver = None
         if driver_id is not None:
             driver = await session.get(Driver, driver_id)
             if not driver:
@@ -188,5 +189,22 @@ async def assign_driver(
             state = DeviceState(device_id=device_id, current_driver_id=driver_id)
             session.add(state)
         await session.flush()
+
+        driver_name = driver.name if driver else None
+
+    from main import get_ws_manager
+    from models.schemas import WSMessageType
+    from datetime import datetime, timezone
+    ws = get_ws_manager()
+    message = {
+        "type":      WSMessageType.POSITION_UPDATE.value,
+        "device_id": device_id,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data": {
+            "current_driver_id":   driver_id,
+            "current_driver_name": driver_name,
+        },
+    }
+    await ws._broadcast_direct(device_id, message)
 
     return {"status": "ok", "driver_id": driver_id}

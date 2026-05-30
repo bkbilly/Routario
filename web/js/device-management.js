@@ -391,8 +391,6 @@ function openDeviceModal(deviceId, startTab = 'general') {
         d.config?.trip_merge_gap_minutes ?? 0;
     document.getElementById('deviceHasCamera').checked =
         d.config?.has_camera ?? false;
-    document.getElementById('deviceAutoClearDriver').checked =
-        d.config?.auto_clear_driver ?? false;
 
     const imeiEl     = document.getElementById('deviceImei');
     const protocolEl = document.getElementById('deviceProtocol');
@@ -525,7 +523,6 @@ async function handleSubmit(event) {
         newConfig.offline_timeout_hours  = parseInt(document.getElementById('offlineTimeoutHours').value) || 24;
         newConfig.trip_merge_gap_minutes = parseInt(document.getElementById('tripMergeGapMinutes').value) || 0;
         newConfig.has_camera             = document.getElementById('deviceHasCamera').checked;
-        newConfig.auto_clear_driver      = document.getElementById('deviceAutoClearDriver').checked;
 
         const isIntg     = _isIntegrationSelected();
         const providerId = document.getElementById('deviceProtocol').value;
