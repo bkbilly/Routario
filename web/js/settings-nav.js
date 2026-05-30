@@ -370,7 +370,7 @@
 
                 <div class="header-menu-divider"></div>
 
-                <button class="header-menu-item" onclick="_clearAppCache()">
+                ${isSettings ? `<button class="header-menu-item" onclick="_clearAppCache()">
                     <span class="header-menu-item-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
                              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -380,8 +380,7 @@
                     </span>
                     <span>Clear Cache</span>
                 </button>
-
-                <div class="header-menu-divider"></div>
+                <div class="header-menu-divider"></div>` : ''}
 
                 <button class="header-menu-item header-menu-danger" onclick="handleLogout()">
                     <span class="header-menu-item-icon">
