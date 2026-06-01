@@ -400,7 +400,7 @@
     return nav;
     } // end _buildNav
 
-    async function _clearAppCache() {
+    window._clearAppCache = async function _clearAppCache() {
         try {
             if ('caches' in window) {
                 const keys = await caches.keys();

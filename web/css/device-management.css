@@ -1218,6 +1218,9 @@ h1 {
     .modal-scrollable {
         padding: 1rem;
     }
+}
+
+@media (max-width: 550px) {
     .modal-footer {
         padding: 0.875rem 1rem;
         flex-direction: column;
@@ -1226,9 +1229,25 @@ h1 {
     .modal-footer > .btn {
         justify-content: center;
     }
+    .modal-footer > div {
+        width: 100%;
+    }
     .modal-footer > div > .btn {
         flex: 1;
         justify-content: center;
+    }
+}
+
+/* Driver modal two-column layout — collapses to one column on mobile */
+.driver-modal-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+@media (max-width: 600px) {
+    .driver-modal-columns {
+        grid-template-columns: 1fr;
     }
 }
 

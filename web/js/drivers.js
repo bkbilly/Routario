@@ -6,7 +6,6 @@ let _drivers       = [];
 let _devices       = [];
 let _companies     = [];
 let _editingDriver = null;
-let _assignDriver  = null;
 let _drvSortCol    = 'name';
 let _drvSortDir    = 1;
 
@@ -99,7 +98,6 @@ function _render() {
             ${_drvIsAdmin ? `<td style="color:var(--text-secondary);font-size:0.85rem;">${_esc(company)}</td>` : '<td style="display:none;"></td>'}
             <td>${assigned ? `<span style="font-size:0.85rem;">${assignedEmoji} ${_esc(assigned.name)}</span>` : '<span style="color:var(--text-muted);">—</span>'}</td>
             <td style="text-align:right;white-space:nowrap;">
-                <button class="btn btn-secondary tbl-btn" onclick="openAssignModal(${d.id})"><i class="mdi mdi-car-key"></i> <span class="drv-btn-label">Assign</span></button>
                 <button class="btn btn-secondary tbl-btn" onclick="openDriverModal(${d.id})"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Edit</span></button>
             </td>
         </tr>`;
@@ -227,6 +225,24 @@ function openDriverModal(driverId = null) {
         }
     }
 
+    // ── Current vehicle (manual assignment) ──────────────────────
+    const currentDevice = driverId ? _assignedDevice(driverId) : null;
+    const visibleDevices = (_drvIsAdmin && _editingDriver?.company_id)
+        ? _devices.filter(d => d.company_id === _editingDriver.company_id)
+        : _devices;
+    const vehicleSel = document.getElementById('driverCurrentVehicle');
+    if (vehicleSel) {
+        vehicleSel.innerHTML = '<option value="">— Unassigned —</option>';
+        visibleDevices.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            const emoji = (VEHICLE_ICONS[d.vehicle_type] || VEHICLE_ICONS['other']).emoji;
+            opt.textContent = `${emoji} ${d.name}` + (d.license_plate ? ` (${d.license_plate})` : '');
+            if (currentDevice?.id === d.id) opt.selected = true;
+            vehicleSel.appendChild(opt);
+        });
+    }
+
     // ── Auto-assignment fields ────────────────────────────────────
     const rule  = _editingDriver?.assignment_rule  || '';
     const mode  = _editingDriver?.assignment_mode  || '';
@@ -314,7 +330,34 @@ async function saveDriver() {
             });
         }
         if (!res.ok) throw new Error((await res.json()).detail || 'Save failed');
+        const savedDriver = await res.json();
+
+        // Handle manual vehicle assignment change
+        const newDeviceId = parseInt(document.getElementById('driverCurrentVehicle')?.value) || null;
+        const prevDevice  = _editingDriver ? _assignedDevice(_editingDriver.id) : null;
+        const prevDeviceId = prevDevice?.id || null;
+        if (newDeviceId !== prevDeviceId) {
+            if (prevDeviceId) {
+                await apiFetch(`${API_BASE}/drivers/assign?device_id=${prevDeviceId}`, { method: 'POST' });
+            }
+            if (newDeviceId) {
+                await apiFetch(`${API_BASE}/drivers/assign?device_id=${newDeviceId}&driver_id=${savedDriver.id}`, { method: 'POST' });
+            }
+            // Notify GPS dashboard tabs in the same browser immediately
+            try {
+                const bc = new BroadcastChannel('routario_driver_updates');
+                if (prevDeviceId) {
+                    bc.postMessage({ device_id: prevDeviceId, current_driver_id: null, current_driver_name: null });
+                }
+                if (newDeviceId) {
+                    bc.postMessage({ device_id: newDeviceId, current_driver_id: savedDriver.id, current_driver_name: savedDriver.name });
+                }
+                bc.close();
+            } catch (_) {}
+        }
+
         closeDriverModal();
+        await _loadDevices();
         await _loadDrivers();
     } catch (e) { showAlert(e.message || 'Save failed', 'error'); }
 }
@@ -330,55 +373,6 @@ async function deleteDriver() {
     } catch (e) { showAlert(e.message || 'Delete failed', 'error'); }
 }
 
-// ── Assign Modal ──────────────────────────────────────────────────
-
-function openAssignModal(driverId) {
-    _assignDriver = _drivers.find(d => d.id === driverId);
-    if (!_assignDriver) return;
-
-    document.getElementById('assignDriverName').textContent = _assignDriver.name;
-
-    const sel = document.getElementById('assignDeviceSelect');
-    const currentDevice = _assignedDevice(driverId);
-    const visibleDevices = (_drvIsAdmin && _assignDriver.company_id)
-        ? _devices.filter(d => d.company_id === _assignDriver.company_id)
-        : _devices;
-    sel.innerHTML = '<option value="">— Unassign —</option>';
-    visibleDevices.forEach(d => {
-        const opt = document.createElement('option');
-        opt.value = d.id;
-        const emoji = (VEHICLE_ICONS[d.vehicle_type] || VEHICLE_ICONS['other']).emoji;
-        opt.textContent = `${emoji} ${d.name}` + (d.license_plate ? ` (${d.license_plate})` : '');
-        if (currentDevice?.id === d.id) opt.selected = true;
-        sel.appendChild(opt);
-    });
-
-    document.getElementById('assignModal').classList.add('active');
-}
-
-function closeAssignModal() {
-    document.getElementById('assignModal').classList.remove('active');
-    _assignDriver = null;
-}
-
-async function confirmAssign() {
-    if (!_assignDriver) return;
-    const deviceId = parseInt(document.getElementById('assignDeviceSelect').value) || null;
-    try {
-        const prev = _assignedDevice(_assignDriver.id);
-        if (prev && prev.id !== deviceId) {
-            await apiFetch(`${API_BASE}/drivers/assign?device_id=${prev.id}`, { method: 'POST' });
-        }
-        if (deviceId) {
-            await apiFetch(`${API_BASE}/drivers/assign?device_id=${deviceId}&driver_id=${_assignDriver.id}`, { method: 'POST' });
-        } else if (!prev) {
-            // Explicit unassign when no previous assignment either (no-op but still reload)
-        }
-        closeAssignModal();
-        await _loadDevices();
-        await _loadDrivers();
-    } catch (e) { showAlert('Assignment failed.', 'error'); }
-}
 
 function _esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');

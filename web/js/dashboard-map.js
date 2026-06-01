@@ -463,6 +463,23 @@ function fitMapToMarkers() {
     }
 }
 
+// ── Cross-tab driver assignment listener ──────────────────────────────────────
+// When the management page assigns/unassigns a driver it posts here; we update
+// the sidebar immediately without waiting for the next position packet.
+try {
+    const _driverBC = new BroadcastChannel('routario_driver_updates');
+    _driverBC.onmessage = ({ data }) => {
+        const devIdx = devices.findIndex(d => d.id === data.device_id);
+        if (devIdx < 0) return;
+        devices[devIdx] = {
+            ...devices[devIdx],
+            current_driver_id:   data.current_driver_id,
+            current_driver_name: data.current_driver_name,
+        };
+        if (!historyDeviceId) updateSidebarCard(data.device_id);
+    };
+} catch (_) {}
+
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 
 function connectWebSocket() {

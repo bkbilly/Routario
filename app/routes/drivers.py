@@ -42,11 +42,22 @@ async def list_drivers(current_user: User = Depends(require_permission("manage_d
         drivers = list((await session.execute(dq)).scalars().all())
 
         # ── Users that should also appear as drivers ──────────────────
-        uq = select(User).where(User.is_admin == False)
+        uq = select(User).where(User.is_admin == False, User.is_company_admin == False)
         if not current_user.is_admin:
             uq = uq.where(User.company_id == current_user.company_id)
         users = list((await session.execute(uq)).scalars().all())
 
+        valid_user_ids = {u.id for u in users}
+
+        # ── Remove stale shadow drivers ───────────────────────────────
+        # Delete shadow drivers whose user no longer exists or is now an
+        # admin / company-admin (and therefore should not be a driver).
+        stale = [d for d in drivers if d.user_id is not None and d.user_id not in valid_user_ids]
+        for d in stale:
+            await session.delete(d)
+            drivers.remove(d)
+
+        # ── Create missing shadow drivers ─────────────────────────────
         existing_user_ids = {d.user_id for d in drivers if d.user_id is not None}
         for user in users:
             if user.id not in existing_user_ids:
@@ -131,16 +142,12 @@ async def update_driver(
                 driver.notes = data.notes
             if data.company_id is not None and current_user.is_admin:
                 driver.company_id = data.company_id
-            if data.assignment_rule is not None:
-                driver.assignment_rule = data.assignment_rule
-            if data.assignment_vehicles is not None:
-                driver.assignment_vehicles = data.assignment_vehicles
-            if data.assignment_mode is not None:
-                driver.assignment_mode = data.assignment_mode
-            if data.assignment_grace_period is not None:
-                driver.assignment_grace_period = data.assignment_grace_period
-            if data.assignment_clear is not None:
-                driver.assignment_clear = data.assignment_clear
+        # Assignment fields always updated (allows clearing by sending null)
+        driver.assignment_rule          = data.assignment_rule
+        driver.assignment_vehicles      = data.assignment_vehicles
+        driver.assignment_mode          = data.assignment_mode
+        driver.assignment_grace_period  = data.assignment_grace_period
+        driver.assignment_clear         = data.assignment_clear
         await session.flush()
         await session.refresh(driver)
         return driver
@@ -196,11 +203,11 @@ async def assign_driver(
         driver_name = driver.name if driver else None
 
     try:
-        from main import get_ws_manager
+        from main import get_ws_manager, redis_pubsub
         from models.schemas import WSMessageType
         from datetime import datetime, timezone
         ws = get_ws_manager()
-        message = json.dumps({
+        message = {
             "type":      WSMessageType.POSITION_UPDATE.value,
             "device_id": device_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -208,8 +215,14 @@ async def assign_driver(
                 "current_driver_id":   driver_id,
                 "current_driver_name": driver_name,
             },
-        })
-        await ws._send_to_user(current_user.id, message)
+        }
+        if redis_pubsub.available:
+            await redis_pubsub.publish(f"device:{device_id}", message)
+        else:
+            await ws._broadcast_direct(device_id, message)
+        # Admins/company-admins are not in device.users so _broadcast_direct skips
+        # them; send directly so their own GPS dashboard updates immediately.
+        await ws._send_to_user(current_user.id, json.dumps(message))
     except Exception:
         pass
 

@@ -470,7 +470,8 @@ function _renderTripList() {
 function _renderDrivers() {
     const byDriver = {};
     for (const r of _reportData) {
-        const key = r.driver_name || '— Unassigned —';
+        if (!r.driver_name) continue;
+        const key = r.driver_name;
         if (!byDriver[key]) byDriver[key] = { driver: key, trips: 0, distance_km: 0, driving_minutes: 0, max_speed: 0, total_avg_speed: 0, vehicles: new Set() };
         byDriver[key].trips++;
         byDriver[key].distance_km    += r.distance_km;
@@ -553,9 +554,10 @@ function _renderDaily() {
     }
 
     const sortKey = _sortCol || 'date';
+    const dir = _sortCol ? _sortDir : -1;
     const rows = Object.values(byDate).sort((a, b) => {
         const av = a[sortKey] ?? '', bv = b[sortKey] ?? '';
-        return typeof av === 'number' ? (av - bv) * _sortDir : String(av).localeCompare(String(bv)) * _sortDir;
+        return typeof av === 'number' ? (av - bv) * dir : String(av).localeCompare(String(bv)) * dir;
     });
 
     const head  = document.getElementById('reportHead');
@@ -881,7 +883,8 @@ async function exportCsv() {
     if (type === 'drivers') {
         const byDriver = {};
         for (const r of _reportData) {
-            const key = r.driver_name || '— Unassigned —';
+            if (!r.driver_name) continue;
+            const key = r.driver_name;
             if (!byDriver[key]) byDriver[key] = { driver: key, trips: 0, distance_km: 0, driving_minutes: 0, max_speed: 0, total_avg: 0, vehicles: new Set() };
             byDriver[key].trips++; byDriver[key].distance_km += r.distance_km;
             byDriver[key].driving_minutes += r.duration_minutes;
