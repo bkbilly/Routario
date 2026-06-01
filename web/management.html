@@ -169,8 +169,8 @@
                         <th data-sort="phone" onclick="sortDrivers('phone')">Phone</th>
                         <th data-sort="licence" onclick="sortDrivers('licence')">Licence</th>
                         <th id="driverCompanyHeader" data-sort="company" onclick="sortDrivers('company')" style="display:none;">Company</th>
-                        <th data-sort="vehicle" onclick="sortDrivers('vehicle')">Assigned Vehicle</th>
-                        <th style="width:140px;text-align:center;">Actions</th>
+                        <th data-sort="vehicle" onclick="sortDrivers('vehicle')">Vehicle</th>
+                        <th style="width:100px;text-align:center;">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="driversTableBody">
@@ -612,7 +612,7 @@
             <button type="button" class="modal-close" onclick="closeDriverModal()"><i class="mdi mdi-close"></i></button>
         </div>
         <div class="modal-scrollable" style="padding:1.25rem;">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+            <div class="driver-modal-columns">
                 <!-- LEFT: driver info -->
                 <div>
                     <div class="form-group">
@@ -631,6 +631,12 @@
                         <label class="form-label">Notes</label>
                         <textarea id="driverNotes" class="form-input" rows="3" placeholder="Optional notes&#8230;" style="resize:vertical;"></textarea>
                     </div>
+                    <div class="form-group">
+                        <label class="form-label">Current Vehicle</label>
+                        <select id="driverCurrentVehicle" class="form-input">
+                            <option value="">&#8212; Unassigned &#8212;</option>
+                        </select>
+                    </div>
                     <div id="driverUserNote" style="display:none;padding:0.6rem 0.75rem;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px;font-size:0.82rem;color:#818cf8;margin-bottom:0.75rem;">
                         <i class="mdi mdi-account"></i> This driver is linked to a user account. Name is managed via the Users section.
                     </div>
@@ -643,10 +649,6 @@
                 <div>
                     <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--border-color);">Auto-Assignment</div>
                     <div class="form-group">
-                        <label class="form-label">Rule</label>
-                        <input type="text" id="driverAssignRule" class="form-input" placeholder="e.g. authorized or speed > 0">
-                    </div>
-                    <div class="form-group">
                         <label class="form-label">Vehicles</label>
                         <div style="border:1px solid var(--border-color);border-radius:6px;padding:0.5rem;max-height:150px;overflow-y:auto;background:var(--bg-card);">
                             <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;cursor:pointer;padding:0.2rem 0;">
@@ -655,6 +657,28 @@
                             </label>
                             <div id="driverVehiclesList" style="margin-top:0.35rem;display:flex;flex-direction:column;gap:0.15rem;"></div>
                         </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Rule</label>
+                        <input type="text" id="driverAssignRule" class="form-input" placeholder="e.g. authorized or speed > 0">
+                        <details style="margin-top:0.4rem;">
+                            <summary style="cursor:pointer;color:var(--text-muted);font-size:0.78rem;"><i class="mdi mdi-information-outline"></i> Syntax reference</summary>
+                            <div style="margin-top:0.4rem;padding:0.65rem 0.85rem;background:var(--bg-secondary);border-radius:8px;font-size:0.76rem;line-height:1.9;color:var(--text-muted);">
+                                <strong style="color:var(--text-secondary);">Attributes:</strong>
+                                speed, ignition, satellites, altitude, battery_voltage, fuel_level, temperature, door_open<br>
+                                <strong style="color:var(--text-secondary);">Operators:</strong>
+                                &gt; &lt; == != &gt;= &lt;= and or not in<br>
+                                <strong style="color:var(--text-secondary);">List of dicts</strong> &#8212;
+                                use a list comprehension to query any field across all items:<br>
+                                &nbsp;&bull;&nbsp;<code style="font-family:var(--font-mono);color:var(--accent-primary);">my_list != null</code> — list is present and non-empty<br>
+                                &nbsp;&bull;&nbsp;<code style="font-family:var(--font-mono);color:var(--accent-primary);">42 in [r["field"] for r in my_list]</code> — any item has <em>field</em> equal to 42<br>
+                                <strong style="color:var(--text-secondary);">Bluetooth beacons</strong> &#8212;
+                                <code style="font-family:var(--font-mono);">beacon_ids</code> is a list of objects with fields
+                                <code style="font-family:var(--font-mono);">id</code>, <code style="font-family:var(--font-mono);">type</code>, <code style="font-family:var(--font-mono);">rssi</code>, <code style="font-family:var(--font-mono);">battery</code>, <code style="font-family:var(--font-mono);">temp</code>.
+                                IDs are formatted as <code style="font-family:var(--font-mono);">"uuid:major:minor"</code> (iBeacon) or <code style="font-family:var(--font-mono);">"namespace:instance"</code> (Eddystone):<br>
+                                &nbsp;&bull;&nbsp;<code style="font-family:var(--font-mono);color:var(--accent-primary);">"abc123:0:1" in [b["id"] for b in beacon_ids]</code> — beacon in range
+                            </div>
+                        </details>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Mode</label>
@@ -689,32 +713,6 @@
     </div>
 </div>
 
-<!-- =============================================================
-     ASSIGN DRIVER MODAL
-============================================================= -->
-<div class="modal" id="assignModal">
-    <div class="modal-content" style="max-width:420px;height:auto;">
-        <div class="modal-header">
-            <h2 class="modal-title">Assign to Vehicle</h2>
-            <button type="button" class="modal-close" onclick="closeAssignModal()"><i class="mdi mdi-close"></i></button>
-        </div>
-        <div class="modal-scrollable" style="padding:1.25rem;">
-            <p style="color:var(--text-muted);font-size:0.875rem;margin:0 0 1rem;">
-                Assigning driver: <strong id="assignDriverName"></strong>
-            </p>
-            <div class="form-group">
-                <label class="form-label">Vehicle</label>
-                <select id="assignDeviceSelect" class="form-input">
-                    <option value="">— Unassign —</option>
-                </select>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="closeAssignModal()">Cancel</button>
-            <button type="button" class="btn btn-primary" onclick="confirmAssign()">Assign</button>
-        </div>
-    </div>
-</div>
 
 <!-- =============================================================
      USER MODAL
@@ -940,7 +938,6 @@
             ['userNotifyModal',  () => usrCloseNotifyModal()],
             ['userAssignModal',  () => usrCloseAssignModal()],
             ['userModal',        () => closeUserModal()],
-            ['assignModal',      () => closeAssignModal()],
             ['driverModal',      () => closeDriverModal()],
             ['alertEditorModal', () => closeAlertEditor()],
             ['companyModal',     () => closeCompanyModal()],

@@ -22,6 +22,7 @@ let alertRows            = [];
 let editingAlertUid      = null;
 let uidCounter           = 0;
 let cachedGeofenceOptions = [];  // { value, label } for current device
+let cachedDriverOptions   = [];  // { value, label } — loaded once per modal open
 let ALERT_TYPES     = {};
 let protocolInfo = {};
 
@@ -204,6 +205,18 @@ async function loadGeofencesForDevice(deviceId) {
         const res = await apiFetch(`${API_BASE}/geofences?device_id=${deviceId}`);
         if (!res.ok) return [];
         return (await res.json()).map(g => ({ value: String(g.id), label: g.name }));
+    } catch { return []; }
+}
+
+async function _loadDriverOptions() {
+    try {
+        const res = await apiFetch(`${API_BASE}/drivers`);
+        if (!res.ok) return [];
+        const drivers = await res.json();
+        return [
+            { value: '', label: '— Any driver —' },
+            ...drivers.map(d => ({ value: String(d.id), label: d.name })),
+        ];
     } catch { return []; }
 }
 
@@ -411,6 +424,10 @@ function openDeviceModal(deviceId, startTab = 'general') {
 
     loadGeofencesForDevice(d.id).then(opts => {
         cachedGeofenceOptions = opts;
+        renderAlertsTable();
+    });
+    _loadDriverOptions().then(opts => {
+        cachedDriverOptions = opts;
         renderAlertsTable();
     });
     // Ensure the current user is always resolvable in the notify-users lookup
@@ -883,8 +900,10 @@ function renderAlertsTable() {
                 const val = row.params?.[f.key];
                 if (val == null || val === '') return null;
                 let display = val;
-                if (f.field_type === 'select') {
-                    const options = f.key === 'geofence_id' ? cachedGeofenceOptions : (f.options || []);
+                if (f.field_type === 'select' || f.field_type === 'driver_select') {
+                    const options = f.field_type === 'driver_select' ? cachedDriverOptions
+                        : f.key === 'geofence_id' ? cachedGeofenceOptions
+                        : (f.options || []);
                     const opt = options.find(o => String(o.value) === String(val));
                     if (opt) display = opt.label;
                 }
@@ -960,6 +979,19 @@ async function openAlertEditor(uid) {
             ...def,
             fields: def.fields.map(f =>
                 f.key === 'geofence_id' ? { ...f, options: geofenceOptions } : f
+            ),
+        };
+    }
+
+    // Patch driver_select fields dynamically before rendering
+    if (def?.fields?.some(f => f.field_type === 'driver_select')) {
+        const driverOptions = await _loadDriverOptions();
+        def = {
+            ...def,
+            fields: def.fields.map(f =>
+                f.field_type === 'driver_select'
+                    ? { ...f, field_type: 'select', options: driverOptions }
+                    : f
             ),
         };
     }
