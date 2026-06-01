@@ -15,6 +15,30 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-ant-path@1.3.0/dist/leaflet-ant-path.js"></script>
     <style>
+        /* ── Tab bar ─────────────────────────────────────────────── */
+        .page-tabs {
+            display: flex;
+            gap: 0.25rem;
+            border-bottom: 2px solid var(--border-color);
+            margin-bottom: 1.5rem;
+        }
+        .page-tab {
+            padding: 0.55rem 1.1rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            border: none;
+            background: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            border-radius: 6px 6px 0 0;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .page-tab:hover { color: var(--text-primary); }
+        .page-tab.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
+
+        /* ── Report controls ─────────────────────────────────────── */
         .report-controls {
             display: flex;
             flex-wrap: wrap;
@@ -29,6 +53,8 @@
         .report-controls .form-group { margin: 0; }
         .report-controls .form-label { font-size: 0.78rem; margin-bottom: 0.3rem; }
         .report-controls .form-input { min-width: 140px; }
+
+        /* ── Summary cards ───────────────────────────────────────── */
         .summary-bar {
             display: flex;
             flex-wrap: wrap;
@@ -54,6 +80,8 @@
             color: var(--text-muted);
             margin-top: 0.2rem;
         }
+
+        /* ── Report table ────────────────────────────────────────── */
         .report-table { width: 100%; border-collapse: collapse; }
         .report-table th, .report-table td {
             padding: 0.65rem 0.9rem;
@@ -81,11 +109,8 @@
         .no-data { text-align: center; color: var(--text-muted); padding: 3rem 1rem; }
         .sort-arrow { font-size: 0.7rem; margin-left: 0.2rem; }
 
-        /* Custom vehicle multi-select */
-        .veh-select-wrap {
-            position: relative;
-            min-width: 190px;
-        }
+        /* ── Vehicle multi-select ────────────────────────────────── */
+        .veh-select-wrap { position: relative; min-width: 190px; }
         .veh-select-btn {
             display: flex;
             align-items: center;
@@ -126,104 +151,259 @@
         .veh-opt:hover { background: var(--bg-tertiary); }
         .veh-opt input[type=checkbox] { accent-color: var(--accent-primary); flex-shrink: 0; }
         .veh-opt-divider { height: 1px; background: var(--border-color); margin: 0.3rem 0; }
-#tripMapModal .modal-content { max-width: 900px; width: 95vw; max-height: 90vh; padding: 0; display: flex; flex-direction: column; }
+
+        /* ── Trip map modal ──────────────────────────────────────── */
+        #tripMapModal .modal-content { max-width: 900px; width: 95vw; max-height: 90vh; padding: 0; display: flex; flex-direction: column; }
         #tripMapModal .modal-header { padding: 1rem 1.25rem 0.75rem; flex-shrink: 0; }
         #tripMapMeta { padding: 0 1.25rem 0.75rem; font-size: 0.8rem; color: var(--text-muted); flex-shrink: 0; }
-        @media (max-width: 600px) {
-            #tripMapModal .modal-title { font-size: 1.1rem; }
-        }
+        @media (max-width: 600px) { #tripMapModal .modal-title { font-size: 1.1rem; } }
         #tripMapWrap { position: relative; flex: 1; min-height: 300px; }
         #tripMapContainer { height: 100%; }
         #tripMapSpinner { display:none; position:absolute; inset:0; align-items:center; justify-content:center; background:var(--bg-card); color:var(--text-muted); gap:0.5rem; font-size:0.9rem; z-index:1000; }
+
+        /* ── Run viewer banner ───────────────────────────────────── */
+        #runViewBanner {
+            display: none;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 1.1rem;
+            background: rgba(59,130,246,0.1);
+            border: 1px solid rgba(59,130,246,0.3);
+            border-radius: 10px;
+            margin-bottom: 1.25rem;
+            flex-wrap: wrap;
+        }
+        #runViewBanner .rvb-label {
+            flex: 1;
+            font-size: 0.875rem;
+            color: var(--accent-primary);
+            font-weight: 600;
+        }
+
+        /* ── Schedules tab ───────────────────────────────────────── */
+        .sched-toolbar {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 1rem;
+        }
+        .sched-table { width: 100%; border-collapse: collapse; }
+        .sched-table th {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            font-weight: 600;
+            padding: 0.5rem 0.9rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+        .sched-table td {
+            padding: 0.7rem 0.9rem;
+            font-size: 0.875rem;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
+        }
+        .sched-table tbody tr { cursor: pointer; transition: background 0.12s; }
+        .sched-table tbody tr:hover td { background: var(--bg-tertiary); }
+        .sched-table tbody tr.expanded td { background: var(--bg-secondary); }
+
+        .sched-badge {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 5px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .sched-badge-active   { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .sched-badge-inactive { background: var(--bg-tertiary); color: var(--text-muted); }
+
+        .run-history-row td {
+            padding: 0;
+            background: var(--bg-primary) !important;
+            cursor: default !important;
+        }
+        .run-history-inner {
+            padding: 0.75rem 1.25rem 1rem;
+            border-bottom: 2px solid var(--accent-primary);
+        }
+        .run-history-title {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .run-table { width: 100%; border-collapse: collapse; }
+        .run-table th {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-muted);
+            font-weight: 600;
+            padding: 0.35rem 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .run-table td { padding: 0.5rem 0.75rem; font-size: 0.82rem; border-bottom: 1px solid var(--border-color); }
+        .run-status-ok  { color: #22c55e; font-weight: 600; }
+        .run-status-err { color: #ef4444; font-weight: 600; }
+
+        /* ── Schedule modal ──────────────────────────────────────── */
+        #schedModal .modal-content { max-width: 800px; }
+        .sched-two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0 1.5rem;
+        }
+        .sched-col { display: flex; flex-direction: column; gap: 0.85rem; }
+        @media (max-width: 560px) {
+            #schedModal .modal-content { max-width: 100%; }
+            .sched-two-col { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
 <div class="container">
 
-    <div class="report-controls">
-        <div class="form-group">
-            <label class="form-label">Report Type</label>
-            <select id="reportType" class="form-input" onchange="onReportTypeChange()">
-                <option value="summary">Fleet Summary</option>
-                <option value="trips">Trip List</option>
-                <option value="daily">Daily Activity</option>
-                <option value="drivers">Driver Activity</option>
-                <option value="sensors">Vehicle Sensors</option>
-                <option value="alerts">Alerts</option>
-            </select>
-        </div>
-        <div class="form-group" id="historyCheckGroup" style="display:none;">
-            <label class="form-label">&nbsp;</label>
-            <label class="form-input" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;min-width:unset;">
-                <input type="checkbox" id="historyCheck" onchange="onHistoryCheckChange()" style="accent-color:var(--accent-primary);">
-                Historical data
-            </label>
-        </div>
-        <div class="form-group" id="dateFromGroup">
-            <label class="form-label">From</label>
-            <input type="date" id="startDate" class="form-input">
-        </div>
-        <div class="form-group" id="dateToGroup">
-            <label class="form-label">To</label>
-            <input type="date" id="endDate" class="form-input">
-        </div>
-        <div class="form-group">
-            <label class="form-label">Vehicles</label>
-            <div class="veh-select-wrap" id="vehSelectWrap">
-                <button type="button" class="form-input veh-select-btn" onclick="toggleVehDropdown(event)">
-                    <span id="vehSelectLabel">All vehicles</span>
-                    <i class="mdi mdi-chevron-down" style="font-size:1rem;flex-shrink:0;"></i>
-                </button>
-                <div class="veh-select-dropdown" id="vehDropdown">
-                    <label class="veh-opt">
-                        <input type="checkbox" id="allVehCheck" checked onchange="toggleAllVehicles(this)">
-                        <span>All vehicles</span>
-                    </label>
-                    <div class="veh-opt-divider"></div>
-                    <div id="vehOptsList"></div>
-                </div>
-            </div>
-        </div>
-        <div class="form-group" id="userSelectGroup" style="display:none;">
-            <label class="form-label">Users</label>
-            <div class="veh-select-wrap" id="userSelectWrap">
-                <button type="button" class="form-input veh-select-btn" onclick="toggleUserDropdown(event)">
-                    <span id="userSelectLabel">All users</span>
-                    <i class="mdi mdi-chevron-down" style="font-size:1rem;flex-shrink:0;"></i>
-                </button>
-                <div class="veh-select-dropdown" id="userDropdown">
-                    <label class="veh-opt">
-                        <input type="checkbox" id="allUserCheck" checked onchange="toggleAllUsers(this)">
-                        <span>All users</span>
-                    </label>
-                    <div class="veh-opt-divider"></div>
-                    <div id="userOptsList"></div>
-                </div>
-            </div>
-        </div>
-        <button class="btn btn-primary" onclick="generateReport()">
-            <i class="mdi mdi-chart-bar"></i> Generate
+    <!-- ── Tab bar ──────────────────────────────────────────────────────── -->
+    <div class="page-tabs">
+        <button class="page-tab active" id="tabReports" onclick="switchTab('reports')">
+            <i class="mdi mdi-chart-bar"></i> Reports
         </button>
-        <button class="btn btn-secondary" id="exportCsvBtn" onclick="exportCsv()" style="display:none;">
-            <i class="mdi mdi-download"></i> Export CSV
+        <button class="page-tab" id="tabSchedules" onclick="switchTab('schedules')">
+            <i class="mdi mdi-calendar-clock"></i> Schedules
         </button>
     </div>
 
-    <p id="reportDescription" style="margin:-0.75rem 0 1.25rem;font-size:0.85rem;color:var(--text-muted);"></p>
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- Reports tab                                                        -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <div id="panelReports">
 
-    <div class="summary-bar" id="summaryBar" style="display:none;"></div>
+        <!-- Run viewer banner (shown when viewing a stored run) -->
+        <div id="runViewBanner">
+            <span class="rvb-label" id="runViewLabel"></span>
+            <button class="btn btn-secondary" onclick="exitRunView()">
+                <i class="mdi mdi-arrow-left"></i> Back to Schedules
+            </button>
+            <button class="btn btn-secondary" id="runViewCsvBtn" onclick="exportCsvFromRun()">
+                <i class="mdi mdi-download"></i> Export CSV
+            </button>
+        </div>
 
-    <div style="overflow-x:auto;">
-        <table class="report-table" id="reportTable" style="display:none;">
-            <thead id="reportHead"></thead>
-            <tbody id="reportBody"></tbody>
-        </table>
-    </div>
-    <div class="no-data" id="noData" style="display:none;">No trip data found for the selected period.</div>
+        <!-- Live report controls (hidden in run-view mode) -->
+        <div id="liveControls">
+            <div class="report-controls">
+                <div class="form-group">
+                    <label class="form-label">Report Type</label>
+                    <select id="reportType" class="form-input" onchange="onReportTypeChange()">
+                        <option value="summary">Fleet Summary</option>
+                        <option value="trips">Trip List</option>
+                        <option value="daily">Daily Activity</option>
+                        <option value="drivers">Driver Activity</option>
+                        <option value="sensors">Vehicle Sensors</option>
+                        <option value="alerts">Alerts</option>
+                    </select>
+                </div>
+                <div class="form-group" id="historyCheckGroup" style="display:none;">
+                    <label class="form-label">&nbsp;</label>
+                    <label class="form-input" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;min-width:unset;">
+                        <input type="checkbox" id="historyCheck" onchange="onHistoryCheckChange()" style="accent-color:var(--accent-primary);">
+                        Historical data
+                    </label>
+                </div>
+                <div class="form-group" id="dateFromGroup">
+                    <label class="form-label">From</label>
+                    <input type="date" id="startDate" class="form-input">
+                </div>
+                <div class="form-group" id="dateToGroup">
+                    <label class="form-label">To</label>
+                    <input type="date" id="endDate" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Vehicles</label>
+                    <div class="veh-select-wrap" id="vehSelectWrap">
+                        <button type="button" class="form-input veh-select-btn" onclick="toggleVehDropdown(event)">
+                            <span id="vehSelectLabel">All vehicles</span>
+                            <i class="mdi mdi-chevron-down" style="font-size:1rem;flex-shrink:0;"></i>
+                        </button>
+                        <div class="veh-select-dropdown" id="vehDropdown">
+                            <label class="veh-opt">
+                                <input type="checkbox" id="allVehCheck" checked onchange="toggleAllVehicles(this)">
+                                <span>All vehicles</span>
+                            </label>
+                            <div class="veh-opt-divider"></div>
+                            <div id="vehOptsList"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group" id="userSelectGroup" style="display:none;">
+                    <label class="form-label">Users</label>
+                    <div class="veh-select-wrap" id="userSelectWrap">
+                        <button type="button" class="form-input veh-select-btn" onclick="toggleUserDropdown(event)">
+                            <span id="userSelectLabel">All users</span>
+                            <i class="mdi mdi-chevron-down" style="font-size:1rem;flex-shrink:0;"></i>
+                        </button>
+                        <div class="veh-select-dropdown" id="userDropdown">
+                            <label class="veh-opt">
+                                <input type="checkbox" id="allUserCheck" checked onchange="toggleAllUsers(this)">
+                                <span>All users</span>
+                            </label>
+                            <div class="veh-opt-divider"></div>
+                            <div id="userOptsList"></div>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="generateReport()">
+                    <i class="mdi mdi-chart-bar"></i> Generate
+                </button>
+                <button class="btn btn-secondary" id="exportCsvBtn" onclick="exportCsv()" style="display:none;">
+                    <i class="mdi mdi-download"></i> Export CSV
+                </button>
+            </div>
+            <p id="reportDescription" style="margin:-0.75rem 0 1.25rem;font-size:0.85rem;color:var(--text-muted);"></p>
+        </div>
 
-</div>
+        <div class="summary-bar" id="summaryBar" style="display:none;"></div>
 
-<!-- Trip Map Modal -->
+        <div style="overflow-x:auto;">
+            <table class="report-table" id="reportTable" style="display:none;">
+                <thead id="reportHead"></thead>
+                <tbody id="reportBody"></tbody>
+            </table>
+        </div>
+        <div class="no-data" id="noData" style="display:none;">No data found for the selected period.</div>
+
+    </div><!-- /panelReports -->
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- Schedules tab                                                      -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <div id="panelSchedules" style="display:none;">
+        <div class="devices-search-bar" style="margin-bottom:1rem;">
+            <div class="search-input-wrap">
+                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                <input type="text" id="schedSearch" class="search-input" placeholder="Search by name, type, frequency…"
+                       oninput="filterSchedules()">
+            </div>
+            <span class="devices-count" id="schedCount"></span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="sched-table" id="schedTable">
+                <thead id="schedHead"></thead>
+                <tbody id="schedBody"></tbody>
+            </table>
+        </div>
+        <div class="no-data" id="schedNoData" style="display:none;">No schedules yet. Use the gear menu to create one.</div>
+    </div><!-- /panelSchedules -->
+
+</div><!-- /container -->
+
+<!-- ── Trip Map Modal ────────────────────────────────────────────────────── -->
 <div class="modal" id="tripMapModal">
     <div class="modal-backdrop" onclick="closeTripMap()"></div>
     <div class="modal-content">
@@ -238,6 +418,160 @@
         </div>
     </div>
 </div>
+
+<!-- ── Schedule Create / Edit Modal ─────────────────────────────────────── -->
+<div class="modal" id="schedModal">
+    <div class="modal-backdrop" onclick="closeScheduleModal()"></div>
+    <div class="modal-content" id="schedModalContent">
+        <div class="modal-header">
+            <h3 class="modal-title" id="schedModalTitle">New Schedule</h3>
+            <button class="modal-close" onclick="closeScheduleModal()">&times;</button>
+        </div>
+        <div class="modal-scrollable">
+
+            <!-- Name: full width above the two columns -->
+            <div class="form-group" style="margin-bottom:1rem;">
+                <label class="form-label">Schedule Name</label>
+                <input type="text" id="sfName" class="form-input" placeholder="e.g. Monthly Fleet Summary" maxlength="200">
+            </div>
+
+            <div class="sched-two-col">
+
+                <!-- ── Left column: what to report ─────────────────── -->
+                <div class="sched-col">
+                    <div class="form-group">
+                        <label class="form-label">Report Type</label>
+                        <select id="sfType" class="form-input" onchange="onSchedTypeChange()">
+                            <option value="summary">Fleet Summary</option>
+                            <option value="trips">Trip List</option>
+                            <option value="daily">Daily Activity</option>
+                            <option value="drivers">Driver Activity</option>
+                            <option value="sensors">Vehicle Sensors</option>
+                            <option value="alerts">Alerts</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="sfHistGroup" style="display:none;">
+                        <label class="form-label">&nbsp;</label>
+                        <label class="form-input" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;min-width:unset;">
+                            <input type="checkbox" id="sfHistorical" onchange="onSchedHistChange()" style="accent-color:var(--accent-primary);">
+                            Historical data
+                        </label>
+                    </div>
+
+                    <div class="form-group" id="sfDateRangeGroup">
+                        <label class="form-label">Date Range</label>
+                        <select id="sfDateRange" class="form-input">
+                            <option value="last_7_days">Last 7 days</option>
+                            <option value="last_14_days">Last 14 days</option>
+                            <option value="last_30_days" selected>Last 30 days</option>
+                            <option value="last_calendar_month">Last calendar month</option>
+                            <option value="last_quarter">Last quarter</option>
+                            <option value="last_year">Last year</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Vehicles</label>
+                        <div class="veh-select-wrap" id="sfVehWrap">
+                            <button type="button" class="form-input veh-select-btn" onclick="toggleSfVeh(event)">
+                                <span id="sfVehLabel">All vehicles</span>
+                                <i class="mdi mdi-chevron-down" style="font-size:1rem;flex-shrink:0;"></i>
+                            </button>
+                            <div class="veh-select-dropdown" id="sfVehDropdown">
+                                <label class="veh-opt">
+                                    <input type="checkbox" id="sfAllVeh" checked onchange="toggleSfAllVeh(this)">
+                                    <span>All vehicles</span>
+                                </label>
+                                <div class="veh-opt-divider"></div>
+                                <div id="sfVehList"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="sfUserGroup" style="display:none;">
+                        <label class="form-label">Users</label>
+                        <div class="veh-select-wrap" id="sfUserWrap">
+                            <button type="button" class="form-input veh-select-btn" onclick="toggleSfUser(event)">
+                                <span id="sfUserLabel">All users</span>
+                                <i class="mdi mdi-chevron-down" style="font-size:1rem;flex-shrink:0;"></i>
+                            </button>
+                            <div class="veh-select-dropdown" id="sfUserDropdown">
+                                <label class="veh-opt">
+                                    <input type="checkbox" id="sfAllUser" checked onchange="toggleSfAllUser(this)">
+                                    <span>All users</span>
+                                </label>
+                                <div class="veh-opt-divider"></div>
+                                <div id="sfUserList"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Right column: when to run ───────────────────── -->
+                <div class="sched-col">
+                    <div class="form-group">
+                        <label class="form-label">Frequency</label>
+                        <select id="sfFreq" class="form-input" onchange="onSchedFreqChange()">
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Run Time</label>
+                        <input type="time" id="sfTime" class="form-input" value="07:00">
+                    </div>
+
+                    <div class="form-group" id="sfDowGroup" style="display:none;">
+                        <label class="form-label">Day of Week</label>
+                        <select id="sfDow" class="form-input">
+                            <option value="0">Monday</option>
+                            <option value="1">Tuesday</option>
+                            <option value="2">Wednesday</option>
+                            <option value="3">Thursday</option>
+                            <option value="4">Friday</option>
+                            <option value="5">Saturday</option>
+                            <option value="6">Sunday</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="sfDomGroup" style="display:none;">
+                        <label class="form-label">Day of Month</label>
+                        <input type="number" id="sfDom" class="form-input" value="1" min="1" max="28">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Keep Last N Runs</label>
+                        <input type="number" id="sfKeep" class="form-input" value="10" min="1" max="100">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-input" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;min-width:unset;">
+                            <input type="checkbox" id="sfActive" checked style="accent-color:var(--accent-primary);">
+                            Active
+                        </label>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" id="sfDeleteBtn" onclick="deleteScheduleFromModal()"
+                    style="color:var(--accent-danger);display:none;">
+                <i class="mdi mdi-delete"></i> Delete
+            </button>
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                <button class="btn btn-secondary" onclick="closeScheduleModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveSchedule()">
+                    <i class="mdi mdi-content-save"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="js/config.js"></script>
 <script src="js/vehicle-icons.js"></script>
 <script src="js/reports.js"></script>

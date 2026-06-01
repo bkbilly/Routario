@@ -106,8 +106,10 @@
             <button type="button" class="btn btn-danger" id="deleteDriverBtn" onclick="deleteDriver()" style="display:none;">
                 <i class="mdi mdi-delete"></i> Delete
             </button>
-            <button type="button" class="btn btn-secondary" onclick="closeDriverModal()">Cancel</button>
-            <button type="button" class="btn btn-primary" onclick="saveDriver()">Save</button>
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                <button type="button" class="btn btn-secondary" onclick="closeDriverModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveDriver()">Save</button>
+            </div>
         </div>
     </div>
 </div>
@@ -131,8 +133,10 @@
             </div>
         </div>
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="closeAssignModal()">Cancel</button>
-            <button type="button" class="btn btn-primary" onclick="confirmAssign()">Assign</button>
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                <button type="button" class="btn btn-secondary" onclick="closeAssignModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="confirmAssign()">Assign</button>
+            </div>
         </div>
     </div>
 </div>

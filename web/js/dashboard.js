@@ -70,6 +70,8 @@ document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     
     const modalIds = [
+        'lbFuelModal',
+        'lbEntryModal',
         'alertsModal',
         'historyModal',
         'shareModal',
