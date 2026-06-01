@@ -122,7 +122,7 @@
             <div class="search-input-wrap">
                 <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
                 <input type="text" id="companySearch" class="search-input"
-                    placeholder="Search companies&#8230;"
+                    placeholder="Search by name&#8230;"
                     oninput="filterCompanies()">
             </div>
             <span class="devices-count" id="companiesCount"></span>
@@ -500,15 +500,15 @@
             </div><!-- /.modal-scrollable -->
 
             <div class="modal-footer">
-                <div style="display:flex;gap:0.75rem;">
+                <button type="button" class="btn btn-danger" id="deleteDeviceBtn" onclick="deleteCurrentDevice()" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+                <div style="display:flex;gap:0.75rem;margin-left:auto;">
                     <button type="button" class="btn btn-secondary" onclick="closeDeviceModal()">Cancel</button>
-                    <button type="button" class="btn btn-danger" id="deleteDeviceBtn" onclick="deleteCurrentDevice()" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                        <i id="submitIcon" class="mdi mdi-content-save"></i>
+                        <span id="submitText">Save</span>
+                        <span id="submitLoading" class="loading" style="display:none;"></span>
+                    </button>
                 </div>
-                <button type="submit" class="btn btn-primary" id="submitBtn">
-                    <i id="submitIcon" class="mdi mdi-content-save"></i>
-                    <span id="submitText">Save</span>
-                    <span id="submitLoading" class="loading" style="display:none;"></span>
-                </button>
             </div>
         </form>
     </div>
@@ -525,8 +525,10 @@
         </div>
         <div id="alertEditorBody"></div>
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="closeAlertEditor()">Cancel</button>
-            <button type="button" class="btn btn-primary" onclick="saveAlertFromEditor()">Save Alert</button>
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                <button type="button" class="btn btn-secondary" onclick="closeAlertEditor()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveAlertFromEditor()">Save Alert</button>
+            </div>
         </div>
     </div>
 </div>
@@ -589,15 +591,15 @@
         </div>
 
         <div class="modal-footer">
-            <div style="display:flex;gap:0.75rem;">
+            <button type="button" class="btn btn-danger" id="deleteCompanyBtn" onclick="deleteCurrentCompany()" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
                 <button type="button" class="btn btn-secondary" onclick="closeCompanyModal()">Cancel</button>
-                <button type="button" class="btn btn-danger" id="deleteCompanyBtn" onclick="deleteCurrentCompany()" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+                <button type="button" class="btn btn-primary" id="saveCompanyBtn" onclick="saveCompany()">
+                    <i class="mdi mdi-content-save"></i>
+                    <span id="saveText">Save</span>
+                    <span id="saveLoading" class="loading" style="display:none;"></span>
+                </button>
             </div>
-            <button type="button" class="btn btn-primary" id="saveCompanyBtn" onclick="saveCompany()">
-                <i class="mdi mdi-content-save"></i>
-                <span id="saveText">Save</span>
-                <span id="saveLoading" class="loading" style="display:none;"></span>
-            </button>
         </div>
     </div>
 </div>
@@ -704,11 +706,11 @@
             </div>
         </div>
         <div class="modal-footer">
-            <div style="display:flex;gap:0.75rem;">
+            <button type="button" class="btn btn-danger" id="deleteDriverBtn" onclick="deleteDriver()" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
                 <button type="button" class="btn btn-secondary" onclick="closeDriverModal()">Cancel</button>
-                <button type="button" class="btn btn-danger" id="deleteDriverBtn" onclick="deleteDriver()" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+                <button type="button" class="btn btn-primary" onclick="saveDriver()">Save</button>
             </div>
-            <button type="button" class="btn btn-primary" onclick="saveDriver()">Save</button>
         </div>
     </div>
 </div>
@@ -768,11 +770,11 @@
             </div>
         </div>
         <div class="modal-footer">
-            <div style="display:flex;gap:0.75rem;">
+            <button type="button" class="btn btn-danger" id="userDeleteBtn" onclick="usrDelete(_usrEditing?.id)" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
                 <button type="button" class="btn btn-secondary" onclick="closeUserModal()">Cancel</button>
-                <button type="button" class="btn btn-danger" id="userDeleteBtn" onclick="usrDelete(_usrEditing?.id)" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+                <button type="button" class="btn btn-primary" id="userSaveBtn" onclick="saveUser()">Save</button>
             </div>
-            <button type="button" class="btn btn-primary" id="userSaveBtn" onclick="saveUser()">Save</button>
         </div>
     </div>
 </div>
@@ -825,8 +827,10 @@
             </div>
         </div>
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="usrCloseNotifyModal()">Cancel</button>
-            <button type="button" class="btn btn-primary" id="userNotifySendBtn" onclick="usrSendNotification()">Send</button>
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                <button type="button" class="btn btn-secondary" onclick="usrCloseNotifyModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="userNotifySendBtn" onclick="usrSendNotification()">Send</button>
+            </div>
         </div>
     </div>
 </div>

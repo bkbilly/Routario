@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await _loadDevices();
     if (_CAN_SEE_USERS) await _loadUsers();
     _updateDescription();
+    _injectNavScheduleAction();
 
     document.addEventListener('click', e => {
         const wrap = document.getElementById('vehSelectWrap');
@@ -1052,6 +1053,14 @@ function _fmtDatetime(iso) {
     return new Date(iso).toLocaleString(undefined, { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
 }
 
+function _fmtDatetimeSplit(iso) {
+    if (!iso) return '—';
+    const d    = new Date(iso);
+    const date = d.toLocaleDateString(undefined, { year:'numeric', month:'2-digit', day:'2-digit' });
+    const time = d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
+    return `<span style="display:block;">${date}</span><span style="display:block;color:var(--text-muted);">${time}</span>`;
+}
+
 function _fmtDuration(minutes) {
     const h = Math.floor(minutes / 60);
     const m = Math.round(minutes % 60);
@@ -1061,3 +1070,545 @@ function _fmtDuration(minutes) {
 function _esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Tab management
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _activeTab = 'reports';
+
+function switchTab(tab) {
+    _activeTab = tab;
+    document.getElementById('tabReports').classList.toggle('active',   tab === 'reports');
+    document.getElementById('tabSchedules').classList.toggle('active', tab === 'schedules');
+    document.getElementById('panelReports').style.display   = tab === 'reports'   ? '' : 'none';
+    document.getElementById('panelSchedules').style.display = tab === 'schedules' ? '' : 'none';
+    if (tab === 'schedules') _loadSchedules();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Run viewer
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _viewingRunData = null;
+
+async function viewRun(schedId, runId, scheduleName, reportType, runAt) {
+    try {
+        const res = await apiFetch(`${API_BASE}/report-schedules/${schedId}/runs/${runId}`);
+        if (!res.ok) { showAlert('Failed to load run data.', 'error'); return; }
+        const run = await res.json();
+        if (!run.data) { showAlert('No data stored for this run.', 'warning'); return; }
+
+        _viewingRunData = { schedId, runId, scheduleName, reportType, runAt, data: run.data };
+
+        // Show view banner, hide live controls
+        document.getElementById('runViewBanner').style.display = 'flex';
+        document.getElementById('liveControls').style.display  = 'none';
+        document.getElementById('exportCsvBtn').style.display  = 'none';
+        document.getElementById('runViewLabel').textContent =
+            `Viewing: ${_esc(scheduleName)}  ·  ${_fmtDatetime(runAt)}`;
+
+        switchTab('reports');
+        _renderRunData(reportType, run.data);
+    } catch (e) { console.error(e); showAlert('Error loading run.', 'error'); }
+}
+
+function exitRunView() {
+    _viewingRunData = null;
+    document.getElementById('runViewBanner').style.display = 'none';
+    document.getElementById('liveControls').style.display  = '';
+    document.getElementById('reportTable').style.display   = 'none';
+    document.getElementById('summaryBar').style.display    = 'none';
+    document.getElementById('noData').style.display        = 'none';
+    document.getElementById('exportCsvBtn').style.display  = 'none';
+    _reportData = [];
+    switchTab('schedules');
+}
+
+function _renderRunData(reportType, data) {
+    _reportData = data.rows || [];
+    _sortCol    = null;
+    _sortDir    = 1;
+
+    if (reportType === 'sensors') {
+        _sensorsHistoryMode = !!data.historical;
+        if (_sensorsHistoryMode) _renderSensorsHistory(); else _renderSensors();
+        return;
+    }
+    if (reportType === 'alerts') { _renderAlerts(); return; }
+
+    // summary / trips / daily / drivers
+    const table  = document.getElementById('reportTable');
+    const noData = document.getElementById('noData');
+    if (!_reportData.length) {
+        table.style.display = 'none'; noData.style.display = '';
+        document.getElementById('summaryBar').style.display = 'none';
+        return;
+    }
+    if      (reportType === 'summary') _renderSummary();
+    else if (reportType === 'trips')   _renderTripList();
+    else if (reportType === 'daily')   _renderDaily();
+    else if (reportType === 'drivers') _renderDrivers();
+    table.style.display  = '';
+    noData.style.display = 'none';
+}
+
+function exportCsvFromRun() {
+    if (!_viewingRunData) return;
+    const { reportType, scheduleName, runAt, data } = _viewingRunData;
+    const slug = scheduleName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+    const date = runAt.slice(0, 10);
+
+    if (reportType === 'summary') {
+        const rows = data.rows || [];
+        _downloadCsv(
+            ['Vehicle', 'Plate', 'Driver', 'Trips', 'Distance (km)', 'Driving (min)', 'Max Speed (km/h)', 'Avg Speed (km/h)'],
+            rows,
+            r => [r.device_name, r.license_plate || '', r.driver_name || '', r.trips,
+                  r.distance_km, r.driving_minutes, r.max_speed, r.avg_speed],
+            `${slug}_${date}.csv`
+        );
+        return;
+    }
+    // For other types, delegate to normal exportCsv which uses _reportData
+    exportCsv();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Schedules list
+// ══════════════════════════════════════════════════════════════════════════════
+
+const _TYPE_LABELS  = { summary: 'Fleet Summary', trips: 'Trip List', daily: 'Daily Activity', drivers: 'Driver Activity', sensors: 'Vehicle Sensors', alerts: 'Alerts' };
+const _RANGE_LABELS = { last_7_days: 'Last 7 days', last_14_days: 'Last 14 days', last_30_days: 'Last 30 days', last_calendar_month: 'Last calendar month', last_quarter: 'Last quarter', last_year: 'Last year' };
+const _DOW          = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function _freqLabel(s) {
+    if (s.frequency === 'daily')   return `Daily at ${s.run_time}`;
+    if (s.frequency === 'weekly')  return `Weekly (${_DOW[s.day_of_week]}) at ${s.run_time}`;
+    if (s.frequency === 'monthly') return `Monthly (day ${s.day_of_month}) at ${s.run_time}`;
+    return s.frequency;
+}
+
+let _schedules          = [];
+let _expandedScheduleId = null;
+let _schedSortCol       = 'name';
+let _schedSortDir       = 1;
+
+async function _loadSchedules() {
+    try {
+        const res = await apiFetch(`${API_BASE}/report-schedules`);
+        if (!res.ok) return;
+        _schedules = await res.json();
+        _renderScheduleList();
+    } catch (e) { console.error(e); }
+}
+
+function filterSchedules() {
+    const q = (document.getElementById('schedSearch')?.value || '').toLowerCase().trim();
+    const filtered = q
+        ? _schedules.filter(s =>
+            s.name.toLowerCase().includes(q) ||
+            (_TYPE_LABELS[s.report_type] || s.report_type).toLowerCase().includes(q) ||
+            _freqLabel(s).toLowerCase().includes(q)
+          )
+        : _schedules;
+    _renderScheduleList(filtered);
+}
+
+function _schedTh(col, label) {
+    const active = _schedSortCol === col;
+    const arrow  = active ? (_schedSortDir === 1 ? ' ▲' : ' ▼') : '';
+    return `<th onclick="sortSchedules('${col}')" style="cursor:pointer;user-select:none;">${label}<span class="sort-arrow">${arrow}</span></th>`;
+}
+
+function sortSchedules(col) {
+    if (_schedSortCol === col) _schedSortDir *= -1;
+    else { _schedSortCol = col; _schedSortDir = 1; }
+    filterSchedules();
+}
+
+function _renderScheduleList(list = _schedules) {
+    const head   = document.getElementById('schedHead');
+    const tbody  = document.getElementById('schedBody');
+    const noData = document.getElementById('schedNoData');
+    const count  = document.getElementById('schedCount');
+    if (count) count.textContent = `${list.length} schedule${list.length !== 1 ? 's' : ''}`;
+
+    // Sort
+    const col = _schedSortCol;
+    const dir = _schedSortDir;
+    const sorted = [...list].sort((a, b) => {
+        let av, bv;
+        if      (col === 'name')      { av = a.name;                              bv = b.name; }
+        else if (col === 'type')      { av = _TYPE_LABELS[a.report_type] || '';   bv = _TYPE_LABELS[b.report_type] || ''; }
+        else if (col === 'frequency') { av = _freqLabel(a);                       bv = _freqLabel(b); }
+        else if (col === 'next_run')  { av = a.next_run || '';                    bv = b.next_run || ''; }
+        else if (col === 'runs')      { av = a.run_count;                         bv = b.run_count; }
+        else if (col === 'status')    { av = a.is_active ? 1 : 0;                 bv = b.is_active ? 1 : 0; }
+        else                          { av = ''; bv = ''; }
+        return typeof av === 'number' ? (av - bv) * dir : String(av).localeCompare(String(bv)) * dir;
+    });
+
+    head.innerHTML = `<tr>
+        ${_schedTh('name',      'Name')}
+        ${_schedTh('type',      'Type')}
+        ${_schedTh('frequency', 'Frequency')}
+        ${_schedTh('next_run',  'Next Run')}
+        ${_schedTh('runs',      'Runs')}
+        ${_schedTh('status',    'Status')}
+        <th>Actions</th>
+    </tr>`;
+
+    if (!sorted.length) {
+        tbody.innerHTML = '';
+        const q = (document.getElementById('schedSearch')?.value || '').trim();
+        noData.textContent = q ? 'No schedules match your search.' : 'No schedules yet. Use the gear menu to create one.';
+        noData.style.display = '';
+        return;
+    }
+    noData.style.display = 'none';
+
+    tbody.innerHTML = sorted.map(s => {
+        const badge   = s.is_active
+            ? '<span class="sched-badge sched-badge-active">Active</span>'
+            : '<span class="sched-badge sched-badge-inactive">Paused</span>';
+        const typeStr = _TYPE_LABELS[s.report_type] || s.report_type;
+        const next    = s.next_run ? _fmtDatetimeSplit(s.next_run) : '—';
+        const runs    = `${s.run_count} / ${s.keep_runs}`;
+
+        return `<tr onclick="toggleRunHistory(${s.id}, this)" id="sr-${s.id}" ${_expandedScheduleId === s.id ? 'class="expanded"' : ''}>
+            <td><strong>${_esc(s.name)}</strong></td>
+            <td>${_esc(typeStr)}</td>
+            <td style="white-space:nowrap;font-size:0.82rem;">${_esc(_freqLabel(s))}</td>
+            <td style="font-size:0.82rem;font-family:var(--font-mono);">${next}</td>
+            <td style="font-family:var(--font-mono);font-size:0.82rem;">${runs}</td>
+            <td>${badge}</td>
+            <td onclick="event.stopPropagation();">
+                <button class="btn btn-secondary" style="padding:0.3rem 0.65rem;font-size:0.78rem;" onclick="openScheduleModal(${s.id})">
+                    <i class="mdi mdi-pencil"></i>
+                </button>
+            </td>
+        </tr>
+        <tr id="rh-${s.id}" class="run-history-row" style="display:${_expandedScheduleId === s.id ? '' : 'none'};">
+            <td colspan="7"><div class="run-history-inner" id="rhi-${s.id}">
+                <div style="text-align:center;color:var(--text-muted);padding:0.5rem;">Loading…</div>
+            </div></td>
+        </tr>`;
+    }).join('');
+
+    if (_expandedScheduleId) _fetchAndShowRuns(_expandedScheduleId);
+}
+
+async function toggleRunHistory(schedId, rowEl) {
+    if (_expandedScheduleId === schedId) {
+        _expandedScheduleId = null;
+        document.getElementById(`rh-${schedId}`).style.display = 'none';
+        rowEl.classList.remove('expanded');
+        return;
+    }
+    _expandedScheduleId = schedId;
+    document.querySelectorAll('.run-history-row').forEach(r => r.style.display = 'none');
+    document.querySelectorAll('.sched-table tbody tr:not(.run-history-row)').forEach(r => r.classList.remove('expanded'));
+    rowEl.classList.add('expanded');
+    document.getElementById(`rh-${schedId}`).style.display = '';
+    await _fetchAndShowRuns(schedId);
+}
+
+async function _fetchAndShowRuns(schedId) {
+    const container = document.getElementById(`rhi-${schedId}`);
+    if (!container) return;
+    container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:0.5rem;">Loading…</div>';
+    try {
+        const res = await apiFetch(`${API_BASE}/report-schedules/${schedId}/runs`);
+        if (!res.ok) { container.innerHTML = '<div style="color:var(--accent-danger);padding:0.5rem;">Failed to load runs.</div>'; return; }
+        const runs = await res.json();
+        const sched = _schedules.find(s => s.id === schedId);
+
+        if (!runs.length) {
+            container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:0.5rem;">No runs yet.</div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <table class="run-table">
+                <thead><tr><th>Date / Time</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                ${runs.map(r => {
+                    const statusHtml = r.status === 'success'
+                        ? '<span class="run-status-ok"><i class="mdi mdi-check-circle"></i> Success</span>'
+                        : `<span class="run-status-err" title="${_esc(r.error_message || '')}"><i class="mdi mdi-alert-circle"></i> Failed</span>`;
+                    const actions = r.has_data
+                        ? `<button class="btn btn-secondary" style="padding:0.25rem 0.6rem;font-size:0.75rem;" onclick="viewRun(${schedId},${r.id},'${_esc(sched?.name || '')}','${sched?.report_type || ''}','${r.run_at}')">
+                               <i class="mdi mdi-eye"></i> View
+                           </button>`
+                        : '—';
+                    return `<tr>
+                        <td style="white-space:nowrap;font-family:var(--font-mono);font-size:0.8rem;">${_fmtDatetime(r.run_at)}</td>
+                        <td>${statusHtml}</td>
+                        <td>${actions}</td>
+                    </tr>`;
+                }).join('')}
+                </tbody>
+            </table>`;
+    } catch (e) { console.error(e); container.innerHTML = '<div style="color:var(--accent-danger);padding:0.5rem;">Error loading runs.</div>'; }
+}
+
+async function deleteSchedule(id, name) {
+    if (!confirm(`Delete schedule "${name}"? This will also delete all stored runs.`)) return;
+    try {
+        const res = await apiFetch(`${API_BASE}/report-schedules/${id}`, { method: 'DELETE' });
+        if (res.ok || res.status === 204) {
+            _schedules = _schedules.filter(s => s.id !== id);
+            if (_expandedScheduleId === id) _expandedScheduleId = null;
+            filterSchedules();
+        } else {
+            showAlert('Failed to delete schedule.', 'error');
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function deleteScheduleFromModal() {
+    if (!_editingScheduleId) return;
+    const schedule = _schedules.find(s => s.id === _editingScheduleId);
+    const name = schedule?.name || 'this schedule';
+    closeScheduleModal();
+    await deleteSchedule(_editingScheduleId, name);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Schedule create / edit modal
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _sfSelectedVehIds  = new Set();
+let _sfSelectedUserIds = new Set();
+let _editingScheduleId = null;
+
+function _injectNavScheduleAction() {
+    const el = document.getElementById('snAddAction');
+    if (!el) return;
+    el.innerHTML = `<button class="header-menu-item" onclick="openScheduleModal(null);document.getElementById('snDropdown').classList.remove('open');document.getElementById('snGearBtn').classList.remove('active');">
+        <span class="header-menu-item-icon"><i class="mdi mdi-calendar-plus" style="font-size:15px;"></i></span>
+        <span>New Schedule</span>
+    </button>`;
+}
+
+async function openScheduleModal(scheduleIdOrObj) {
+    let schedule = null;
+    if (scheduleIdOrObj !== null && scheduleIdOrObj !== undefined) {
+        if (typeof scheduleIdOrObj === 'object') {
+            schedule = scheduleIdOrObj;
+        } else {
+            schedule = _schedules.find(s => s.id === scheduleIdOrObj) || null;
+        }
+    }
+
+    _editingScheduleId = schedule ? schedule.id : null;
+    document.getElementById('schedModalTitle').textContent = schedule ? 'Edit Schedule' : 'New Schedule';
+    document.getElementById('sfDeleteBtn').style.display   = schedule ? '' : 'none';
+
+    _sfSelectedVehIds.clear();
+    _sfSelectedUserIds.clear();
+
+    if (schedule) {
+        document.getElementById('sfName').value        = schedule.name;
+        document.getElementById('sfType').value        = schedule.report_type;
+        document.getElementById('sfHistorical').checked = schedule.sensors_historical;
+        document.getElementById('sfDateRange').value   = schedule.date_range || 'last_30_days';
+        document.getElementById('sfFreq').value        = schedule.frequency;
+        document.getElementById('sfTime').value        = schedule.run_time;
+        document.getElementById('sfDow').value         = schedule.day_of_week ?? 0;
+        document.getElementById('sfDom').value         = schedule.day_of_month ?? 1;
+        document.getElementById('sfKeep').value        = schedule.keep_runs;
+        document.getElementById('sfActive').checked    = schedule.is_active;
+        (schedule.filter_device_ids || []).forEach(id => _sfSelectedVehIds.add(id));
+        (schedule.filter_user_ids   || []).forEach(id => _sfSelectedUserIds.add(id));
+    } else {
+        document.getElementById('sfName').value        = '';
+        document.getElementById('sfType').value        = 'summary';
+        document.getElementById('sfHistorical').checked = false;
+        document.getElementById('sfDateRange').value   = 'last_30_days';
+        document.getElementById('sfFreq').value        = 'daily';
+        document.getElementById('sfTime').value        = '07:00';
+        document.getElementById('sfDow').value         = '0';
+        document.getElementById('sfDom').value         = '1';
+        document.getElementById('sfKeep').value        = '10';
+        document.getElementById('sfActive').checked    = true;
+    }
+
+    _buildSfVehList();
+    _buildSfUserList();
+    onSchedTypeChange();
+    onSchedFreqChange();
+
+    document.getElementById('schedModal').classList.add('active');
+}
+
+function closeScheduleModal() {
+    document.getElementById('schedModal').classList.remove('active');
+}
+
+function _buildSfVehList() {
+    const list = document.getElementById('sfVehList');
+    list.innerHTML = '';
+    _allDevices.forEach(d => {
+        const label = document.createElement('label');
+        label.className = 'veh-opt';
+        label.innerHTML = `<input type="checkbox" data-id="${d.id}" ${_sfSelectedVehIds.has(d.id) ? 'checked' : ''} onchange="onSfVehCheck(this)">
+            <span>${_esc(d.name)}${d.license_plate ? ` <span style="color:var(--text-muted);font-size:0.8rem;">(${_esc(d.license_plate)})</span>` : ''}</span>`;
+        list.appendChild(label);
+    });
+    document.getElementById('sfAllVeh').checked = _sfSelectedVehIds.size === 0;
+    _updateSfVehLabel();
+}
+
+function _buildSfUserList() {
+    const list = document.getElementById('sfUserList');
+    list.innerHTML = '';
+    _allUsers.forEach(u => {
+        const label = document.createElement('label');
+        label.className = 'veh-opt';
+        label.innerHTML = `<input type="checkbox" data-id="${u.id}" ${_sfSelectedUserIds.has(u.id) ? 'checked' : ''} onchange="onSfUserCheck(this)">
+            <span>${_esc(u.username)}${u.email ? ` <span style="color:var(--text-muted);font-size:0.8rem;">(${_esc(u.email)})</span>` : ''}</span>`;
+        list.appendChild(label);
+    });
+    document.getElementById('sfAllUser').checked = _sfSelectedUserIds.size === 0;
+    _updateSfUserLabel();
+}
+
+function onSchedTypeChange() {
+    const t      = document.getElementById('sfType').value;
+    const isSens = t === 'sensors';
+    const isAlt  = t === 'alerts';
+
+    document.getElementById('sfHistGroup').style.display  = isSens ? '' : 'none';
+    document.getElementById('sfUserGroup').style.display  = (isAlt && _CAN_SEE_USERS) ? '' : 'none';
+
+    // Date range: hidden for sensors when not in historical mode
+    const needsRange = !isSens || document.getElementById('sfHistorical').checked;
+    document.getElementById('sfDateRangeGroup').style.display = needsRange ? '' : 'none';
+}
+
+function onSchedHistChange() {
+    onSchedTypeChange();
+}
+
+function onSchedFreqChange() {
+    const f = document.getElementById('sfFreq').value;
+    document.getElementById('sfDowGroup').style.display = f === 'weekly'  ? '' : 'none';
+    document.getElementById('sfDomGroup').style.display = f === 'monthly' ? '' : 'none';
+}
+
+function toggleSfVeh(e) { e.stopPropagation(); document.getElementById('sfVehWrap').classList.toggle('open'); }
+function toggleSfUser(e) { e.stopPropagation(); document.getElementById('sfUserWrap').classList.toggle('open'); }
+
+function onSfVehCheck(cb) {
+    const id = parseInt(cb.dataset.id);
+    if (cb.checked) _sfSelectedVehIds.add(id); else _sfSelectedVehIds.delete(id);
+    document.getElementById('sfAllVeh').checked = _sfSelectedVehIds.size === 0;
+    _updateSfVehLabel();
+}
+
+function onSfUserCheck(cb) {
+    const id = parseInt(cb.dataset.id);
+    if (cb.checked) _sfSelectedUserIds.add(id); else _sfSelectedUserIds.delete(id);
+    document.getElementById('sfAllUser').checked = _sfSelectedUserIds.size === 0;
+    _updateSfUserLabel();
+}
+
+function toggleSfAllVeh(cb) {
+    _sfSelectedVehIds.clear();
+    document.querySelectorAll('#sfVehList input[type=checkbox]').forEach(el => el.checked = false);
+    cb.checked = true;
+    _updateSfVehLabel();
+}
+
+function toggleSfAllUser(cb) {
+    _sfSelectedUserIds.clear();
+    document.querySelectorAll('#sfUserList input[type=checkbox]').forEach(el => el.checked = false);
+    cb.checked = true;
+    _updateSfUserLabel();
+}
+
+function _updateSfVehLabel() {
+    const lbl = document.getElementById('sfVehLabel');
+    if (_sfSelectedVehIds.size === 0) { lbl.textContent = 'All vehicles'; return; }
+    if (_sfSelectedVehIds.size === 1) {
+        const d = _allDevices.find(d => _sfSelectedVehIds.has(d.id));
+        lbl.textContent = d ? d.name : '1 vehicle';
+        return;
+    }
+    lbl.textContent = `${_sfSelectedVehIds.size} vehicles`;
+}
+
+function _updateSfUserLabel() {
+    const lbl = document.getElementById('sfUserLabel');
+    if (_sfSelectedUserIds.size === 0) { lbl.textContent = 'All users'; return; }
+    if (_sfSelectedUserIds.size === 1) {
+        const u = _allUsers.find(u => _sfSelectedUserIds.has(u.id));
+        lbl.textContent = u ? u.username : '1 user';
+        return;
+    }
+    lbl.textContent = `${_sfSelectedUserIds.size} users`;
+}
+
+async function saveSchedule() {
+    const name = document.getElementById('sfName').value.trim();
+    if (!name) { showAlert('Schedule name is required.', 'warning'); return; }
+
+    const rtype      = document.getElementById('sfType').value;
+    const historical = document.getElementById('sfHistorical').checked;
+    const dateRange  = document.getElementById('sfDateRange').value;
+    const freq       = document.getElementById('sfFreq').value;
+    const runTime    = document.getElementById('sfTime').value;
+    const keep       = parseInt(document.getElementById('sfKeep').value);
+
+    if (!runTime) { showAlert('Run time is required.', 'warning'); return; }
+    if (isNaN(keep) || keep < 1 || keep > 100) { showAlert('Keep Runs must be between 1 and 100.', 'warning'); return; }
+
+    const needsRange = rtype !== 'sensors' || historical;
+    if (needsRange && !dateRange) { showAlert('Date range is required.', 'warning'); return; }
+
+    const body = {
+        name,
+        report_type:        rtype,
+        filter_device_ids:  [..._sfSelectedVehIds],
+        filter_user_ids:    [..._sfSelectedUserIds],
+        sensors_historical: historical,
+        date_range:         needsRange ? dateRange : null,
+        frequency:          freq,
+        run_time:           runTime,
+        day_of_week:        freq === 'weekly'  ? parseInt(document.getElementById('sfDow').value) : null,
+        day_of_month:       freq === 'monthly' ? parseInt(document.getElementById('sfDom').value) : null,
+        timezone:           Intl.DateTimeFormat().resolvedOptions().timeZone,
+        keep_runs:          keep,
+        is_active:          document.getElementById('sfActive').checked,
+    };
+
+    try {
+        const url    = _editingScheduleId
+            ? `${API_BASE}/report-schedules/${_editingScheduleId}`
+            : `${API_BASE}/report-schedules`;
+        const method = _editingScheduleId ? 'PUT' : 'POST';
+        const res    = await apiFetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(body),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            showAlert(err.detail || 'Failed to save schedule.', 'error');
+            return;
+        }
+        closeScheduleModal();
+        await _loadSchedules();
+        if (_activeTab !== 'schedules') switchTab('schedules');
+    } catch (e) { console.error(e); showAlert('Error saving schedule.', 'error'); }
+}
+
+// Close dropdowns in the schedule modal when clicking outside
+document.addEventListener('click', e => {
+    const vw = document.getElementById('sfVehWrap');
+    if (vw && !vw.contains(e.target)) vw.classList.remove('open');
+    const uw = document.getElementById('sfUserWrap');
+    if (uw && !uw.contains(e.target)) uw.classList.remove('open');
+});

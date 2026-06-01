@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from core.alert_engine import get_alert_engine, periodic_alert_task
+from core.schedule_runner import periodic_schedule_task
 from core.config import get_settings
 from core.database import get_db, init_database
 from core.gateway import TCPServer, UDPServer, connection_manager
@@ -385,8 +386,9 @@ async def lifespan(app: FastAPI):
                 asyncio.create_task(server.start())
                 logger.info("Started TCP Server for %s on port %s", name, port)
 
-    alert_task = asyncio.create_task(periodic_alert_task())
-    poll_task  = asyncio.create_task(integration_poll_task(process_position_callback))
+    alert_task    = asyncio.create_task(periodic_alert_task())
+    poll_task     = asyncio.create_task(integration_poll_task(process_position_callback))
+    schedule_task = asyncio.create_task(periodic_schedule_task())
     logger.info("Routario Platform started successfully")
 
     yield
@@ -396,7 +398,8 @@ async def lifespan(app: FastAPI):
     # Cancel background tasks so their loops exit before we tear down resources
     alert_task.cancel()
     poll_task.cancel()
-    await asyncio.gather(alert_task, poll_task, return_exceptions=True)
+    schedule_task.cancel()
+    await asyncio.gather(alert_task, poll_task, schedule_task, return_exceptions=True)
 
     # Stop FCM clients — each holds an open TCP connection to Google's MCS
     # endpoint with its own internal read loop that would otherwise block

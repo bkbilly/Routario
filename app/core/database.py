@@ -179,6 +179,7 @@ class DatabaseService:
             "ALTER TABLE drivers ADD COLUMN assignment_grace_period INTEGER",
             "ALTER TABLE drivers ADD COLUMN assignment_clear VARCHAR(20)",
             "ALTER TABLE position_records ADD COLUMN driver_id INTEGER REFERENCES drivers(id) ON DELETE SET NULL",
+            "ALTER TABLE scheduled_reports ADD COLUMN user_timezone VARCHAR(50) DEFAULT 'UTC'",
             """CREATE TABLE IF NOT EXISTS voice_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 sender_id INTEGER REFERENCES users(id) ON DELETE SET NULL,

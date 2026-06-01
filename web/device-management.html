@@ -314,15 +314,15 @@
 
             <!-- PERSISTENT FOOTER -->
             <div class="modal-footer">
-                <div style="display:flex;gap:0.75rem;">
+                <button type="button" class="btn btn-danger" id="deleteDeviceBtn" onclick="deleteCurrentDevice()" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+                <div style="display:flex;gap:0.75rem;margin-left:auto;">
                     <button type="button" class="btn btn-secondary" onclick="closeDeviceModal()">Cancel</button>
-                    <button type="button" class="btn btn-danger" id="deleteDeviceBtn" onclick="deleteCurrentDevice()" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                        <i id="submitIcon" class="mdi mdi-content-save"></i>
+                        <span id="submitText">Save</span>
+                        <span id="submitLoading" class="loading" style="display:none;"></span>
+                    </button>
                 </div>
-                <button type="submit" class="btn btn-primary" id="submitBtn">
-                    <i id="submitIcon" class="mdi mdi-content-save"></i>
-                    <span id="submitText">Save</span>
-                    <span id="submitLoading" class="loading" style="display:none;"></span>
-                </button>
             </div>
 
         </form>
@@ -340,8 +340,10 @@
         </div>
         <div id="alertEditorBody"></div>
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="closeAlertEditor()">Cancel</button>
-            <button type="button" class="btn btn-primary" onclick="saveAlertFromEditor()">Save Alert</button>
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                <button type="button" class="btn btn-secondary" onclick="closeAlertEditor()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveAlertFromEditor()">Save Alert</button>
+            </div>
         </div>
     </div>
 </div>

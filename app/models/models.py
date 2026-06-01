@@ -314,6 +314,45 @@ class LocationShare(Base):
     creator: Mapped["User"]   = relationship("User")
 
 
+class ScheduledReport(Base):
+    __tablename__ = 'scheduled_reports'
+
+    id:                 Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id:            Mapped[int]           = mapped_column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    name:               Mapped[str]           = mapped_column(String(200), nullable=False)
+    report_type:        Mapped[str]           = mapped_column(String(20), nullable=False)
+    filter_device_ids:  Mapped[Optional[list]] = mapped_column(JsonType, nullable=True, default=list)
+    filter_user_ids:    Mapped[Optional[list]] = mapped_column(JsonType, nullable=True, default=list)
+    sensors_historical: Mapped[bool]          = mapped_column(Boolean, default=False)
+    date_range:         Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    frequency:          Mapped[str]           = mapped_column(String(20), nullable=False)
+    run_time:           Mapped[str]           = mapped_column(String(5), nullable=False)
+    day_of_week:        Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    day_of_month:       Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    user_timezone:      Mapped[str]           = mapped_column(String(50), default='UTC')
+    keep_runs:          Mapped[int]           = mapped_column(Integer, default=10)
+    is_active:          Mapped[bool]          = mapped_column(Boolean, default=True)
+    next_run:           Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    last_run:           Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at:         Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped["User"]                     = relationship("User")
+    runs: Mapped[List["ScheduledReportRun"]] = relationship(back_populates="schedule", cascade="all, delete-orphan")
+
+
+class ScheduledReportRun(Base):
+    __tablename__ = 'scheduled_report_runs'
+
+    id:            Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    schedule_id:   Mapped[int]           = mapped_column(Integer, ForeignKey('scheduled_reports.id', ondelete='CASCADE'), nullable=False, index=True)
+    run_at:        Mapped[datetime]      = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    status:        Mapped[str]           = mapped_column(String(20), nullable=False)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    result_json:   Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    schedule: Mapped["ScheduledReport"] = relationship(back_populates="runs")
+
+
 class VideoClip(Base):
     __tablename__ = 'video_clips'
 

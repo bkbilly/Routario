@@ -367,6 +367,7 @@
                 </a>
 
                 ${isManagement ? `<div class="header-menu-divider"></div><div id="snAddAction"></div><div id="snNotifyAction"></div>` : ''}
+                ${isReports ? `<div class="header-menu-divider"></div><div id="snAddAction"></div>` : ''}
 
                 <div class="header-menu-divider"></div>
 
