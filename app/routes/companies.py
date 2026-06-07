@@ -9,10 +9,11 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 
 from core.database import get_db
 from core.auth import require_admin
-from models import Company, User, Device
+from models import Company, User, Device, DeviceState
 from models.schemas import CompanyCreate, CompanyUpdate, CompanyResponse, UserResponse, DeviceResponse
 
 router = APIRouter(prefix="/api/companies", tags=["companies"])
@@ -83,7 +84,11 @@ async def get_company_users(company_id: int, admin: User = Depends(require_admin
 async def get_company_devices(company_id: int, admin: User = Depends(require_admin)):
     db = get_db()
     async with db.get_session() as session:
-        result = await session.execute(select(Device).where(Device.company_id == company_id))
+        result = await session.execute(
+            select(Device)
+            .where(Device.company_id == company_id)
+            .options(selectinload(Device.state).selectinload(DeviceState.current_driver))
+        )
         return result.scalars().all()
 
 
