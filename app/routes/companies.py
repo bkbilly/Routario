@@ -6,6 +6,7 @@ Access rules:
   All endpoints → super admin only
 """
 from pathlib import Path
+import re
 from typing import List
 
 from fastapi import APIRouter, HTTPException, Query, Depends, File, UploadFile
@@ -26,6 +27,7 @@ ALLOWED_IMAGE_TYPES = {
     "image/webp": ".webp",
 }
 MAX_BRANDING_BYTES = 2 * 1024 * 1024
+LOGIN_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,98}[a-z0-9]$")
 
 
 def _clean_app_name(value: str | None) -> str | None:
@@ -33,6 +35,32 @@ def _clean_app_name(value: str | None) -> str | None:
         return None
     value = value.strip()
     return value or None
+
+
+def _clean_login_slug(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip().lower()
+    if not value:
+        return None
+    if not LOGIN_SLUG_RE.match(value):
+        raise HTTPException(
+            status_code=400,
+            detail="Login URL slug must be 3-100 lowercase letters, numbers, or hyphens",
+        )
+    return value
+
+
+async def _ensure_login_slug_available(slug: str | None, exclude_company_id: int | None = None):
+    if not slug:
+        return
+    db = get_db()
+    async with db.get_session() as session:
+        q = select(Company).where(Company.login_slug == slug)
+        if exclude_company_id is not None:
+            q = q.where(Company.id != exclude_company_id)
+        if (await session.execute(q)).scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Login URL slug already exists")
 
 
 async def _store_branding_file(company: Company, upload: UploadFile, kind: str) -> str:
@@ -93,6 +121,8 @@ async def get_all_companies(admin: User = Depends(require_admin)):
 async def create_company(data: CompanyCreate, admin: User = Depends(require_admin)):
     db = get_db()
     data.app_name = _clean_app_name(data.app_name)
+    data.login_slug = _clean_login_slug(data.login_slug)
+    await _ensure_login_slug_available(data.login_slug)
     return await db.create_company(data)
 
 
@@ -110,6 +140,9 @@ async def update_company(company_id: int, data: CompanyUpdate, admin: User = Dep
     db = get_db()
     if data.app_name is not None:
         data.app_name = _clean_app_name(data.app_name)
+    if "login_slug" in data.model_fields_set:
+        data.login_slug = _clean_login_slug(data.login_slug)
+        await _ensure_login_slug_available(data.login_slug, exclude_company_id=company_id)
     company = await db.update_company(company_id, data)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")

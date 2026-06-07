@@ -97,11 +97,17 @@ function hasPermission(perm) {
 }
 
 function handleLogout() {
+    const loginSlug = localStorage.getItem('company_login_slug');
+    const slugCompanyId = localStorage.getItem('company_login_slug_company_id');
+    const currentCompanyId = localStorage.getItem('company_id');
+    const loginUrl = loginSlug && slugCompanyId && currentCompanyId && slugCompanyId === currentCompanyId
+        ? `/login/${encodeURIComponent(loginSlug)}`
+        : '/login.html';
     ['auth_token','user_id','username','is_admin','units','is_company_admin','company_id',
      'permissions',
      'impersonating_admin_token','impersonating_admin_user_id','impersonating_admin_username']
         .forEach(k => localStorage.removeItem(k));
-    window.location.href = 'login.html';
+    window.location.href = loginUrl;
 }
 
 function checkLogin() {
@@ -140,6 +146,13 @@ async function applyCompanyBranding(companyId = localStorage.getItem('company_id
         if (!res.ok) return;
         const meta = await res.json();
         const version = meta.branding_version || 1;
+        if (meta.login_slug) {
+            localStorage.setItem('company_login_slug', meta.login_slug);
+            localStorage.setItem('company_login_slug_company_id', String(cid));
+        } else {
+            localStorage.removeItem('company_login_slug');
+            localStorage.removeItem('company_login_slug_company_id');
+        }
         _setHeadLink('manifest', `/manifest.json?company_id=${cid}&v=${version}`);
         if (meta.icon_url) {
             _setHeadLink('icon', `${base}/favicon.ico?v=${version}`);
@@ -162,6 +175,45 @@ async function applyCompanyBranding(companyId = localStorage.getItem('company_id
         }
     } catch {
         // Branding is cosmetic; keep the default Routario assets if it fails.
+    }
+}
+
+async function applyCompanyLoginBranding(companySlug) {
+    const slug = String(companySlug || '').trim().toLowerCase();
+    if (!slug) return null;
+    if (!document.documentElement.dataset.defaultTitle) {
+        document.documentElement.dataset.defaultTitle = document.title || 'Routario';
+    }
+
+    try {
+        const res = await fetch(`/branding/login/${encodeURIComponent(slug)}/metadata`);
+        if (!res.ok) return null;
+        const meta = await res.json();
+        if (!meta.company_id) return null;
+        if (meta.login_slug) {
+            localStorage.setItem('company_login_slug', meta.login_slug);
+            localStorage.setItem('company_login_slug_company_id', String(meta.company_id));
+        }
+
+        const version = meta.branding_version || 1;
+        const base = `/branding/company/${meta.company_id}`;
+        _setHeadLink('manifest', `/manifest.json?company_slug=${encodeURIComponent(slug)}&v=${version}`);
+
+        if (meta.icon_url) {
+            _setHeadLink('icon', `${base}/favicon.ico?v=${version}`);
+            _setHeadLink('apple-touch-icon', `${base}/apple-touch-icon.png?v=${version}`);
+            document.querySelectorAll('.logo-icon').forEach(img => { img.src = `${base}/icon-192.png?v=${version}`; });
+        }
+        if (meta.app_name) {
+            const page = _defaultTitleForPage();
+            document.title = page ? `${page} - ${meta.app_name}` : meta.app_name;
+            const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+            if (appleTitle) appleTitle.content = meta.app_name;
+            document.querySelectorAll('.logo-text').forEach(el => { el.textContent = meta.app_name; });
+        }
+        return meta;
+    } catch {
+        return null;
     }
 }
 

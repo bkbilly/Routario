@@ -167,6 +167,7 @@ class DatabaseService:
             "ALTER TABLE users ADD COLUMN is_company_admin BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT NULL",
             "ALTER TABLE companies ADD COLUMN app_name VARCHAR(100)",
+            "ALTER TABLE companies ADD COLUMN login_slug VARCHAR(100)",
             "ALTER TABLE companies ADD COLUMN icon_filename VARCHAR(255)",
             "ALTER TABLE companies ADD COLUMN badge_filename VARCHAR(255)",
             "ALTER TABLE companies ADD COLUMN branding_version INTEGER DEFAULT 1",
@@ -545,7 +546,11 @@ class DatabaseService:
 
     async def create_company(self, data: CompanyCreate) -> Company:
         async with self.get_session() as session:
-            company = Company(name=data.name, app_name=(data.app_name or None))
+            company = Company(
+                name=data.name,
+                app_name=(data.app_name or None),
+                login_slug=(data.login_slug or None),
+            )
             session.add(company)
             await session.flush()
             await session.refresh(company)
@@ -574,6 +579,8 @@ class DatabaseService:
                 if company.app_name != next_app_name:
                     company.app_name = next_app_name
                     company.branding_version = (company.branding_version or 1) + 1
+            if "login_slug" in data.model_fields_set:
+                company.login_slug = data.login_slug or None
             await session.flush()
             await session.refresh(company)
             return company

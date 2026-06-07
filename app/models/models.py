@@ -37,6 +37,7 @@ class Company(Base):
     id:         Mapped[int]      = mapped_column(Integer, primary_key=True)
     name:       Mapped[str]      = mapped_column(String(200), unique=True, nullable=False)
     app_name:   Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    login_slug: Mapped[Optional[str]] = mapped_column(String(100), unique=True, nullable=True, index=True)
     icon_filename:  Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     badge_filename: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     branding_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)

@@ -62,6 +62,7 @@
         }
 
         .logo { font-size: 3rem; margin-bottom: 1rem; }
+        .logo img { width: 96px; height: 96px; object-fit: contain; }
         h1 { margin-bottom: 0.5rem; font-weight: 700; }
         p { color: #9ca3af; margin-bottom: 2rem; font-size: 0.9rem; }
 
@@ -95,7 +96,7 @@
 <body>
     <div class="login-card">
         <div class="logo">
-            <img src="/icons/icon-192-full.png">
+            <img src="/icons/icon-192-full.png" class="logo-icon">
         </div>
         <h1>Welcome Back</h1>
         <p>Sign in to your GPS Fleet Tracker</p>
@@ -113,8 +114,14 @@
             <div class="error-msg" id="errorMsg">Invalid credentials</div>
         </form>
     </div>
-    <script src="js/config.js"></script>
+    <script src="/js/config.js"></script>
     <script>
+        const loginSlug = (() => {
+            const match = window.location.pathname.match(/^\/login\/([^/]+)\/?$/);
+            return match ? decodeURIComponent(match[1]) : null;
+        })();
+        if (loginSlug) applyCompanyLoginBranding(loginSlug);
+
         async function handleLogin(e) {
             e.preventDefault();
             const btn = document.getElementById('loginBtn');
@@ -144,7 +151,11 @@
                     localStorage.setItem('company_id', data.company_id ?? '');
                     localStorage.setItem('units', data.units || 'metric');
                     localStorage.setItem('permissions', JSON.stringify(data.permissions || []));
-                    window.location.href = 'gps-dashboard.html';
+                    if (String(data.company_id ?? '') !== localStorage.getItem('company_login_slug_company_id')) {
+                        localStorage.removeItem('company_login_slug');
+                        localStorage.removeItem('company_login_slug_company_id');
+                    }
+                    window.location.href = '/gps-dashboard.html';
                 } else {
                     err.textContent = 'Invalid username or password';
                     err.style.display = 'block';
