@@ -11,6 +11,7 @@ State keys in DeviceState.alert_states:
   auto_assign_grace_period  – snapshot of grace period at assignment time
   auto_assign_rule_last_match – ISO timestamp of last successful rule match
 """
+import json
 import logging
 from datetime import datetime
 from typing import List
@@ -133,6 +134,13 @@ async def _eligible(session: AsyncSession, device) -> List[Driver]:
     out = []
     for d in result.scalars().all():
         vehicles = d.assignment_vehicles
+        if isinstance(vehicles, str):
+            try:
+                vehicles = json.loads(vehicles)
+            except (json.JSONDecodeError, ValueError):
+                vehicles = None
+        if vehicles is not None and not isinstance(vehicles, list):
+            vehicles = None
         if not vehicles or device.id in vehicles:
             out.append(d)
     return out

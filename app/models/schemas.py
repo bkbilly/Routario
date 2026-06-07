@@ -2,6 +2,7 @@
 Pydantic Schemas - Routario Platform
 Request/Response models with validation
 """
+import json
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Union
 from pydantic import BaseModel, Field, field_validator, ConfigDict
@@ -537,6 +538,19 @@ class DriverResponse(BaseModel):
     assignment_mode: Optional[str] = None
     assignment_grace_period: Optional[int] = None
     assignment_clear: Optional[str] = None
+
+    @field_validator('assignment_vehicles', mode='before')
+    @classmethod
+    def validate_assignment_vehicles(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+            except (json.JSONDecodeError, ValueError):
+                return None
+            return parsed if isinstance(parsed, list) else None
+        return v if isinstance(v, list) else None
 
 
 # ==================== Fuel Schemas ====================

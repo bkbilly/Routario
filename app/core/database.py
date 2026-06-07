@@ -200,6 +200,14 @@ class DatabaseService:
         if self._is_postgres:
             migrations.append("ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)")
             migrations.append("ALTER TABLE alert_history ALTER COLUMN device_id DROP NOT NULL")
+            migrations.append("""
+                ALTER TABLE drivers
+                ALTER COLUMN assignment_vehicles TYPE JSONB
+                USING CASE
+                    WHEN assignment_vehicles IS NULL OR assignment_vehicles = 'null' THEN NULL
+                    ELSE assignment_vehicles::jsonb
+                END
+            """)
 
         for stmt in migrations:
             try:
