@@ -34,6 +34,13 @@ let currentRawDeviceId = null;
 
 // Users tab
 let allUsers                = [];
+let allUsersLoaded          = false;
+let allUsersLoadPromise     = null;
+let allUsersLoadFailed      = false;
+let notifyUsersResolvePromise = null;
+let notifyUserLoadPromises  = new Map();
+let notifyUserLoadFailedIds = new Set();
+let deviceAlertUsers        = [];
 let deviceAssignedUserIds   = new Set();
 
 // Companies
@@ -53,6 +60,53 @@ const hasAdminAccess   = isAdmin || isCompanyAdmin;
 // ── Helpers ───────────────────────────────────────────────────────
 function nextUid() { return ++uidCounter; }
 function pad(n)    { return String(n).padStart(2, '0'); }
+
+function _toId(v) {
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) ? n : null;
+}
+
+function _idSet(values) {
+    return new Set((values || []).map(_toId).filter(id => id !== null));
+}
+
+function _sameId(a, b) {
+    const aid = _toId(a);
+    const bid = _toId(b);
+    return aid !== null && bid !== null && aid === bid;
+}
+
+function _mergeUsersIntoCache(users) {
+    (users || []).forEach(u => {
+        if (!u || _toId(u.id) === null) return;
+        const existing = allUsers.find(a => _sameId(a.id, u.id));
+        if (existing) Object.assign(existing, u);
+        else allUsers.push(u);
+    });
+}
+
+function _findUserById(id) {
+    return allUsers.find(u => _sameId(u.id, id))
+        || deviceAlertUsers.find(u => _sameId(u.id, id))
+        || null;
+}
+
+function _hasUnresolvedNotifyUsers() {
+    return _missingNotifyUserIds().length > 0;
+}
+
+function _missingNotifyUserIds() {
+    const missing = new Set();
+    alertRows.forEach(row => {
+        (row.notify_user_ids || []).forEach(id => {
+            const numericId = _toId(id);
+            if (numericId !== null && !_findUserById(numericId) && !notifyUserLoadFailedIds.has(numericId)) {
+                missing.add(numericId);
+            }
+        });
+    });
+    return [...missing];
+}
 
 function protoBadgeHtml(protocol) {
     const hue = [...protocol].reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
@@ -89,7 +143,7 @@ async function initDeviceSection() {
         loadAvailableProtocols(),
         loadUserChannels(),
         loadDevices(),
-        ...(hasAdminAccess ? [loadAllUsers()] : []),
+        ...((isAdmin || (isCompanyAdmin && hasPermission('manage_users'))) ? [loadAllUsers()] : []),
     ]);
     populateAddAlertDropdown();
 }
@@ -172,6 +226,13 @@ async function loadAvailableProtocols() {
 async function loadUserChannels() {
     try {
         const userId = localStorage.getItem('user_id') || 1;
+        if (typeof permissionsReady !== 'undefined') {
+            const currentUser = await permissionsReady;
+            if (_sameId(currentUser?.id, userId)) {
+                userChannels = currentUser.notification_channels || [];
+                return;
+            }
+        }
         const res    = await apiFetch(`${API_BASE}/users/${userId}`);
         if (!res.ok) throw new Error();
         const user   = await res.json();
@@ -375,6 +436,7 @@ function openDeviceModal(deviceId, startTab = 'general') {
     const d = devices.find(x => x.id == deviceId);
     if (!d) return;
     editingDeviceId = d.id;
+    deviceAlertUsers = [];
 
     document.getElementById('modalTitle').textContent        = 'Edit Device';
     document.getElementById('submitText').textContent        = 'Save';
@@ -433,9 +495,10 @@ function openDeviceModal(deviceId, startTab = 'general') {
     // Ensure the current user is always resolvable in the notify-users lookup
     const _myId = parseInt(localStorage.getItem('user_id'), 10);
     const _myName = localStorage.getItem('username');
-    if (_myId && _myName && !allUsers.some(u => u.id === _myId)) {
+    if (_myId && _myName && !allUsers.some(u => _sameId(u.id, _myId))) {
         allUsers.push({ id: _myId, username: _myName });
     }
+    if (isCompanyAdmin && !allUsersLoaded) loadDeviceAlertUsers(d.id);
     loadAlertsFromConfig(d.config || {});
     switchModalTab(startTab);
     refreshNativeEventAlerts();
@@ -543,9 +606,21 @@ async function handleSubmit(event) {
 
         const isIntg     = _isIntegrationSelected();
         const providerId = document.getElementById('deviceProtocol').value;
+        const deviceName = document.getElementById('deviceName').value.trim();
+        const rawImei    = document.getElementById('deviceImei').value.trim();
+
+        if (!deviceName) {
+            showAlert({ title: 'Device name required', message: 'Please enter a device name before saving.', type: 'error' });
+            return;
+        }
 
         if (!providerId) {
             showAlert({ title: 'Protocol required', message: 'Please select a protocol before saving.', type: 'error' });
+            return;
+        }
+
+        if (!isIntg && !rawImei) {
+            showAlert({ title: 'IMEI required', message: 'Please enter a device identifier before saving.', type: 'error' });
             return;
         }
 
@@ -556,15 +631,34 @@ async function handleSubmit(event) {
                 // Non-admins cannot edit integration credentials — preserve as-is
                 newConfig.integration = existingConfig.integration || {};
             } else {
+                const existingIntegration = existingConfig.integration || {};
+                const isExistingIntegration = editingDeviceId && existingIntegration.provider === providerId;
                 const existingSel  = document.getElementById('intgAccountSelect');
                 const accountId    = existingSel?.value ? parseInt(existingSel.value) : null;
                 const account      = accountId ? integrationAccounts.find(a => a.id === accountId) : null;
                 const accountLabel = account?.account_label
                     ?? document.getElementById('intgAccountLabel')?.value?.trim() ?? '';
                 const remoteId     = document.getElementById('intgRemoteId')?.value?.trim() ?? '';
+                const preservingExistingUnlabelledIntegration =
+                    isExistingIntegration && !accountId && !accountLabel;
+
+                if (!accountId && !preservingExistingUnlabelledIntegration) {
+                    if (!accountLabel) {
+                        showAlert({ title: 'Account label required', message: 'Enter an integration account label before saving.', type: 'error' });
+                        return;
+                    }
+                    const missingCredential = (provider.fields || []).find(f =>
+                        f.required && !document.getElementById(`intgField_${f.key}`)?.value?.trim()
+                    );
+                    if (missingCredential) {
+                        showAlert({ title: 'Missing credentials', message: `Fill in ${missingCredential.label} before saving.`, type: 'error' });
+                        return;
+                    }
+                }
 
                 if (!accountId && accountLabel) {
-                    await _ensureAccount(provider);
+                    const createdAccountId = await _ensureAccount(provider);
+                    if (!createdAccountId) return;
                 }
 
                 newConfig.integration = {
@@ -575,14 +669,14 @@ async function handleSubmit(event) {
             }
         }
 
-        let imei = document.getElementById('deviceImei').value.trim();
+        let imei = rawImei;
         if (isIntg && !imei) {
             const remoteId = newConfig.integration?.remote_id || Date.now();
             imei = `EXT-${providerId}-${remoteId}`.slice(0, 64);
         }
 
         const payload = {
-            name:          document.getElementById('deviceName').value.trim(),
+            name:          deviceName,
             imei,
             protocol:      providerId,
             vehicle_type:  document.getElementById('vehicleType').value    || DEFAULT_TYPE,
@@ -824,8 +918,15 @@ function renderAlertsTable() {
     const tbody    = document.getElementById('alertsTableBody');
     const emptyRow = document.getElementById('alertsEmptyRow');
     if (!tbody) return;
+    if (hasAdminAccess && _hasUnresolvedNotifyUsers() && !notifyUsersResolvePromise) {
+        notifyUsersResolvePromise = resolveMissingNotifyUsers()
+            .then(renderAlertsTable)
+            .finally(() => { notifyUsersResolvePromise = null; });
+    }
     const notifyHdr = document.getElementById('alertsNotifyUsersHeader');
     if (notifyHdr) notifyHdr.style.display = hasAdminAccess ? '' : 'none';
+    const emptyCell = emptyRow?.querySelector('td');
+    if (emptyCell) emptyCell.colSpan = hasAdminAccess ? 7 : 6;
     tbody.querySelectorAll('tr.alert-data-row').forEach(r => r.remove());
     if (!alertRows.length) { if (emptyRow) emptyRow.style.display = ''; return; }
 
@@ -834,12 +935,9 @@ function renderAlertsTable() {
     if (isAdmin) {
         visibleRows = alertRows;
     } else if (isCompanyAdmin) {
-        const companyUserIds = new Set([_uid, ...allUsers.map(u => u.id)]);
-        visibleRows = alertRows.filter(r =>
-            !r.notify_user_ids || r.notify_user_ids.some(id => companyUserIds.has(id))
-        );
+        visibleRows = alertRows;
     } else {
-        visibleRows = alertRows.filter(r => !r.notify_user_ids || r.notify_user_ids.includes(_uid));
+        visibleRows = alertRows.filter(r => !r.notify_user_ids || _idSet(r.notify_user_ids).has(_uid));
     }
 
     if (!visibleRows.length) { if (emptyRow) emptyRow.style.display = ''; return; }
@@ -934,8 +1032,10 @@ function renderAlertsTable() {
                 notifyUsersCell = `<td><span style="color:var(--text-muted);font-size:0.8rem;">${!ids ? 'All' : 'None'}</span></td>`;
             } else {
                 const visibleUsers = ids
-                    .map(id => allUsers.find(u => u.id === id))
-                    .filter(Boolean);
+                    .map(id => {
+                        const user = _findUserById(id);
+                        return user || { id, username: (allUsersLoaded || allUsersLoadFailed) ? `User #${id}` : 'Loading...' };
+                    });
                 notifyUsersCell = `<td><div style="display:flex;flex-wrap:wrap;gap:0.3rem;">${
                     visibleUsers.map(u => `<span class="channel-pill active" style="pointer-events:none;font-size:0.75rem;">${_esc(u.username)}</span>`).join('')
                 }</div></td>`;
@@ -1147,51 +1247,44 @@ async function openAlertEditor(uid) {
             let allFetched = [];
 
             if (isAdmin) {
-                const device = devices.find(d => d.id === editingDeviceId);
-                if (allUsers.length === 0) {
-                    const res = await apiFetch(`${API_BASE}/users`);
-                    allFetched = res.ok ? await res.json() : [];
-                    allUsers = allFetched;
-                } else {
-                    allFetched = allUsers;
-                }
-                if (device?.company_id) {
-                    deviceUsers = allFetched.filter(u => u.company_id === device.company_id && !u.is_admin);
-                }
+                await loadAllUsers();
+                allFetched = allUsers;
+                deviceUsers = allFetched;
             } else {
                 const res = await apiFetch(`${API_BASE}/devices/${editingDeviceId}/users`);
                 deviceUsers = res.ok ? await res.json() : [];
                 deviceUsers = deviceUsers.filter(u => !u.is_admin);
             }
+            _mergeUsersIntoCache(deviceUsers);
 
             // Always include the current user
-            if (!deviceUsers.some(u => u.id === currentUserId)) {
+            if (!deviceUsers.some(u => _sameId(u.id, currentUserId))) {
                 deviceUsers.unshift({ id: currentUserId, username: localStorage.getItem('username') || 'me' });
             }
 
             // Always include users already in notify_user_ids (e.g. creator outside the company filter)
-            const existingIds = row.notify_user_ids ?? [];
+            const existingIds = (row.notify_user_ids ?? []).map(_toId).filter(id => id !== null);
             for (const uid of existingIds) {
-                if (!deviceUsers.some(u => u.id === uid)) {
-                    const known = allFetched.find(u => u.id === uid);
+                if (!deviceUsers.some(u => _sameId(u.id, uid))) {
+                    const known = allFetched.find(u => _sameId(u.id, uid)) || _findUserById(uid);
                     if (known) deviceUsers.push(known);
                 }
             }
 
             // Merge fetched users into allUsers so renderAlertsTable can show names
             (allFetched.length ? allFetched : deviceUsers).forEach(u => {
-                if (!allUsers.some(a => a.id === u.id)) allUsers.push(u);
+                if (!allUsers.some(a => _sameId(a.id, u.id))) allUsers.push(u);
             });
             renderAlertsTable();
 
             // Default selection: existing notify_user_ids, no fallback to current user
-            const selectedIds = new Set(existingIds);
+            const selectedIds = _idSet(existingIds);
             // IDs not shown as checkboxes (out-of-scope admins, etc.) — preserve on save
-            const hiddenIds = existingIds.filter(id => !deviceUsers.some(u => u.id === id));
+            const hiddenIds = existingIds.filter(id => !deviceUsers.some(u => _sameId(u.id, id)));
             const pills = deviceUsers.map(u =>
-                `<label class="channel-pill${selectedIds.has(u.id) ? ' active' : ''}">
-                    <input type="checkbox" class="editor-notify-user-cb" value="${u.id}"${selectedIds.has(u.id) ? ' checked' : ''}>
-                    ${_esc(u.username)}${u.id === currentUserId ? ' (you)' : ''}
+                `<label class="channel-pill${selectedIds.has(_toId(u.id)) ? ' active' : ''}">
+                    <input type="checkbox" class="editor-notify-user-cb" value="${u.id}"${selectedIds.has(_toId(u.id)) ? ' checked' : ''}>
+                    ${_esc(u.username)}${_sameId(u.id, currentUserId) ? ' (you)' : ''}
                 </label>`
             ).join('');
             notifyUsersHtml = `<div class="form-group">
@@ -1371,15 +1464,85 @@ function buildConfigFromAlertRows(existing = {}) {
 // ================================================================
 
 async function loadAllUsers() {
-    try {
-        const res = await apiFetch(`${API_BASE}/users`);
-        if (res.ok) {
-            allUsers = await res.json();
-            if (document.getElementById('deviceModal')?.classList.contains('active')) {
-                renderAlertsTable();
+    if (allUsersLoaded) return allUsers;
+    if (allUsersLoadPromise) return allUsersLoadPromise;
+
+    allUsersLoadPromise = (async () => {
+        try {
+            const res = await apiFetch(`${API_BASE}/users`);
+            if (res.ok) {
+                allUsers = await res.json();
+                allUsersLoaded = true;
+                allUsersLoadFailed = false;
+                if (document.getElementById('deviceModal')?.classList.contains('active')) {
+                    renderAlertsTable();
+                }
+            } else {
+                allUsersLoadFailed = true;
             }
+        } catch (e) {
+            allUsersLoadFailed = true;
+            console.error('Failed to load users:', e);
+        } finally {
+            allUsersLoadPromise = null;
         }
-    } catch (e) { console.error('Failed to load users:', e); }
+        return allUsers;
+    })();
+
+    return allUsersLoadPromise;
+}
+
+async function loadNotifyUserById(userId) {
+    const id = _toId(userId);
+    if (id === null || _findUserById(id)) return _findUserById(id);
+    if (notifyUserLoadFailedIds.has(id)) return null;
+    if (notifyUserLoadPromises.has(id)) return notifyUserLoadPromises.get(id);
+
+    const promise = (async () => {
+        try {
+            const res = await apiFetch(`${API_BASE}/users/${id}`);
+            if (!res.ok) {
+                notifyUserLoadFailedIds.add(id);
+                return null;
+            }
+            const user = await res.json();
+            _mergeUsersIntoCache([user]);
+            return user;
+        } catch (e) {
+            notifyUserLoadFailedIds.add(id);
+            console.error(`Failed to load notify user ${id}:`, e);
+            return null;
+        } finally {
+            notifyUserLoadPromises.delete(id);
+        }
+    })();
+
+    notifyUserLoadPromises.set(id, promise);
+    return promise;
+}
+
+async function loadMissingNotifyUsers() {
+    const ids = _missingNotifyUserIds();
+    if (!ids.length) return [];
+    return Promise.all(ids.map(loadNotifyUserById));
+}
+
+async function resolveMissingNotifyUsers() {
+    if (isAdmin && !allUsersLoaded && !allUsersLoadFailed) {
+        await loadAllUsers();
+    }
+    if (!_hasUnresolvedNotifyUsers()) return [];
+    return loadMissingNotifyUsers();
+}
+
+async function loadDeviceAlertUsers(deviceId) {
+    try {
+        const res = await apiFetch(`${API_BASE}/devices/${deviceId}/users`);
+        if (!res.ok) return;
+        deviceAlertUsers = await res.json();
+        _mergeUsersIntoCache(deviceAlertUsers);
+        if (editingDeviceId === deviceId) renderAlertsTable();
+    } catch (e) { console.error('Failed to load device alert users:', e); }
 }
 
 async function loadAllCompanies() {
@@ -1746,5 +1909,3 @@ async function deleteClip(clipId) {
         showAlert({ title: 'Error', message: 'Failed to delete clip.', type: 'error' });
     }
 }
-
-
