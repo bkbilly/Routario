@@ -5,9 +5,10 @@ CRUD and membership management for companies.
 Access rules:
   All endpoints → super admin only
 """
+from pathlib import Path
 from typing import List
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, File, UploadFile
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
@@ -17,6 +18,55 @@ from models import Company, User, Device, DeviceState
 from models.schemas import CompanyCreate, CompanyUpdate, CompanyResponse, UserResponse, DeviceResponse
 
 router = APIRouter(prefix="/api/companies", tags=["companies"])
+
+BRANDING_DIR = Path("web/uploads/company-branding")
+ALLOWED_IMAGE_TYPES = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+}
+MAX_BRANDING_BYTES = 2 * 1024 * 1024
+
+
+def _clean_app_name(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+async def _store_branding_file(company: Company, upload: UploadFile, kind: str) -> str:
+    suffix = ALLOWED_IMAGE_TYPES.get(upload.content_type or "")
+    if not suffix:
+        raise HTTPException(status_code=400, detail="Unsupported image type")
+
+    data = await upload.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    if len(data) > MAX_BRANDING_BYTES:
+        raise HTTPException(status_code=400, detail="Image must be 2 MB or smaller")
+
+    BRANDING_DIR.mkdir(parents=True, exist_ok=True)
+    current = getattr(company, f"{kind}_filename", None)
+    if current:
+        try:
+            (BRANDING_DIR / current).unlink()
+        except OSError:
+            pass
+
+    filename = f"company-{company.id}-{kind}{suffix}"
+    path = BRANDING_DIR / filename
+    path.write_bytes(data)
+    return filename
+
+
+def _delete_branding_file(filename: str | None):
+    if not filename:
+        return
+    try:
+        (BRANDING_DIR / filename).unlink()
+    except OSError:
+        pass
 
 
 @router.get("", response_model=List[CompanyResponse])
@@ -42,6 +92,7 @@ async def get_all_companies(admin: User = Depends(require_admin)):
 @router.post("", response_model=CompanyResponse)
 async def create_company(data: CompanyCreate, admin: User = Depends(require_admin)):
     db = get_db()
+    data.app_name = _clean_app_name(data.app_name)
     return await db.create_company(data)
 
 
@@ -57,10 +108,78 @@ async def get_company(company_id: int, admin: User = Depends(require_admin)):
 @router.put("/{company_id}", response_model=CompanyResponse)
 async def update_company(company_id: int, data: CompanyUpdate, admin: User = Depends(require_admin)):
     db = get_db()
+    if data.app_name is not None:
+        data.app_name = _clean_app_name(data.app_name)
     company = await db.update_company(company_id, data)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     return company
+
+
+@router.post("/{company_id}/branding/icon", response_model=CompanyResponse)
+async def upload_company_icon(
+    company_id: int,
+    file: UploadFile = File(...),
+    admin: User = Depends(require_admin),
+):
+    db = get_db()
+    async with db.get_session() as session:
+        company = await session.get(Company, company_id)
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+        company.icon_filename = await _store_branding_file(company, file, "icon")
+        company.branding_version = (company.branding_version or 1) + 1
+        await session.flush()
+        await session.refresh(company)
+        return company
+
+
+@router.delete("/{company_id}/branding/icon", response_model=CompanyResponse)
+async def delete_company_icon(company_id: int, admin: User = Depends(require_admin)):
+    db = get_db()
+    async with db.get_session() as session:
+        company = await session.get(Company, company_id)
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+        _delete_branding_file(company.icon_filename)
+        company.icon_filename = None
+        company.branding_version = (company.branding_version or 1) + 1
+        await session.flush()
+        await session.refresh(company)
+        return company
+
+
+@router.post("/{company_id}/branding/badge", response_model=CompanyResponse)
+async def upload_company_badge(
+    company_id: int,
+    file: UploadFile = File(...),
+    admin: User = Depends(require_admin),
+):
+    db = get_db()
+    async with db.get_session() as session:
+        company = await session.get(Company, company_id)
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+        company.badge_filename = await _store_branding_file(company, file, "badge")
+        company.branding_version = (company.branding_version or 1) + 1
+        await session.flush()
+        await session.refresh(company)
+        return company
+
+
+@router.delete("/{company_id}/branding/badge", response_model=CompanyResponse)
+async def delete_company_badge(company_id: int, admin: User = Depends(require_admin)):
+    db = get_db()
+    async with db.get_session() as session:
+        company = await session.get(Company, company_id)
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+        _delete_branding_file(company.badge_filename)
+        company.badge_filename = None
+        company.branding_version = (company.branding_version or 1) + 1
+        await session.flush()
+        await session.refresh(company)
+        return company
 
 
 @router.delete("/{company_id}")

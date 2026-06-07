@@ -166,6 +166,10 @@ class DatabaseService:
             "ALTER TABLE users ADD COLUMN company_id INTEGER",
             "ALTER TABLE users ADD COLUMN is_company_admin BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT NULL",
+            "ALTER TABLE companies ADD COLUMN app_name VARCHAR(100)",
+            "ALTER TABLE companies ADD COLUMN icon_filename VARCHAR(255)",
+            "ALTER TABLE companies ADD COLUMN badge_filename VARCHAR(255)",
+            "ALTER TABLE companies ADD COLUMN branding_version INTEGER DEFAULT 1",
             "ALTER TABLE devices ADD COLUMN company_id INTEGER",
             "ALTER TABLE geofences ADD COLUMN user_id INTEGER",
             "ALTER TABLE device_states ADD COLUMN last_trip_id INTEGER",
@@ -475,10 +479,15 @@ class DatabaseService:
             return user
 
     async def authenticate_user(self, username: str, password: str) -> Optional[User]:
+        identifier = (username or "").strip()
+        identifier_lower = identifier.lower()
         async with self.get_session() as session:
             result = await session.execute(
                 select(User).where(
-                    or_(User.username == username, User.email == username)
+                    or_(
+                        func.lower(User.username) == identifier_lower,
+                        func.lower(User.email) == identifier_lower,
+                    )
                 )
             )
             user = result.scalar_one_or_none()
@@ -536,7 +545,7 @@ class DatabaseService:
 
     async def create_company(self, data: CompanyCreate) -> Company:
         async with self.get_session() as session:
-            company = Company(name=data.name)
+            company = Company(name=data.name, app_name=(data.app_name or None))
             session.add(company)
             await session.flush()
             await session.refresh(company)
@@ -560,6 +569,11 @@ class DatabaseService:
                 return None
             if data.name is not None:
                 company.name = data.name
+            if "app_name" in data.model_fields_set:
+                next_app_name = data.app_name or None
+                if company.app_name != next_app_name:
+                    company.app_name = next_app_name
+                    company.branding_version = (company.branding_version or 1) + 1
             await session.flush()
             await session.refresh(company)
             return company

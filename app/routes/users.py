@@ -15,7 +15,8 @@ from typing import List
 
 import jwt
 from fastapi import APIRouter, HTTPException, Query, Depends
-from sqlalchemy import select, delete, update
+from sqlalchemy import select, delete, update, func
+from sqlalchemy.exc import IntegrityError
 
 from core.database import get_db
 from core.config import get_settings
@@ -32,6 +33,33 @@ def _check_manage_users(caller: User):
     """Raise 403 if caller lacks manage_users permission (super admin bypasses)."""
     if not caller.is_admin and "manage_users" not in (caller.permissions or []):
         raise HTTPException(status_code=403, detail="Permission required: manage_users")
+
+
+def _user_integrity_detail(exc: IntegrityError) -> str:
+    msg = str(exc.orig).lower() if getattr(exc, "orig", None) else str(exc).lower()
+    if "users.email" in msg or "email" in msg:
+        return "Email already exists"
+    if "users.username" in msg or "username" in msg:
+        return "Username already exists"
+    return "User already exists"
+
+
+async def _ensure_unique_user_identity(username: str | None = None, email: str | None = None, exclude_user_id: int | None = None):
+    db = get_db()
+    async with db.get_session() as session:
+        if username:
+            q = select(User).where(func.lower(User.username) == username.strip().lower())
+            if exclude_user_id is not None:
+                q = q.where(User.id != exclude_user_id)
+            if (await session.execute(q)).scalar_one_or_none():
+                raise HTTPException(status_code=400, detail="Username already exists")
+
+        if email:
+            q = select(User).where(func.lower(User.email) == email.strip().lower())
+            if exclude_user_id is not None:
+                q = q.where(User.id != exclude_user_id)
+            if (await session.execute(q)).scalar_one_or_none():
+                raise HTTPException(status_code=400, detail="Email already exists")
 
 
 @router.get("", response_model=List[UserResponse])
@@ -62,7 +90,11 @@ async def create_user(user_data: UserCreate, caller: User = Depends(require_comp
         user_data.permissions = cap_permissions(user_data.permissions, caller)
 
     db = get_db()
-    return await db.create_user(user_data)
+    await _ensure_unique_user_identity(username=user_data.username, email=user_data.email)
+    try:
+        return await db.create_user(user_data)
+    except IntegrityError as exc:
+        raise HTTPException(status_code=400, detail=_user_integrity_detail(exc)) from exc
 
 
 @router.get("/{user_id}/devices", response_model=List[DeviceResponse])
@@ -111,7 +143,11 @@ async def update_user(
             user_data.permissions = cap_permissions(user_data.permissions, caller)
 
     db = get_db()
-    user = await db.update_user(user_id, user_data)
+    await _ensure_unique_user_identity(email=user_data.email, exclude_user_id=user_id)
+    try:
+        user = await db.update_user(user_id, user_data)
+    except IntegrityError as exc:
+        raise HTTPException(status_code=400, detail=_user_integrity_detail(exc)) from exc
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user

@@ -141,9 +141,12 @@ function openAddCompanyModal() {
     editingCompanyId = null;
     document.getElementById('cmpModalTitle').textContent     = 'Add Company';
     document.getElementById('companyName').value          = '';
+    document.getElementById('companyAppName').value       = '';
+    updateBrandingPreview(null);
     document.getElementById('deleteCompanyBtn').style.display = 'none';
     document.getElementById('cmpUsersTabBtn').style.display  = 'none';
     document.getElementById('cmpDevicesTabBtn').style.display = 'none';
+    document.getElementById('companyBrandingControls').style.display = 'none';
     switchTab('general');
     document.getElementById('companyModal').classList.add('active');
 }
@@ -155,9 +158,12 @@ async function openEditModal(companyId) {
 
     document.getElementById('cmpModalTitle').textContent     = `Edit — ${c.name}`;
     document.getElementById('companyName').value          = c.name;
+    document.getElementById('companyAppName').value       = c.app_name || '';
+    updateBrandingPreview(c);
     document.getElementById('deleteCompanyBtn').style.display = 'inline-flex';
     document.getElementById('cmpUsersTabBtn').style.display  = '';
     document.getElementById('cmpDevicesTabBtn').style.display = '';
+    document.getElementById('companyBrandingControls').style.display = '';
 
     // Load current company memberships
     const [userRes, deviceRes] = await Promise.all([
@@ -186,6 +192,7 @@ function closeCompanyModal() {
 
 async function saveCompany() {
     const name = document.getElementById('companyName').value.trim();
+    const appName = document.getElementById('companyAppName').value.trim();
     if (!name) { showAlert('Company name is required', 'error'); return; }
 
     const saveBtn  = document.getElementById('saveCompanyBtn');
@@ -201,10 +208,12 @@ async function saveCompany() {
         const res = await apiFetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name }),
+            body: JSON.stringify({ name, app_name: appName || null }),
         });
         if (res.ok) {
             showAlert(editingCompanyId ? 'Company updated' : 'Company created', 'success');
+            const saved = await res.json();
+            if (saved?.id === parseInt(localStorage.getItem('company_id') || '0', 10)) applyCompanyBranding(saved.id);
             closeCompanyModal();
             await loadCompanies();
         } else {
@@ -216,6 +225,72 @@ async function saveCompany() {
         saveBtn.disabled       = false;
         saveText.style.display = 'inline';
         saveLoad.style.display = 'none';
+    }
+}
+
+function updateBrandingPreview(company) {
+    const version = company?.branding_version || 1;
+    const iconPreview = document.getElementById('companyIconPreview');
+    const badgePreview = document.getElementById('companyBadgePreview');
+    if (iconPreview) {
+        iconPreview.src = company?.icon_url
+            ? `${company.icon_url}${company.icon_url.includes('?') ? '&' : '?'}preview=${version}`
+            : '/icons/icon-192.png';
+    }
+    if (badgePreview) {
+        badgePreview.src = company?.badge_url
+            ? `${company.badge_url}${company.badge_url.includes('?') ? '&' : '?'}preview=${version}`
+            : '/icons/badge-96.png';
+    }
+}
+
+async function uploadCompanyBranding(kind) {
+    if (!editingCompanyId) return;
+    const input = document.getElementById(kind === 'badge' ? 'companyBadgeFile' : 'companyIconFile');
+    const file = input?.files?.[0];
+    if (!file) return;
+
+    const form = new FormData();
+    form.append('file', file);
+    try {
+        const res = await apiFetch(`${API_BASE}/companies/${editingCompanyId}/branding/${kind}`, {
+            method: 'POST',
+            body: form,
+        });
+        input.value = '';
+        if (!res.ok) {
+            const err = await res.json();
+            showAlert(err.detail || 'Failed to upload image', 'error');
+            return;
+        }
+        const updated = await res.json();
+        companies = companies.map(c => c.id === updated.id ? { ...c, ...updated } : c);
+        cmpAllCompanies = cmpAllCompanies.map(c => c.id === updated.id ? { ...c, ...updated } : c);
+        updateBrandingPreview(updated);
+        if (updated.id === parseInt(localStorage.getItem('company_id') || '0', 10)) applyCompanyBranding(updated.id);
+        showAlert(kind === 'badge' ? 'Badge updated' : 'App icon updated', 'success');
+    } catch (e) {
+        showAlert('Error uploading image', 'error');
+    }
+}
+
+async function resetCompanyBranding(kind) {
+    if (!editingCompanyId) return;
+    try {
+        const res = await apiFetch(`${API_BASE}/companies/${editingCompanyId}/branding/${kind}`, { method: 'DELETE' });
+        if (!res.ok) {
+            const err = await res.json();
+            showAlert(err.detail || 'Failed to reset image', 'error');
+            return;
+        }
+        const updated = await res.json();
+        companies = companies.map(c => c.id === updated.id ? { ...c, ...updated } : c);
+        cmpAllCompanies = cmpAllCompanies.map(c => c.id === updated.id ? { ...c, ...updated } : c);
+        updateBrandingPreview(updated);
+        if (updated.id === parseInt(localStorage.getItem('company_id') || '0', 10)) applyCompanyBranding(updated.id);
+        showAlert(kind === 'badge' ? 'Badge reset to default' : 'App icon reset to default', 'success');
+    } catch (e) {
+        showAlert('Error resetting image', 'error');
     }
 }
 
@@ -386,4 +461,3 @@ async function toggleDeviceMembership(deviceId, add) {
 }
 
 // ── Toast ─────────────────────────────────────────────────────────
-

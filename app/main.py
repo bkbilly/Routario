@@ -5,16 +5,18 @@ FastAPI Application - Routario Platform
 import asyncio
 import json
 import logging
+import mimetypes
 import os
 import signal
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 import jwt
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -27,7 +29,7 @@ from core.gateway import TCPServer, UDPServer, connection_manager
 from core.push_notifications import get_push_service
 from core.valhalla import check_valhalla_health, set_valhalla_url
 from integrations.engine import integration_poll_task
-from models import AlertHistory, Device, User
+from models import AlertHistory, Company, Device, User
 from models.schemas import NormalizedPosition, UserCreate, WSMessageType
 from protocols import ProtocolRegistry
 from routes import ROUTE_REGISTRY
@@ -36,6 +38,44 @@ from routes.share import page_router
 import integrations  # triggers autodiscover()
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_APP_NAME = "Routario"
+DEFAULT_MANIFEST_NAME = "Routario Platform"
+BRANDING_DIR = Path("web/uploads/company-branding")
+DEFAULT_ICON_PATHS = {
+    "favicon": Path("web/icons/favicon.ico"),
+    "apple-touch-icon": Path("web/icons/apple-touch-icon.png"),
+    "icon-192": Path("web/icons/icon-192.png"),
+    "icon-192-full": Path("web/icons/icon-192-full.png"),
+    "icon-512": Path("web/icons/icon-512.png"),
+    "badge-96": Path("web/icons/badge-96.png"),
+}
+
+
+async def _get_company_for_branding(company_id: Optional[int]) -> Optional[Company]:
+    if not company_id:
+        return None
+    db = get_db()
+    async with db.get_session() as session:
+        return await session.get(Company, company_id)
+
+
+def _company_file_path(company: Optional[Company], attr: str) -> Optional[Path]:
+    filename = getattr(company, attr, None) if company else None
+    if not filename:
+        return None
+    path = BRANDING_DIR / filename
+    return path if path.exists() else None
+
+
+def _file_response(path: Path) -> FileResponse:
+    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return FileResponse(path, media_type=media_type)
+
+
+def _branding_url(company: Company, asset: str) -> str:
+    version = company.branding_version or 1
+    return f"/branding/company/{company.id}/{asset}?v={version}"
 
 
 # ==================== Redis Pub/Sub (optional) ====================
@@ -479,6 +519,92 @@ async def settings_page():
     return FileResponse("web/user-settings.html")
 
 
+@app.get("/branding/company/{company_id}/metadata")
+async def company_branding_metadata(company_id: int):
+    company = await _get_company_for_branding(company_id)
+    if not company:
+        return {
+            "app_name": None,
+            "branding_version": 1,
+            "icon_url": None,
+            "badge_url": None,
+        }
+    return {
+        "app_name": company.app_name,
+        "branding_version": company.branding_version or 1,
+        "icon_url": _branding_url(company, "icon-192.png") if company.icon_filename else None,
+        "badge_url": _branding_url(company, "badge-96.png") if company.badge_filename else None,
+    }
+
+
+@app.get("/branding/company/{company_id}/{asset_name}")
+async def company_branding_asset(company_id: int, asset_name: str):
+    company = await _get_company_for_branding(company_id)
+    if asset_name == "badge-96.png":
+        custom = _company_file_path(company, "badge_filename")
+        return _file_response(custom or DEFAULT_ICON_PATHS["badge-96"])
+
+    default_key = asset_name.rsplit(".", 1)[0]
+    if default_key not in DEFAULT_ICON_PATHS:
+        return _file_response(DEFAULT_ICON_PATHS["icon-192"])
+
+    custom = _company_file_path(company, "icon_filename")
+    return _file_response(custom or DEFAULT_ICON_PATHS[default_key])
+
+
+@app.get("/manifest.json")
+async def web_manifest(company_id: Optional[int] = Query(None)):
+    company = await _get_company_for_branding(company_id)
+    app_name = (company.app_name if company and company.app_name else None)
+    name = app_name or DEFAULT_MANIFEST_NAME
+    short_name = app_name or DEFAULT_APP_NAME
+    if company and company.icon_filename:
+        icon_192 = _branding_url(company, "icon-192.png")
+        icon_512 = _branding_url(company, "icon-512.png")
+    else:
+        icon_192 = "icons/icon-192.png"
+        icon_512 = "icons/icon-512.png"
+
+    return {
+        "id": f"/routario/company/{company.id}" if company and app_name else "/routario",
+        "name": name,
+        "short_name": short_name,
+        "description": "Real-time GPS device tracking and alerts",
+        "start_url": "/gps-dashboard.html",
+        "display": "standalone",
+        "background_color": "#0f172a",
+        "theme_color": "#170b1c",
+        "orientation": "natural",
+        "icons": [
+            {"src": icon_192, "sizes": "192x192", "purpose": "any"},
+            {"src": icon_192, "sizes": "192x192", "purpose": "maskable"},
+            {"src": icon_512, "sizes": "512x512", "purpose": "any"},
+            {"src": icon_512, "sizes": "512x512", "purpose": "maskable"},
+        ],
+        "categories": ["navigation", "utilities"],
+        "shortcuts": [
+            {
+                "name": "Dashboard",
+                "url": "/gps-dashboard.html",
+                "description": "Open live map dashboard",
+                "icons": [{"src": "icons/shortcut-dashboard.png", "sizes": "96x96", "type": "image/png"}],
+            },
+            {
+                "name": "Devices",
+                "url": "/device-management.html",
+                "description": "Manage tracked devices",
+                "icons": [{"src": "icons/shortcut-devices.png", "sizes": "96x96", "type": "image/png"}],
+            },
+            {
+                "name": "User Settings",
+                "url": "/user-settings.html",
+                "description": "Manage your account and notifications",
+                "icons": [{"src": "icons/shortcut-settings.png", "sizes": "96x96", "type": "image/png"}],
+            },
+        ],
+    }
+
+
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: int):
     await ws_manager.connect(user_id, websocket)
@@ -552,7 +678,7 @@ async def _websocket_direct_loop(websocket: WebSocket, user_id: int):
 
 # Static files — must be last
 os.makedirs("web/uploads", exist_ok=True)
-for _d in ["voice", "dashcam"]:
+for _d in ["voice", "dashcam", "company-branding"]:
     try:
         os.makedirs(f"web/uploads/{_d}", exist_ok=True)
     except OSError:
