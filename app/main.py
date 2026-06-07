@@ -20,6 +20,7 @@ from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import select
 
 from core.alert_engine import get_alert_engine, periodic_alert_task
 from core.schedule_runner import periodic_schedule_task
@@ -58,6 +59,17 @@ async def _get_company_for_branding(company_id: Optional[int]) -> Optional[Compa
     db = get_db()
     async with db.get_session() as session:
         return await session.get(Company, company_id)
+
+
+async def _get_company_for_login_slug(login_slug: Optional[str]) -> Optional[Company]:
+    if not login_slug:
+        return None
+    db = get_db()
+    async with db.get_session() as session:
+        result = await session.execute(
+            select(Company).where(Company.login_slug == login_slug.strip().lower())
+        )
+        return result.scalar_one_or_none()
 
 
 def _company_file_path(company: Optional[Company], attr: str) -> Optional[Path]:
@@ -506,6 +518,10 @@ async def root():
 async def login_page():
     return FileResponse("web/login.html")
 
+@app.get("/login/{company_slug}")
+async def company_login_page(company_slug: str):
+    return FileResponse("web/login.html")
+
 @app.get("/share.html")
 async def share_html_page():
     return FileResponse("web/share.html")
@@ -531,6 +547,28 @@ async def company_branding_metadata(company_id: int):
         }
     return {
         "app_name": company.app_name,
+        "login_slug": company.login_slug,
+        "branding_version": company.branding_version or 1,
+        "icon_url": _branding_url(company, "icon-192.png") if company.icon_filename else None,
+        "badge_url": _branding_url(company, "badge-96.png") if company.badge_filename else None,
+    }
+
+
+@app.get("/branding/login/{company_slug}/metadata")
+async def company_login_branding_metadata(company_slug: str):
+    company = await _get_company_for_login_slug(company_slug)
+    if not company:
+        return {
+            "company_id": None,
+            "app_name": None,
+            "branding_version": 1,
+            "icon_url": None,
+            "badge_url": None,
+        }
+    return {
+        "company_id": company.id,
+        "app_name": company.app_name,
+        "login_slug": company.login_slug,
         "branding_version": company.branding_version or 1,
         "icon_url": _branding_url(company, "icon-192.png") if company.icon_filename else None,
         "badge_url": _branding_url(company, "badge-96.png") if company.badge_filename else None,
@@ -553,8 +591,10 @@ async def company_branding_asset(company_id: int, asset_name: str):
 
 
 @app.get("/manifest.json")
-async def web_manifest(company_id: Optional[int] = Query(None)):
+async def web_manifest(company_id: Optional[int] = Query(None), company_slug: Optional[str] = Query(None)):
     company = await _get_company_for_branding(company_id)
+    if company is None and company_slug:
+        company = await _get_company_for_login_slug(company_slug)
     app_name = (company.app_name if company and company.app_name else None)
     name = app_name or DEFAULT_MANIFEST_NAME
     short_name = app_name or DEFAULT_APP_NAME

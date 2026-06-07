@@ -142,6 +142,7 @@ function openAddCompanyModal() {
     document.getElementById('cmpModalTitle').textContent     = 'Add Company';
     document.getElementById('companyName').value          = '';
     document.getElementById('companyAppName').value       = '';
+    document.getElementById('companyLoginSlug').value     = '';
     updateBrandingPreview(null);
     document.getElementById('deleteCompanyBtn').style.display = 'none';
     document.getElementById('cmpUsersTabBtn').style.display  = 'none';
@@ -159,6 +160,7 @@ async function openEditModal(companyId) {
     document.getElementById('cmpModalTitle').textContent     = `Edit — ${c.name}`;
     document.getElementById('companyName').value          = c.name;
     document.getElementById('companyAppName').value       = c.app_name || '';
+    document.getElementById('companyLoginSlug').value     = c.login_slug || '';
     updateBrandingPreview(c);
     document.getElementById('deleteCompanyBtn').style.display = 'inline-flex';
     document.getElementById('cmpUsersTabBtn').style.display  = '';
@@ -193,6 +195,7 @@ function closeCompanyModal() {
 async function saveCompany() {
     const name = document.getElementById('companyName').value.trim();
     const appName = document.getElementById('companyAppName').value.trim();
+    const loginSlug = document.getElementById('companyLoginSlug').value.trim().toLowerCase();
     if (!name) { showAlert('Company name is required', 'error'); return; }
 
     const saveBtn  = document.getElementById('saveCompanyBtn');
@@ -208,7 +211,7 @@ async function saveCompany() {
         const res = await apiFetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, app_name: appName || null }),
+            body: JSON.stringify({ name, app_name: appName || null, login_slug: loginSlug || null }),
         });
         if (res.ok) {
             showAlert(editingCompanyId ? 'Company updated' : 'Company created', 'success');
