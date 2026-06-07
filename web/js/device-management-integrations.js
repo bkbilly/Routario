@@ -49,6 +49,7 @@ function onProtocolChange(existingIntg = null) {
 
     if (!isIntg) {
         panel.style.display = 'none';
+        panel.querySelectorAll('input, textarea, select').forEach(el => el.removeAttribute('required'));
         panel.innerHTML     = '';
         return;
     }
@@ -58,6 +59,7 @@ function onProtocolChange(existingIntg = null) {
 
     panel.style.display = 'block';
     panel.innerHTML     = _renderIntegrationFields(provider, existingIntg);
+    _syncIntegrationRequiredFields();
 }
 
 // ── Returns true if the selected protocol is an integration ───────
@@ -65,6 +67,26 @@ function onProtocolChange(existingIntg = null) {
 function _isIntegrationSelected() {
     const val = document.getElementById('deviceProtocol')?.value;
     return integrationProviders.some(p => p.provider_id === val);
+}
+
+function _setRequiredWhenVisible(input, required) {
+    if (!input) return;
+    if (required) input.setAttribute('required', '');
+    else input.removeAttribute('required');
+}
+
+function _syncIntegrationRequiredFields() {
+    const panel = document.getElementById('integrationFieldsPanel');
+    if (!panel || panel.style.display === 'none') return;
+
+    const fields = document.getElementById('intgCredentialFields');
+    const usingExisting = !!document.getElementById('intgAccountSelect')?.value;
+    const credentialsVisible = !!fields && fields.style.display !== 'none' && !usingExisting;
+
+    _setRequiredWhenVisible(document.getElementById('intgAccountLabel'), credentialsVisible);
+    fields?.querySelectorAll('input[id^="intgField_"], textarea[id^="intgField_"]').forEach(input => {
+        _setRequiredWhenVisible(input, credentialsVisible && input.dataset.required === 'true');
+    });
 }
 
 // ── Render credential form for a provider ────────────────────────
@@ -95,7 +117,7 @@ function _renderIntegrationFields(provider, existingIntg = null) {
     ).join('');
 
     // Determine if an existing account is pre-selected (e.g. when editing a device)
-    const preSelectedAccount = existingIntg?.account_label
+    const preSelectedAccount = existingIntg && existingIntg.account_label != null
         ? existing.find(a => a.account_label === existingIntg.account_label)
         : null;
     const usingExisting = !!preSelectedAccount;
@@ -124,7 +146,8 @@ function _renderIntegrationFields(provider, existingIntg = null) {
                     <label class="form-label">Account Label *</label>
                     <input type="text" class="form-input" id="intgAccountLabel"
                            placeholder="e.g. Main Fleet, Branch Office…"
-                           value="${_esc(existingIntg?.account_label || '')}">
+                           value="${_esc(existingIntg?.account_label || '')}"
+                           ${usingExisting ? '' : 'required'}>
                     <div class="form-help">Devices sharing the same label reuse one login.</div>
                 </div>
 
@@ -135,14 +158,16 @@ function _renderIntegrationFields(provider, existingIntg = null) {
                       ? `<textarea class="form-input" id="intgField_${f.key}"
                                    placeholder="${_esc(f.placeholder || '')}"
                                    rows="6" style="font-family:monospace;font-size:0.8rem;resize:vertical;"
-                                   ${f.required ? 'required' : ''}>${_esc(existingIntg?.credentials?.[f.key] ?? f.default ?? '')}</textarea>`
+                                   data-required="${f.required ? 'true' : 'false'}"
+                                   ${f.required && !usingExisting ? 'required' : ''}>${_esc(existingIntg?.credentials?.[f.key] ?? f.default ?? '')}</textarea>`
                       : `<input type="${f.field_type === 'password' ? 'password'
                                        : f.field_type === 'number'   ? 'number' : 'text'}"
                                  class="form-input"
                                  id="intgField_${f.key}"
                                  placeholder="${_esc(f.placeholder || '')}"
                                  value="${_esc(existingIntg?.credentials?.[f.key] ?? f.default ?? '')}"
-                                 ${f.required ? 'required' : ''}>`}
+                                 data-required="${f.required ? 'true' : 'false'}"
+                                 ${f.required && !usingExisting ? 'required' : ''}>`}
                     ${f.help_text ? `<div class="form-help">${_esc(f.help_text)}</div>` : ''}
                 </div>`).join('')}
             </div>
@@ -233,20 +258,7 @@ function onIntgAccountSelect() {
         newActions.style.display = usingExisting ? 'none' : '';
     }
 
-    // Remove/restore `required` so the browser won't block form submission
-    const labelInput = document.getElementById('intgAccountLabel');
-    if (labelInput) labelInput.required = !usingExisting;
-
-    fields.querySelectorAll('input[id^="intgField_"], textarea[id^="intgField_"]').forEach(input => {
-        if (usingExisting) {
-            input.removeAttribute('required');
-        } else {
-            const label = input.closest('.form-group')?.querySelector('.form-label');
-            if (label?.textContent.includes(' *')) {
-                input.setAttribute('required', '');
-            }
-        }
-    });
+    _syncIntegrationRequiredFields();
 }
 
 // ── Test connection ───────────────────────────────────────────────
