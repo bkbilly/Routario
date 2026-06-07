@@ -24,7 +24,7 @@ async function apiFetch(url, options = {}) {
     }
 
     // Only set Content-Type to JSON if there's a body and it hasn't been set already
-    if (options.body && !headers['Content-Type']) {
+    if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
         headers['Content-Type'] = 'application/json';
     }
 
@@ -108,6 +108,63 @@ function checkLogin() {
     if (!localStorage.getItem('auth_token')) window.location.href = 'login.html';
 }
 
+function _setHeadLink(rel, href) {
+    let link = document.querySelector(`link[rel="${rel}"]`);
+    if (!link) {
+        link = document.createElement('link');
+        link.rel = rel;
+        document.head.appendChild(link);
+    }
+    link.href = href;
+}
+
+function _defaultTitleForPage() {
+    const title = document.documentElement.dataset.defaultTitle || document.title || 'Routario';
+    return title.includes(' - Routario') ? title.replace(' - Routario', '') : title.replace('Routario', '').trim();
+}
+
+async function applyCompanyBranding(companyId = localStorage.getItem('company_id')) {
+    const cid = parseInt(companyId || '0', 10) || null;
+    if (!cid) return;
+    if (!document.documentElement.dataset.defaultTitle) {
+        document.documentElement.dataset.defaultTitle = document.title || 'Routario';
+    }
+
+    const base = `/branding/company/${cid}`;
+    _setHeadLink('manifest', `/manifest.json?company_id=${cid}`);
+    _setHeadLink('icon', `${base}/favicon.ico`);
+    _setHeadLink('apple-touch-icon', `${base}/apple-touch-icon.png`);
+
+    try {
+        const res = await fetch(`${base}/metadata`);
+        if (!res.ok) return;
+        const meta = await res.json();
+        const version = meta.branding_version || 1;
+        _setHeadLink('manifest', `/manifest.json?company_id=${cid}&v=${version}`);
+        if (meta.icon_url) {
+            _setHeadLink('icon', `${base}/favicon.ico?v=${version}`);
+            _setHeadLink('apple-touch-icon', `${base}/apple-touch-icon.png?v=${version}`);
+            document.querySelectorAll('.logo-icon').forEach(img => { img.src = `${base}/icon-192.png?v=${version}`; });
+        } else {
+            document.querySelectorAll('.logo-icon').forEach(img => { img.src = '/icons/icon-192.png'; });
+        }
+        if (meta.app_name) {
+            const page = _defaultTitleForPage();
+            document.title = page ? `${page} - ${meta.app_name}` : meta.app_name;
+            const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+            if (appleTitle) appleTitle.content = meta.app_name;
+            document.querySelectorAll('.logo-text').forEach(el => { el.textContent = meta.app_name; });
+        } else {
+            document.title = document.documentElement.dataset.defaultTitle || document.title;
+            const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+            if (appleTitle) appleTitle.content = 'Routario';
+            document.querySelectorAll('.logo-text').forEach(el => { el.textContent = 'Routario'; });
+        }
+    } catch {
+        // Branding is cosmetic; keep the default Routario assets if it fails.
+    }
+}
+
 function _esc(str) {
     return String(str ?? '')
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -142,9 +199,16 @@ const permissionsReady = (function () {
             localStorage.setItem('is_admin', user.is_admin);
         if (user.is_company_admin !== undefined)
             localStorage.setItem('is_company_admin', user.is_company_admin);
+        if (user.company_id !== undefined)
+            localStorage.setItem('company_id', user.company_id ?? '');
         if (user.units)
             localStorage.setItem('units', user.units);
+        applyCompanyBranding(user.company_id);
         return user;
     })
     .catch(() => null); // network failure: use cached value
 })();
+
+if (localStorage.getItem('company_id')) {
+    applyCompanyBranding();
+}

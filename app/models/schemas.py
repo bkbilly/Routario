@@ -291,16 +291,22 @@ class UserResponse(BaseModel):
 
 class CompanyCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
+    app_name: Optional[str] = Field(None, max_length=100)
 
 
 class CompanyUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
+    app_name: Optional[str] = Field(None, max_length=100)
 
 
 class CompanyResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
+    app_name: Optional[str] = None
+    icon_url: Optional[str] = None
+    badge_url: Optional[str] = None
+    branding_version: int = 1
     created_at: datetime
     user_count: Optional[int] = None
     device_count: Optional[int] = None

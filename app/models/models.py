@@ -36,10 +36,26 @@ class Company(Base):
 
     id:         Mapped[int]      = mapped_column(Integer, primary_key=True)
     name:       Mapped[str]      = mapped_column(String(200), unique=True, nullable=False)
+    app_name:   Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    icon_filename:  Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    badge_filename: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    branding_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     users:   Mapped[List["User"]]   = relationship(back_populates="company")
     devices: Mapped[List["Device"]] = relationship(back_populates="company")
+
+    @property
+    def icon_url(self) -> Optional[str]:
+        if not self.icon_filename:
+            return None
+        return f"/branding/company/{self.id}/icon-192.png?v={self.branding_version or 1}"
+
+    @property
+    def badge_url(self) -> Optional[str]:
+        if not self.badge_filename:
+            return None
+        return f"/branding/company/{self.id}/badge-96.png?v={self.branding_version or 1}"
 
 
 class User(Base):

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from core.db_types import JsonType
 from core.config import get_settings
-from models.models import Base
+from models.models import Base, Company, User
 
 logger = logging.getLogger(__name__)
 
@@ -58,13 +58,14 @@ class PushNotificationService:
         subscription = await self._get_subscription(db_service, user_id)
         if not subscription:
             return False
+        icon, badge = await self._get_branding_urls(db_service, user_id)
         payload = json.dumps({
             "title":    title,
             "body":     message,
             "severity": "info",
             "tag":      "admin-notification",
-            "icon":     "/icons/icon-192.png",
-            "badge":    "/icons/badge-96.png",
+            "icon":     icon,
+            "badge":    badge,
             "data":     {"url": "/gps-dashboard.html"},
         })
         try:
@@ -99,6 +100,7 @@ class PushNotificationService:
         subscription = await self._get_subscription(db_service, user_id)
         if not subscription:
             return False
+        icon, badge = await self._get_branding_urls(db_service, user_id)
         return await self._send(
             subscription=subscription,
             alert_type=alert_type,
@@ -106,6 +108,8 @@ class PushNotificationService:
             severity=severity,
             device_name=device_name,
             alert_id=alert_id,
+            icon=icon,
+            badge=badge,
         )
 
     async def save_subscription(self, db_service, user_id: int, subscription: dict):
@@ -165,8 +169,25 @@ class PushNotificationService:
             row = result.scalar_one_or_none()
             return row.subscription if row else None
 
+    async def _get_branding_urls(self, db_service, user_id: int) -> tuple[str, str]:
+        icon = "/icons/icon-192.png"
+        badge = "/icons/badge-96.png"
+        async with db_service.get_session() as session:
+            user = await session.get(User, user_id)
+            if not user or not user.company_id:
+                return icon, badge
+            company = await session.get(Company, user.company_id)
+            if not company:
+                return icon, badge
+            version = company.branding_version or 1
+            if company.icon_filename:
+                icon = f"/branding/company/{company.id}/icon-192.png?v={version}"
+            if company.badge_filename:
+                badge = f"/branding/company/{company.id}/badge-96.png?v={version}"
+        return icon, badge
+
     async def _send(self, subscription, alert_type, message, severity,
-                    device_name, alert_id) -> bool:
+                    device_name, alert_id, icon="/icons/icon-192.png", badge="/icons/badge-96.png") -> bool:
         try:
             from pywebpush import webpush, WebPushException
         except ImportError:
@@ -181,8 +202,8 @@ class PushNotificationService:
             "body":     message,
             "severity": severity,
             "tag":      f"gps-alert-{alert_type}",
-            "icon":     "/icons/icon-192.png",
-            "badge":    "/icons/badge-96.png",
+            "icon":     icon,
+            "badge":    badge,
             "data":     {"url": "/gps-dashboard.html", "alert_id": alert_id},
         })
 

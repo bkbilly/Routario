@@ -571,6 +571,43 @@
                     <label class="form-label">Company Name *</label>
                     <input type="text" class="form-input" id="companyName" required placeholder="e.g. Acme Corp">
                 </div>
+                <div class="form-group">
+                    <label class="form-label">Application Name</label>
+                    <input type="text" class="form-input" id="companyAppName" maxlength="100" placeholder="Routario">
+                </div>
+                <div class="form-group" id="companyBrandingControls" style="display:none;">
+                    <label class="form-label">Branding</label>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
+                        <div style="border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;">
+                            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+                                <img id="companyIconPreview" src="/icons/icon-192.png" alt="" style="width:48px;height:48px;border-radius:8px;object-fit:contain;background:var(--surface-secondary);border:1px solid var(--border-color);">
+                                <div>
+                                    <div style="font-weight:600;font-size:0.9rem;color:var(--text-primary);">App Icon</div>
+                                    <div style="font-size:0.78rem;color:var(--text-muted);">Used for app icons and favicon</div>
+                                </div>
+                            </div>
+                            <input type="file" id="companyIconFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="uploadCompanyBranding('icon')">
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                                <button type="button" class="btn btn-secondary tbl-btn" onclick="document.getElementById('companyIconFile').click()"><i class="mdi mdi-upload"></i> Upload</button>
+                                <button type="button" class="btn btn-secondary tbl-btn" onclick="resetCompanyBranding('icon')"><i class="mdi mdi-restore"></i> Default</button>
+                            </div>
+                        </div>
+                        <div style="border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;">
+                            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+                                <img id="companyBadgePreview" src="/icons/badge-96.png" alt="" style="width:48px;height:48px;border-radius:8px;object-fit:contain;background:var(--surface-secondary);border:1px solid var(--border-color);">
+                                <div>
+                                    <div style="font-weight:600;font-size:0.9rem;color:var(--text-primary);">Notification Badge</div>
+                                    <div style="font-size:0.78rem;color:var(--text-muted);">Upload a 96x96 badge</div>
+                                </div>
+                            </div>
+                            <input type="file" id="companyBadgeFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="uploadCompanyBranding('badge')">
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                                <button type="button" class="btn btn-secondary tbl-btn" onclick="document.getElementById('companyBadgeFile').click()"><i class="mdi mdi-upload"></i> Upload</button>
+                                <button type="button" class="btn btn-secondary tbl-btn" onclick="resetCompanyBranding('badge')"><i class="mdi mdi-restore"></i> Default</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="modal-tab-content" id="tab-cmp-users">
