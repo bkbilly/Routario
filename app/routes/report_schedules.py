@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api/report-schedules", tags=["report-schedules"])
 
 MAX_KEEP_RUNS = 100
 
-_VALID_TYPES      = {"summary", "trips", "daily", "drivers", "sensors", "alerts"}
+_VALID_TYPES      = {"summary", "trips", "daily", "drivers", "users", "sensors", "alerts"}
 _VALID_FREQS      = {"daily", "weekly", "monthly"}
 _VALID_RANGES     = {
     "last_7_days", "last_14_days", "last_30_days",

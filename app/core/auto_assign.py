@@ -119,7 +119,7 @@ async def evaluate(session: AsyncSession, device, state: DeviceState,
             }
             if state.active_trip_id:
                 trip = await session.get(Trip, state.active_trip_id)
-                if trip and trip.driver_id is None:
+                if trip:
                     trip.driver_id = driver.id
             break
 

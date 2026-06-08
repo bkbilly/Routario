@@ -166,6 +166,7 @@ class DatabaseService:
             "ALTER TABLE users ADD COLUMN company_id INTEGER",
             "ALTER TABLE users ADD COLUMN is_company_admin BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT NULL",
+            "ALTER TABLE users ADD COLUMN last_activity DATETIME",
             "ALTER TABLE companies ADD COLUMN app_name VARCHAR(100)",
             "ALTER TABLE companies ADD COLUMN login_slug VARCHAR(100)",
             "ALTER TABLE companies ADD COLUMN icon_filename VARCHAR(255)",
@@ -492,11 +493,23 @@ class DatabaseService:
                 )
             )
             user = result.scalar_one_or_none()
-        if not user:
-            return None
-        if bcrypt.checkpw(password.encode(), user.password_hash.encode()):
-            return user
+            if not user:
+                return None
+            if bcrypt.checkpw(password.encode(), user.password_hash.encode()):
+                return user
         return None
+
+    async def touch_user_activity(self, user_id: int, interval_minutes: int = 15) -> None:
+        cutoff = datetime.utcnow() - timedelta(minutes=interval_minutes)
+        async with self.get_session() as session:
+            await session.execute(
+                update(User)
+                .where(
+                    User.id == user_id,
+                    or_(User.last_activity.is_(None), User.last_activity < cutoff),
+                )
+                .values(last_activity=datetime.utcnow())
+            )
 
     async def update_user(self, user_id: int, user_data: UserUpdate) -> Optional[User]:
         async with self.get_session() as session:
@@ -725,9 +738,9 @@ class DatabaseService:
             state.total_odometer += distance_km
             if state.active_trip_id:
                 state.trip_odometer += distance_km
-                if position.speed and position.speed > 0:
-                    trip = await session.get(Trip, state.active_trip_id)
-                    if trip and position.speed > trip.max_speed:
+                trip = await session.get(Trip, state.active_trip_id)
+                if trip:
+                    if position.speed and position.speed > trip.max_speed:
                         trip.max_speed = position.speed
 
             state.last_latitude  = position.latitude
@@ -748,6 +761,11 @@ class DatabaseService:
             state.sensors = {**(state.sensors or {}), "last_gps_time": device_time.isoformat()}
 
             await evaluate_auto_assign(session, device, state, position, device_time)
+
+            if state.active_trip_id:
+                trip = await session.get(Trip, state.active_trip_id)
+                if trip and trip.driver_id != state.current_driver_id:
+                    trip.driver_id = state.current_driver_id
 
             rec = PositionRecord(
                 device_id=device.id,
@@ -930,6 +948,7 @@ class DatabaseService:
         async with self.get_session() as session:
             result = await session.execute(
                 select(Trip)
+                .options(selectinload(Trip.driver))
                 .where(
                     and_(
                         Trip.device_id == device_id,

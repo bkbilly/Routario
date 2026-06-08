@@ -15,6 +15,7 @@ from sqlalchemy import select
 from core.auth import get_current_user, require_permission
 from core.database import get_db
 from models import Driver, Device, DeviceState, User
+from models.models import Trip
 from models.schemas import DriverCreate, DriverUpdate, DriverResponse
 
 router = APIRouter(prefix="/api/drivers", tags=["drivers"])
@@ -195,6 +196,10 @@ async def assign_driver(
         state = await session.get(DeviceState, device_id)
         if state:
             state.current_driver_id = driver_id
+            if state.active_trip_id:
+                trip = await session.get(Trip, state.active_trip_id)
+                if trip:
+                    trip.driver_id = driver_id
         else:
             state = DeviceState(device_id=device_id, current_driver_id=driver_id)
             session.add(state)

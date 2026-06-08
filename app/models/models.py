@@ -79,6 +79,7 @@ class User(Base):
     units:      Mapped[str] = mapped_column(String(10),  default='metric')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_activity: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     company:       Mapped[Optional["Company"]]  = relationship(back_populates="users")
     devices:       Mapped[List["Device"]]       = relationship(secondary=user_device_association, back_populates="users")
@@ -208,6 +209,10 @@ class Trip(Base):
 
     device: Mapped["Device"]           = relationship(back_populates="trips")
     driver: Mapped[Optional["Driver"]] = relationship(back_populates="trips")
+
+    @property
+    def driver_name(self) -> Optional[str]:
+        return self.driver.name if self.driver else None
 
 
 class Geofence(Base):

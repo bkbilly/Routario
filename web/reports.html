@@ -305,6 +305,7 @@
                         <option value="trips">Trip List</option>
                         <option value="daily">Daily Activity</option>
                         <option value="drivers">Driver Activity</option>
+                        <option value="users">User Fleet</option>
                         <option value="sensors">Vehicle Sensors</option>
                         <option value="alerts">Alerts</option>
                     </select>
@@ -316,6 +317,14 @@
                         Historical data
                     </label>
                 </div>
+                <div class="form-group" id="dailyModeGroup" style="display:none;">
+                    <label class="form-label">Daily Breakdown</label>
+                    <select id="dailyMode" class="form-input" onchange="onDailyModeChange()">
+                        <option value="fleet">Fleet total</option>
+                        <option value="vehicles">Vehicles</option>
+                        <option value="drivers">Drivers</option>
+                    </select>
+                </div>
                 <div class="form-group" id="dateFromGroup">
                     <label class="form-label">From</label>
                     <input type="date" id="startDate" class="form-input">
@@ -324,7 +333,7 @@
                     <label class="form-label">To</label>
                     <input type="date" id="endDate" class="form-input">
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="vehicleSelectGroup">
                     <label class="form-label">Vehicles</label>
                     <div class="veh-select-wrap" id="vehSelectWrap">
                         <button type="button" class="form-input veh-select-btn" onclick="toggleVehDropdown(event)">
@@ -355,6 +364,23 @@
                             </label>
                             <div class="veh-opt-divider"></div>
                             <div id="userOptsList"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group" id="driverSelectGroup" style="display:none;">
+                    <label class="form-label">Drivers</label>
+                    <div class="veh-select-wrap" id="driverSelectWrap">
+                        <button type="button" class="form-input veh-select-btn" onclick="toggleDriverDropdown(event)">
+                            <span id="driverSelectLabel">All drivers</span>
+                            <i class="mdi mdi-chevron-down" style="font-size:1rem;flex-shrink:0;"></i>
+                        </button>
+                        <div class="veh-select-dropdown" id="driverDropdown">
+                            <label class="veh-opt">
+                                <input type="checkbox" id="allDriverCheck" checked onchange="toggleAllDrivers(this)">
+                                <span>All drivers</span>
+                            </label>
+                            <div class="veh-opt-divider"></div>
+                            <div id="driverOptsList"></div>
                         </div>
                     </div>
                 </div>
@@ -446,6 +472,7 @@
                             <option value="trips">Trip List</option>
                             <option value="daily">Daily Activity</option>
                             <option value="drivers">Driver Activity</option>
+                            <option value="users">User Fleet</option>
                             <option value="sensors">Vehicle Sensors</option>
                             <option value="alerts">Alerts</option>
                         </select>
