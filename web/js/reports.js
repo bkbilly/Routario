@@ -10,6 +10,8 @@ let _tripRows            = []; // sorted trip rows, for map button index lookup
 
 let _allUsers            = [];
 let _selectedUserIds     = new Set(); // empty = all visible users
+let _allDrivers          = [];
+let _selectedDriverIds   = new Set(); // empty = all visible drivers
 
 const _IS_ADMIN         = localStorage.getItem('is_admin') === 'true';
 const _IS_COMPANY_ADMIN = localStorage.getItem('is_company_admin') === 'true';
@@ -28,6 +30,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await _loadDevices();
     if (_CAN_SEE_USERS) await _loadUsers();
+    await _loadDrivers();
+    if (!_CAN_SEE_USERS) {
+        document.querySelectorAll('option[value="users"]').forEach(opt => opt.remove());
+    }
     _updateDescription();
     _injectNavScheduleAction();
 
@@ -36,6 +42,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
         const uwrap = document.getElementById('userSelectWrap');
         if (uwrap && !uwrap.contains(e.target)) uwrap.classList.remove('open');
+        const dwrap = document.getElementById('driverSelectWrap');
+        if (dwrap && !dwrap.contains(e.target)) dwrap.classList.remove('open');
     });
 
     document.addEventListener('keydown', e => {
@@ -78,6 +86,81 @@ async function _loadUsers() {
             list.appendChild(label);
         });
     } catch (e) { console.error(e); }
+}
+
+async function _loadDrivers() {
+    try {
+        const res = await apiFetch(`${API_BASE}/drivers`);
+        if (!res.ok) return;
+        _allDrivers = await res.json();
+        _renderDriverOptions();
+    } catch (e) { console.error(e); }
+}
+
+function _renderDriverOptions() {
+    const list = document.getElementById('driverOptsList');
+    if (!list) return;
+    list.innerHTML = '';
+    _allDrivers.forEach(d => {
+        const label = document.createElement('label');
+        label.className = 'veh-opt';
+        label.innerHTML = `<input type="checkbox" data-id="${d.id}" onchange="onDriverCheck(this)" ${_selectedDriverIds.has(d.id) ? 'checked' : ''}>
+            <span>${_esc(d.name)}</span>`;
+        list.appendChild(label);
+    });
+    _syncAllDriverCheck();
+    _updateDriverLabel();
+}
+
+function _mergeDriversFromTrips(rows) {
+    const existing = new Map(_allDrivers.map(d => [d.id, d]));
+    rows.forEach(r => {
+        if (!r.driver_id || existing.has(r.driver_id)) return;
+        existing.set(r.driver_id, { id: r.driver_id, name: r.driver_name || `Driver ${r.driver_id}` });
+    });
+    _allDrivers = [...existing.values()].sort((a, b) => a.name.localeCompare(b.name));
+    _renderDriverOptions();
+}
+
+function toggleDriverDropdown(e) {
+    e.stopPropagation();
+    document.getElementById('driverSelectWrap').classList.toggle('open');
+}
+
+function onDriverCheck(cb) {
+    const id = parseInt(cb.dataset.id);
+    if (cb.checked) _selectedDriverIds.add(id);
+    else _selectedDriverIds.delete(id);
+    _syncAllDriverCheck();
+    _updateDriverLabel();
+    if (_isDailyDriverMode() && _reportData.length) _renderReport();
+}
+
+function toggleAllDrivers(cb) {
+    _selectedDriverIds.clear();
+    document.querySelectorAll('#driverOptsList input[type=checkbox]').forEach(el => { el.checked = false; });
+    cb.checked = true;
+    _updateDriverLabel();
+    if (_isDailyDriverMode() && _reportData.length) _renderReport();
+}
+
+function _syncAllDriverCheck() {
+    const checked = document.querySelectorAll('#driverOptsList input[type=checkbox]:checked');
+    const allChk = document.getElementById('allDriverCheck');
+    if (allChk) allChk.checked = checked.length === 0;
+}
+
+function _updateDriverLabel() {
+    const label = document.getElementById('driverSelectLabel');
+    if (!label) return;
+    if (_selectedDriverIds.size === 0) {
+        label.textContent = 'All drivers';
+    } else if (_selectedDriverIds.size === 1) {
+        const d = _allDrivers.find(d => _selectedDriverIds.has(d.id));
+        label.textContent = d ? d.name : '1 driver';
+    } else {
+        label.textContent = `${_selectedDriverIds.size} drivers`;
+    }
 }
 
 function toggleUserDropdown(e) {
@@ -157,6 +240,27 @@ function _updateVehLabel() {
     }
 }
 
+function _isDailyDriverMode() {
+    return document.getElementById('reportType').value === 'daily' && _getDailyMode() === 'drivers';
+}
+
+function _syncReportFilters() {
+    const type = document.getElementById('reportType').value;
+    const isSensors = type === 'sensors';
+    const isAlerts  = type === 'alerts';
+    const isDaily   = type === 'daily';
+    const isUsers   = type === 'users';
+    const dailyDrivers = isDaily && _getDailyMode() === 'drivers';
+
+    document.getElementById('historyCheckGroup').style.display = isSensors ? '' : 'none';
+    document.getElementById('dailyModeGroup').style.display = isDaily ? '' : 'none';
+    document.getElementById('vehicleSelectGroup').style.display = (dailyDrivers || isUsers) ? 'none' : '';
+    document.getElementById('dateFromGroup').style.display = isSensors ? 'none' : '';
+    document.getElementById('dateToGroup').style.display  = isSensors ? 'none' : '';
+    document.getElementById('userSelectGroup').style.display = ((isAlerts || isUsers) && _CAN_SEE_USERS) ? '' : 'none';
+    document.getElementById('driverSelectGroup').style.display = dailyDrivers ? '' : 'none';
+}
+
 function onReportTypeChange() {
     _reportData = [];
     _sensorsHistoryMode = false;
@@ -164,22 +268,17 @@ function onReportTypeChange() {
     document.getElementById('noData').style.display = 'none';
     document.getElementById('summaryBar').style.display = 'none';
     document.getElementById('exportCsvBtn').style.display = 'none';
-    const type = document.getElementById('reportType').value;
-    const isSensors = type === 'sensors';
-    const isAlerts  = type === 'alerts';
-    document.getElementById('historyCheckGroup').style.display = isSensors ? '' : 'none';
     document.getElementById('historyCheck').checked = false;
-    document.getElementById('dateFromGroup').style.display = isSensors ? 'none' : '';
-    document.getElementById('dateToGroup').style.display  = isSensors ? 'none' : '';
-    document.getElementById('userSelectGroup').style.display = (isAlerts && _CAN_SEE_USERS) ? '' : 'none';
+    _syncReportFilters();
     _updateDescription();
 }
 
 const _REPORT_DESCRIPTIONS = {
     summary: 'Totals per vehicle for the selected period — trips, distance, driving time, and top speed.',
     trips:   'Individual trips with start/end location, distance, duration, and driver. Click any row to view the route on a map.',
-    daily:   'All trips aggregated by day — total trips, distance, and driving time per date.',
+    daily:   'Trip activity aggregated by day for the whole fleet, each vehicle, or each driver.',
     drivers: 'Activity per driver for the selected period — trips, distance, driving time, and top speed.',
+    users:   'Account readiness by user — vehicle access, push status, notification channels, alert backlog, schedules, and key permissions.',
     sensors: 'Current sensor readings for all vehicles. Enable historical data to view sensor values over a date range.',
     alerts:  'Alert history for the selected period. Admins can filter by user.',
 };
@@ -193,6 +292,14 @@ function onHistoryCheckChange() {
     const checked = document.getElementById('historyCheck').checked;
     document.getElementById('dateFromGroup').style.display = checked ? '' : 'none';
     document.getElementById('dateToGroup').style.display   = checked ? '' : 'none';
+}
+
+function onDailyModeChange() {
+    _syncReportFilters();
+    if (document.getElementById('reportType').value === 'daily' && _reportData.length) {
+        _sortCol = null;
+        _renderReport();
+    }
 }
 
 async function generateReport() {
@@ -217,6 +324,28 @@ async function generateReport() {
             _reportData = await res.json();
             _sortCol = null;
             _renderAlerts();
+        } catch (e) { console.error(e); showAlert('Error generating report.', 'error'); }
+        return;
+    }
+
+    if (type === 'users') {
+        const start = document.getElementById('startDate').value;
+        const end   = document.getElementById('endDate').value;
+        if (!start || !end) { showAlert('Please select a date range.', 'warning'); return; }
+
+        const params = new URLSearchParams({
+            start_date: `${start}T00:00:00`,
+            end_date:   `${end}T23:59:59`,
+        });
+        if (_selectedUserIds.size) params.set('user_ids', [..._selectedUserIds].join(','));
+
+        try {
+            const res = await apiFetch(`${API_BASE}/reports/users?${params}`);
+            if (!res.ok) { showAlert('Failed to load user fleet report.', 'error'); return; }
+            const data = await res.json();
+            _reportData = data.rows || [];
+            _sortCol = null;
+            _renderUsers();
         } catch (e) { console.error(e); showAlert('Error generating report.', 'error'); }
         return;
     }
@@ -259,7 +388,7 @@ async function generateReport() {
     const end   = document.getElementById('endDate').value;
     if (!start || !end) { showAlert('Please select a date range.', 'warning'); return; }
 
-    const deviceParam = _selectedIds.size ? `&device_ids=${[..._selectedIds].join(',')}` : '';
+    const deviceParam = _selectedIds.size && !_isDailyDriverMode() ? `&device_ids=${[..._selectedIds].join(',')}` : '';
 
     const endpoint = type === 'summary'
         ? `${API_BASE}/reports/fleet?start_date=${start}T00:00:00&end_date=${end}T23:59:59${deviceParam}`
@@ -270,6 +399,7 @@ async function generateReport() {
         if (!res.ok) { showAlert('Failed to load report.', 'error'); return; }
         const data = await res.json();
         _reportData = type === 'summary' ? data.rows : data;
+        if (type === 'daily' || type === 'trips' || type === 'drivers') _mergeDriversFromTrips(_reportData);
         _sortCol = null;
         _renderReport();
     } catch (e) { console.error(e); alert('Error generating report.'); }
@@ -294,6 +424,7 @@ function _renderReport() {
     else if (type === 'trips')   _renderTripList();
     else if (type === 'daily')   _renderDaily();
     else if (type === 'drivers') _renderDrivers();
+    else if (type === 'users')   _renderUsers();
 
     table.style.display = '';
     noData.style.display = 'none';
@@ -361,6 +492,85 @@ function _renderAlerts() {
             <td>${sevBadge}</td>
             <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${_esc(r.message)}">${_esc(r.message)}</td>
             <td>${status}</td>
+        </tr>`;
+    }).join('');
+
+    table.style.display = '';
+    noData.style.display = 'none';
+    expBtn.style.display = '';
+}
+
+// ── User Fleet Report ─────────────────────────────────────────────
+
+function _renderUsers() {
+    const table  = document.getElementById('reportTable');
+    const head   = document.getElementById('reportHead');
+    const tbody  = document.getElementById('reportBody');
+    const noData = document.getElementById('noData');
+    const sumBar = document.getElementById('summaryBar');
+    const expBtn = document.getElementById('exportCsvBtn');
+
+    if (!_reportData.length) {
+        table.style.display = 'none';
+        noData.style.display = '';
+        sumBar.style.display = 'none';
+        expBtn.style.display = 'none';
+        return;
+    }
+
+    const rows = _sortedRows(_reportData, _sortCol || 'username');
+    const total = rows.length;
+    const pushEnabled = rows.filter(r => r.push_enabled).length;
+    const missingFallback = rows.filter(r => !r.push_enabled && !r.notification_channel_count && !r.webhook_count).length;
+    const unreadAlerts = rows.reduce((sum, r) => sum + (r.unread_alerts || 0), 0);
+    const inactive = rows.filter(r => !r.last_activity).length;
+
+    sumBar.innerHTML = `
+        <div class="summary-card"><div class="val">${total}</div><div class="lbl">Users</div></div>
+        <div class="summary-card"><div class="val">${pushEnabled}</div><div class="lbl">Push Enabled</div></div>
+        <div class="summary-card"><div class="val" style="color:${missingFallback ? 'var(--accent-danger)' : 'var(--accent-success)'};">${missingFallback}</div><div class="lbl">No Alert Fallback</div></div>
+        <div class="summary-card"><div class="val">${unreadAlerts}</div><div class="lbl">Unread Alerts</div></div>
+        <div class="summary-card"><div class="val">${inactive}</div><div class="lbl">No Activity</div></div>`;
+    sumBar.style.display = '';
+
+    head.innerHTML = `<tr>
+        ${_th('username', 'User')}
+        ${_th('role', 'Role')}
+        ${_th('assigned_devices', 'Vehicles')}
+        ${_th('push_enabled', 'Push')}
+        ${_th('notification_channel_count', 'Channels')}
+        ${_th('webhook_count', 'Webhooks')}
+        ${_th('unread_alerts', 'Unread')}
+        ${_th('critical_alerts', 'Critical')}
+        ${_th('active_scheduled_reports', 'Schedules')}
+        ${_th('last_activity', 'Last Activity')}
+        ${_th('key_permissions', 'Key Permissions')}
+    </tr>`;
+
+    tbody.innerHTML = rows.map(r => {
+        const deviceList = (r.assigned_device_names || []).join(', ');
+        const channelList = (r.notification_channel_names || []).join(', ');
+        const permissionList = (r.key_permissions || []).join(', ');
+        const fallbackOk = r.push_enabled || r.notification_channel_count > 0 || r.webhook_count > 0;
+        const pushCell = r.push_enabled
+            ? `<span style="color:var(--accent-success);font-weight:600;">Active</span><br><span style="color:var(--text-muted);font-size:0.75rem;">${_fmtDatetime(r.push_updated_at)}</span>`
+            : `<span style="color:${fallbackOk ? 'var(--text-muted)' : 'var(--accent-danger)'};font-weight:${fallbackOk ? '400' : '600'};">Missing</span>`;
+
+        return `<tr>
+            <td>
+                <strong>${_esc(r.username)}</strong>
+                <div style="color:var(--text-muted);font-size:0.78rem;">${_esc(r.email)}</div>
+            </td>
+            <td>${_esc(r.role)}${r.company_name ? `<div style="color:var(--text-muted);font-size:0.78rem;">${_esc(r.company_name)}</div>` : ''}</td>
+            <td title="${_esc(deviceList)}">${r.assigned_devices}</td>
+            <td>${pushCell}</td>
+            <td title="${_esc(channelList)}">${r.notification_channel_count}</td>
+            <td>${r.webhook_count}</td>
+            <td style="color:${r.unread_alerts ? 'var(--accent-warning,#eab308)' : 'var(--text-secondary)'};">${r.unread_alerts}</td>
+            <td style="color:${r.critical_alerts ? 'var(--accent-danger)' : 'var(--text-secondary)'};">${r.critical_alerts}</td>
+            <td>${r.active_scheduled_reports}</td>
+            <td style="white-space:nowrap;">${r.last_activity ? _fmtDatetimeSplit(r.last_activity) : '<span style="color:var(--accent-warning,#eab308);">Never</span>'}</td>
+            <td title="${_esc(permissionList)}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${permissionList ? _esc(permissionList) : '—'}</td>
         </tr>`;
     }).join('');
 
@@ -543,23 +753,58 @@ function _renderDrivers() {
 
 // ── Daily Activity ────────────────────────────────────────────────
 
-function _renderDaily() {
-    // Group trip list data by date
-    const byDate = {};
+function _getDailyMode() {
+    return document.getElementById('dailyMode')?.value || 'fleet';
+}
+
+function _buildDailyRows() {
+    const mode = _getDailyMode();
+    const groups = {};
     for (const r of _reportData) {
+        if (mode === 'drivers') {
+            if (!r.driver_id) continue;
+            if (_selectedDriverIds.size && !(_selectedDriverIds.has(r.driver_id))) continue;
+        }
         const date = r.start_time.slice(0, 10);
-        if (!byDate[date]) byDate[date] = { date, trips: 0, distance_km: 0, driving_minutes: 0 };
-        byDate[date].trips++;
-        byDate[date].distance_km += r.distance_km;
-        byDate[date].driving_minutes += r.duration_minutes;
+        let key = date;
+        let label = '';
+        let extra = '';
+
+        if (mode === 'vehicles') {
+            key = `${date}:vehicle:${r.device_id}`;
+            label = r.device_name || `Vehicle ${r.device_id}`;
+            extra = r.license_plate || '';
+        } else if (mode === 'drivers') {
+            key = `${date}:driver:${r.driver_id}`;
+            label = r.driver_name || `Driver ${r.driver_id}`;
+        }
+
+        if (!groups[key]) {
+            groups[key] = {
+                date,
+                label,
+                extra,
+                trips: 0,
+                distance_km: 0,
+                driving_minutes: 0,
+            };
+        }
+        groups[key].trips++;
+        groups[key].distance_km += r.distance_km;
+        groups[key].driving_minutes += r.duration_minutes;
     }
 
     const sortKey = _sortCol || 'date';
     const dir = _sortCol ? _sortDir : -1;
-    const rows = Object.values(byDate).sort((a, b) => {
+    return Object.values(groups).sort((a, b) => {
         const av = a[sortKey] ?? '', bv = b[sortKey] ?? '';
         return typeof av === 'number' ? (av - bv) * dir : String(av).localeCompare(String(bv)) * dir;
     });
+}
+
+function _renderDaily() {
+    const mode = _getDailyMode();
+    const rows = _buildDailyRows();
 
     const head  = document.getElementById('reportHead');
     const tbody = document.getElementById('reportBody');
@@ -567,6 +812,8 @@ function _renderDaily() {
 
     head.innerHTML = `<tr>
         ${_th('date','Date')}
+        ${mode === 'fleet' ? '' : _th('label', mode === 'vehicles' ? 'Vehicle' : 'Driver')}
+        ${mode === 'vehicles' ? _th('extra', 'Plate') : ''}
         ${_th('trips','Trips')}
         ${_th('distance_km','Distance (km)')}
         ${_th('driving_minutes','Drive Time')}
@@ -575,9 +822,11 @@ function _renderDaily() {
     const totalTrips = rows.reduce((s, r) => s + r.trips, 0);
     const totalDist  = rows.reduce((s, r) => s + r.distance_km, 0);
     const totalMins  = rows.reduce((s, r) => s + r.driving_minutes, 0);
+    const dayCount   = new Set(rows.map(r => r.date)).size;
 
     sumBar.innerHTML = `
-        <div class="summary-card"><div class="val">${rows.length}</div><div class="lbl">Days</div></div>
+        <div class="summary-card"><div class="val">${dayCount}</div><div class="lbl">Days</div></div>
+        ${mode === 'fleet' ? '' : `<div class="summary-card"><div class="val">${rows.length}</div><div class="lbl">${mode === 'vehicles' ? 'Vehicle Days' : 'Driver Days'}</div></div>`}
         <div class="summary-card"><div class="val">${totalTrips}</div><div class="lbl">Total Trips</div></div>
         <div class="summary-card"><div class="val">${totalDist.toFixed(1)}</div><div class="lbl">Total Distance (km)</div></div>
         <div class="summary-card"><div class="val">${(totalMins/60).toFixed(1)}</div><div class="lbl">Driving Time (h)</div></div>`;
@@ -585,11 +834,15 @@ function _renderDaily() {
 
     tbody.innerHTML = rows.map(r => `<tr>
         <td>${_esc(r.date)}</td>
+        ${mode === 'fleet' ? '' : `<td>${_esc(r.label)}</td>`}
+        ${mode === 'vehicles' ? `<td>${_esc(r.extra || '—')}</td>` : ''}
         <td>${r.trips}</td>
         <td>${r.distance_km.toFixed(1)}</td>
         <td>${_fmtDuration(r.driving_minutes)}</td>
     </tr>`).join('') + `<tr class="total-row">
         <td>Total</td>
+        ${mode === 'fleet' ? '' : '<td>—</td>'}
+        ${mode === 'vehicles' ? '<td>—</td>' : ''}
         <td>${totalTrips}</td>
         <td>${totalDist.toFixed(1)}</td>
         <td>${_fmtDuration(totalMins)}</td>
@@ -606,6 +859,8 @@ function sortReport(col) {
         _sensorsHistoryMode ? _renderSensorsHistory() : _renderSensors();
     } else if (type === 'alerts') {
         _renderAlerts();
+    } else if (type === 'users') {
+        _renderUsers();
     } else {
         _renderReport();
     }
@@ -755,6 +1010,7 @@ function _renderSensorsHistory() {
     head.innerHTML = `<tr>
         ${_th('vehicle', 'Vehicle')}
         ${_th('time', 'Time')}
+        ${_th('driver_name', 'Driver')}
         ${_th('ignition', 'Ignition')}
         ${_th('speed', 'Speed')}
         ${_th('altitude', 'Altitude')}
@@ -779,6 +1035,7 @@ function _renderSensorsHistory() {
         return `<tr>
             <td><strong>${_esc(p._device.name)}</strong></td>
             <td style="white-space:nowrap;font-family:var(--font-mono);font-size:0.82rem;">${_fmtDatetime(p.time)}</td>
+            <td style="color:var(--text-secondary);">${_esc(p.driver_name || '—')}</td>
             ${ignCell}
             <td style="font-family:var(--font-mono);">${p.speed != null ? parseFloat(p.speed).toFixed(1) + ' km/h' : '—'}</td>
             <td style="font-family:var(--font-mono);">${p.altitude != null ? parseFloat(p.altitude).toFixed(0) + ' m' : '—'}</td>
@@ -824,15 +1081,54 @@ async function exportCsv() {
         return;
     }
 
+    if (type === 'users') {
+        const start = document.getElementById('startDate').value;
+        const end   = document.getElementById('endDate').value;
+        const headers = [
+            'Username', 'Email', 'Role', 'Company', 'Assigned Vehicles', 'Vehicle Names',
+            'Push Enabled', 'Push Updated', 'Notification Channels', 'Channel Names',
+            'Webhooks', 'Unread Alerts', 'Total Alerts', 'Critical Alerts',
+            'Active Schedules', 'Permission Count', 'Key Permissions',
+            'Timezone', 'Language', 'Units', 'Created At', 'Last Activity',
+        ];
+        const rowFn = r => [
+            r.username,
+            r.email,
+            r.role,
+            r.company_name || '',
+            r.assigned_devices,
+            (r.assigned_device_names || []).join('; '),
+            r.push_enabled ? 'Yes' : 'No',
+            r.push_updated_at ? _fmtDatetime(r.push_updated_at) : '',
+            r.notification_channel_count,
+            (r.notification_channel_names || []).join('; '),
+            r.webhook_count,
+            r.unread_alerts,
+            r.total_alerts,
+            r.critical_alerts,
+            r.active_scheduled_reports,
+            r.permission_count,
+            (r.key_permissions || []).join('; '),
+            r.timezone,
+            r.language,
+            r.units,
+            r.created_at ? _fmtDatetime(r.created_at) : '',
+            r.last_activity ? _fmtDatetime(r.last_activity) : '',
+        ];
+        _downloadCsv(headers, _sortedRows(_reportData, 'username'), rowFn, `user_fleet_${start}_${end}.csv`);
+        return;
+    }
+
     if (type === 'sensors') {
         if (_sensorsHistoryMode) {
             const sensorKeys = [];
             for (const p of _reportData) for (const k of Object.keys(p.sensors || {})) if (!sensorKeys.includes(k)) sensorKeys.push(k);
             sensorKeys.sort();
-            const headers = ['Vehicle', 'Time', 'Ignition', 'Speed (km/h)', 'Altitude (m)', ...sensorKeys];
+            const headers = ['Vehicle', 'Time', 'Driver', 'Ignition', 'Speed (km/h)', 'Altitude (m)', ...sensorKeys];
             const rowFn = p => [
                 p._device.name,
                 p.time ? _fmtDatetime(p.time) : '',
+                p.driver_name || '',
                 p.ignition != null ? (p.ignition ? 'On' : 'Off') : '',
                 p.speed    != null ? parseFloat(p.speed).toFixed(1) : '',
                 p.altitude != null ? parseFloat(p.altitude).toFixed(0) : '',
@@ -903,16 +1199,19 @@ async function exportCsv() {
         rowFn = r => [_fmtDatetime(r.start_time), r.device_name, r.license_plate||'', r.driver_name||'', r.start_address||'', r.end_address||'',
                       r.distance_km.toFixed(2), r.duration_minutes.toFixed(1), r.avg_speed.toFixed(1), r.max_speed.toFixed(1)];
     } else {
-        headers = ['Date','Trips','Distance (km)','Drive Time (min)'];
-        const byDate = {};
-        for (const r of _reportData) {
-            const d = r.start_time.slice(0,10);
-            if (!byDate[d]) byDate[d] = { date: d, trips: 0, distance_km: 0, driving_minutes: 0 };
-            byDate[d].trips++; byDate[d].distance_km += r.distance_km; byDate[d].driving_minutes += r.duration_minutes;
+        const mode = _getDailyMode();
+        const rows = _buildDailyRows().sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
+        if (mode === 'vehicles') {
+            headers = ['Date','Vehicle','Plate','Trips','Distance (km)','Drive Time (min)'];
+            rowFn = r => [r.date, r.label, r.extra || '', r.trips, r.distance_km.toFixed(2), r.driving_minutes.toFixed(1)];
+        } else if (mode === 'drivers') {
+            headers = ['Date','Driver','Trips','Distance (km)','Drive Time (min)'];
+            rowFn = r => [r.date, r.label, r.trips, r.distance_km.toFixed(2), r.driving_minutes.toFixed(1)];
+        } else {
+            headers = ['Date','Trips','Distance (km)','Drive Time (min)'];
+            rowFn = r => [r.date, r.trips, r.distance_km.toFixed(2), r.driving_minutes.toFixed(1)];
         }
-        rowFn = r => [r.date, r.trips, r.distance_km.toFixed(2), r.driving_minutes.toFixed(1)];
-        const rows = Object.values(byDate).sort((a,b) => a.date.localeCompare(b.date));
-        _downloadCsv(headers, rows, rowFn, `fleet_daily_${start}_${end}.csv`);
+        _downloadCsv(headers, rows, rowFn, `daily_activity_${mode}_${start}_${end}.csv`);
         return;
     }
     _downloadCsv(headers, _reportData, rowFn, `fleet_trips_${start}_${end}.csv`);
@@ -1136,6 +1435,7 @@ function _renderRunData(reportType, data) {
         return;
     }
     if (reportType === 'alerts') { _renderAlerts(); return; }
+    if (reportType === 'users') { _renderUsers(); return; }
 
     // summary / trips / daily / drivers
     const table  = document.getElementById('reportTable');
@@ -1149,6 +1449,7 @@ function _renderRunData(reportType, data) {
     else if (reportType === 'trips')   _renderTripList();
     else if (reportType === 'daily')   _renderDaily();
     else if (reportType === 'drivers') _renderDrivers();
+    else if (reportType === 'users')   _renderUsers();
     table.style.display  = '';
     noData.style.display = 'none';
 }
@@ -1170,6 +1471,28 @@ function exportCsvFromRun() {
         );
         return;
     }
+    if (reportType === 'users') {
+        const rows = data.rows || [];
+        _downloadCsv(
+            ['Username', 'Email', 'Role', 'Company', 'Assigned Vehicles', 'Vehicle Names',
+             'Push Enabled', 'Push Updated', 'Notification Channels', 'Channel Names',
+             'Webhooks', 'Unread Alerts', 'Total Alerts', 'Critical Alerts',
+             'Active Schedules', 'Permission Count', 'Key Permissions',
+             'Timezone', 'Language', 'Units', 'Created At', 'Last Activity'],
+            rows,
+            r => [r.username, r.email, r.role, r.company_name || '', r.assigned_devices,
+                  (r.assigned_device_names || []).join('; '), r.push_enabled ? 'Yes' : 'No',
+                  r.push_updated_at ? _fmtDatetime(r.push_updated_at) : '',
+                  r.notification_channel_count, (r.notification_channel_names || []).join('; '),
+                  r.webhook_count, r.unread_alerts, r.total_alerts, r.critical_alerts,
+                  r.active_scheduled_reports, r.permission_count, (r.key_permissions || []).join('; '),
+                  r.timezone, r.language, r.units,
+                  r.created_at ? _fmtDatetime(r.created_at) : '',
+                  r.last_activity ? _fmtDatetime(r.last_activity) : ''],
+            `${slug}_${date}.csv`
+        );
+        return;
+    }
     // For other types, delegate to normal exportCsv which uses _reportData
     exportCsv();
 }
@@ -1178,7 +1501,7 @@ function exportCsvFromRun() {
 // Schedules list
 // ══════════════════════════════════════════════════════════════════════════════
 
-const _TYPE_LABELS  = { summary: 'Fleet Summary', trips: 'Trip List', daily: 'Daily Activity', drivers: 'Driver Activity', sensors: 'Vehicle Sensors', alerts: 'Alerts' };
+const _TYPE_LABELS  = { summary: 'Fleet Summary', trips: 'Trip List', daily: 'Daily Activity', drivers: 'Driver Activity', users: 'User Fleet', sensors: 'Vehicle Sensors', alerts: 'Alerts' };
 const _RANGE_LABELS = { last_7_days: 'Last 7 days', last_14_days: 'Last 14 days', last_30_days: 'Last 30 days', last_calendar_month: 'Last calendar month', last_quarter: 'Last quarter', last_year: 'Last year' };
 const _DOW          = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -1479,9 +1802,11 @@ function onSchedTypeChange() {
     const t      = document.getElementById('sfType').value;
     const isSens = t === 'sensors';
     const isAlt  = t === 'alerts';
+    const isUsers = t === 'users';
 
     document.getElementById('sfHistGroup').style.display  = isSens ? '' : 'none';
-    document.getElementById('sfUserGroup').style.display  = (isAlt && _CAN_SEE_USERS) ? '' : 'none';
+    document.getElementById('sfUserGroup').style.display  = ((isAlt || isUsers) && _CAN_SEE_USERS) ? '' : 'none';
+    document.getElementById('sfVehWrap').closest('.form-group').style.display = isUsers ? 'none' : '';
 
     // Date range: hidden for sensors when not in historical mode
     const needsRange = !isSens || document.getElementById('sfHistorical').checked;
@@ -1571,7 +1896,7 @@ async function saveSchedule() {
     const body = {
         name,
         report_type:        rtype,
-        filter_device_ids:  [..._sfSelectedVehIds],
+        filter_device_ids:  rtype === 'users' ? [] : [..._sfSelectedVehIds],
         filter_user_ids:    [..._sfSelectedUserIds],
         sensors_historical: historical,
         date_range:         needsRange ? dateRange : null,

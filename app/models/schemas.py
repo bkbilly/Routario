@@ -612,6 +612,39 @@ class FleetReport(BaseModel):
     rows: List[FleetReportRow]
 
 
+class UserFleetReportRow(BaseModel):
+    user_id: int
+    username: str
+    email: str
+    role: str
+    company_id: Optional[int] = None
+    company_name: Optional[str] = None
+    assigned_devices: int
+    assigned_device_names: List[str] = Field(default_factory=list)
+    push_enabled: bool = False
+    push_updated_at: Optional[datetime] = None
+    notification_channel_count: int = 0
+    notification_channel_names: List[str] = Field(default_factory=list)
+    webhook_count: int = 0
+    unread_alerts: int = 0
+    total_alerts: int = 0
+    critical_alerts: int = 0
+    active_scheduled_reports: int = 0
+    permission_count: int = 0
+    key_permissions: List[str] = Field(default_factory=list)
+    timezone: str = "UTC"
+    language: str = "en"
+    units: str = "metric"
+    created_at: datetime
+    last_activity: Optional[datetime] = None
+
+
+class UserFleetReport(BaseModel):
+    start_date: datetime
+    end_date: datetime
+    rows: List[UserFleetReportRow]
+
+
 class VideoClipResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -632,6 +665,8 @@ class TripReportRow(BaseModel):
     device_id: int
     device_name: str
     license_plate: Optional[str]
+    driver_id: Optional[int] = None
+    driver_user_id: Optional[int] = None
     driver_name: Optional[str]
     start_time: str
     end_time: Optional[str]

@@ -1513,10 +1513,12 @@ body::before {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 0.6rem;
     margin-bottom: 0.5rem;
 }
 
 .trip-index {
+    flex: 0 0 auto;
     font-size: 0.78rem;
     font-weight: 700;
     color: var(--accent-primary);
@@ -1526,10 +1528,16 @@ body::before {
 
 .trip-badges {
     display: flex;
+    flex: 0 1 auto;
     gap: 0.35rem;
+    justify-content: flex-end;
+    min-width: 0;
 }
 
 .trip-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
     background: rgba(59, 130, 246, 0.1);
     border: 1px solid rgba(59, 130, 246, 0.2);
     border-radius: 5px;
@@ -1545,6 +1553,27 @@ body::before {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
+}
+
+.trip-driver {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.trip-driver i {
+    flex: 0 0 auto;
+    color: var(--accent-primary);
+}
+
+.trip-driver span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .trip-row {

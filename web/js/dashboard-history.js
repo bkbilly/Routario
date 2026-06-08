@@ -524,6 +524,7 @@ function updatePlaybackUI() {
             </div>
             <div class="vp-grid">
                 <span class="vp-label">Time</span>      <span class="vp-value vp-mono">${time}</span>
+                <span class="vp-label">Driver</span>    <span class="vp-value">${p.driver_name ? _esc(p.driver_name) : '—'}</span>
                 <span class="vp-label">Speed</span>     <span class="vp-value">${p.speed != null ? fmtSpeed(p.speed) : '—'}</span>
                 <span class="vp-label">Heading</span>   <span class="vp-value">${p.course != null ? Number(p.course).toFixed(0) + '°' : '—'}</span>
                 <span class="vp-label">Ignition</span>  <span class="vp-value" style="color:${ignColor};font-weight:700;">${p.ignition === true ? 'ON' : p.ignition === false ? 'OFF' : '—'}</span>
@@ -600,6 +601,7 @@ function updatePointDetails(feature) {
     let html = `
         <div class="detail-grid">
             ${di('Lat/Lon', `${feature.geometry.coordinates[1].toFixed(5)}, ${feature.geometry.coordinates[0].toFixed(5)}`)}
+            ${di('Driver',     p.driver_name ? _esc(p.driver_name) : null)}
             ${di('Speed',      p.speed      != null ? fmtSpeed(p.speed)        : null)}
             ${di('Heading',    p.course     != null ? p.course.toFixed(0) + '°': null)}
             ${di('Altitude',   p.altitude   != null ? fmtAlt(p.altitude)       : null)}
@@ -747,6 +749,7 @@ async function loadTripsForHistory(deviceId, startTime, endTime) {
                     </span>
                 </div>
                 <div class="trip-card-body">
+                    ${trip.driver_name ? `<div class="trip-driver" title="${_esc(trip.driver_name)}"><i class="mdi mdi-account"></i><span>${_esc(trip.driver_name)}</span></div>` : ''}
                     <div class="trip-time">${start} → ${end}</div>
                 </div>
             </div>`;
@@ -1014,7 +1017,7 @@ function exportHistoryCSV() {
         }
     });
 
-    const coreFields = ['time', 'latitude', 'longitude', 'speed', 'altitude', 'course', 'satellites', 'ignition'];
+    const coreFields = ['time', 'latitude', 'longitude', 'driver', 'speed', 'altitude', 'course', 'satellites', 'ignition'];
     const sensorCols = Array.from(sensorKeys).sort();
     const allHeaders = [...coreFields, ...sensorCols];
 
@@ -1026,6 +1029,7 @@ function exportHistoryCSV() {
             time:       p.time || '',
             latitude:   coords[1],
             longitude:  coords[0],
+            driver:     p.driver_name || '',
             speed:      p.speed      ?? '',
             altitude:   p.altitude   ?? '',
             course:     p.course     ?? '',

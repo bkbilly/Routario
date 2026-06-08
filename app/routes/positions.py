@@ -4,11 +4,12 @@ GPS position history endpoint.
 """
 from datetime import datetime
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 
 from core.database import get_db
 from core.auth import get_current_user, verify_device_access, require_permission
 from core.spatial import calculate_distance_km
-from models import User
+from models import User, Driver
 from models.schemas import PositionHistoryRequest, PositionHistoryResponse, PositionGeoJSON
 
 router = APIRouter(prefix="/api/positions", tags=["positions"])
@@ -34,6 +35,13 @@ async def get_position_history(
     trips = await db.get_device_trips(
         request.device_id, request.start_time, request.end_time
     )
+
+    driver_ids = {pos.driver_id for pos in positions if pos.driver_id}
+    driver_map = {}
+    if driver_ids:
+        async with db.get_session() as session:
+            result = await session.execute(select(Driver).where(Driver.id.in_(driver_ids)))
+            driver_map = {driver.id: driver.name for driver in result.scalars().all()}
 
     # Build a sorted list of (start, end, trip_id) for fast lookups
     trip_ranges = []
@@ -79,6 +87,7 @@ async def get_position_history(
                 "sensors":   pos.sensors,
                 "trip_id":   find_trip_id(pos.device_time),
                 "driver_id": pos.driver_id,
+                "driver_name": driver_map.get(pos.driver_id) if pos.driver_id else None,
             },
         ))
 

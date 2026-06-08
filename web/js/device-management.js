@@ -394,11 +394,27 @@ function switchModalTab(tabId, btn) {
 }
 
 // ── Open / Close Device Modal ─────────────────────────────────────
+function setDeviceModalTitle(device = null) {
+    const title = document.getElementById('modalTitle');
+    if (!title) return;
+    if (!device) {
+        title.textContent = 'Add New Device';
+        return;
+    }
+    const cfg = VEHICLE_ICONS[device.vehicle_type] || VEHICLE_ICONS.other;
+    title.innerHTML = `
+        <span style="display:inline-flex;align-items:center;gap:0.55rem;min-width:0;">
+            <span aria-hidden="true" style="font-size:1.25rem;line-height:1;">${cfg.emoji}</span>
+            <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_esc(device.name)}</span>
+        </span>
+    `;
+}
+
 function openAddDeviceModal() {
     if (!hasAdminAccess || !hasPermission('edit_devices')) return;
     editingDeviceId = null;
 
-    document.getElementById('modalTitle').textContent        = 'Add New Device';
+    setDeviceModalTitle();
     document.getElementById('submitText').textContent        = 'Add Device';
     document.getElementById('submitIcon').className         = 'mdi mdi-plus';
     document.getElementById('deleteDeviceBtn').style.display = 'none';
@@ -438,7 +454,7 @@ function openDeviceModal(deviceId, startTab = 'general') {
     editingDeviceId = d.id;
     deviceAlertUsers = [];
 
-    document.getElementById('modalTitle').textContent        = 'Edit Device';
+    setDeviceModalTitle(d);
     document.getElementById('submitText').textContent        = 'Save';
     document.getElementById('submitIcon').className         = 'mdi mdi-content-save';
     document.getElementById('deleteDeviceBtn').style.display = hasAdminAccess ? 'inline-flex' : 'none';
@@ -1650,7 +1666,7 @@ async function loadRawDataForModal(deviceId) {
     currentRawDeviceId = deviceId;
     currentPage        = 1;
     const tbody        = document.getElementById('rawDataBody');
-    tbody.innerHTML    = '<tr><td colspan="10" style="text-align:center;padding:2rem;">Loading…</td></tr>';
+    tbody.innerHTML    = '<tr><td colspan="11" style="text-align:center;padding:2rem;">Loading…</td></tr>';
 
     const end = new Date();
     try {
@@ -1675,7 +1691,7 @@ async function loadRawDataForModal(deviceId) {
         }
         renderRawDataPage();
     } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--accent-danger);">Failed to load: ${e.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--accent-danger);">Failed to load: ${e.message}</td></tr>`;
     }
 }
 
@@ -1691,7 +1707,7 @@ function renderRawDataPage() {
     tbody.innerHTML = '';
 
     if (!slice.length) {
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--text-muted);">No data available.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:2rem;color:var(--text-muted);">No data available.</td></tr>';
         return;
     }
 
@@ -1725,6 +1741,7 @@ function renderRawDataPage() {
             <td>${p.satellites != null ? p.satellites : '—'}</td>
             <td>${fmtAlt(p.altitude || 0)}</td>
             <td>${p.ignition === true ? '<span style="color:var(--accent-success);font-weight:600;">ON</span>' : p.ignition === false ? '<span style="color:var(--accent-danger);font-weight:600;">OFF</span>' : '<span style="color:var(--text-muted);">—</span>'}</td>
+            <td>${p.driver_name ? _esc(p.driver_name) : '—'}</td>
             <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:0.72rem;"
                 title="${_esc(attrStr)}">${_esc(attrStr)}</td>`;
         tbody.appendChild(tr);

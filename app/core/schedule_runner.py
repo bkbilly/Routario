@@ -7,12 +7,14 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
-from sqlalchemy import delete, select
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.orm import selectinload
 
 from core.database import get_db
+from core.push_notifications import PushSubscription
 from models.models import (
     AlertHistory,
+    Company,
     Device,
     DeviceState,
     Driver,
@@ -28,6 +30,17 @@ from routes.report_schedules import compute_next_run
 logger = logging.getLogger(__name__)
 
 _CHECK_INTERVAL = 60  # seconds
+
+_KEY_USER_PERMISSIONS = [
+    "view_devices",
+    "view_history",
+    "view_reports",
+    "manage_alerts",
+    "manage_drivers",
+    "send_commands",
+    "voice_ptt",
+    "live_share",
+]
 
 
 # ── Date range helpers ────────────────────────────────────────────────────────
@@ -213,6 +226,107 @@ async def _run_report(session, schedule: ScheduledReport, user: User) -> dict:
             for a, username, device_name in result.all()
         ]
         return {"type": "alerts", "start_date": start.isoformat(), "end_date": end.isoformat(), "rows": rows}
+
+    # ── User Fleet ───────────────────────────────────────────────────────────
+    if rtype == "users":
+        start, end = _date_range(schedule.date_range)
+        filter_user_ids = set(schedule.filter_user_ids or [])
+
+        q = select(User).options(selectinload(User.devices), selectinload(User.company))
+        if not user.is_admin:
+            q = q.where(User.company_id == user.company_id)
+        if filter_user_ids:
+            q = q.where(User.id.in_(filter_user_ids))
+
+        users = sorted((await session.execute(q)).scalars().all(), key=lambda u: u.username.lower())
+        user_ids = [u.id for u in users]
+
+        push_map = {}
+        alert_map = {}
+        schedule_map = {}
+        company_map = {}
+
+        if user_ids:
+            push_r = await session.execute(select(PushSubscription).where(PushSubscription.user_id.in_(user_ids)))
+            push_map = {p.user_id: p for p in push_r.scalars().all()}
+
+            alerts_r = await session.execute(
+                select(
+                    AlertHistory.user_id,
+                    func.count(AlertHistory.id).label("total_alerts"),
+                    func.coalesce(func.sum(case((AlertHistory.is_read == False, 1), else_=0)), 0).label("unread_alerts"),
+                    func.coalesce(func.sum(case((AlertHistory.severity.in_(["critical", "high"]), 1), else_=0)), 0).label("critical_alerts"),
+                )
+                .where(
+                    AlertHistory.user_id.in_(user_ids),
+                    AlertHistory.created_at >= start,
+                    AlertHistory.created_at <= end,
+                )
+                .group_by(AlertHistory.user_id)
+            )
+            alert_map = {
+                row.user_id: {
+                    "total_alerts": int(row.total_alerts or 0),
+                    "unread_alerts": int(row.unread_alerts or 0),
+                    "critical_alerts": int(row.critical_alerts or 0),
+                }
+                for row in alerts_r.all()
+            }
+
+            sched_r = await session.execute(
+                select(ScheduledReport.user_id, func.count(ScheduledReport.id).label("active_scheduled_reports"))
+                .where(ScheduledReport.user_id.in_(user_ids), ScheduledReport.is_active == True)
+                .group_by(ScheduledReport.user_id)
+            )
+            schedule_map = {row.user_id: int(row.active_scheduled_reports or 0) for row in sched_r.all()}
+
+        if user.is_admin:
+            company_r = await session.execute(select(Company))
+            company_map = {c.id: c.name for c in company_r.scalars().all()}
+
+        rows = []
+        for u in users:
+            channels = u.notification_channels or []
+            if isinstance(channels, dict):
+                channels = []
+            webhooks = u.webhook_urls or []
+            permissions = u.permissions or []
+            if u.is_admin:
+                role = "Admin"
+            elif u.is_company_admin:
+                role = "Company Admin"
+            else:
+                role = "User"
+            alerts = alert_map.get(u.id, {})
+            push = push_map.get(u.id)
+            rows.append({
+                "user_id": u.id,
+                "username": u.username,
+                "email": u.email,
+                "role": role,
+                "company_id": u.company_id,
+                "company_name": company_map.get(u.company_id) if user.is_admin else (u.company.name if u.company else None),
+                "assigned_devices": len(u.devices or []),
+                "assigned_device_names": sorted([d.name for d in (u.devices or [])]),
+                "push_enabled": push is not None,
+                "push_updated_at": push.updated_at.isoformat() if push else None,
+                "notification_channel_count": len(channels),
+                "notification_channel_names": [c.get("name", "") for c in channels if isinstance(c, dict) and c.get("name")],
+                "webhook_count": len(webhooks),
+                "unread_alerts": alerts.get("unread_alerts", 0),
+                "total_alerts": alerts.get("total_alerts", 0),
+                "critical_alerts": alerts.get("critical_alerts", 0),
+                "active_scheduled_reports": schedule_map.get(u.id, 0),
+                "permission_count": len(permissions),
+                "key_permissions": [p for p in _KEY_USER_PERMISSIONS if u.is_admin or p in permissions],
+                "timezone": u.timezone or "UTC",
+                "language": u.language or "en",
+                "units": u.units or "metric",
+                "created_at": u.created_at.isoformat(),
+                "last_activity": u.last_activity.isoformat() if u.last_activity else None,
+            })
+
+        return {"type": "users", "start_date": start.isoformat(), "end_date": end.isoformat(), "rows": rows}
 
     # ── Trip-based reports (summary / trips / daily / drivers) ────────────────
     start, end = _date_range(schedule.date_range)

@@ -31,6 +31,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
     user = await db.get_user(user_id)
     if not user:
         raise credentials_exception
+    await db.touch_user_activity(user.id, interval_minutes=15)
     return user
 
 
