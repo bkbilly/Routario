@@ -9,7 +9,7 @@ import io
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from core.auth import require_permission
@@ -123,17 +123,16 @@ async def trips_report(
 
 @router.get("/{report_key}")
 async def report_by_key(
+    request: Request,
     report_key: str,
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
     device_ids: Optional[str] = Query(None),
     user_ids: Optional[str] = Query(None),
     driver_ids: Optional[str] = Query(None),
-    group_by: Optional[str] = Query(None),
     historical: bool = Query(False),
     current_user: User = Depends(require_permission("view_reports")),
 ):
-    options = {}
-    if group_by is not None:
-        options["group_by"] = group_by
+    known_params = {"start_date", "end_date", "device_ids", "user_ids", "driver_ids", "historical"}
+    options = {k: v for k, v in request.query_params.items() if k not in known_params and v != ""}
     return await _run_report(report_key, current_user, start_date, end_date, device_ids, user_ids, driver_ids, options, historical)
