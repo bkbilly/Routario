@@ -7,7 +7,7 @@ All read/delete endpoints require a logged-in user.
 """
 import subprocess
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -35,6 +35,14 @@ TELTONIKA_EVENT_TYPES = {
 }
 
 CAMERA_CHANNELS = {0: "front", 1: "rear", 2: "interior"}
+
+
+def _to_naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def _generate_thumbnail(video_path: Path, thumb_path: Path) -> bool:
@@ -144,6 +152,8 @@ async def list_clips(
     current_user: User = Depends(get_current_user),
 ):
     db = get_db()
+    start = _to_naive_utc(start)
+    end = _to_naive_utc(end)
     async with db.get_session() as session:
         q = select(VideoClip).order_by(VideoClip.timestamp.desc())
         if device_id:

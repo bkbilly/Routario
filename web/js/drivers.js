@@ -283,6 +283,7 @@ function closeDriverModal() {
 async function saveDriver() {
     const name = document.getElementById('driverName').value.trim();
     if (!name) { document.getElementById('driverName').focus(); return; }
+    const isEdit = !!_editingDriver;
 
     // Collect assignment vehicles
     const allCb   = document.getElementById('driverVehiclesAll');
@@ -359,6 +360,7 @@ async function saveDriver() {
         closeDriverModal();
         await _loadDevices();
         await _loadDrivers();
+        showAlert(isEdit ? 'Driver updated' : 'Driver added', 'success');
     } catch (e) { showAlert(e.message || 'Save failed', 'error'); }
 }
 
