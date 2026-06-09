@@ -537,10 +537,13 @@ async function usrSendNotification() {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body:    JSON.stringify({ title, message }),
-            }).then(r => r.json()).catch(() => ({ error: true }))
+            }).then(async r => r.ok ? r.json().catch(() => ({})) : ({ error: true })).catch(() => ({ error: true }))
         ));
         const failed = results.filter(r => r.error).length;
+        const pushMissing = results.filter(r => !r.error && r.push_delivered === false).length;
         if (failed) showAlert(`Sent to ${userIds.length - failed} user(s). ${failed} failed.`, 'warning');
+        else if (pushMissing) showAlert(`Notification sent. Push was not delivered to ${pushMissing} user(s).`, 'warning');
+        else showAlert(`Notification sent to ${userIds.length} user(s).`, 'success');
         usrCloseNotifyModal();
     } catch (e) { showAlert(e.message || 'Send failed', 'error'); }
     finally {
