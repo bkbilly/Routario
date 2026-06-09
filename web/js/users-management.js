@@ -319,6 +319,7 @@ async function saveUser() {
                 showAlert(detail || 'Save failed', 'error');
             }
         } else {
+            showAlert(isNew ? 'User created' : 'User updated', 'success');
             closeUserModal();
             await _usrLoad();
         }
