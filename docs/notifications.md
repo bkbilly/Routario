@@ -204,7 +204,7 @@ Sent whenever an alert fires for the device. Receivers can check `"event": "aler
 }
 ```
 
-Possible `alert_type` values: `speeding` · `idling` · `geofence_enter` · `geofence_exit` · `offline` · `towing` · `maintenance` · `low_battery` · `device_event` · `custom`
+Possible `alert_type` values: `speeding` · `idling` · `geofence_enter` · `geofence_exit` · `offline` · `towing` · `maintenance` · `low_battery` · `harsh_brake` · `harsh_accel` · `unauthorized_driver` · `device_event` · `custom` · `notification`
 
 Possible `severity` values: `info` · `warning` · `critical`
 
@@ -213,6 +213,8 @@ Possible `severity` values: `info` · `warning` · `critical`
 ## Browser Push Notifications
 
 Routario supports the **Web Push API** for delivering notifications directly to your browser — even when the tab is not open.
+
+If a user's company has custom branding, browser push notifications use that company's app icon and notification badge. If no company branding is configured, Routario uses the default app icons.
 
 ### Server setup
 

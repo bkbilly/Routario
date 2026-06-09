@@ -17,12 +17,12 @@ from core.auth import require_permission
 from core.database import get_db
 from models import User
 from models.models import ScheduledReport, ScheduledReportRun
+from reports import get_report, valid_report_types
 
 router = APIRouter(prefix="/api/report-schedules", tags=["report-schedules"])
 
 MAX_KEEP_RUNS = 100
 
-_VALID_TYPES      = {"summary", "trips", "daily", "drivers", "users", "sensors", "alerts"}
 _VALID_FREQS      = {"daily", "weekly", "monthly"}
 _VALID_RANGES     = {
     "last_7_days", "last_14_days", "last_30_days",
@@ -114,15 +114,18 @@ class ScheduleUpdate(BaseModel):
 
 
 def _validate(data: ScheduleCreate) -> None:
-    if data.report_type not in _VALID_TYPES:
+    if data.report_type not in valid_report_types():
         raise HTTPException(400, "Invalid report_type")
+    report = get_report(data.report_type)
+    if report and not report.definition.schedule_supported:
+        raise HTTPException(400, "Report type cannot be scheduled")
     if data.frequency not in _VALID_FREQS:
         raise HTTPException(400, "Invalid frequency")
     if data.frequency == "weekly" and data.day_of_week is None:
         raise HTTPException(400, "day_of_week required for weekly frequency")
     if data.frequency == "monthly" and data.day_of_month is None:
         raise HTTPException(400, "day_of_month required for monthly frequency")
-    needs_range = data.report_type != "sensors" or data.sensors_historical
+    needs_range = (report.definition.needs_date_range if report else True) or data.sensors_historical
     if needs_range:
         if not data.date_range:
             raise HTTPException(400, "date_range required for this report type")
@@ -190,6 +193,9 @@ async def create_schedule(
     current_user: User = Depends(require_permission("view_reports")),
 ):
     _validate(data)
+    report = get_report(data.report_type)
+    if report and report.definition.company_admin_required and not (current_user.is_admin or current_user.is_company_admin):
+        raise HTTPException(403, "Company admin access required")
     tz = data.timezone or current_user.timezone or "UTC"
     next_run = compute_next_run(data.frequency, data.run_time, data.day_of_week, data.day_of_month, tz)
 
@@ -235,6 +241,10 @@ async def update_schedule(
         schedule = result.scalar_one_or_none()
         if not schedule:
             raise HTTPException(404, "Schedule not found")
+
+        report = get_report(schedule.report_type)
+        if report and report.definition.company_admin_required and not (current_user.is_admin or current_user.is_company_admin):
+            raise HTTPException(403, "Company admin access required")
 
         if data.name               is not None: schedule.name               = data.name
         if data.filter_device_ids  is not None: schedule.filter_device_ids  = data.filter_device_ids

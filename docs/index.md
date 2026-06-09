@@ -43,6 +43,12 @@
 
     [:octicons-arrow-right-24: Notifications](notifications.md)
 
+- :material-chart-box: **Backend-Defined Reports**
+
+    Fleet summaries, trips, daily activity, driver activity, user fleet, sensors, alerts, scheduled delivery, and CSV exports.
+
+    [:octicons-arrow-right-24: Reports](reports.md)
+
 - :material-cellphone-arrow-down: **PWA Support**
 
     Install Routario on iOS and Android from the browser. Offline-capable with native-style push notifications.

@@ -30,6 +30,7 @@ nav:
   - Features: features.md
   - Supported Devices: devices.md
   - Alerts: alerts.md
+  - Reports: reports.md
   - Cloud Integrations: integrations.md
   - Notifications: notifications.md
   - Administration: administration.md

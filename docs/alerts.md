@@ -62,7 +62,15 @@ Fires when a device reports an SOS/panic event triggered by the hardware SOS but
 
 ### 🪫 Low Battery Alert
 
-Fires when the device battery drops below a configurable voltage or percentage threshold. Exact behaviour depends on the device protocol's battery reporting capabilities.
+Fires when the configured voltage sensor drops below a threshold.
+
+| Parameter | Default | Description |
+|---|---|---|
+| Battery Type | `lead_acid` | Preset threshold helper: Lead Acid, AGM, or Lithium (LiFePO4). |
+| Voltage Threshold (V) | `12.2` | Alert fires below this voltage. The preset can be adjusted manually. |
+| Voltage Sensor | `external_voltage` | Sensor key to read from position data, for example `external_voltage` or `battery_voltage`. |
+
+Values reported in millivolts are normalized to volts automatically.
 
 ---
 
@@ -106,22 +114,26 @@ Fires when a device has not sent a position for longer than a configurable timeo
 
 ### 🔧 Maintenance Due Alert
 
-Fires when a vehicle's odometer is approaching or has reached a scheduled service interval. Useful for tracking recurring maintenance across a fleet without an external service management tool.
+Fires when a vehicle's odometer or a date-based service schedule is approaching or due. Useful for tracking recurring maintenance across a fleet without an external service management tool.
 
 | Parameter | Default | Description |
 |---|---|---|
 | Maintenance Type | `service` | Preset types: Service, Oil Change, Tire Change, Brake Service, Air Filter, or Custom. |
 | Custom Label | — | Name shown in the alert when type is *Custom*. |
+| Track By | `distance` | Track by odometer distance or calendar date. |
 | Next Service At (km) | `0` | Odometer reading at which the first service is due. |
 | Repeat Every (km) | `5000` | After the first service, how often (in km) to repeat the alert. |
 | Warn When Within (km) | `500` | Fire an advance warning this many km before the service is due. |
+| Next Service Date | — | Date on which the first service is due when tracking by date. |
+| Repeat Every (days) | `180` | How often to repeat the date-based alert. |
+| Warn When Within (days) | `14` | Fire an advance warning this many days before the due date. |
 
 Two alert events are generated for each interval:
 
-- **Info** — fired `Warn When Within` km before the due odometer reading.
-- **Warning** — fired when the odometer reaches or passes the due reading.
+- **Info** — fired within the configured warning distance or warning days.
+- **Warning** — fired when the odometer or date reaches/passes the due value.
 
-After the due reading is passed, the next interval begins automatically based on the *Repeat Every* value — no manual reset needed.
+After the due value is passed, the next interval begins automatically based on the configured repeat interval — no manual reset needed.
 
 ---
 
@@ -139,6 +151,27 @@ The alert fires **once** per ignition cycle and resets automatically when the ig
 
 !!! info "Device support"
     BLE beacon detection requires the tracker hardware to scan for beacons and include them in the position payload (typically in a `beacon_ids` sensor field). Not all devices support this — check your device's firmware and protocol documentation.
+
+---
+
+### 🧑‍✈️ No / Unexpected Driver Alert
+
+Fires when a vehicle is moving without an assigned driver, or when the assigned driver is not the expected one.
+
+| Parameter | Default | Description |
+|---|---|---|
+| Minimum speed (km/h) | `5` | Alert only when speed exceeds this value. |
+| Expected driver | *(any driver)* | Leave blank to alert whenever no driver is assigned, or choose a specific driver to alert when someone else is assigned. |
+
+The alert fires once per moving period and resets when the vehicle stops or the correct driver is assigned.
+
+---
+
+### 📡 Device Native Event Alert
+
+Some protocols expose built-in hardware events as sensor values. Routario can create hidden protocol-specific alert rules for these events, such as panic, power cut, tamper, towing, or other native device events.
+
+These rules use the internal `device_event` alert implementation and are injected by protocol support rather than shown as a generic system alert in the dropdown.
 
 ---
 

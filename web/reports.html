@@ -301,13 +301,7 @@
                 <div class="form-group">
                     <label class="form-label">Report Type</label>
                     <select id="reportType" class="form-input" onchange="onReportTypeChange()">
-                        <option value="summary">Fleet Summary</option>
-                        <option value="trips">Trip List</option>
-                        <option value="daily">Daily Activity</option>
-                        <option value="drivers">Driver Activity</option>
-                        <option value="users">User Fleet</option>
-                        <option value="sensors">Vehicle Sensors</option>
-                        <option value="alerts">Alerts</option>
+                        <option value="">Loading reports...</option>
                     </select>
                 </div>
                 <div class="form-group" id="historyCheckGroup" style="display:none;">
@@ -317,14 +311,7 @@
                         Historical data
                     </label>
                 </div>
-                <div class="form-group" id="dailyModeGroup" style="display:none;">
-                    <label class="form-label">Daily Breakdown</label>
-                    <select id="dailyMode" class="form-input" onchange="onDailyModeChange()">
-                        <option value="fleet">Fleet total</option>
-                        <option value="vehicles">Vehicles</option>
-                        <option value="drivers">Drivers</option>
-                    </select>
-                </div>
+                <div id="reportControlsGroup" style="display:contents;"></div>
                 <div class="form-group" id="dateFromGroup">
                     <label class="form-label">From</label>
                     <input type="date" id="startDate" class="form-input">
@@ -468,13 +455,7 @@
                     <div class="form-group">
                         <label class="form-label">Report Type</label>
                         <select id="sfType" class="form-input" onchange="onSchedTypeChange()">
-                            <option value="summary">Fleet Summary</option>
-                            <option value="trips">Trip List</option>
-                            <option value="daily">Daily Activity</option>
-                            <option value="drivers">Driver Activity</option>
-                            <option value="users">User Fleet</option>
-                            <option value="sensors">Vehicle Sensors</option>
-                            <option value="alerts">Alerts</option>
+                            <option value="">Loading reports...</option>
                         </select>
                     </div>
 

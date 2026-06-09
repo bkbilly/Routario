@@ -4,401 +4,46 @@ Background task: execute due report schedules and store results.
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from datetime import datetime
 
-from sqlalchemy import case, delete, func, select
-from sqlalchemy.orm import selectinload
+from sqlalchemy import delete, select
 
 from core.database import get_db
-from core.push_notifications import PushSubscription
 from models.models import (
-    AlertHistory,
-    Company,
-    Device,
-    DeviceState,
-    Driver,
-    PositionRecord,
     ScheduledReport,
     ScheduledReportRun,
-    Trip,
     User,
-    user_device_association,
 )
+from reports import get_report
+from reports.common import date_range
 from routes.report_schedules import compute_next_run
 
 logger = logging.getLogger(__name__)
 
 _CHECK_INTERVAL = 60  # seconds
 
-_KEY_USER_PERMISSIONS = [
-    "view_devices",
-    "view_history",
-    "view_reports",
-    "manage_alerts",
-    "manage_drivers",
-    "send_commands",
-    "voice_ptt",
-    "live_share",
-]
-
-
-# ── Date range helpers ────────────────────────────────────────────────────────
-
-def _date_range(name: str) -> Tuple[datetime, datetime]:
-    import calendar
-    now   = datetime.utcnow()
-    today = now.date()
-
-    if name == "last_7_days":
-        return (
-            datetime.combine(today - timedelta(days=7), datetime.min.time()),
-            datetime.combine(today, datetime.max.time().replace(microsecond=0)),
-        )
-    if name == "last_14_days":
-        return (
-            datetime.combine(today - timedelta(days=14), datetime.min.time()),
-            datetime.combine(today, datetime.max.time().replace(microsecond=0)),
-        )
-    if name == "last_30_days":
-        return (
-            datetime.combine(today - timedelta(days=30), datetime.min.time()),
-            datetime.combine(today, datetime.max.time().replace(microsecond=0)),
-        )
-    if name == "last_calendar_month":
-        first_this = today.replace(day=1)
-        last_prev  = first_this - timedelta(days=1)
-        first_prev = last_prev.replace(day=1)
-        return (
-            datetime.combine(first_prev, datetime.min.time()),
-            datetime.combine(last_prev,  datetime.max.time().replace(microsecond=0)),
-        )
-    if name == "last_quarter":
-        q = (today.month - 1) // 3
-        if q == 0:
-            sy, sm, ey, em = today.year - 1, 10, today.year - 1, 12
-        else:
-            sy, sm = today.year, (q - 1) * 3 + 1
-            ey, em = today.year, q * 3
-        return (
-            datetime(sy, sm, 1),
-            datetime(ey, em, calendar.monthrange(ey, em)[1], 23, 59, 59),
-        )
-    if name == "last_year":
-        y = today.year - 1
-        return datetime(y, 1, 1), datetime(y, 12, 31, 23, 59, 59)
-
-    # fallback: last 30 days
-    return (
-        datetime.combine(today - timedelta(days=30), datetime.min.time()),
-        datetime.combine(today, datetime.max.time().replace(microsecond=0)),
-    )
-
-
-# ── Device access ─────────────────────────────────────────────────────────────
-
-async def _accessible_devices(session, user: User) -> List[Device]:
-    if user.is_admin:
-        r = await session.execute(select(Device).where(Device.is_active == True))
-        return r.scalars().all()
-    if user.is_company_admin and user.company_id:
-        r = await session.execute(
-            select(Device).where(Device.company_id == user.company_id, Device.is_active == True)
-        )
-        return r.scalars().all()
-    r = await session.execute(
-        select(Device)
-        .join(user_device_association, user_device_association.c.device_id == Device.id)
-        .where(user_device_association.c.user_id == user.id, Device.is_active == True)
-    )
-    return r.scalars().all()
-
-
 # ── Report generators ─────────────────────────────────────────────────────────
 
 async def _run_report(session, schedule: ScheduledReport, user: User) -> dict:
-    rtype = schedule.report_type
+    report = get_report(schedule.report_type)
+    if not report:
+        raise ValueError(f"Unknown report type: {schedule.report_type}")
+    if report.definition.company_admin_required and not (user.is_admin or user.is_company_admin):
+        raise PermissionError(f"Report type requires company admin: {schedule.report_type}")
 
-    all_devices = await _accessible_devices(session, user)
-    filter_ids  = set(schedule.filter_device_ids or [])
-    devices     = [d for d in all_devices if not filter_ids or d.id in filter_ids]
-    device_map  = {d.id: d for d in devices}
-    device_ids  = list(device_map)
+    start = end = None
+    if report.definition.needs_date_range or schedule.sensors_historical:
+        start, end = date_range(schedule.date_range)
 
-    # ── Sensors ──────────────────────────────────────────────────────────────
-    if rtype == "sensors":
-        if not schedule.sensors_historical:
-            states_r = await session.execute(
-                select(DeviceState)
-                .where(DeviceState.device_id.in_(device_ids))
-                .options(selectinload(DeviceState.current_driver))
-            )
-            state_map = {s.device_id: s for s in states_r.scalars().all()}
-            rows = []
-            for d in sorted(devices, key=lambda x: x.name):
-                s = state_map.get(d.id)
-                rows.append({
-                    "id":            d.id,
-                    "name":          d.name,
-                    "license_plate": d.license_plate,
-                    "state": {
-                        "ignition_on":          s.ignition_on if s else None,
-                        "last_speed":           s.last_speed if s else None,
-                        "last_altitude":        s.last_altitude if s else None,
-                        "sensors":              s.sensors if s else {},
-                        "current_driver_name":  s.current_driver.name if (s and s.current_driver) else None,
-                        "last_update":          s.last_update.isoformat() if (s and s.last_update) else None,
-                    },
-                })
-            return {"type": "sensors", "historical": False, "rows": rows}
-
-        start, end = _date_range(schedule.date_range)
-        rows = []
-        for d in sorted(devices, key=lambda x: x.name):
-            pos_r = await session.execute(
-                select(PositionRecord)
-                .where(
-                    PositionRecord.device_id == d.id,
-                    PositionRecord.device_time >= start,
-                    PositionRecord.device_time <= end,
-                )
-                .order_by(PositionRecord.device_time.desc())
-                .limit(5000)
-            )
-            for p in pos_r.scalars().all():
-                rows.append({
-                    "_device":  {"id": d.id, "name": d.name},
-                    "time":     p.device_time.isoformat(),
-                    "speed":    p.speed,
-                    "altitude": p.altitude,
-                    "ignition": p.ignition,
-                    "sensors":  p.sensors or {},
-                })
-        return {
-            "type":       "sensors",
-            "historical": True,
-            "start_date": start.isoformat(),
-            "end_date":   end.isoformat(),
-            "rows":       rows,
-        }
-
-    # ── Alerts ────────────────────────────────────────────────────────────────
-    if rtype == "alerts":
-        start, end = _date_range(schedule.date_range)
-        filter_user_ids = schedule.filter_user_ids or []
-
-        if user.is_admin:
-            eff_user_ids = filter_user_ids
-        elif user.is_company_admin:
-            cu = await session.execute(
-                select(User.id).where(User.company_id == user.company_id)
-            )
-            company_ids = [r[0] for r in cu.all()]
-            eff_user_ids = [i for i in filter_user_ids if i in company_ids] if filter_user_ids else company_ids
-        else:
-            eff_user_ids = [user.id]
-
-        query = (
-            select(AlertHistory, User.username, Device.name.label("device_name"))
-            .join(User,   AlertHistory.user_id   == User.id)
-            .outerjoin(Device, AlertHistory.device_id == Device.id)
-            .where(AlertHistory.created_at >= start, AlertHistory.created_at <= end)
-        )
-        if eff_user_ids:
-            query = query.where(AlertHistory.user_id.in_(eff_user_ids))
-        if filter_ids:
-            query = query.where(AlertHistory.device_id.in_(device_ids))
-
-        result = await session.execute(
-            query.order_by(AlertHistory.created_at.desc()).limit(2000)
-        )
-        rows = [
-            {
-                "id":          a.id,
-                "created_at":  a.created_at.isoformat(),
-                "alert_type":  a.alert_type,
-                "severity":    a.severity,
-                "message":     a.message,
-                "is_read":     a.is_read,
-                "username":    username,
-                "device_name": device_name,
-            }
-            for a, username, device_name in result.all()
-        ]
-        return {"type": "alerts", "start_date": start.isoformat(), "end_date": end.isoformat(), "rows": rows}
-
-    # ── User Fleet ───────────────────────────────────────────────────────────
-    if rtype == "users":
-        start, end = _date_range(schedule.date_range)
-        filter_user_ids = set(schedule.filter_user_ids or [])
-
-        q = select(User).options(selectinload(User.devices), selectinload(User.company))
-        if not user.is_admin:
-            q = q.where(User.company_id == user.company_id)
-        if filter_user_ids:
-            q = q.where(User.id.in_(filter_user_ids))
-
-        users = sorted((await session.execute(q)).scalars().all(), key=lambda u: u.username.lower())
-        user_ids = [u.id for u in users]
-
-        push_map = {}
-        alert_map = {}
-        schedule_map = {}
-        company_map = {}
-
-        if user_ids:
-            push_r = await session.execute(select(PushSubscription).where(PushSubscription.user_id.in_(user_ids)))
-            push_map = {p.user_id: p for p in push_r.scalars().all()}
-
-            alerts_r = await session.execute(
-                select(
-                    AlertHistory.user_id,
-                    func.count(AlertHistory.id).label("total_alerts"),
-                    func.coalesce(func.sum(case((AlertHistory.is_read == False, 1), else_=0)), 0).label("unread_alerts"),
-                    func.coalesce(func.sum(case((AlertHistory.severity.in_(["critical", "high"]), 1), else_=0)), 0).label("critical_alerts"),
-                )
-                .where(
-                    AlertHistory.user_id.in_(user_ids),
-                    AlertHistory.created_at >= start,
-                    AlertHistory.created_at <= end,
-                )
-                .group_by(AlertHistory.user_id)
-            )
-            alert_map = {
-                row.user_id: {
-                    "total_alerts": int(row.total_alerts or 0),
-                    "unread_alerts": int(row.unread_alerts or 0),
-                    "critical_alerts": int(row.critical_alerts or 0),
-                }
-                for row in alerts_r.all()
-            }
-
-            sched_r = await session.execute(
-                select(ScheduledReport.user_id, func.count(ScheduledReport.id).label("active_scheduled_reports"))
-                .where(ScheduledReport.user_id.in_(user_ids), ScheduledReport.is_active == True)
-                .group_by(ScheduledReport.user_id)
-            )
-            schedule_map = {row.user_id: int(row.active_scheduled_reports or 0) for row in sched_r.all()}
-
-        if user.is_admin:
-            company_r = await session.execute(select(Company))
-            company_map = {c.id: c.name for c in company_r.scalars().all()}
-
-        rows = []
-        for u in users:
-            channels = u.notification_channels or []
-            if isinstance(channels, dict):
-                channels = []
-            webhooks = u.webhook_urls or []
-            permissions = u.permissions or []
-            if u.is_admin:
-                role = "Admin"
-            elif u.is_company_admin:
-                role = "Company Admin"
-            else:
-                role = "User"
-            alerts = alert_map.get(u.id, {})
-            push = push_map.get(u.id)
-            rows.append({
-                "user_id": u.id,
-                "username": u.username,
-                "email": u.email,
-                "role": role,
-                "company_id": u.company_id,
-                "company_name": company_map.get(u.company_id) if user.is_admin else (u.company.name if u.company else None),
-                "assigned_devices": len(u.devices or []),
-                "assigned_device_names": sorted([d.name for d in (u.devices or [])]),
-                "push_enabled": push is not None,
-                "push_updated_at": push.updated_at.isoformat() if push else None,
-                "notification_channel_count": len(channels),
-                "notification_channel_names": [c.get("name", "") for c in channels if isinstance(c, dict) and c.get("name")],
-                "webhook_count": len(webhooks),
-                "unread_alerts": alerts.get("unread_alerts", 0),
-                "total_alerts": alerts.get("total_alerts", 0),
-                "critical_alerts": alerts.get("critical_alerts", 0),
-                "active_scheduled_reports": schedule_map.get(u.id, 0),
-                "permission_count": len(permissions),
-                "key_permissions": [p for p in _KEY_USER_PERMISSIONS if u.is_admin or p in permissions],
-                "timezone": u.timezone or "UTC",
-                "language": u.language or "en",
-                "units": u.units or "metric",
-                "created_at": u.created_at.isoformat(),
-                "last_activity": u.last_activity.isoformat() if u.last_activity else None,
-            })
-
-        return {"type": "users", "start_date": start.isoformat(), "end_date": end.isoformat(), "rows": rows}
-
-    # ── Trip-based reports (summary / trips / daily / drivers) ────────────────
-    start, end = _date_range(schedule.date_range)
-    trips_r = await session.execute(
-        select(Trip).where(
-            Trip.device_id.in_(device_ids),
-            Trip.start_time >= start,
-            Trip.start_time <= end,
-            Trip.end_time.isnot(None),
-        ).order_by(Trip.start_time.desc())
+    return await report.run(
+        session=session,
+        current_user=user,
+        start_date=start,
+        end_date=end,
+        device_ids=schedule.filter_device_ids or [],
+        user_ids=schedule.filter_user_ids or [],
+        historical=schedule.sensors_historical,
     )
-    trips = trips_r.scalars().all()
-
-    driver_ids = {t.driver_id for t in trips if t.driver_id}
-    driver_map: dict = {}
-    if driver_ids:
-        dr = await session.execute(select(Driver).where(Driver.id.in_(driver_ids)))
-        driver_map = {d.id: d.name for d in dr.scalars().all()}
-
-    trip_rows = [
-        {
-            "device_id":        t.device_id,
-            "device_name":      device_map[t.device_id].name if t.device_id in device_map else str(t.device_id),
-            "license_plate":    device_map[t.device_id].license_plate if t.device_id in device_map else None,
-            "driver_name":      driver_map.get(t.driver_id) if t.driver_id else None,
-            "start_time":       t.start_time.isoformat(),
-            "end_time":         t.end_time.isoformat() if t.end_time else None,
-            "distance_km":      round(t.distance_km, 2),
-            "duration_minutes": round(t.duration_minutes, 1),
-            "avg_speed":        round(t.avg_speed, 1),
-            "max_speed":        round(t.max_speed, 1),
-            "start_address":    t.start_address,
-            "end_address":      t.end_address,
-        }
-        for t in trips
-    ]
-
-    if rtype == "summary":
-        by_dev: dict = {}
-        for r in trip_rows:
-            did = r["device_id"]
-            if did not in by_dev:
-                by_dev[did] = {
-                    "device_id":        did,
-                    "device_name":      r["device_name"],
-                    "license_plate":    r["license_plate"],
-                    "driver_name":      r["driver_name"],
-                    "trips":            0,
-                    "distance_km":      0.0,
-                    "driving_minutes":  0.0,
-                    "max_speed":        0.0,
-                    "_sum_avg":         0.0,
-                }
-            by_dev[did]["trips"]           += 1
-            by_dev[did]["distance_km"]     += r["distance_km"]
-            by_dev[did]["driving_minutes"] += r["duration_minutes"]
-            by_dev[did]["max_speed"]        = max(by_dev[did]["max_speed"], r["max_speed"])
-            by_dev[did]["_sum_avg"]        += r["avg_speed"]
-
-        rows = []
-        for d in by_dev.values():
-            d["avg_speed"]       = round(d["_sum_avg"] / d["trips"], 1) if d["trips"] else 0.0
-            d["distance_km"]     = round(d["distance_km"], 2)
-            d["driving_minutes"] = round(d["driving_minutes"], 1)
-            d["max_speed"]       = round(d["max_speed"], 1)
-            del d["_sum_avg"]
-            rows.append(d)
-
-        return {"type": "summary", "start_date": start.isoformat(), "end_date": end.isoformat(), "rows": rows}
-
-    # trips / daily / drivers all store raw trip rows; frontend differentiates
-    return {"type": rtype, "start_date": start.isoformat(), "end_date": end.isoformat(), "rows": trip_rows}
 
 
 # ── Execute one schedule ──────────────────────────────────────────────────────
