@@ -14,6 +14,8 @@ This means adding a new report does not require editing `reports.js`: create a n
 | **Trip List** | Individual trips with start/end time, locations, distance, duration, speed, assigned driver, and a clickable map view. |
 | **Daily Activity** | Daily totals grouped by the whole fleet, by vehicle, or by driver. |
 | **Driver Activity** | Per-driver totals for trips, distance, driving time, speed, and vehicles used. |
+| **Logbook** | Selectable fuel or maintenance report for vehicle fuel fill-ups, service entries, and configured maintenance due items. |
+| **Geofence Activity** | Geofence enter and exit activity by vehicle, geofence, event, and notification recipient. |
 | **User Fleet** | Company-admin report for user readiness: assigned vehicles, push status, channels, webhooks, alerts, permissions, and last activity. |
 | **Vehicle Sensors** | Current vehicle sensor values, or historical sensor rows over a selected date range. |
 | **Alerts** | Alert history over a selected period, with optional user filtering for admins. |
