@@ -54,10 +54,10 @@ Routario evaluates alert rules continuously as positions arrive. Supported alert
 - **Geofence** — enter/exit events for polygons and circles
 - **Ignition** — on/off events from the device
 - **SOS** — hardware panic button trigger
-- **Low battery** — voltage or percentage threshold
+- **Low battery** — voltage threshold with battery chemistry presets
 - **Idling** — engine running but vehicle stationary
 - **Towing / Shock** — hardware sensor trigger
-- **Maintenance Due** — odometer-based service intervals with advance warnings
+- **Maintenance Due** — odometer- or date-based service intervals with advance warnings
 - **Driver ID (Beacon)** — unauthorized driver detection via BLE beacon proximity
 - **Custom / Sensor Rule** — arbitrary boolean expression over device sensor data
 - **Device Offline** — no position received within a configurable timeout
@@ -100,8 +100,8 @@ The dashboard maintains a persistent WebSocket connection. Whenever a device sen
 ## Driver Management
 
 - **Driver profiles** — create drivers with name, contact details, and notes.
-- **Vehicle assignment** — assign a driver to a vehicle; each trip records who was driving.
-- **Trip attribution** — history and reports link trips to the assigned driver for accountability.
+- **Vehicle assignment** — assign a driver to a vehicle; position history stores the assigned driver at each point.
+- **Trip attribution** — history and reports link trips to the stored driver attribution. When a driver changes during a trip, the trip report uses the final stored trip driver.
 
 ---
 
@@ -109,11 +109,29 @@ The dashboard maintains a persistent WebSocket connection. Whenever a device sen
 
 Generate reports across your fleet for any time window:
 
-- **Fleet summary** — totals per device: distance driven, trips made, engine hours, and top speed.
+- **Fleet summary** — totals per device: distance driven, trips made, driving time, average speed, and top speed.
 - **Trips report** — each trip with start/end time, distance, duration, and a map view of the route.
-- **Daily aggregates** — per-device totals rolled up by calendar day.
-- **Sensor history** — graph any sensor attribute (fuel level, temperature, voltage, etc.) over time.
+- **Daily activity** — totals rolled up by calendar day for the whole fleet, each vehicle, or each driver.
+- **Driver activity** — per-driver totals for trips, distance, driving time, top speed, and vehicles used.
+- **User fleet** — user readiness report for company admins: assigned vehicles, push status, notification channels, webhooks, permissions, alerts, and last activity.
+- **Vehicle sensors** — current sensor values or historical sensor rows over a selected period.
+- **Alerts** — alert history report with optional user filtering for admins.
+- **Scheduled reports** — run reports daily, weekly, or monthly and keep stored run history.
 - **CSV export** — download data for each report type.
+- **Backend-defined reports** — report files define their own controls, columns, summaries, CSV output, and optional row actions.
+
+[:octicons-arrow-right-24: Reports](reports.md)
+
+---
+
+## Dashcam Clips
+
+Routario supports Teltonika DualCam and generic HTTP camera clip uploads for camera-capable devices.
+
+- **Dashcam upload endpoint** — cameras can upload event clips to `/api/dashcam/upload`.
+- **Device Management clip browser** — view, filter, play, and delete clips for devices marked as having a dashcam.
+- **History integration** — clips can be shown alongside trip/history time ranges.
+- **Nearest-position matching** — when a clip upload does not include coordinates, Routario links it to the nearest stored position for that device.
 
 ---
 
@@ -172,5 +190,6 @@ Pull live positions from third-party GPS platforms without reconfiguring your de
 - **Backup & Restore** — download a full database backup as a portable archive, and restore from a previous backup, all from the admin panel.
 - **User impersonation** — admins can temporarily act as any user to diagnose access or configuration issues.
 - **Company management** — partition users and devices into isolated companies with their own admin accounts.
+- **Company branding** — optionally set a company app name, `/login/<slug>` URL, app icons, and notification badge.
 
 [:octicons-arrow-right-24: Administration Guide](administration.md)

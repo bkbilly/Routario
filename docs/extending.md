@@ -1,6 +1,6 @@
 # Extending Routario
 
-Routario is designed to be extended without touching core files. Protocols, integrations, alert types, and notification channels are all auto-discovered at startup — add a file, implement the interface, and it appears in the UI on the next restart.
+Routario is designed to be extended without touching core files. Protocols, integrations, alert types, reports, and notification channels are all auto-discovered at startup — add a file, implement the interface, and it appears in the UI on the next restart.
 
 ---
 
@@ -56,7 +56,7 @@ class MyProviderIntegration(BaseIntegration):
     FIELDS = [
         IntegrationField(key="token", label="API Token",
                          field_type="password", required=True),
-        # field_type options: "text" | "password" | "number" | "url" | "textarea"
+        # field_type options: "text" | "password" | "number" | "url"
     ]
 
     async def authenticate(self, credentials: dict) -> AuthContext:
@@ -71,6 +71,113 @@ class MyProviderIntegration(BaseIntegration):
 
 !!! info "`SUPPORTS_BROWSE = False`"
     Set this on integrations that have no remote device list to query (e.g. the built-in GPS Simulator). It hides the **Browse** button from the credential form so users are not presented with a button that does nothing.
+
+---
+
+## Adding a Report
+
+Reports live in `app/reports/`. Each report module defines both the backend query and the frontend presentation schema.
+
+1. Create a new file in `app/reports/`.
+2. Subclass `Report`.
+3. Define a `ReportDefinition`.
+4. Implement `run()` and return a `table_payload()`.
+5. Expose a module-level `report` object.
+
+The report registry discovers modules automatically. The Reports UI reads report metadata from `/api/reports/types`, renders backend-defined controls, and displays the payload returned by `/api/reports/{report_key}`.
+
+```python
+from datetime import datetime
+from typing import Any, Optional
+
+from reports.base import Report, ReportDefinition
+from reports.common import table_payload
+
+
+class MyReport(Report):
+    definition = ReportDefinition(
+        key="my_report",
+        label="My Report",
+        description="Shows useful information.",
+        needs_date_range=True,
+        supports_vehicle_filter=True,
+        controls=(
+            {
+                "key": "group_by",
+                "label": "Group By",
+                "type": "select",
+                "default": "vehicle",
+                "options": [
+                    {"value": "vehicle", "label": "Vehicle"},
+                    {"value": "driver", "label": "Driver"},
+                ],
+            },
+        ),
+    )
+
+    async def run(
+        self,
+        session,
+        current_user: Any,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        device_ids: Optional[list[int]] = None,
+        user_ids: Optional[list[int]] = None,
+        driver_ids: Optional[list[int]] = None,
+        options: Optional[dict[str, Any]] = None,
+        historical: bool = False,
+    ) -> dict:
+        rows = [{"name": "Example", "count": 1}]
+        return table_payload(
+            self.definition.key,
+            rows,
+            [
+                {"key": "name", "label": "Name", "type": "text"},
+                {"key": "count", "label": "Count", "type": "integer"},
+            ],
+            summary=[{"label": "Rows", "value": len(rows)}],
+            start_date=start_date,
+            end_date=end_date,
+            default_sort={"key": "name", "dir": 1},
+            csv_filename="my_report.csv",
+        )
+
+
+report = MyReport()
+```
+
+### Report column types
+
+The generic frontend renderer supports these common column types:
+
+| Type | Output |
+|---|---|
+| `text` | Escaped text, arrays joined with commas. |
+| `integer` | Whole number. |
+| `number` | Decimal number with optional `decimals` and `suffix`. |
+| `datetime` | Localized date/time. |
+| `datetime_split` | Date and time on separate lines. |
+| `duration_minutes` | Minutes formatted as `1h 20m`. |
+| `bool_on` | `On` / `Off` display. |
+| `bool_active` | `Active` / `Missing` display. |
+| `read_status` | `Read` / `Unread` display. |
+| `severity` | Colored severity label. |
+| `auto` | Generic value rendering, useful for dynamic sensor keys. |
+
+Columns may also define:
+
+- `detail_key` — secondary text shown below the main value.
+- `title_key` — tooltip text.
+- `max_width` — truncates long text cells.
+- `empty` and `empty_tone` — custom empty-state display.
+- `tone_if_positive` — color a positive numeric value.
+- `csv: false` — omit the column from CSV export.
+
+### Report row actions
+
+Reports may define a generic `row_action`. The built-in supported action is `trip_map`, which makes each row clickable and opens the trip route map using the row's trip fields.
+
+For user-facing report behavior, scheduled reports, and CSV behavior, see [Reports](reports.md).
 
 ---
 

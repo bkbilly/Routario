@@ -30,6 +30,8 @@ The Teltonika decoder supports Codec 8, 8E, 16, and 26 binary frames over both T
 
 **Supported commands:** `cpureset`, `getver`, `getgps`, `readio`, `getrecord`, `getinfo`, `setparam`, `getparam`, `flush`, `readstatus`, `getimei`, `custom` (raw text or hex)
 
+**Camera support:** Teltonika devices can be marked as dashcam-capable in Device Management. Routario exposes HTTP clip upload/list/playback endpoints for Teltonika DualCam and generic HTTP camera clips.
+
 **Device setup:** In Teltonika Configurator, set the server IP and port to your Routario host on port **5027**. Use Codec 8E for best results.
 
 ---
@@ -84,3 +86,22 @@ Devices that connect directly to Routario using Flespi's unified JSON wire forma
 ## Adding New Protocols
 
 See [Extending Routario → Adding a Protocol Decoder](extending.md#adding-a-protocol-decoder).
+
+---
+
+## Dashcam Clips
+
+Devices with camera support can store video clips in Routario.
+
+1. Enable **This device has a dashcam** for the device in Device Management.
+2. Configure the camera media server/upload URL to point at `/api/dashcam/upload`.
+3. Uploaded clips can be browsed from Device Management and shown in History when they overlap the selected time range.
+
+Routario stores uploaded clips under `web/uploads/dashcam` and exposes:
+
+- `/api/dashcam/upload` — clip upload endpoint.
+- `/api/dashcam/clips` — list clips for a device and optional time range.
+- `/api/dashcam/clips/{clip_id}/video` — stream the clip video.
+- `/api/dashcam/clips/{clip_id}/thumbnail` — retrieve a thumbnail when available.
+
+If a camera upload does not include coordinates, Routario links the clip to the nearest stored position for that device.

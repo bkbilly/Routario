@@ -16,13 +16,21 @@ Routario can export a complete snapshot of the database and restore from a previ
 Navigate to **Admin Panel → Backup → Download Backup**, or call the API directly:
 
 ```bash
-curl -u admin:password http://localhost:8000/api/admin/backup/download \
+TOKEN=$(curl -s http://localhost:8000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin_password"}' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+
+curl -H "Authorization: Bearer $TOKEN" \
+     http://localhost:8000/api/admin/backup/download \
      -o routario-backup.tar.gz
 ```
 
 The archive is a `.tar.gz` file containing:
 
-- **`database.json`** — a full JSON dump of every database table, one JSON object per row.
+- **`manifest.json`** — backup metadata.
+- **`db.json`** — a full JSON dump of every database table.
+- **`uploads/`** — uploaded files, when `web/uploads` exists.
 
 The dump is compatible with any SQLAlchemy-supported database (PostgreSQL, MySQL, SQLite), so backups can be used to migrate between database engines.
 
@@ -34,7 +42,12 @@ The dump is compatible with any SQLAlchemy-supported database (PostgreSQL, MySQL
 Upload a previously downloaded archive via **Admin Panel → Backup → Restore**, or use the API:
 
 ```bash
-curl -u admin:password \
+TOKEN=$(curl -s http://localhost:8000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin_password"}' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+
+curl -H "Authorization: Bearer $TOKEN" \
      -X POST http://localhost:8000/api/admin/backup/restore \
      -F "file=@routario-backup.tar.gz"
 ```
@@ -45,9 +58,7 @@ Routario does not have a built-in scheduler for backups. Use a cron job on the h
 
 ```cron
 # Daily backup at 02:00, kept for 30 days
-0 2 * * * curl -s -u admin:changeme http://localhost:8000/api/admin/backup/download \
-           -o /backups/routario-$(date +\%F).tar.gz \
-           && find /backups -name "routario-*.tar.gz" -mtime +30 -delete
+0 2 * * * TOKEN=$(curl -s http://localhost:8000/api/login -H "Content-Type: application/json" -d '{"username":"admin","password":"changeme"}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])') && curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/admin/backup/download -o /backups/routario-$(date +\%F).tar.gz && find /backups -name "routario-*.tar.gz" -mtime +30 -delete
 ```
 
 ---
@@ -118,5 +129,22 @@ Companies let you partition users and devices into isolated groups. A user or de
 - **Create companies** — give each company a name.
 - **Assign users** — toggle which users belong to a company. Mark specific users as Company Admin within that company.
 - **Assign devices** — toggle which devices belong to a company. Company admins and their users only see devices assigned to their company.
+- **App name** — optionally override the visible application name for users in that company.
+- **Login slug** — optionally create a company-specific login URL such as `/login/acme`.
+- **Custom icon** — optionally upload a company app icon. Routario generates the common PWA icon sizes from it.
+- **Custom badge** — optionally upload a notification badge icon. This is stored separately because Android notification badges have stricter shape requirements.
 
 Access via **Admin Panel → Companies** (super admin only).
+
+### Company branding
+
+Company branding is optional. If a company does not set custom branding, Routario uses the default application name and icons.
+
+When branding is set:
+
+- `/login/<slug>` loads the company app name and icon before login.
+- Logged-in users in that company see the company app name in page titles and navigation.
+- The PWA manifest uses the company app name and icon URLs.
+- Browser push notifications use the company's icon and badge when available.
+
+If a user logs in through a company slug and later logs out, Routario returns them to that company's login URL. If they then log into a company without a slug, the previous slug is cleared.
