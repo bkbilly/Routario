@@ -166,7 +166,6 @@ class DatabaseService:
             "ALTER TABLE users ADD COLUMN company_id INTEGER",
             "ALTER TABLE users ADD COLUMN is_company_admin BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT NULL",
-            "ALTER TABLE users ADD COLUMN last_activity DATETIME",
             "ALTER TABLE companies ADD COLUMN app_name VARCHAR(100)",
             "ALTER TABLE companies ADD COLUMN login_slug VARCHAR(100)",
             "ALTER TABLE companies ADD COLUMN icon_filename VARCHAR(255)",
@@ -204,6 +203,7 @@ class DatabaseService:
             )""",
         ]
         if self._is_postgres:
+            migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP")
             migrations.append("ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)")
             migrations.append("ALTER TABLE alert_history ALTER COLUMN device_id DROP NOT NULL")
             migrations.append("""
@@ -214,6 +214,8 @@ class DatabaseService:
                     ELSE assignment_vehicles::jsonb
                 END
             """)
+        else:
+            migrations.append("ALTER TABLE users ADD COLUMN last_activity DATETIME")
 
         for stmt in migrations:
             try:
