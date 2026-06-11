@@ -30,7 +30,7 @@ class VehicleSensorsReport(Report):
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
 
-        from models.models import DeviceState, PositionRecord
+        from models.models import DeviceState, Driver, PositionRecord
 
         device_map = await filtered_device_map(session, current_user, device_ids)
         devices = sorted(device_map.values(), key=lambda x: x.name)
@@ -79,6 +79,7 @@ class VehicleSensorsReport(Report):
             )
 
         rows = []
+        driver_ids = set()
         for d in devices:
             pos_r = await session.execute(
                 select(PositionRecord)
@@ -91,7 +92,7 @@ class VehicleSensorsReport(Report):
                 .limit(5000)
             )
             for p in pos_r.scalars().all():
-                rows.append({
+                row = {
                     "device_id": d.id,
                     "vehicle": d.name,
                     "time": p.device_time.isoformat(),
@@ -101,7 +102,18 @@ class VehicleSensorsReport(Report):
                     "driver_id": p.driver_id,
                     "driver_name": None,
                     **{f"sensor__{key}": value for key, value in (p.sensors or {}).items()},
-                })
+                }
+                if p.driver_id:
+                    driver_ids.add(p.driver_id)
+                rows.append(row)
+
+        driver_map = {}
+        if driver_ids:
+            driver_r = await session.execute(select(Driver).where(Driver.id.in_(driver_ids)))
+            driver_map = {driver.id: driver.name for driver in driver_r.scalars().all()}
+            for row in rows:
+                row["driver_name"] = driver_map.get(row.get("driver_id"))
+
         sensor_keys = sorted({k for row in rows for k in row if k.startswith("sensor__")})
         return table_payload(
             self.definition.key,

@@ -132,10 +132,18 @@ function initMap() {
         disableClusteringAtZoom: 14,
         spiderfyOnMaxZoom: false,
         showCoverageOnHover: false,
+        zoomToBoundsOnClick: false,
         maxClusterRadius: 60,
     }).addTo(map);
 
+    clusterGroup.on('clusterclick', (e) => {
+        zoomToClusterWithSidebarOffset(e.layer);
+    });
+
     initGeofences(map);
+    if (typeof initHistoryZoomLineModeSwitch === 'function') {
+        initHistoryZoomLineModeSwitch();
+    }
 }
 
 // ── Tile layers ───────────────────────────────────────────────────────────────
@@ -447,6 +455,26 @@ function applyLatLngOffset(latlng, zoom) {
     if (!offset) return L.latLng(latlng);
     const point = map.project(L.latLng(latlng), zoom);
     return map.unproject(L.point(point.x - offset / 2, point.y), zoom);
+}
+
+function zoomToClusterWithSidebarOffset(cluster) {
+    if (!cluster || !map) return;
+
+    const sidebarOffset = getSidebarOffset();
+    const bounds = cluster.getBounds?.();
+    const maxZoom = clusterGroup?.options?.disableClusteringAtZoom || map.getMaxZoom();
+
+    if (bounds?.isValid?.() && bounds.getNorthEast && !bounds.getNorthEast().equals(bounds.getSouthWest())) {
+        map.fitBounds(bounds.pad(0.2), {
+            paddingTopLeft: [sidebarOffset, 16],
+            paddingBottomRight: [16, 16],
+            maxZoom,
+        });
+        return;
+    }
+
+    const targetZoom = Math.min(maxZoom, map.getZoom() + 2);
+    map.setView(applyLatLngOffset(cluster.getLatLng(), targetZoom), targetZoom);
 }
 
 function fitMapToMarkers() {

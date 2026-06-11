@@ -155,11 +155,19 @@ function _updateClearOptions(mode) {
     const sel = document.getElementById('driverAssignClear');
     if (!sel) return;
     const current = sel.value;
+    if (mode === 'continuous') {
+        sel.innerHTML = '<option value="rule_stops">When rule stops matching</option>';
+        sel.value = 'rule_stops';
+        sel.disabled = true;
+        _updateGraceVisibility();
+        return;
+    }
+
+    sel.disabled = false;
     sel.innerHTML = `
         <option value="never">Never</option>
         <option value="ignition_off">On ignition off</option>
         <option value="trip_end">On trip end</option>
-        ${mode === 'continuous' ? '<option value="rule_stops">When rule stops matching</option>' : ''}
     `;
     // Restore previous selection if still valid
     if ([...sel.options].some(o => o.value === current)) sel.value = current;
@@ -168,9 +176,8 @@ function _updateClearOptions(mode) {
 
 function _updateGraceVisibility() {
     const mode  = document.getElementById('driverAssignMode')?.value;
-    const clear = document.getElementById('driverAssignClear')?.value;
     const grp   = document.getElementById('driverGraceGroup');
-    if (grp) grp.style.display = (mode === 'continuous' && clear === 'rule_stops') ? '' : 'none';
+    if (grp) grp.style.display = mode === 'continuous' ? '' : 'none';
 }
 
 function onDriverModeChange() {
@@ -246,7 +253,7 @@ function openDriverModal(driverId = null) {
     // ── Auto-assignment fields ────────────────────────────────────
     const rule  = _editingDriver?.assignment_rule  || '';
     const mode  = _editingDriver?.assignment_mode  || '';
-    const clear = _editingDriver?.assignment_clear || 'never';
+    const clear = mode === 'continuous' ? 'rule_stops' : (_editingDriver?.assignment_clear || 'never');
     const grace = _editingDriver?.assignment_grace_period ?? '';
     const vehicles = _editingDriver?.assignment_vehicles || null; // null = all
 

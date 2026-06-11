@@ -4,7 +4,7 @@
  * Place this file at: /web/sw.js  (root of your web directory)
  */
 
-const CACHE_NAME = 'gps-dashboard-v90';
+const CACHE_NAME = 'gps-dashboard-v91';
 const STATIC_ASSETS = [
   '/login.html',
   '/gps-dashboard.html',
@@ -15,6 +15,7 @@ const STATIC_ASSETS = [
   '/css/device-management.css',
   '/css/user-settings.css',
   '/js/config.js',
+  '/js/dashboard-state.js',
   '/js/dashboard.js',
   '/js/dashboard-auth.js',
   '/js/dashboard-alerts.js',
@@ -22,7 +23,9 @@ const STATIC_ASSETS = [
   '/js/dashboard-geofences.js',
   '/js/dashboard-history.js',
   '/js/dashboard-logbook.js',
+  '/js/dashboard-map.js',
   '/js/dashboard-utils.js',
+  '/js/drivers.js',
   '/js/settings-nav.js',
   '/js/device-management.js',
   '/js/device-management-integrations.js',

@@ -4,7 +4,10 @@
  */
 
 let historyLineMode = 'static'; // 'static' | 'ant'
+let historyLineRenderMode = null; // temporary render override, e.g. static while zooming
 let historyClips = [];
+let _historyZoomLineSwitchAttached = false;
+let _historyZoomLineSwitchActive = false;
 
 const PLAYBACK_SPEEDS = [1, 2, 5, 10];
 let playbackSpeedIdx = 0;
@@ -183,6 +186,8 @@ async function handleHistorySubmit(e) {
 
 async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
     historyBatchOffset = batchOffset;
+    historyLineRenderMode = null;
+    _historyZoomLineSwitchActive = false;
 
     if (polylines['history']) {
         polylines['history'].eachLayer(l => map.removeLayer(l));
@@ -268,7 +273,7 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
 }
 
 function _buildHistoryLayers() {
-    const ant = historyLineMode === 'ant';
+    const ant = (historyLineRenderMode || historyLineMode) === 'ant';
     const allLayers = [];
     let tripColorIdx = 0;
     let currentTripId = undefined;
@@ -331,8 +336,30 @@ function _redrawHistoryPolylines() {
 
 function toggleHistoryLineMode() {
     historyLineMode = historyLineMode === 'static' ? 'ant' : 'static';
+    historyLineRenderMode = null;
+    _historyZoomLineSwitchActive = false;
     if (historyData.length > 0) _redrawHistoryPolylines();
     else _updateLineModeBtn();
+}
+
+function initHistoryZoomLineModeSwitch() {
+    if (_historyZoomLineSwitchAttached || !map) return;
+    _historyZoomLineSwitchAttached = true;
+
+    map.on('zoomstart', () => {
+        if (historyLineMode !== 'ant' || !historyData.length || !polylines['history']) return;
+        if (_historyZoomLineSwitchActive) return;
+        historyLineRenderMode = 'static';
+        _historyZoomLineSwitchActive = true;
+        _redrawHistoryPolylines();
+    });
+
+    map.on('zoomend', () => {
+        if (!_historyZoomLineSwitchActive) return;
+        historyLineRenderMode = null;
+        _historyZoomLineSwitchActive = false;
+        if (historyLineMode === 'ant' && historyData.length && polylines['history']) _redrawHistoryPolylines();
+    });
 }
 
 function _updateSliderGradient() {
@@ -367,6 +394,8 @@ function _updateLineModeBtn() {
 function exitHistoryMode() {
     stopPlayback();
     _clearAlertHighlight();
+    historyLineRenderMode = null;
+    _historyZoomLineSwitchActive = false;
     if (polylines['history']) {
         polylines['history'].eachLayer(l => map.removeLayer(l));
         delete polylines['history'];

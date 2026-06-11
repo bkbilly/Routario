@@ -86,13 +86,12 @@ async def evaluate(session: AsyncSession, device, state: DeviceState,
         if mode == 'one_time':
             return
 
-        # Continuous — re-evaluate
+        # Continuous — re-evaluate and keep the driver only while the rule
+        # continues matching. The grace period tolerates short sensor gaps.
         driver = await session.get(Driver, auto_id)
         if driver and driver.assignment_rule:
             if _eval_rule(driver.assignment_rule, ctx):
                 state.alert_states = {**a, 'auto_assign_rule_last_match': device_time.isoformat()}
-                return
-            if a.get('auto_assign_clear') != 'rule_stops':
                 return
             grace = int(a.get('auto_assign_grace_period') or 0)
             last = a.get('auto_assign_rule_last_match')
@@ -108,12 +107,13 @@ async def evaluate(session: AsyncSession, device, state: DeviceState,
         if not driver.assignment_rule:
             continue
         if _eval_rule(driver.assignment_rule, ctx):
+            mode = driver.assignment_mode or 'one_time'
             state.current_driver_id = driver.id
             state.alert_states = {
                 **a,
                 'auto_assigned_driver_id': driver.id,
-                'auto_assign_mode': driver.assignment_mode or 'one_time',
-                'auto_assign_clear': driver.assignment_clear or 'never',
+                'auto_assign_mode': mode,
+                'auto_assign_clear': 'rule_stops' if mode == 'continuous' else (driver.assignment_clear or 'never'),
                 'auto_assign_grace_period': driver.assignment_grace_period or 0,
                 'auto_assign_rule_last_match': device_time.isoformat(),
             }
