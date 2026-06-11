@@ -80,9 +80,7 @@ class AlertEngine:
 
     async def process_position_alerts(self, position, device, state):
         try:
-            users = device.users
-            if not users:
-                return
+            users = device.users or []
 
             if state.alert_states is None:
                 state.alert_states = {}
@@ -142,14 +140,13 @@ class AlertEngine:
         Ensures WebSocket broadcast only happens ONCE per alert event.
         """
         notify_ids = alert_data.get('notify_user_ids')
+        db = get_db()
         if notify_ids is not None:
-            notify_set = set(notify_ids)
-            users = [u for u in users if u.id in notify_set]
+            users = await db.get_users_by_ids(notify_ids)
 
         broadcasted = False
 
         for user in users:
-            db = get_db()
             # 1. Create personal alert history record
             alert = await db.create_alert(AlertCreate(
                 user_id=user.id, 

@@ -550,6 +550,14 @@ class DatabaseService:
             result = await session.execute(select(User).where(User.id == user_id))
             return result.scalar_one_or_none()
 
+    async def get_users_by_ids(self, user_ids: List[int]) -> List[User]:
+        ids = [int(uid) for uid in user_ids if uid is not None]
+        if not ids:
+            return []
+        async with self.get_session() as session:
+            result = await session.execute(select(User).where(User.id.in_(ids)))
+            return result.scalars().all()
+
     async def get_user_by_username(self, username: str) -> Optional[User]:
         async with self.get_session() as session:
             result = await session.execute(
