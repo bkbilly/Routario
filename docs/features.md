@@ -74,6 +74,7 @@ Routario evaluates alert rules continuously as positions arrive. Supported alert
 - **Device assignment** — grant or revoke access to specific devices per user. Regular users only see their assigned devices.
 - **Per-user notification channels** — each user independently configures their alert delivery URLs (Telegram, email, Slack, webhooks, etc.).
 - **Unit system** — each user can independently choose metric (km, km/h, m) or imperial (mi, mph, ft) display units.
+- **Security settings** — permission-based API key management, MFA setup, scoped backup/restore, audit logs, and health visibility.
 
 ---
 
@@ -121,6 +122,26 @@ Generate reports across your fleet for any time window:
 - **Backend-defined reports** — report files define their own controls, columns, summaries, CSV output, and optional row actions.
 
 [:octicons-arrow-right-24: Reports](reports.md)
+
+---
+
+## Route Planning
+
+- **Planned routes** — create multi-stop routes and assign them to vehicles and drivers.
+- **Route preview** — preview route geometry before dispatch. Valhalla is used when available, with a straight-line fallback when routing is unavailable.
+- **Route lifecycle** — track planned, started, paused, completed, and cancelled routes.
+- **Scoped management** — routes are company-scoped and controlled by the Manage Routes permission or route API scopes.
+- **Clickable tables** — route rows open directly into edit details for faster dispatch workflows.
+
+---
+
+## Billing & Operations
+
+- **Billing plans** — define base price, included devices, included position records, included API calls, and overage rates.
+- **Company billing settings** — configure plan, billing status, currency, tax rate, billing email, and billing address.
+- **Usage calculation** — measure active devices, stored positions, and API usage events for invoice generation.
+- **Invoice snapshots** — generated invoices keep totals, tax, currency, exchange rate, and usage details at the time of billing.
+- **Audit and health tools** — review administrative events and readiness checks from the management area.
 
 ---
 
@@ -187,9 +208,11 @@ Pull live positions from third-party GPS platforms without reconfiguring your de
 
 ## Administration
 
-- **Backup & Restore** — download a full database backup as a portable archive, and restore from a previous backup, all from the admin panel.
+- **Backup & Restore** — super admins can back up and restore the full platform; company admins with permission can back up and restore only their company.
 - **User impersonation** — admins can temporarily act as any user to diagnose access or configuration issues.
 - **Company management** — partition users and devices into isolated companies with their own admin accounts.
 - **Company branding** — optionally set a company app name, `/login/<slug>` URL, app icons, and notification badge.
+- **API keys and MFA** — create scoped API keys and manage authenticator-app MFA according to permissions.
+- **Billing, audit, and health** — manage company billing, review audit logs, and inspect readiness checks.
 
 [:octicons-arrow-right-24: Administration Guide](administration.md)

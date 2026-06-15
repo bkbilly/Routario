@@ -27,7 +27,7 @@
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('notifications')" id="settingsTabNotifications"><i class="mdi mdi-bell"></i> Notifications</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('webhooks')" id="settingsTabWebhooks"><i class="mdi mdi-link-variant"></i> Webhooks</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('apiKeys')" id="settingsTabApiKeys" style="display:none;"><i class="mdi mdi-key-variant"></i> API Keys</button>
-            <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('admin')" id="settingsTabAdmin" style="display:none;"><i class="mdi mdi-shield"></i> Admin</button>
+            <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('backups')" id="settingsTabBackups" style="display:none;"><i class="mdi mdi-database-arrow-down"></i> Backups</button>
         </div>
 
         <div>
@@ -155,61 +155,48 @@
                 </div>
             </div>
 
-            <div class="card settings-section" id="settings-section-admin" style="display: none;">
-                <div class="card-header">
-                    <div class="card-icon card-icon-warning"><i class="mdi mdi-shield"></i></div>
-                    <div style="flex:1;">
-                        <h2 class="card-title card-title-warning">Admin Panel</h2>
-                        <p class="card-subtitle">Manage users, devices and system data</p>
-                    </div>
-                    <a href="company-management.html" id="companyMgmtLink" class="btn btn-secondary" style="display:none;"><i class="mdi mdi-briefcase"></i> Companies</a>
-                </div>
-
-                <!-- Section: Backup & Restore (super admin only) -->
-                <div class="admin-section" id="backupSection">
-                    <div class="admin-section-header">
-                        <span class="admin-section-icon"><i class="mdi mdi-content-save"></i></span>
-                        <div class="admin-section-info">
-                            <div class="admin-section-title">Backup & Restore</div>
-                            <div class="admin-section-subtitle">Database and uploaded files</div>
-                        </div>
+            <div class="settings-section" id="settings-section-backups" style="display: none;">
+                <div class="backup-shell" id="backupSection">
+                    <div class="backup-header">
+                        <h2>Backup & Restore</h2>
+                        <p>Exports and restores are scoped to the current company.</p>
                     </div>
 
-                    <div class="admin-section-content">
-                        <!-- Download -->
-                        <div class="backup-action">
-                            <div>
-                                <div class="backup-action-title">Download Backup</div>
-                                <div class="backup-action-subtitle">Full snapshot — database + uploads</div>
+                    <div class="backup-operations">
+                        <section class="backup-operation">
+                            <div class="backup-operation-main">
+                                <i class="mdi mdi-tray-arrow-down backup-operation-icon"></i>
+                                <div class="backup-operation-copy">
+                                    <h3>Export company backup</h3>
+                                    <p>Downloads database rows and related uploads as a <span class="mono">.tar.gz</span> archive.</p>
+                                </div>
                             </div>
-                            <button class="btn btn-primary" onclick="downloadBackup()" id="backupDownloadBtn">
-                                <i class="mdi mdi-download"></i> Download
+                            <button class="btn btn-primary backup-action-btn" onclick="downloadBackup()" id="backupDownloadBtn">
+                                <i class="mdi mdi-download"></i> Download Backup
                             </button>
-                        </div>
+                        </section>
 
-                        <div class="admin-section-divider"></div>
-
-                        <!-- Restore -->
-                        <div>
-                            <div class="backup-action-title">Restore from Backup</div>
-                            <div class="backup-action-subtitle">
-                                Accepts a <span class="mono">.tar.gz</span> backup file.
-                                <span class="backup-warning">This will overwrite all existing data.</span>
+                        <section class="backup-operation restore-operation">
+                            <div class="backup-operation-main">
+                                <i class="mdi mdi-restore backup-operation-icon warning"></i>
+                                <div class="backup-operation-copy">
+                                    <h3>Restore company backup</h3>
+                                    <p>Replaces existing company data from a backup archive. Other companies and super admins are not changed.</p>
+                                </div>
                             </div>
 
                             <input type="file" id="restoreFileInput" accept=".tar.gz" style="display:none;" onchange="handleRestoreFile(this)">
 
-                            <div class="file-picker-row">
-                                <button class="btn btn-secondary" onclick="document.getElementById('restoreFileInput').click()">
-                                    <i class="mdi mdi-folder-open"></i> Choose file…
+                            <div class="backup-restore-controls">
+                                <button class="backup-file-button" onclick="document.getElementById('restoreFileInput').click()">
+                                    <i class="mdi mdi-folder-upload-outline"></i>
+                                    <span id="restoreFileName">Choose backup file</span>
                                 </button>
-                                <span id="restoreFileName">No file selected</span>
+                                <button id="restoreConfirmBtn" onclick="confirmRestore()" class="btn-restore">
+                                    <i class="mdi mdi-database-sync"></i> Restore
+                                </button>
                             </div>
-
-                            <button id="restoreConfirmBtn" onclick="confirmRestore()" class="btn-restore">
-                                <i class="mdi mdi-alert"></i> Restore — this will overwrite all data
-                            </button>
-                        </div>
+                        </section>
                     </div>
                 </div>
             </div>

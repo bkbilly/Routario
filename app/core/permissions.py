@@ -26,6 +26,7 @@ ALL_PERMISSIONS: List[str] = [
     "view_health",
     "manage_api_keys",
     "manage_mfa",
+    "manage_backups",
 ]
 
 PERMISSION_GROUPS = [
@@ -84,6 +85,7 @@ PERMISSION_GROUPS = [
         "perms": [
             ("manage_api_keys", "Manage API Keys"),
             ("manage_mfa",      "Manage MFA"),
+            ("manage_backups",  "Backup & Restore"),
         ],
     },
 ]

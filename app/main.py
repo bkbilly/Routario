@@ -26,7 +26,7 @@ from core.alert_engine import get_alert_engine, periodic_alert_task
 from core.schedule_runner import periodic_schedule_task
 from core.config import get_settings
 from core.database import get_db, init_database
-from core.gateway import TCPServer, UDPServer, connection_manager
+from core.gateway import connection_manager, protocol_server_manager, sync_active_protocol_servers
 from core.push_notifications import get_push_service
 from core.valhalla import check_valhalla_health, set_valhalla_url
 from integrations.engine import integration_poll_task
@@ -421,22 +421,14 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Valhalla disabled in config.")
 
-    # Start protocol servers
-    protocols = ProtocolRegistry.get_all()
-    for name, decoder in protocols.items():
-        port = decoder.PORT
-        for protocol_type in decoder.PROTOCOL_TYPES:
-            if protocol_type == "udp":
-                server = UDPServer(settings.udp_host, port, name, process_position_callback)
-                asyncio.create_task(server.start())
-                logger.info("Started UDP Server for %s on port %s", name, port)
-            else:
-                server = TCPServer(
-                    settings.tcp_host, port, name,
-                    process_position_callback, command_callback, ack_callback,
-                )
-                asyncio.create_task(server.start())
-                logger.info("Started TCP Server for %s on port %s", name, port)
+    protocol_server_manager.configure(
+        tcp_host=settings.tcp_host,
+        udp_host=settings.udp_host,
+        position_callback=process_position_callback,
+        command_callback=command_callback,
+        ack_callback=ack_callback,
+    )
+    await sync_active_protocol_servers()
 
     alert_task    = asyncio.create_task(periodic_alert_task())
     poll_task     = asyncio.create_task(integration_poll_task(process_position_callback))
@@ -448,6 +440,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down...")
 
     # Cancel background tasks so their loops exit before we tear down resources
+    await protocol_server_manager.stop_all()
     alert_task.cancel()
     poll_task.cancel()
     schedule_task.cancel()
@@ -513,6 +506,7 @@ async def get_protocols():
     return {
         "protocols":       ProtocolRegistry.list_protocols(),
         "online_devices":  len(connection_manager.connections),
+        "running_servers": protocol_server_manager.running_protocols(),
         "protocol_info":   protocols_info,
     }
 

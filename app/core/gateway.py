@@ -5,10 +5,14 @@ High-performance async network handlers for GPS device connections
 import asyncio
 import logging
 import struct
-from typing import Dict, Optional, Callable, Any
+from typing import Dict, Optional, Callable, Any, Coroutine
 from datetime import datetime
 
+from sqlalchemy import select
+
+from core.database import get_db
 from protocols import ProtocolRegistry
+from models import Device
 from models.schemas import NormalizedPosition
 
 logger = logging.getLogger(__name__)
@@ -214,9 +218,21 @@ class TCPServer:
 
     async def start(self):
         self.server = await asyncio.start_server(self._handle_client, self.host, self.port)
-        # logger.info(f"{self.protocol.upper()} TCP Server started on {self.host}:{self.port}")
-        async with self.server:
-            await self.server.serve_forever()
+        logger.info(f"{self.protocol.upper()} TCP Server started on {self.host}:{self.port}")
+        try:
+            async with self.server:
+                await self.server.serve_forever()
+        except asyncio.CancelledError:
+            raise
+        finally:
+            await self.stop()
+
+    async def stop(self):
+        if self.server:
+            self.server.close()
+            await self.server.wait_closed()
+            self.server = None
+            logger.info(f"{self.protocol.upper()} TCP Server stopped on {self.host}:{self.port}")
 
 
 class UDPProtocol(asyncio.DatagramProtocol):
@@ -247,14 +263,144 @@ class UDPServer:
         self.port = port
         self.protocol = protocol
         self.position_callback = position_callback
+        self.transport = None
 
     async def start(self):
         loop = asyncio.get_event_loop()
-        await loop.create_datagram_endpoint(
+        self.transport, _ = await loop.create_datagram_endpoint(
             lambda: UDPProtocol(self.protocol, self.position_callback),
             local_addr=(self.host, self.port),
         )
-        # logger.info(f"{self.protocol.upper()} UDP Server started on {self.host}:{self.port}")
+        logger.info(f"{self.protocol.upper()} UDP Server started on {self.host}:{self.port}")
+        try:
+            await asyncio.Future()
+        except asyncio.CancelledError:
+            raise
+        finally:
+            await self.stop()
+
+    async def stop(self):
+        if self.transport:
+            self.transport.close()
+            self.transport = None
+            logger.info(f"{self.protocol.upper()} UDP Server stopped on {self.host}:{self.port}")
+
+
+class ProtocolServerManager:
+    """Starts only the protocol listeners required by active devices."""
+
+    def __init__(self):
+        self._running: Dict[tuple[str, str], tuple[Any, asyncio.Task]] = {}
+        self._lock = asyncio.Lock()
+        self._tcp_host = "0.0.0.0"
+        self._udp_host = "0.0.0.0"
+        self._position_callback: Optional[Callable[..., Coroutine[Any, Any, None]]] = None
+        self._command_callback: Optional[Callable[..., Coroutine[Any, Any, None]]] = None
+        self._ack_callback: Optional[Callable[..., Coroutine[Any, Any, None]]] = None
+
+    def configure(
+        self,
+        *,
+        tcp_host: str,
+        udp_host: str,
+        position_callback: Callable[..., Coroutine[Any, Any, None]],
+        command_callback: Optional[Callable[..., Coroutine[Any, Any, None]]] = None,
+        ack_callback: Optional[Callable[..., Coroutine[Any, Any, None]]] = None,
+    ) -> None:
+        self._tcp_host = tcp_host
+        self._udp_host = udp_host
+        self._position_callback = position_callback
+        self._command_callback = command_callback
+        self._ack_callback = ack_callback
+
+    async def sync(self, active_protocols: set[str]) -> None:
+        if self._position_callback is None:
+            logger.warning("Protocol server manager is not configured; skipping sync")
+            return
+
+        wanted: set[tuple[str, str]] = set()
+        for protocol in active_protocols:
+            decoder = ProtocolRegistry.get_decoder(protocol)
+            if not decoder:
+                continue
+            for protocol_type in getattr(decoder, "PROTOCOL_TYPES", ["tcp"]):
+                wanted.add((protocol.lower(), protocol_type.lower()))
+
+        async with self._lock:
+            for key in list(self._running):
+                if key not in wanted:
+                    await self._stop(key)
+
+            for key in sorted(wanted):
+                if key not in self._running:
+                    await self._start(key)
+
+    async def stop_all(self) -> None:
+        async with self._lock:
+            for key in list(self._running):
+                await self._stop(key)
+
+    def running_protocols(self) -> list[dict]:
+        rows = []
+        for (protocol, protocol_type), (server, task) in sorted(self._running.items()):
+            rows.append({
+                "protocol": protocol,
+                "protocol_type": protocol_type,
+                "port": getattr(server, "port", None),
+                "running": not task.done(),
+            })
+        return rows
+
+    async def _start(self, key: tuple[str, str]) -> None:
+        protocol, protocol_type = key
+        decoder = ProtocolRegistry.get_decoder(protocol)
+        if not decoder:
+            return
+
+        if protocol_type == "udp":
+            server = UDPServer(self._udp_host, decoder.PORT, protocol, self._position_callback)
+        else:
+            server = TCPServer(
+                self._tcp_host,
+                decoder.PORT,
+                protocol,
+                self._position_callback,
+                self._command_callback,
+                self._ack_callback,
+            )
+
+        task = asyncio.create_task(server.start())
+        task.add_done_callback(lambda t, p=protocol, pt=protocol_type: self._log_task_result(p, pt, t))
+        self._running[key] = (server, task)
+
+    async def _stop(self, key: tuple[str, str]) -> None:
+        server, task = self._running.pop(key)
+        await server.stop()
+        if not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    def _log_task_result(self, protocol: str, protocol_type: str, task: asyncio.Task) -> None:
+        self._running.pop((protocol, protocol_type), None)
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc:
+            logger.error("%s %s server stopped unexpectedly: %s", protocol, protocol_type, exc, exc_info=exc)
+
+
+protocol_server_manager = ProtocolServerManager()
+
+
+async def get_active_device_protocols() -> set[str]:
+    db = get_db()
+    async with db.get_session() as session:
+        result = await session.execute(select(Device.protocol).where(Device.is_active == True))
+        return {protocol.lower() for protocol in result.scalars().all() if protocol}
+
+
+async def sync_active_protocol_servers() -> None:
+    await protocol_server_manager.sync(await get_active_device_protocols())
 
 
 async def send_command_to_device(imei: str, command_data: bytes) -> bool:

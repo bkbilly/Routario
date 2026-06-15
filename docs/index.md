@@ -59,7 +59,7 @@
 
     Playback routes, explore sensor graphs, view trip summaries, and export raw position data as CSV.
 
-    [:octicons-arrow-right-24: Features](features.md#trip-history--playback)
+    [:octicons-arrow-right-24: Features](features.md#trip-history-playback)
 
 </div>
 
@@ -69,7 +69,7 @@
 
 Routario runs as a single Python/FastAPI application managing three concurrent responsibilities:
 
-1. **Protocol Gateway** — listens on separate TCP/UDP ports for each device protocol, decodes incoming packets into a normalised position format, and persists them to the database.
+1. **Protocol Gateway** — listens on TCP/UDP ports for the native protocols used by active devices, decodes incoming packets into a normalised position format, and persists them to the database.
 2. **REST API + WebSocket** — serves the web frontend, exposes a JSON API for all CRUD operations, and broadcasts live position updates in real time.
 3. **Alert & Integration Engine** — runs background tasks that evaluate alert rules per device, poll cloud integrations, and dispatch notifications.
 
