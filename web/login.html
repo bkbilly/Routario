@@ -110,6 +110,10 @@
                 <label class="form-label">Password</label>
                 <input type="password" id="password" class="form-input" required>
             </div>
+            <div class="form-group" id="mfaGroup" style="display:none;">
+                <label class="form-label">Authenticator or Recovery Code</label>
+                <input type="text" id="mfaCode" class="form-input" inputmode="numeric" autocomplete="one-time-code">
+            </div>
             <button type="submit" class="btn" id="loginBtn">Sign In</button>
             <div class="error-msg" id="errorMsg">Invalid credentials</div>
         </form>
@@ -133,16 +137,27 @@
 
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
+            const mfaCode = document.getElementById('mfaCode').value.trim();
 
             try {
                 const res = await fetch(`${API_BASE}/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ username, password, mfa_code: mfaCode || null })
                 });
 
                 if (res.ok) {
                     const data = await res.json();
+                    if (data.mfa_required) {
+                        document.getElementById('mfaGroup').style.display = 'block';
+                        document.getElementById('mfaCode').required = true;
+                        document.getElementById('mfaCode').focus();
+                        err.textContent = 'Enter your authenticator or recovery code';
+                        err.style.display = 'block';
+                        btn.disabled = false;
+                        btn.textContent = 'Verify Code';
+                        return;
+                    }
                     localStorage.setItem('auth_token', data.access_token);
                     localStorage.setItem('user_id', data.user_id);
                     localStorage.setItem('username', data.username);

@@ -41,10 +41,14 @@ class Company(Base):
     icon_filename:  Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     badge_filename: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     branding_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    billing_plan_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('billing_plans.id', ondelete='SET NULL'), nullable=True)
+    billing_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    billing_status: Mapped[str] = mapped_column(String(30), default='active', nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     users:   Mapped[List["User"]]   = relationship(back_populates="company")
     devices: Mapped[List["Device"]] = relationship(back_populates="company")
+    billing_plan: Mapped[Optional["BillingPlan"]] = relationship("BillingPlan")
 
     @property
     def icon_url(self) -> Optional[str]:
@@ -80,6 +84,9 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_activity: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    mfa_secret: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    mfa_recovery_codes: Mapped[Optional[list]] = mapped_column(JsonType, nullable=True, default=list)
 
     company:       Mapped[Optional["Company"]]  = relationship(back_populates="users")
     devices:       Mapped[List["Device"]]       = relationship(secondary=user_device_association, back_populates="users")
@@ -393,3 +400,131 @@ class VideoClip(Base):
     created_at:     Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
 
     device: Mapped["Device"] = relationship(back_populates="clips")
+
+
+class AuditLog(Base):
+    __tablename__ = 'audit_logs'
+
+    id:          Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    actor_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    company_id: Mapped[Optional[int]]  = mapped_column(Integer, ForeignKey('companies.id', ondelete='SET NULL'), nullable=True, index=True)
+    action:      Mapped[str]           = mapped_column(String(100), nullable=False, index=True)
+    target_type: Mapped[Optional[str]]  = mapped_column(String(100), nullable=True)
+    target_id:   Mapped[Optional[str]]  = mapped_column(String(100), nullable=True)
+    ip_address:  Mapped[Optional[str]]  = mapped_column(String(64), nullable=True)
+    user_agent:  Mapped[Optional[str]]  = mapped_column(String(500), nullable=True)
+    metadata_json: Mapped[Dict]         = mapped_column(JsonType, default={})
+    created_at:  Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    actor:  Mapped[Optional["User"]]    = relationship("User")
+    company: Mapped[Optional["Company"]] = relationship("Company")
+
+
+class ApiKey(Base):
+    __tablename__ = 'api_keys'
+
+    id:          Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id:     Mapped[int]           = mapped_column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    company_id:  Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), nullable=True, index=True)
+    name:        Mapped[str]           = mapped_column(String(120), nullable=False)
+    key_prefix:  Mapped[str]           = mapped_column(String(24), nullable=False, index=True)
+    key_hash:    Mapped[str]           = mapped_column(String(128), nullable=False, unique=True)
+    scopes:      Mapped[list]          = mapped_column(JsonType, default=list)
+    is_active:   Mapped[bool]          = mapped_column(Boolean, default=True, nullable=False)
+    expires_at:  Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_used_ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    created_at:  Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    revoked_at:  Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    user:    Mapped["User"]            = relationship("User")
+    company: Mapped[Optional["Company"]] = relationship("Company")
+
+
+class BillingPlan(Base):
+    __tablename__ = 'billing_plans'
+
+    id:          Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name:        Mapped[str]      = mapped_column(String(120), nullable=False, unique=True)
+    currency:    Mapped[str]      = mapped_column(String(3), default='USD', nullable=False)
+    base_price_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    included_devices: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    included_positions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    included_api_calls: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    price_per_device_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    price_per_1000_positions_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    price_per_1000_api_calls_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_active:   Mapped[bool]     = mapped_column(Boolean, default=True, nullable=False)
+    created_at:  Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class UsageEvent(Base):
+    __tablename__ = 'usage_events'
+
+    id:          Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_id:  Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), nullable=True, index=True)
+    metric:      Mapped[str]           = mapped_column(String(80), nullable=False, index=True)
+    quantity:    Mapped[int]           = mapped_column(Integer, default=1, nullable=False)
+    source:      Mapped[Optional[str]]  = mapped_column(String(80), nullable=True)
+    metadata_json: Mapped[Dict]         = mapped_column(JsonType, default={})
+    created_at:  Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    company: Mapped[Optional["Company"]] = relationship("Company")
+
+
+class BillingInvoice(Base):
+    __tablename__ = 'billing_invoices'
+
+    id:          Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_id:  Mapped[int]           = mapped_column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), nullable=False, index=True)
+    period_start: Mapped[datetime]     = mapped_column(DateTime, nullable=False, index=True)
+    period_end: Mapped[datetime]       = mapped_column(DateTime, nullable=False)
+    currency:    Mapped[str]           = mapped_column(String(3), default='USD', nullable=False)
+    amount_cents: Mapped[int]          = mapped_column(Integer, default=0, nullable=False)
+    status:      Mapped[str]           = mapped_column(String(30), default='draft', nullable=False)
+    line_items:  Mapped[list]          = mapped_column(JsonType, default=list)
+    created_at:  Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    company: Mapped["Company"] = relationship("Company")
+
+
+class PlannedRoute(Base):
+    __tablename__ = 'planned_routes'
+
+    id:          Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_id:  Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), nullable=True, index=True)
+    name:        Mapped[str]           = mapped_column(String(200), nullable=False)
+    device_id:   Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('devices.id', ondelete='SET NULL'), nullable=True, index=True)
+    driver_id:   Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('drivers.id', ondelete='SET NULL'), nullable=True, index=True)
+    status:      Mapped[str]           = mapped_column(String(30), default='draft', nullable=False)
+    route_geometry: Mapped[Optional[Dict]] = mapped_column(JsonType, nullable=True)
+    distance_km: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    duration_minutes: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    created_by:  Mapped[Optional[int]]  = mapped_column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at:  Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at:  Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
+
+    company: Mapped[Optional["Company"]] = relationship("Company")
+    device:  Mapped[Optional["Device"]] = relationship("Device")
+    driver:  Mapped[Optional["Driver"]] = relationship("Driver")
+    stops:   Mapped[List["RouteStop"]]  = relationship(back_populates="route", cascade="all, delete-orphan", order_by="RouteStop.sequence")
+
+
+class RouteStop(Base):
+    __tablename__ = 'route_stops'
+
+    id:          Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    route_id:    Mapped[int]      = mapped_column(Integer, ForeignKey('planned_routes.id', ondelete='CASCADE'), nullable=False, index=True)
+    sequence:    Mapped[int]      = mapped_column(Integer, nullable=False)
+    name:        Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    address:     Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    latitude:    Mapped[float]    = mapped_column(Float, nullable=False)
+    longitude:   Mapped[float]    = mapped_column(Float, nullable=False)
+    planned_arrival: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    service_minutes: Mapped[int]  = mapped_column(Integer, default=0, nullable=False)
+    status:      Mapped[str]      = mapped_column(String(30), default='pending', nullable=False)
+    arrived_at:  Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    notes:       Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    route: Mapped["PlannedRoute"] = relationship(back_populates="stops")

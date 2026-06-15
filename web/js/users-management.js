@@ -22,7 +22,8 @@ const PERMISSION_GROUPS = [
     { label: 'Fleet Operations',      perms: [['manage_drivers','Manage Drivers'],['manage_fuel','Manage Fuel'],['manage_maintenance','Manage Maintenance'],['manage_logbook','Manage Logbook']] },
     { label: 'Zones',                 perms: [['manage_geofences','Manage Geofences']] },
     { label: 'Communication & Sharing', perms: [['voice_ptt','Voice PTT'],['live_share','Live Share']] },
-    { label: 'Administration',        perms: [['view_management','View Management'],['manage_users','Manage Users']] },
+    { label: 'Administration',        perms: [['view_management','View Management'],['manage_users','Manage Users'],['manage_routes','Manage Routes'],['manage_billing','Manage Billing'],['view_audit','View Audit Log'],['view_health','View Health Checks']] },
+    { label: 'User Settings',         perms: [['manage_api_keys','Manage API Keys'],['manage_mfa','Manage MFA']] },
 ];
 const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap(g => g.perms.map(p => p[0]));
 
@@ -224,7 +225,7 @@ function _usrRenderPermissions() {
     }
 
     // Permissions that don't apply to regular users
-    const adminOnlyPerms = new Set(['manage_users', 'edit_devices', 'manage_integrations', 'view_management']);
+    const adminOnlyPerms = new Set(['manage_users', 'edit_devices', 'manage_integrations', 'view_management', 'manage_routes', 'manage_billing', 'view_audit', 'view_health']);
     const isUserRole = role === 'user';
 
     container.innerHTML = PERMISSION_GROUPS.map(group => {

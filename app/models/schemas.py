@@ -212,14 +212,16 @@ class UserUpdate(BaseModel):
 class UserLogin(BaseModel):
     username: str
     password: str
+    mfa_code: Optional[str] = None
 
 
 class Token(BaseModel):
-    access_token: str
+    access_token: str = ""
     token_type: str
     user_id: int
     username: str
     is_admin: bool
+    mfa_required: bool = False
     is_company_admin: bool = False
     company_id: Optional[int] = None
     units: str = "metric"
@@ -255,6 +257,7 @@ class UserResponse(BaseModel):
     created_at: datetime
     webhook_urls: List[str] = Field(default_factory=list)
     permissions: List[str] = Field(default_factory=list)
+    mfa_enabled: bool = False
 
     @field_validator('notification_channels', 'webhook_urls', mode='before')
     @classmethod
@@ -310,6 +313,9 @@ class CompanyResponse(BaseModel):
     icon_url: Optional[str] = None
     badge_url: Optional[str] = None
     branding_version: int = 1
+    billing_plan_id: Optional[int] = None
+    billing_email: Optional[str] = None
+    billing_status: Optional[str] = None
     created_at: datetime
     user_count: Optional[int] = None
     device_count: Optional[int] = None

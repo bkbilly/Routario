@@ -5,6 +5,12 @@ const IS_COMPANY_ADMIN = localStorage.getItem('is_company_admin') === 'true';
 const MY_COMPANY_ID    = parseInt(localStorage.getItem('company_id') || '0') || null;
 let channels = [];
 let webhooks = [];
+let settingsApiKeyScopesLoaded = false;
+let settingsMfaSetupPending = false;
+
+function settingsEsc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
+}
 
 function maskUrl(url) {
     const schemeEnd = url.indexOf('://');
@@ -13,19 +19,55 @@ function maskUrl(url) {
     return scheme + '....';
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     checkLogin();
+    await permissionsReady;
     loadSettings();
+    applySettingsPermissions();
 
     if (IS_ADMIN || IS_COMPANY_ADMIN) {
-        document.getElementById('adminPanel').style.display = 'block';
+        const adminTab = document.getElementById('settingsTabAdmin');
+        if (adminTab) adminTab.style.display = '';
         const backupSection = document.getElementById('backupSection');
         if (backupSection) backupSection.style.display = IS_ADMIN ? '' : 'none';
         const companyLink = document.getElementById('companyMgmtLink');
         if (companyLink) companyLink.style.display = IS_ADMIN ? '' : 'none';
-    } else {
-        document.getElementById('accountInfoCard').style.display = '';
     }
+    const hash = window.location.hash.replace('#', '');
+    switchSettingsTab(['profile', 'notifications', 'webhooks', 'apiKeys', 'mfa', 'admin'].includes(hash) ? hash : 'profile', false);
+});
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeApiKeyModal();
+});
+
+function switchSettingsTab(name, pushState = true) {
+    const sections = ['profile', 'notifications', 'webhooks', 'apiKeys', 'mfa', 'admin'];
+    if (!sections.includes(name)) name = 'profile';
+    if (name === 'admin' && !(IS_ADMIN || IS_COMPANY_ADMIN)) name = 'profile';
+    if (name === 'apiKeys' && !hasPermission('manage_api_keys')) name = 'profile';
+    if (name === 'mfa' && !hasPermission('manage_mfa')) name = 'profile';
+    sections.forEach(section => {
+        const panel = document.getElementById(`settings-section-${section}`);
+        if (panel) panel.style.display = section === name ? '' : 'none';
+        const tab = document.getElementById('settingsTab' + section.charAt(0).toUpperCase() + section.slice(1));
+        if (tab) tab.classList.toggle('active', section === name);
+    });
+    if (pushState) history.replaceState(null, '', '#' + name);
+    if (name === 'apiKeys') initSettingsApiKeys();
+    if (name === 'mfa') initSettingsMfa();
+}
+
+function applySettingsPermissions() {
+    const apiTab = document.getElementById('settingsTabApiKeys');
+    if (apiTab) apiTab.style.display = hasPermission('manage_api_keys') ? '' : 'none';
+    const mfaTab = document.getElementById('settingsTabMfa');
+    if (mfaTab) mfaTab.style.display = hasPermission('manage_mfa') ? '' : 'none';
+}
+
+window.addEventListener('hashchange', () => {
+    const hash = window.location.hash.replace('#', '');
+    switchSettingsTab(hash || 'profile', false);
 });
 
 async function loadSettings() {
@@ -304,4 +346,179 @@ async function confirmRestore() {
     }
 }
 
+async function settingsJson(url, options = {}) {
+    const res = await apiFetch(url, options);
+    if (!res.ok) {
+        let msg = `Request failed (${res.status})`;
+        try { msg = (await res.json()).detail || msg; } catch {}
+        throw new Error(Array.isArray(msg) ? msg.map(x => x.msg || JSON.stringify(x)).join(', ') : msg);
+    }
+    return res.json();
+}
 
+async function initSettingsApiKeys() {
+    try {
+        if (!settingsApiKeyScopesLoaded) {
+            const data = await settingsJson(`${API_BASE}/api-keys/scopes`);
+            document.getElementById('settingsApiKeyScopes').innerHTML =
+                data.scopes.map(s => `
+                    <label class="scope-option">
+                        <input type="checkbox" value="${settingsEsc(s)}" checked>
+                        <span>${settingsEsc(s)}</span>
+                    </label>
+                `).join('');
+            settingsApiKeyScopesLoaded = true;
+        }
+        await loadSettingsApiKeys();
+    } catch (e) {
+        showAlert(e.message, 'error');
+    }
+}
+
+async function loadSettingsApiKeys() {
+    const body = document.getElementById('settingsApiKeyTableBody');
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="5" style="color:var(--text-muted);padding:1rem 0;text-align:center;">Loading API keys...</td></tr>';
+    const keys = (await settingsJson(`${API_BASE}/api-keys`)).filter(k => k.is_active);
+    body.innerHTML = keys.length ? keys.map(k => `
+        <tr>
+            <td>${settingsEsc(k.name)}</td>
+            <td style="font-family:var(--font-mono);font-size:0.82rem;">${settingsEsc(k.key_prefix)}...</td>
+            <td style="font-size:0.82rem;color:var(--text-secondary);">${(k.scopes || []).map(settingsEsc).join(', ') || 'no scopes'}</td>
+            <td style="white-space:nowrap;color:var(--text-secondary);font-size:0.82rem;">${k.last_used_at ? new Date(k.last_used_at).toLocaleString() : 'Never'}</td>
+            <td style="text-align:right;">
+                <button type="button" class="btn btn-danger btn-small" onclick="revokeSettingsApiKey(${k.id})"><i class="mdi mdi-key-remove"></i> Revoke</button>
+            </td>
+        </tr>
+    `).join('') : '<tr><td colspan="5" style="color:var(--text-muted);padding:1rem 0;text-align:center;">No active API keys.</td></tr>';
+}
+
+function openApiKeyModal() {
+    document.getElementById('settingsApiKeyName').value = '';
+    document.querySelectorAll('#settingsApiKeyScopes input[type="checkbox"]').forEach(cb => { cb.checked = true; });
+    document.getElementById('apiKeyModal').classList.add('active');
+    setTimeout(() => document.getElementById('settingsApiKeyName')?.focus(), 50);
+}
+
+function closeApiKeyModal() {
+    document.getElementById('apiKeyModal').classList.remove('active');
+}
+
+async function createSettingsApiKey() {
+    try {
+        const scopes = [...document.querySelectorAll('#settingsApiKeyScopes input:checked')].map(o => o.value);
+        if (!scopes.length) throw new Error('Select at least one API scope');
+        const key = await settingsJson(`${API_BASE}/api-keys`, {
+            method: 'POST',
+            body: JSON.stringify({
+                name: document.getElementById('settingsApiKeyName').value.trim() || 'API Key',
+                scopes,
+            }),
+        });
+        const reveal = document.getElementById('settingsApiKeyReveal');
+        reveal.style.display = '';
+        reveal.innerHTML = `<strong>Copy now. This key will not be shown again.</strong><br>${settingsEsc(key.key)}`;
+        document.getElementById('settingsApiKeyName').value = '';
+        closeApiKeyModal();
+        await loadSettingsApiKeys();
+    } catch (e) {
+        showAlert(e.message, 'error');
+    }
+}
+
+async function revokeSettingsApiKey(id) {
+    if (!confirm('Delete this API key? It will stop working immediately.')) return;
+    try {
+        await settingsJson(`${API_BASE}/api-keys/${id}`, { method: 'DELETE' });
+        await loadSettingsApiKeys();
+        showAlert('API key deleted', 'success');
+    } catch (e) {
+        showAlert(e.message, 'error');
+    }
+}
+
+async function initSettingsMfa() {
+    try {
+        const s = await settingsJson(`${API_BASE}/mfa/status`);
+        document.getElementById('settingsMfaStatus').innerHTML =
+            `<div class="settings-list-item">MFA is <strong>${s.enabled ? 'enabled' : 'disabled'}</strong>.</div>`;
+        renderSettingsMfaControls(Boolean(s.enabled));
+    } catch (e) {
+        showAlert(e.message, 'error');
+    }
+}
+
+function renderSettingsMfaControls(enabled) {
+    const setupBtn = document.getElementById('settingsMfaSetupBtn');
+    const enableBtn = document.getElementById('settingsMfaEnableBtn');
+    const disableBtn = document.getElementById('settingsMfaDisableBtn');
+    const codeGroup = document.getElementById('settingsMfaCodeGroup');
+    const codeLabel = document.getElementById('settingsMfaCodeLabel');
+    const setupBox = document.getElementById('settingsMfaSetupBox');
+
+    if (enabled) {
+        settingsMfaSetupPending = false;
+        setupBtn.style.display = 'none';
+        enableBtn.style.display = 'none';
+        disableBtn.style.display = 'inline-flex';
+        codeGroup.style.display = '';
+        codeLabel.textContent = 'Authenticator or Recovery Code';
+        if (setupBox) setupBox.style.display = 'none';
+    } else {
+        setupBtn.style.display = 'inline-flex';
+        enableBtn.style.display = settingsMfaSetupPending ? 'inline-flex' : 'none';
+        disableBtn.style.display = 'none';
+        codeGroup.style.display = settingsMfaSetupPending ? '' : 'none';
+        codeLabel.textContent = 'Authenticator Code';
+    }
+}
+
+async function setupSettingsMfa() {
+    try {
+        const data = await settingsJson(`${API_BASE}/mfa/setup`, { method: 'POST' });
+        settingsMfaSetupPending = true;
+        const box = document.getElementById('settingsMfaSetupBox');
+        box.style.display = '';
+        box.innerHTML = `<div id="settingsMfaQr"></div><strong>Secret:</strong><br>${settingsEsc(data.secret)}<br><br><strong>Recovery Codes:</strong><br>${data.recovery_codes.map(settingsEsc).join('<br>')}`;
+        const qrEl = document.getElementById('settingsMfaQr');
+        if (window.QRCode && qrEl) {
+            new QRCode(qrEl, { text: data.provisioning_uri, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+        } else if (qrEl) {
+            qrEl.textContent = data.provisioning_uri;
+        }
+        renderSettingsMfaControls(false);
+    } catch (e) {
+        showAlert(e.message, 'error');
+    }
+}
+
+async function enableSettingsMfa() {
+    try {
+        await settingsJson(`${API_BASE}/mfa/enable`, {
+            method: 'POST',
+            body: JSON.stringify({ code: document.getElementById('settingsMfaCode').value }),
+        });
+        showAlert('MFA enabled', 'success');
+        settingsMfaSetupPending = false;
+        document.getElementById('settingsMfaCode').value = '';
+        await initSettingsMfa();
+    } catch (e) {
+        showAlert(e.message, 'error');
+    }
+}
+
+async function disableSettingsMfa() {
+    try {
+        await settingsJson(`${API_BASE}/mfa/disable`, {
+            method: 'POST',
+            body: JSON.stringify({ code: document.getElementById('settingsMfaCode').value }),
+        });
+        showAlert('MFA disabled', 'success');
+        settingsMfaSetupPending = false;
+        document.getElementById('settingsMfaCode').value = '';
+        document.getElementById('settingsMfaSetupBox').style.display = 'none';
+        await initSettingsMfa();
+    } catch (e) {
+        showAlert(e.message, 'error');
+    }
+}

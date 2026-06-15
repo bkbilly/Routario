@@ -2,24 +2,47 @@
 Authentication & Authorization
 JWT token validation and role-based access Depends() factories.
 """
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 
+from core.api_keys import authenticate_api_key
 from core.config import get_settings
 from core.database import get_db
+from core.audit import request_ip
 from models import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
+bearer_scheme = HTTPBearer(
+    scheme_name="Routario API Key",
+    description=(
+        "Paste a Routario API key created in User Settings -> API Keys, "
+        "for example `rt_...`. JWT bearer tokens from `/api/login` are also accepted. "
+        "Do not include the `Bearer` prefix; Swagger adds it automatically."
+    ),
+    auto_error=False,
+)
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
+async def get_current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> User:
     """Validate JWT and return the current User object."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid or expired token",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if not credentials:
+        raise credentials_exception
+    token = credentials.credentials
+
+    api_user, api_key = await authenticate_api_key(token, request_ip(request))
+    if api_user and api_key:
+        request.state.api_key = api_key
+        await get_db().touch_user_activity(api_user.id, interval_minutes=15)
+        return api_user
+
     try:
         settings = get_settings()
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
@@ -116,4 +139,37 @@ def require_permission(perm: str):
                 detail=f"Permission required: {perm}",
             )
         return current_user
+    return checker
+
+
+def require_api_scope(scope: str):
+    """Require a scope when authenticated with an API key; JWT users pass through."""
+    async def checker(request: Request, current_user: User = Depends(get_current_user)) -> User:
+        api_key = getattr(request.state, "api_key", None)
+        if api_key and scope not in (api_key.scopes or []):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"API key scope required: {scope}",
+            )
+        return current_user
+    return checker
+
+
+def require_api_scope_or_permission(scope: str, perm: str):
+    """Require API-key scope for API keys, or a user permission for JWT users."""
+    async def checker(request: Request, current_user: User = Depends(get_current_user)) -> User:
+        api_key = getattr(request.state, "api_key", None)
+        if api_key:
+            if scope not in (api_key.scopes or []):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"API key scope required: {scope}",
+                )
+            return current_user
+        if current_user.is_admin or perm in (current_user.permissions or []):
+            return current_user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Permission required: {perm}",
+        )
     return checker
