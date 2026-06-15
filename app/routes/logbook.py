@@ -17,6 +17,7 @@ from sqlalchemy import select
 
 from core.database import get_db
 from core.auth import get_current_user, verify_device_access, require_permission
+from core.currency import currency_snapshot
 from models import User
 from models.logbook import LogbookEntry
 
@@ -34,6 +35,8 @@ class LogbookEntryResponse(BaseModel):
     odometer: Optional[float]
     date: datetime
     price: Optional[float]
+    currency: str = "EUR"
+    exchange_rate: float = 1.0
     documents: List[str]
     created_at: datetime
     created_by: int
@@ -89,6 +92,7 @@ async def create_logbook_entry(
     _: User = Depends(require_permission("manage_logbook")),
 ):
     import os, uuid, aiofiles
+    currency, exchange_rate = currency_snapshot(current_user)
 
     doc_paths: List[str] = []
     upload_dir = f"web/uploads/logbook/{device_id}"
@@ -111,6 +115,8 @@ async def create_logbook_entry(
             odometer=odometer,
             date=_naive_utc(date),
             price=price,
+            currency=currency,
+            exchange_rate=exchange_rate,
             documents=doc_paths,
             created_by=current_user.id,
         )
@@ -131,6 +137,7 @@ async def update_logbook_entry(
     current_user: User = Depends(verify_device_access),
     _: User = Depends(require_permission("manage_logbook")),
 ):
+    currency, exchange_rate = currency_snapshot(current_user)
     db = get_db()
     async with db.get_session() as session:
         entry = await _get_entry_or_404(session, device_id, entry_id)
@@ -138,6 +145,8 @@ async def update_logbook_entry(
         entry.odometer = odometer
         entry.date = _naive_utc(date)
         entry.price = price
+        entry.currency = currency
+        entry.exchange_rate = exchange_rate
         await session.flush()
         await session.refresh(entry)
         return entry

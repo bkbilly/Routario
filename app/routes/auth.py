@@ -37,6 +37,7 @@ async def login(form_data: UserLogin, request: Request):
                 "is_company_admin": getattr(user, "is_company_admin", False) or False,
                 "company_id": getattr(user, "company_id", None),
                 "units": getattr(user, "units", "metric") or "metric",
+                "currency": getattr(user, "currency", "EUR") or "EUR",
                 "permissions": [],
             }
 
@@ -83,5 +84,6 @@ async def login(form_data: UserLogin, request: Request):
         "is_company_admin": getattr(user, "is_company_admin", False) or False,
         "company_id": getattr(user, "company_id", None),
         "units": getattr(user, "units", "metric") or "metric",
+        "currency": getattr(user, "currency", "EUR") or "EUR",
         "permissions": ALL_PERMISSIONS if user.is_admin else (user.permissions or []),
     }

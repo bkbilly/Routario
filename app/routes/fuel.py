@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import select
 
 from core.auth import get_current_user, verify_device_access, require_permission
+from core.currency import currency_snapshot
 from core.database import get_db
 from models import FuelLog, User
 from models.schemas import FuelLogCreate, FuelLogUpdate, FuelLogResponse
@@ -38,6 +39,7 @@ async def create_fuel_log(
     current_user: User = Depends(verify_device_access),
     _: User = Depends(require_permission("manage_fuel")),
 ):
+    currency, exchange_rate = currency_snapshot(current_user)
     db = get_db()
     async with db.get_session() as session:
         log = FuelLog(
@@ -46,6 +48,8 @@ async def create_fuel_log(
             liters=data.liters,
             odometer_km=data.odometer_km,
             price_per_liter=data.price_per_liter,
+            currency=currency,
+            exchange_rate=exchange_rate,
             full_tank=data.full_tank,
             notes=data.notes,
         )
@@ -63,6 +67,7 @@ async def update_fuel_log(
     current_user: User = Depends(verify_device_access),
     _: User = Depends(require_permission("manage_fuel")),
 ):
+    currency, exchange_rate = currency_snapshot(current_user)
     db = get_db()
     async with db.get_session() as session:
         log = await _get_log_or_404(session, device_id, log_id)
@@ -74,6 +79,8 @@ async def update_fuel_log(
             log.odometer_km = data.odometer_km
         if data.price_per_liter is not None:
             log.price_per_liter = data.price_per_liter
+            log.currency = currency
+            log.exchange_rate = exchange_rate
         if data.full_tank is not None:
             log.full_tank = data.full_tank
         if data.notes is not None:

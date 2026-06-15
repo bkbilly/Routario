@@ -6,6 +6,7 @@ let companies    = [];
 let cmpAllCompanies = [];
 let cmpAllUsers     = [];
 let cmpAllDevices   = [];
+let cmpBillingPlans = [];
 
 let companySortCol         = 'name';
 let companySortDir         = 1;
@@ -27,7 +28,7 @@ async function initCompanySection() {
     if (_cmpSectionInitialized) return;
     _cmpSectionInitialized = true;
     if (localStorage.getItem('is_admin') !== 'true') return;
-    await Promise.all([loadCompanies(), loadAllUsers(), loadAllDevices()]);
+    await Promise.all([loadCompanies(), loadAllUsers(), loadAllDevices(), loadCompanyBillingPlans()]);
 }
 
 // ── Loaders ───────────────────────────────────────────────────────
@@ -59,6 +60,13 @@ async function loadAllDevices() {
     } catch (e) { console.error(e); }
 }
 
+async function loadCompanyBillingPlans() {
+    try {
+        const res = await apiFetch(`${API_BASE}/billing/plans`);
+        if (res.ok) cmpBillingPlans = await res.json();
+    } catch (e) { console.error(e); }
+}
+
 // ── Table ─────────────────────────────────────────────────────────
 
 function sortCompanies(col) {
@@ -84,9 +92,14 @@ function _companySortValue(c, col) {
         case 'name':    return (c.name || '').toLowerCase();
         case 'users':   return c.user_count ?? -Infinity;
         case 'devices': return c.device_count ?? -Infinity;
+        case 'billing': return (_companyBillingPlanName(c) || '').toLowerCase();
         case 'created': return c.created_at ? new Date(c.created_at).getTime() : -Infinity;
         default:        return '';
     }
+}
+
+function _companyBillingPlanName(company) {
+    return cmpBillingPlans.find(p => Number(p.id) === Number(company.billing_plan_id))?.name || '';
 }
 
 function filterCompanies() {
@@ -108,7 +121,7 @@ function renderTable(list) {
     count.textContent = `${list.length} compan${list.length !== 1 ? 'ies' : 'y'}`;
 
     if (!list.length) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:3rem;color:var(--text-muted);">
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:3rem;color:var(--text-muted);">
             <div style="font-size:2.5rem;margin-bottom:0.75rem;">&#127970;</div>No companies found</td></tr>`;
         return;
     }
@@ -118,6 +131,7 @@ function renderTable(list) {
             <td><span class="device-row-name">${_esc(c.name)}</span></td>
             <td style="text-align:center;font-family:var(--font-mono);">${c.user_count ?? 0}</td>
             <td style="text-align:center;font-family:var(--font-mono);">${c.device_count ?? 0}</td>
+            <td>${c.billing_plan_id ? `<span class="proto-badge">${_esc(_companyBillingPlanName(c) || 'Assigned')}</span>` : '<span style="color:var(--text-muted);">No active plan</span>'}</td>
             <td style="font-size:0.85rem;color:var(--text-secondary);">${formatDate(c.created_at)}</td>
             <td style="text-align:right;white-space:nowrap;">
                 <button class="btn btn-secondary tbl-btn" onclick="openEditModal(${c.id})"><i class="mdi mdi-pencil"></i> Edit</button>

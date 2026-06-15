@@ -68,6 +68,13 @@ document.addEventListener('click', closePicker);
 
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+
+    const historyClip = document.getElementById('historyClipModal');
+    if (historyClip && historyClip.style.display !== 'none' && historyClip.style.display !== '') {
+        document.getElementById('historyClipVideo')?.pause();
+        historyClip.style.display = 'none';
+        return;
+    }
     
     const modalIds = [
         'lbFuelModal',

@@ -11,6 +11,49 @@ let _editingEntryId   = null;
 let _fuelLogs         = [];
 let _editingFuelLogId = null;
 
+function _lbMoney(amount, digits = 2) {
+    return typeof fmtMoney === 'function' ? fmtMoney(amount, userCurrency(), digits) : `€${Number(amount || 0).toFixed(digits)}`;
+}
+
+function _lbMoneySnapshot(amount, record, digits = 2) {
+    return typeof fmtMoneyAtRate === 'function'
+        ? fmtMoneyAtRate(amount, record?.currency || userCurrency(), record?.exchange_rate || 1, digits)
+        : _lbMoney(amount, digits);
+}
+
+function _lbMoneyInput(amount, digits = 2) {
+    return typeof currencyInputValue === 'function' ? currencyInputValue(amount, digits) : (amount ?? '');
+}
+
+function _lbMoneyFromInput(id) {
+    const value = document.getElementById(id)?.value;
+    return typeof currencyInputToBase === 'function' ? currencyInputToBase(value) : (value === '' ? null : Number(value));
+}
+
+function _lbApplyCurrencyLabels() {
+    const cur = typeof userCurrency === 'function' ? userCurrency() : 'EUR';
+    const entryLabel = document.getElementById('lbEntryPriceLabel');
+    const fuelLabel = document.getElementById('lbFuelPriceLabel');
+    if (entryLabel) entryLabel.textContent = `Price (${cur})`;
+    if (fuelLabel) fuelLabel.textContent = `Price per litre (${cur})`;
+}
+
+window.addEventListener('routario:currencychange', () => {
+    _lbApplyCurrencyLabels();
+    if (document.getElementById('logbookModal')?.classList.contains('active')) {
+        if (_logbookEntries.length) _renderLogbookTable();
+        if (_fuelLogs.length) _renderFuelTable();
+    }
+    if (document.getElementById('lbEntryModal')?.classList.contains('active')) {
+        const entry = _editingEntryId ? _logbookEntries.find(e => e.id === _editingEntryId) : null;
+        if (entry?.price != null) document.getElementById('lbEntryPrice').value = _lbMoneyInput(entry.price);
+    }
+    if (document.getElementById('lbFuelModal')?.classList.contains('active')) {
+        const log = _editingFuelLogId ? _fuelLogs.find(l => l.id === _editingFuelLogId) : null;
+        if (log?.price_per_liter != null) document.getElementById('lbFuelPrice').value = _lbMoneyInput(log.price_per_liter, 3);
+    }
+});
+
 // ── Open / Close ──────────────────────────────────────────────────────────────
 function openLogbookModal(deviceId) {
     _logbookDeviceId = deviceId;
@@ -21,6 +64,7 @@ function openLogbookModal(deviceId) {
     const name   = device ? device.name : `Device ${deviceId}`;
 
     document.getElementById('logbookModalTitle').textContent = `${icon} ${name}`;
+    _lbApplyCurrencyLabels();
     closeEntryModal();
     document.getElementById('logbookModal').classList.add('active');
 
@@ -102,7 +146,7 @@ function openEntryModal(logId = null) {
             - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
         document.getElementById('lbEntryDate').value      = localIso;
         document.getElementById('lbEntryOdometer').value  = entry.odometer ?? '';
-        document.getElementById('lbEntryPrice').value     = entry.price ?? '';
+        document.getElementById('lbEntryPrice').value     = entry.price != null ? _lbMoneyInput(entry.price) : '';
         document.getElementById('lbEntryFiles').value     = '';
     }
 
@@ -170,7 +214,7 @@ function _renderLogbookTable() {
         const date    = dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
         const time    = dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
         const odo     = e.odometer != null ? `${parseFloat(e.odometer).toLocaleString()} km` : '—';
-        const price   = e.price    != null ? `€${parseFloat(e.price).toFixed(2)}` : '—';
+        const price   = e.price    != null ? _lbMoneySnapshot(e.price, e) : '—';
         const docHtml = (e.documents || []).length
             ? e.documents.map(d => {
                 const raw  = d.split('/').pop();
@@ -212,7 +256,8 @@ async function submitLogbookEntry() {
     fd.append('description', description);
     fd.append('date', new Date(dateVal).toISOString());
     if (odoVal)   fd.append('odometer', parseFloat(odoVal));
-    if (priceVal) fd.append('price',    parseFloat(priceVal));
+    const priceBase = _lbMoneyFromInput('lbEntryPrice');
+    if (priceVal && priceBase != null) fd.append('price', priceBase);
     for (const file of filesInput.files) fd.append('documents', file);
 
     const btn = document.getElementById('lbEntrySaveBtn');
@@ -303,7 +348,7 @@ function _renderFuelTable() {
     const avgCons     = avgVals.length ? (avgVals.reduce((a,b) => a+b) / avgVals.length).toFixed(1) : null;
     if (summary) summary.innerHTML =
         `<strong>${totalLitres.toFixed(1)} L</strong> total` +
-        (totalCost > 0 ? ` · <strong>€${totalCost.toFixed(2)}</strong> total cost` : '') +
+        (totalCost > 0 ? ` · <strong>${_lbMoney(totalCost)}</strong> total cost` : '') +
         (avgCons ? ` · <strong>${avgCons} L/100km</strong> avg consumption` : '');
 
     tbody.innerHTML = [..._fuelLogs]
@@ -313,7 +358,7 @@ function _renderFuelTable() {
             const date     = dtObj.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
             const time     = dtObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
             const cons     = consumption[log.id] ? `${consumption[log.id]}` : '—';
-            const total    = log.price_per_liter ? (log.liters * log.price_per_liter).toFixed(2) : '—';
+            const total    = log.price_per_liter ? _lbMoneySnapshot(log.liters * log.price_per_liter, log) : '—';
             const fullIcon = log.full_tank
                 ? `<i class="mdi mdi-check-circle" style="color:var(--accent-success);" title="Full tank"></i>`
                 : `<i class="mdi mdi-minus" style="color:var(--text-muted);" title="Partial fill"></i>`;
@@ -321,7 +366,7 @@ function _renderFuelTable() {
                 <td style="white-space:nowrap;">${date}<br><span style="color:var(--text-muted);font-size:0.8rem;">${time}</span></td>
                 <td style="text-align:right;font-family:var(--font-mono);">${log.liters.toFixed(2)}</td>
                 <td style="text-align:right;font-family:var(--font-mono);color:var(--text-secondary);">${log.odometer_km != null ? Math.round(log.odometer_km).toLocaleString() : '—'}</td>
-                <td style="text-align:right;color:var(--text-secondary);">${log.price_per_liter != null ? log.price_per_liter.toFixed(3) : '—'}</td>
+                <td style="text-align:right;color:var(--text-secondary);">${log.price_per_liter != null ? _lbMoneySnapshot(log.price_per_liter, log, 3) : '—'}</td>
                 <td style="text-align:right;color:var(--text-secondary);">${total}</td>
                 <td style="text-align:center;">${fullIcon}</td>
                 <td style="text-align:right;font-family:var(--font-mono);">${cons}</td>
@@ -338,9 +383,10 @@ function openFuelLogModal(logId = null) {
     const isNew = !log;
 
     document.getElementById('lbFuelModalTitle').textContent = isNew ? 'Add Fill-up' : 'Edit Fill-up';
+    _lbApplyCurrencyLabels();
     document.getElementById('lbFuelLogId').value      = log?.id || '';
     document.getElementById('lbFuelLiters').value     = log?.liters ?? '';
-    document.getElementById('lbFuelPrice').value      = log?.price_per_liter ?? '';
+    document.getElementById('lbFuelPrice').value      = log?.price_per_liter != null ? _lbMoneyInput(log.price_per_liter, 3) : '';
     document.getElementById('lbFuelOdometer').value   = log?.odometer_km ?? '';
     document.getElementById('lbFuelFullTank').checked = log?.full_tank ?? true;
     document.getElementById('lbFuelNotes').value      = log?.notes || '';
@@ -374,7 +420,7 @@ async function saveFuelLog() {
         date:            new Date(dateVal).toISOString(),
         liters,
         odometer_km:     parseFloat(document.getElementById('lbFuelOdometer').value) || null,
-        price_per_liter: parseFloat(document.getElementById('lbFuelPrice').value)    || null,
+        price_per_liter: _lbMoneyFromInput('lbFuelPrice'),
         full_tank:       document.getElementById('lbFuelFullTank').checked,
         notes:           document.getElementById('lbFuelNotes').value.trim() || null,
     };

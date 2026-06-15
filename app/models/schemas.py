@@ -189,6 +189,7 @@ class UserCreate(BaseModel):
     notification_channels: List[Dict[str, str]] = Field(default_factory=list)
     language: Optional[str] = "en"
     units: Optional[str] = "metric"
+    currency: Optional[str] = "EUR"
     is_admin: bool = False
     company_id: Optional[int] = None
     is_company_admin: bool = False
@@ -202,6 +203,7 @@ class UserUpdate(BaseModel):
     notification_channels: Optional[List[Dict[str, str]]] = None
     language: Optional[str] = None
     units: Optional[str] = None
+    currency: Optional[str] = None
     is_admin: Optional[bool] = None
     is_company_admin: Optional[bool] = None
     company_id: Optional[int] = None
@@ -225,6 +227,7 @@ class Token(BaseModel):
     is_company_admin: bool = False
     company_id: Optional[int] = None
     units: str = "metric"
+    currency: str = "EUR"
     permissions: List[str] = Field(default_factory=list)
 
     @field_validator('permissions', mode='before')
@@ -253,6 +256,7 @@ class UserResponse(BaseModel):
     company_id: Optional[int] = None
     language: Optional[str] = "en"
     units: Optional[str] = "metric"
+    currency: Optional[str] = "EUR"
     notification_channels: List[Dict[str, str]] = Field(default_factory=list)
     created_at: datetime
     webhook_urls: List[str] = Field(default_factory=list)
@@ -594,6 +598,8 @@ class FuelLogResponse(BaseModel):
     liters: float
     odometer_km: Optional[float]
     price_per_liter: Optional[float]
+    currency: str = "EUR"
+    exchange_rate: float = 1.0
     full_tank: bool
     notes: Optional[str]
     created_at: datetime

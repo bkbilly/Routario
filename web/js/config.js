@@ -103,7 +103,7 @@ function handleLogout() {
     const loginUrl = loginSlug && slugCompanyId && currentCompanyId && slugCompanyId === currentCompanyId
         ? `/login/${encodeURIComponent(loginSlug)}`
         : '/login.html';
-    ['auth_token','user_id','username','is_admin','units','is_company_admin','company_id',
+    ['auth_token','user_id','username','is_admin','units','currency','is_company_admin','company_id',
      'permissions',
      'impersonating_admin_token','impersonating_admin_user_id','impersonating_admin_username']
         .forEach(k => localStorage.removeItem(k));
@@ -255,6 +255,8 @@ const permissionsReady = (function () {
             localStorage.setItem('company_id', user.company_id ?? '');
         if (user.units)
             localStorage.setItem('units', user.units);
+        if (user.currency)
+            localStorage.setItem('currency', user.currency);
         applyCompanyBranding(user.company_id);
         return user;
     })

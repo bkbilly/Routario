@@ -366,12 +366,13 @@
                     ${chevron}
                 </a>
 
-                ${isManagement ? `<div class="header-menu-divider"></div><div id="snAddAction"></div><div id="snNotifyAction"></div>` : ''}
+                ${isManagement ? `<div class="header-menu-divider"></div><div id="snAddAction"></div><div id="snNotifyAction"></div><div id="snRefreshAction"></div>` : ''}
                 ${isReports ? `<div class="header-menu-divider"></div><div id="snAddAction"></div>` : ''}
 
                 <div class="header-menu-divider"></div>
 
-                ${isSettings ? `<button class="header-menu-item" onclick="_clearAppCache()">
+                ${isSettings ? `<div id="snSettingsAction"></div>
+                <button class="header-menu-item" onclick="_clearAppCache()">
                     <span class="header-menu-item-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
                              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

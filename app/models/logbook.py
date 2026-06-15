@@ -22,6 +22,8 @@ class LogbookEntry(Base):
     odometer:    Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     date:        Mapped[datetime]       = mapped_column(DateTime, nullable=False)
     price:       Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    currency:    Mapped[str]             = mapped_column(String(3), default="EUR", nullable=False)
+    exchange_rate: Mapped[float]          = mapped_column(Float, default=1.0, nullable=False)
     documents:   Mapped[List]           = mapped_column(JsonType, default=list, nullable=False)
     created_by:  Mapped[int]            = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True

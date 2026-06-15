@@ -47,15 +47,22 @@
             color: var(--accent-primary);
             border-bottom-color: var(--accent-primary);
         }
-        #userModalBody {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0 1.5rem;
-            align-items: start;
+        .audit-table,
+        .health-table {
+            min-width: 720px;
+        }
+        @media (max-width: 768px) {
+            .audit-table th,
+            .audit-table td,
+            .health-table th,
+            .health-table td {
+                display: table-cell !important;
+            }
+            .health-table {
+                min-width: 560px;
+            }
         }
         @media (max-width: 640px) {
-            #userModalBody { grid-template-columns: 1fr; }
-            #userModal .modal-content { max-width: 95vw; }
             .drv-btn-label { display: none; }
         }
         .admin-grid {
@@ -262,9 +269,6 @@
         <button class="mgmt-tab" id="mgmtTabDrivers" onclick="switchMgmtSection('drivers')">
             <i class="mdi mdi-account-tie"></i> Drivers
         </button>
-        <button class="mgmt-tab" id="mgmtTabUsers" onclick="switchMgmtSection('users')" style="display:none;">
-            <i class="mdi mdi-account-group"></i> Users
-        </button>
         <button class="mgmt-tab" id="mgmtTabClips" onclick="switchMgmtSection('clips')" style="display:none;">
             <i class="mdi mdi-video"></i> Clips
         </button>
@@ -337,13 +341,14 @@
                         <th data-sort="name" data-sort-dir="asc" onclick="sortCompanies('name')">Name</th>
                         <th data-sort="users" style="text-align:center;" onclick="sortCompanies('users')">Users</th>
                         <th data-sort="devices" style="text-align:center;" onclick="sortCompanies('devices')">Devices</th>
+                        <th data-sort="billing" onclick="sortCompanies('billing')">Billing Plan</th>
                         <th data-sort="created" onclick="sortCompanies('created')">Created</th>
                         <th style="width:180px;text-align:center;">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="companiesTableBody">
                     <tr>
-                        <td colspan="5" style="text-align:center;padding:3rem;color:var(--text-muted);">
+                        <td colspan="6" style="text-align:center;padding:3rem;color:var(--text-muted);">
                             <div class="loading" style="margin:0 auto 1rem;"></div>
                             Loading companies&#8230;
                         </td>
@@ -410,40 +415,6 @@
             </select>
         </div>
         <div id="clipsGrid" class="clips-grid"></div>
-    </div>
-
-    <div id="section-users" style="display:none;">
-        <div class="devices-search-bar">
-            <div class="search-input-wrap">
-                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
-                <input type="text" id="userSearch" class="search-input"
-                    placeholder="Search by username or email&#8230;"
-                    oninput="filterUsers()">
-            </div>
-            <span class="devices-count" id="userCount"></span>
-        </div>
-        <div style="overflow-x:auto;">
-            <table class="devices-table" id="usersTable">
-                <thead>
-                    <tr>
-                        <th data-sort="username" data-sort-dir="asc" onclick="sortUsers('username')">Username</th>
-                        <th data-sort="email" onclick="sortUsers('email')">Email</th>
-                        <th id="userCompanyHeader" data-sort="company" onclick="sortUsers('company')" style="display:none;">Company</th>
-                        <th data-sort="role" onclick="sortUsers('role')">Role</th>
-                        <th data-sort="created" onclick="sortUsers('created')">Created</th>
-                        <th style="width:320px;text-align:center;">Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="usersTableBody">
-                    <tr>
-                        <td colspan="6" style="text-align:center;padding:3rem;color:var(--text-muted);">
-                            <div class="loading" style="margin:0 auto 1rem;"></div>
-                            Loading users&#8230;
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
     </div>
 
     <!-- ── ROUTES SECTION ─────────────────────────────────────────── -->
@@ -513,10 +484,9 @@
                 <input type="text" id="auditSearch" class="search-input" placeholder="Search audit logs..." oninput="rtpRenderAuditTable()">
             </div>
             <span class="devices-count" id="auditCount"></span>
-            <button class="btn btn-secondary" onclick="rtpLoadAudit()"><i class="mdi mdi-refresh"></i> Refresh</button>
         </div>
         <div style="overflow-x:auto;">
-            <table class="devices-table">
+            <table class="devices-table audit-table">
                 <thead>
                     <tr>
                         <th data-sort="time" data-sort-dir="desc" onclick="rtpSortAudit('time')">Time</th>
@@ -540,10 +510,9 @@
                 <input type="text" id="healthSearch" class="search-input" placeholder="Search health checks..." oninput="rtpRenderHealthTable()">
             </div>
             <span class="devices-count" id="healthCount"></span>
-            <button class="btn btn-secondary" onclick="rtpLoadHealth()"><i class="mdi mdi-refresh"></i> Refresh</button>
         </div>
         <div style="overflow-x:auto;">
-            <table class="devices-table">
+            <table class="devices-table health-table">
                 <thead>
                     <tr>
                         <th data-sort="name" data-sort-dir="asc" onclick="rtpSortHealth('name')">Check</th>
@@ -1071,125 +1040,6 @@
 </div>
 
 
-<!-- =============================================================
-     USER MODAL
-============================================================= -->
-<div class="modal" id="userModal">
-    <div class="modal-content" style="max-width:860px;height:auto;max-height:90vh;">
-        <div class="modal-header">
-            <h2 class="modal-title" id="userModalTitle">Add User</h2>
-            <button type="button" class="modal-close" onclick="closeUserModal()"><i class="mdi mdi-close"></i></button>
-        </div>
-        <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
-            <div id="userModalBody">
-                <!-- Left column: basic fields -->
-                <div>
-                    <div class="form-group">
-                        <label class="form-label">Username *</label>
-                        <input type="text" id="userModalUsername" class="form-input" placeholder="johndoe" autocomplete="off">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Email *</label>
-                        <input type="email" id="userModalEmail" class="form-input" placeholder="john@example.com">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" id="userPasswordLabel">Password *</label>
-                        <input type="password" id="userModalPassword" class="form-input" autocomplete="new-password">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Role *</label>
-                        <select id="userModalRole" class="form-input" onchange="onUserRoleChange()"></select>
-                    </div>
-                    <div class="form-group" id="userModalCompanyGroup" style="display:none;">
-                        <label class="form-label">Company *</label>
-                        <select id="userModalCompany" class="form-input">
-                            <option value="">— Select company —</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Unit System</label>
-                        <select id="userModalUnits" class="form-input">
-                            <option value="metric">Metric (km, km/h, m)</option>
-                            <option value="imperial">Imperial (mi, mph, ft)</option>
-                        </select>
-                    </div>
-                </div>
-                <!-- Right column: permissions -->
-                <div class="form-group" id="userModalPermissionsGroup">
-                    <label class="form-label" style="display:flex;align-items:center;justify-content:space-between;">
-                        <span>Permissions</span>
-                        <span id="userModalPermHint" style="font-size:0.75rem;color:var(--text-muted);font-weight:400;"></span>
-                    </label>
-                    <div id="userModalPermissions" style="border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;display:flex;flex-direction:column;gap:0.75rem;"></div>
-                </div>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button type="button" class="btn btn-danger" id="userDeleteBtn" onclick="usrDelete(_usrEditing?.id)" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
-            <div style="display:flex;gap:0.75rem;margin-left:auto;">
-                <button type="button" class="btn btn-secondary" onclick="closeUserModal()">Cancel</button>
-                <button type="button" class="btn btn-primary" id="userSaveBtn" onclick="saveUser()">Save</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- =============================================================
-     USER DEVICE ASSIGNMENT MODAL
-============================================================= -->
-<div class="modal" id="userAssignModal">
-    <div class="modal-content" style="max-width:480px;height:auto;max-height:75vh;">
-        <div class="modal-header">
-            <h2 class="modal-title">Devices for <span id="userAssignName" class="modal-highlight"></span></h2>
-            <button type="button" class="modal-close" onclick="usrCloseAssignModal()"><i class="mdi mdi-close"></i></button>
-        </div>
-        <div class="modal-scrollable" style="padding:1.25rem;">
-            <div class="form-group">
-                <input type="text" class="form-input" id="userDeviceSearch" placeholder="Search devices&#8230;" oninput="usrFilterDeviceList()">
-            </div>
-            <div id="userDeviceAssignList" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
-        </div>
-        <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="usrCloseAssignModal()">Close</button>
-        </div>
-    </div>
-</div>
-
-<!-- =============================================================
-     USER NOTIFY MODAL
-============================================================= -->
-<div class="modal" id="userNotifyModal">
-    <div class="modal-content" style="max-width:620px;height:auto;max-height:75vh;">
-        <div class="modal-header">
-            <h2 class="modal-title">Send Notification</h2>
-            <button type="button" class="modal-close" onclick="usrCloseNotifyModal()"><i class="mdi mdi-close"></i></button>
-        </div>
-        <div class="modal-scrollable" style="display:flex;gap:1.25rem;padding:1.25rem;flex-wrap:wrap;align-items:stretch;">
-            <div style="flex:1;min-width:180px;min-height:0;display:flex;flex-direction:column;gap:0.5rem;">
-                <label class="form-label">To <span id="userNotifyCount" style="font-size:0.78rem;color:var(--accent-primary);font-weight:600;margin-left:0.25rem;"></span></label>
-                <input type="text" id="userNotifySearch" class="form-input" placeholder="Search users&#8230;" oninput="usrFilterNotifyUsers()">
-                <div id="userNotifyList" style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:0.15rem;"></div>
-            </div>
-            <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:0.75rem;">
-                <div class="form-group">
-                    <label class="form-label">Title</label>
-                    <input type="text" id="userNotifyTitle" class="form-input" placeholder="Notification title" maxlength="100">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Message</label>
-                    <textarea id="userNotifyMessage" class="form-input" rows="6" placeholder="Notification message" maxlength="500" style="resize:vertical;"></textarea>
-                </div>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <div style="display:flex;gap:0.75rem;margin-left:auto;">
-                <button type="button" class="btn btn-secondary" onclick="usrCloseNotifyModal()">Cancel</button>
-                <button type="button" class="btn btn-primary" id="userNotifySendBtn" onclick="usrSendNotification()">Send</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <div class="modal" id="routeModal">
     <div class="modal-content wide">
         <div class="modal-header">
@@ -1227,13 +1077,13 @@
         <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
             <div class="form-grid">
                 <label><span>Name</span><input id="billPlanName" class="form-input" placeholder="Growth"><div class="form-help">Internal plan name shown in billing tables and company assignments.</div></label>
-                <label><span>Base Price</span><input id="billBase" class="form-input" type="number" min="0" placeholder="0"><div class="form-help">Fixed monthly amount charged before any usage overages.</div></label>
+                <label><span id="billBaseLabel">Base Price</span><input id="billBase" class="form-input" type="number" min="0" placeholder="0"><div class="form-help">Fixed monthly amount charged before any usage overages.</div></label>
                 <label><span>Included Devices</span><input id="billIncDevices" class="form-input" type="number" min="0" value="0"><div class="form-help">Active devices included in the base monthly price.</div></label>
-                <label><span>Per Device</span><input id="billDevicePrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Monthly charge for each active device above the included amount.</div></label>
+                <label><span id="billDevicePriceLabel">Per Device</span><input id="billDevicePrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Monthly charge for each active device above the included amount.</div></label>
                 <label><span>Included Positions</span><input id="billIncPositions" class="form-input" type="number" min="0" value="0"><div class="form-help">Position messages included per month before overage billing starts.</div></label>
-                <label><span>Per 1000 Positions</span><input id="billPositionPrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Charge per started block of 1000 extra position messages.</div></label>
+                <label><span id="billPositionPriceLabel">Per 1000 Positions</span><input id="billPositionPrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Charge per started block of 1000 extra position messages.</div></label>
                 <label><span>Included API Calls</span><input id="billIncApi" class="form-input" type="number" min="0" value="0"><div class="form-help">REST API calls included per month for companies on this plan.</div></label>
-                <label><span>Per 1000 API Calls</span><input id="billApiPrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Charge per started block of 1000 API calls above the included amount.</div></label>
+                <label><span id="billApiPriceLabel">Per 1000 API Calls</span><input id="billApiPrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Charge per started block of 1000 API calls above the included amount.</div></label>
                 <label style="grid-column:1 / -1;">
                     <span>Assigned Companies</span>
                     <input id="billPlanCompanySearch" class="form-input" placeholder="Search companies..." oninput="rtpFilterPlanCompanies()" style="margin-bottom:0.5rem;">
@@ -1264,8 +1114,8 @@
                 <label><span>Month</span><input id="billDetailMonth" class="form-input" type="number" min="1" max="12"></label>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
-                <button type="button" class="btn btn-secondary" onclick="rtpDetailLoadUsage()"><i class="mdi mdi-chart-bar"></i> Load Usage</button>
-                <button type="button" class="btn btn-primary" onclick="rtpDetailGenerateInvoice()"><i class="mdi mdi-file-document-plus"></i> Draft Invoice</button>
+                <button type="button" class="btn btn-primary" onclick="rtpDetailGenerateBillingSummary()"><i class="mdi mdi-calculator-variant"></i> Generate Billing Summary</button>
+                <button type="button" class="btn btn-secondary" onclick="rtpPrintBillingDetails()"><i class="mdi mdi-printer"></i> Printable Report</button>
             </div>
             <div id="billingPlanDetailsResult" class="stack-list"></div>
         </div>
@@ -1288,30 +1138,27 @@
 <script src="js/device-commands.js"></script>
 <script src="js/company-management.js"></script>
 <script src="js/drivers.js"></script>
-<script src="js/users-management.js"></script>
 <script src="js/management-advanced.js"></script>
 <script>
 (function () {
-    const SECTIONS = ['devices', 'companies', 'drivers', 'users', 'clips', 'routes', 'billing', 'audit', 'health'];
+    const SECTIONS = ['devices', 'companies', 'drivers', 'clips', 'routes', 'billing', 'audit', 'health'];
 
     const _plusIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
     const _addActions = {
         devices:   { label: 'Add Device',  fn: 'openAddDeviceModal()' },
         companies: { label: 'Add Company', fn: 'openAddCompanyModal()' },
         drivers:   { label: 'Add Driver',  fn: 'openDriverModal()' },
-        users:     { label: 'Add User',    fn: 'openUserModal()' },
         routes:    { label: 'Add Route',   fn: 'rtpOpenRouteModal()' },
         billing:   { label: 'Create Plan', fn: 'rtpOpenPlanModal()' },
     };
 
-    const _bellIcon = `<i class="mdi mdi-bell" style="font-size:15px;"></i>`;
+    const _refreshIcon = `<i class="mdi mdi-refresh" style="font-size:15px;"></i>`;
     const _closeMenu = `document.getElementById('snDropdown').classList.remove('open'); document.getElementById('snGearBtn').classList.remove('active');`;
 
     const _addPermissions = {
         devices:   'edit_devices',
         companies: null,
         drivers:   'manage_drivers',
-        users:     'manage_users',
         routes:    'manage_routes',
         billing:   'manage_billing',
     };
@@ -1320,7 +1167,6 @@
         devices:   null,
         companies: null,
         drivers:   'manage_drivers',
-        users:     'manage_users',
         clips:     null,
         routes:    'manage_routes',
         billing:   'manage_billing',
@@ -1331,7 +1177,6 @@
     function _canAccessSection(name) {
         const perm = _sectionPermissions[name];
         if (name === 'companies') return localStorage.getItem('is_admin') === 'true';
-        if (name === 'users') return hasPermission('manage_users');
         return !perm || hasPermission(perm);
     }
 
@@ -1345,8 +1190,13 @@
 
         const notifyEl = document.getElementById('snNotifyAction');
         if (!notifyEl) return;
-        notifyEl.innerHTML = name === 'users'
-            ? `<button class="header-menu-item" onclick="usrOpenNotifyModal(); ${_closeMenu}"><span class="header-menu-item-icon">${_bellIcon}</span><span>Send Notification</span></button>`
+        notifyEl.innerHTML = '';
+
+        const refreshEl = document.getElementById('snRefreshAction');
+        if (!refreshEl) return;
+        const refreshFn = name === 'audit' ? 'rtpLoadAudit()' : name === 'health' ? 'rtpLoadHealth()' : null;
+        refreshEl.innerHTML = refreshFn
+            ? `<button class="header-menu-item" onclick="${refreshFn}; ${_closeMenu}"><span class="header-menu-item-icon">${_refreshIcon}</span><span>Refresh</span></button>`
             : '';
     }
 
@@ -1354,7 +1204,6 @@
         devices:   () => initDeviceSection(),
         companies: () => initCompanySection(),
         drivers:   () => initDriversSection(),
-        users:     () => initUsersSection(),
         clips:     () => initClipsSection(),
         routes:    () => rtpInitRoutes(),
         billing:   () => rtpInitBilling(),
@@ -1386,12 +1235,6 @@
         if (isAdmin) {
             const t = document.getElementById('mgmtTabCompanies');
             if (t) t.style.display = '';
-            const ch = document.getElementById('userCompanyHeader');
-            if (ch) ch.style.display = '';
-        }
-        if (hasPermission('manage_users')) {
-            const t = document.getElementById('mgmtTabUsers');
-            if (t) t.style.display = '';
         }
         [
             ['Routes', 'manage_routes'],
@@ -1418,10 +1261,15 @@
 
     document.addEventListener('keydown', e => {
         if (e.key !== 'Escape') return;
+        const clipModal = document.getElementById('clipPlayerModal');
+        if (clipModal && clipModal.style.display !== 'none' && clipModal.style.display !== '') {
+            closeClipPlayer();
+            return;
+        }
         const closers = [
-            ['userNotifyModal',  () => usrCloseNotifyModal()],
-            ['userAssignModal',  () => usrCloseAssignModal()],
-            ['userModal',        () => closeUserModal()],
+            ['billingPlanDetailsModal', () => rtpClosePlanDetailsModal()],
+            ['billingPlanModal', () => rtpClosePlanModal()],
+            ['routeModal',       () => rtpCloseRouteModal()],
             ['driverModal',      () => closeDriverModal()],
             ['alertEditorModal', () => closeAlertEditor()],
             ['companyModal',     () => closeCompanyModal()],

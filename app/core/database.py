@@ -163,6 +163,11 @@ class DatabaseService:
             # 'polygon_wkt' in the model. Drop the NOT NULL so inserts don't fail.
             "ALTER TABLE geofences ALTER COLUMN polygon DROP NOT NULL",
             "ALTER TABLE users ADD COLUMN units VARCHAR(10) DEFAULT 'metric'",
+            "ALTER TABLE users ADD COLUMN currency VARCHAR(3) DEFAULT 'EUR'",
+            "ALTER TABLE fuel_logs ADD COLUMN currency VARCHAR(3) DEFAULT 'EUR'",
+            "ALTER TABLE fuel_logs ADD COLUMN exchange_rate FLOAT DEFAULT 1.0",
+            "ALTER TABLE logbook_entries ADD COLUMN currency VARCHAR(3) DEFAULT 'EUR'",
+            "ALTER TABLE logbook_entries ADD COLUMN exchange_rate FLOAT DEFAULT 1.0",
             "ALTER TABLE users ADD COLUMN company_id INTEGER",
             "ALTER TABLE users ADD COLUMN is_company_admin BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT NULL",
@@ -237,7 +242,7 @@ class DatabaseService:
             """CREATE TABLE IF NOT EXISTS billing_plans (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name VARCHAR(120) NOT NULL UNIQUE,
-                currency VARCHAR(3) DEFAULT 'USD',
+                currency VARCHAR(3) DEFAULT 'EUR',
                 base_price_cents INTEGER DEFAULT 0,
                 included_devices INTEGER DEFAULT 0,
                 included_positions INTEGER DEFAULT 0,
@@ -262,8 +267,10 @@ class DatabaseService:
                 company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
                 period_start DATETIME NOT NULL,
                 period_end DATETIME NOT NULL,
-                currency VARCHAR(3) DEFAULT 'USD',
+                currency VARCHAR(3) DEFAULT 'EUR',
+                exchange_rate FLOAT DEFAULT 1.0,
                 amount_cents INTEGER DEFAULT 0,
+                amount_display_cents INTEGER DEFAULT 0,
                 status VARCHAR(30) DEFAULT 'draft',
                 line_items JSON DEFAULT '[]',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -297,6 +304,10 @@ class DatabaseService:
                 completed_at DATETIME,
                 notes TEXT
             )""",
+            "ALTER TABLE billing_plans ALTER COLUMN currency SET DEFAULT 'EUR'",
+            "ALTER TABLE billing_invoices ALTER COLUMN currency SET DEFAULT 'EUR'",
+            "ALTER TABLE billing_invoices ADD COLUMN exchange_rate FLOAT DEFAULT 1.0",
+            "ALTER TABLE billing_invoices ADD COLUMN amount_display_cents INTEGER DEFAULT 0",
         ]
         if self._is_postgres:
             migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP")
@@ -329,6 +340,16 @@ class DatabaseService:
                     text("UPDATE users SET permissions = :p WHERE permissions IS NULL"),
                     {"p": json.dumps(ALL_PERMISSIONS)},
                 )
+        except Exception:
+            pass
+
+        # The billing UI now uses EUR. Normalize earlier default records so
+        # existing plans and draft invoices render with the current currency.
+        try:
+            async with self.engine.begin() as conn:
+                await conn.execute(text("UPDATE billing_plans SET currency = 'EUR' WHERE currency = 'USD'"))
+                await conn.execute(text("UPDATE billing_invoices SET currency = 'EUR' WHERE currency = 'USD'"))
+                await conn.execute(text("UPDATE billing_invoices SET amount_display_cents = amount_cents WHERE amount_display_cents IS NULL OR amount_display_cents = 0"))
         except Exception:
             pass
 
@@ -571,6 +592,9 @@ class DatabaseService:
                 company_id=user_data.company_id,
                 is_company_admin=user_data.is_company_admin,
                 notification_channels=user_data.notification_channels,
+                language=user_data.language or "en",
+                units=user_data.units or "metric",
+                currency=(user_data.currency or "EUR").upper(),
                 permissions=user_data.permissions if user_data.permissions is not None else [],
             )
             session.add(user)
@@ -627,6 +651,8 @@ class DatabaseService:
                 user.language = user_data.language
             if user_data.units is not None:
                 user.units = user_data.units
+            if user_data.currency is not None:
+                user.currency = user_data.currency.upper()
             if user_data.webhook_urls is not None:
                 user.webhook_urls = user_data.webhook_urls
             if user_data.is_admin is not None:

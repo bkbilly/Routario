@@ -165,6 +165,7 @@
                     localStorage.setItem('is_company_admin', data.is_company_admin || false);
                     localStorage.setItem('company_id', data.company_id ?? '');
                     localStorage.setItem('units', data.units || 'metric');
+                    localStorage.setItem('currency', data.currency || 'EUR');
                     localStorage.setItem('permissions', JSON.stringify(data.permissions || []));
                     if (String(data.company_id ?? '') !== localStorage.getItem('company_login_slug_company_id')) {
                         localStorage.removeItem('company_login_slug');

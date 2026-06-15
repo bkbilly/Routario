@@ -71,11 +71,49 @@ let _drawControl = null;          // Active Leaflet.draw control (if any)
 let _editingLayer = null;         // The single layer currently in edit mode
 let _editingGeofenceId = null;    // ID of geofence being edited (null = new)
 let _pendingCoords = null;        // Coords of a freshly drawn shape waiting to be saved
-let _pendingType = 'polygon';     // 'polygon' | 'polyline'
+let _pendingType = 'polygon';     // 'polygon' | 'polyline' | 'navigation-polyline'
+let _pendingSource = null;        // Additional context for generated geofences
 let _geofences = [];              // Local cache [{id, name, color, coords, type}, ...]
 let _showAllUsersGeofences = false;
 let _mapDraggedRecently = false;
 let _cachedUsers = null;
+let _valhallaNavigationAvailable = false;
+
+function _decodeValhallaShape(encoded) {
+    if (!encoded) return [];
+    const coordinates = [];
+    let index = 0, lat = 0, lng = 0;
+    const precision = 1e6;
+    while (index < encoded.length) {
+        let b, shift = 0, result = 0;
+        do {
+            b = encoded.charCodeAt(index++) - 63;
+            result |= (b & 0x1f) << shift;
+            shift += 5;
+        } while (b >= 0x20 && index < encoded.length);
+        lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+
+        shift = 0;
+        result = 0;
+        do {
+            b = encoded.charCodeAt(index++) - 63;
+            result |= (b & 0x1f) << shift;
+            shift += 5;
+        } while (b >= 0x20 && index < encoded.length);
+        lng += (result & 1) ? ~(result >> 1) : (result >> 1);
+        coordinates.push([lng / precision, lat / precision]);
+    }
+    return coordinates;
+}
+
+function _geometryToCoords(geometry) {
+    if (!geometry) return [];
+    if (geometry.provider === 'valhalla') {
+        const shapes = geometry.encoded_shapes || (geometry.encoded_shape ? [geometry.encoded_shape] : []);
+        return shapes.flatMap(shape => _decodeValhallaShape(shape));
+    }
+    return Array.isArray(geometry.coordinates) ? geometry.coordinates : [];
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 function initGeofences(mapInstance) {
@@ -92,7 +130,21 @@ function initGeofences(mapInstance) {
         if (wrap) wrap.style.display = '';
     }
 
+    _refreshNavigationGeofenceAvailability();
     reloadGeofences();
+}
+
+async function _refreshNavigationGeofenceAvailability() {
+    const btn = document.getElementById('geofenceNavigationPathBtn');
+    if (!btn) return;
+    try {
+        const res = await apiFetch('/health/ready');
+        const data = res.ok ? await res.json() : null;
+        _valhallaNavigationAvailable = Boolean(data?.checks?.valhalla?.ok);
+    } catch {
+        _valhallaNavigationAvailable = false;
+    }
+    btn.style.display = _valhallaNavigationAvailable ? '' : 'none';
 }
 
 // ── Load & Render ─────────────────────────────────────────────────────────────
@@ -207,12 +259,18 @@ function _addLayerToMap(gf) {
 
 // ── Draw Mode (create new) ────────────────────────────────────────────────────
 function startDrawGeofence(type = 'polygon') {
+    if (type === 'navigation-polyline' && !_valhallaNavigationAvailable) {
+        showAlert('Navigation geofences require Valhalla to be available.', 'warning');
+        return;
+    }
     if (_editingLayer) _cancelEdit();
     _cancelDraw();
 
     _pendingType = type;
+    _pendingSource = null;
 
-    const options = type === 'polyline'
+    const isLine = type === 'polyline' || type === 'navigation-polyline';
+    const options = isLine
         ? new L.Draw.Polyline(_map, { shapeOptions: { color: '#3b82f6', weight: 3 } })
         : new L.Draw.Polygon(_map, {
             shapeOptions: { color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.15, weight: 2 },
@@ -229,7 +287,7 @@ function startDrawGeofence(type = 'polygon') {
     _setDrawButtonActive(true);
 }
 
-function _onDrawCreated(e) {
+async function _onDrawCreated(e) {
     _drawControl = null;
     _setDrawButtonActive(false);
 
@@ -237,7 +295,7 @@ function _onDrawCreated(e) {
 
     // Extract coords as [lng, lat] (GeoJSON order for backend)
     let coords;
-    if (_pendingType === 'polyline') {
+    if (_pendingType === 'polyline' || _pendingType === 'navigation-polyline') {
         coords = layer.getLatLngs().map(ll => [ll.lng, ll.lat]);
     } else {
         coords = layer.getLatLngs()[0].map(ll => [ll.lng, ll.lat]);
@@ -248,10 +306,48 @@ function _onDrawCreated(e) {
         }
     }
 
-    _pendingCoords = coords;
+    if (_pendingType === 'navigation-polyline') {
+        await _prepareNavigationGeofence(coords);
+        return;
+    }
 
+    _pendingCoords = coords;
     // Show the save modal for a new geofence
     _openGeofenceModal(null, null, _pendingType);
+}
+
+async function _prepareNavigationGeofence(points) {
+    if (!points || points.length < 2) {
+        showAlert('Draw at least two points for a navigation path.', 'error');
+        _pendingCoords = null;
+        return;
+    }
+    try {
+        showAlert('Creating navigation path...', 'info', 1800);
+        const res = await apiFetch(`${API_BASE}/geofences/navigation-preview`, {
+            method: 'POST',
+            body: JSON.stringify({ points }),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || 'Navigation path failed');
+        }
+        const preview = await res.json();
+        const coords = _geometryToCoords(preview.route_geometry);
+        if (!coords.length) throw new Error('No navigation geometry returned');
+        _pendingCoords = coords;
+        _pendingSource = {
+            kind: 'navigation',
+            provider: preview.route_geometry?.provider || 'straight_line',
+            distance_km: preview.distance_km,
+            duration_minutes: preview.duration_minutes,
+        };
+        _openGeofenceModal(null, null, 'polyline');
+    } catch (e) {
+        console.error(e);
+        showAlert(e.message || 'Failed to create navigation path.', 'error');
+        _pendingCoords = null;
+    }
 }
 
 function _cancelDraw() {
@@ -262,6 +358,7 @@ function _cancelDraw() {
         _setDrawButtonActive(false);
     }
     _pendingCoords = null;
+    _pendingSource = null;
 }
 
 // ── Edit Mode (existing geofence) ─────────────────────────────────────────────
@@ -369,7 +466,9 @@ async function _openGeofenceModal(id, gf, type) {
     document.getElementById('geofenceModalId').value = id || '';
     document.getElementById('geofenceModalType').value = type || 'polygon';
     document.getElementById('geofenceModalName').value = gf?.name || '';
-    document.getElementById('geofenceModalDescription').value = gf?.description || '';
+    document.getElementById('geofenceModalDescription').value = gf?.description || (_pendingSource?.kind === 'navigation'
+        ? `Navigation path${_pendingSource.provider ? ` (${_pendingSource.provider})` : ''}`
+        : '');
     document.getElementById('geofenceModalColor').value = gf?.color || '#3b82f6';
     document.getElementById('geofenceModalBuffer').value = gf?.buffer_meters ?? 50;
 
@@ -387,7 +486,7 @@ async function _openGeofenceModal(id, gf, type) {
     }
 
     const titleEl = document.getElementById('geofenceModalTitle');
-    if (titleEl) titleEl.textContent = id ? 'Edit Geofence' : 'Save Geofence';
+    if (titleEl) titleEl.textContent = id ? 'Edit Geofence' : (_pendingSource?.kind === 'navigation' ? 'Save Navigation Geofence' : 'Save Geofence');
 
     document.getElementById('geofenceModal').classList.add('active');
     setTimeout(() => document.getElementById('geofenceModalName').focus(), 100);
@@ -428,6 +527,7 @@ function closeGeofenceModal() {
     // If it was a new draw and user cancels, just reload to clear the temp shape
     if (!document.getElementById('geofenceModalId').value) {
         _pendingCoords = null;
+        _pendingSource = null;
         reloadGeofences();
     }
 }
@@ -490,6 +590,7 @@ async function submitGeofenceModal() {
         closeGeofenceModal();
         _cancelEdit();
         _pendingCoords = null;
+        _pendingSource = null;
         await reloadGeofences();
         showAlert(id ? 'Geofence updated.' : 'Geofence created.', 'success');
     } catch (e) {

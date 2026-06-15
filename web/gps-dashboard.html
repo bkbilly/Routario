@@ -288,6 +288,7 @@
                     <div class="map-ctrl-flyout" id="geofenceCtrlFlyout">
                         <button onclick="startDrawType('polygon'); closeAllMapFlyouts();">⬡ Draw Zone (Polygon)</button>
                         <button onclick="startDrawType('polyline'); closeAllMapFlyouts();">〰 Draw Path (Polyline)</button>
+                        <button id="geofenceNavigationPathBtn" onclick="startDrawType('navigation-polyline'); closeAllMapFlyouts();" style="display:none;"><i class="mdi mdi-navigation-variant-outline"></i> Navigation Path</button>
                         <div id="geofenceAllUsersToggleWrap" style="display:none; border-top: 1px solid var(--border-color); margin-top: 4px; padding-top: 4px;">
                             <button id="geofenceAllUsersToggleBtn" onclick="toggleAllUsersGeofences()">
                                 <i class="mdi mdi-eye-off-outline"></i> Show other users' geofences
@@ -680,7 +681,7 @@
                         <input type="number" id="lbFuelLiters" class="form-input" placeholder="0.00" step="0.01" min="0">
                     </div>
                     <div class="form-group" style="margin:0;">
-                        <label class="form-label">Price per litre</label>
+                        <label class="form-label" id="lbFuelPriceLabel">Price per litre</label>
                         <input type="number" id="lbFuelPrice" class="form-input" placeholder="0.00" step="0.001" min="0">
                     </div>
                 </div>
@@ -731,7 +732,7 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Price (€) <span style="color:var(--text-muted);font-weight:400;">optional</span></label>
+                    <label class="form-label"><span id="lbEntryPriceLabel">Price</span> <span style="color:var(--text-muted);font-weight:400;">optional</span></label>
                     <input type="number" id="lbEntryPrice" class="form-input" min="0" step="0.01" placeholder="0.00">
                 </div>
                 <div class="form-group">

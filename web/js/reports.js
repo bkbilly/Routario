@@ -48,7 +48,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     document.addEventListener('keydown', e => {
-        if (e.key === 'Escape' && document.getElementById('tripMapModal').classList.contains('active')) {
+        if (e.key !== 'Escape') return;
+        if (document.getElementById('schedModal')?.classList.contains('active')) {
+            closeScheduleModal();
+            return;
+        }
+        if (document.getElementById('tripMapModal')?.classList.contains('active')) {
             closeTripMap();
         }
     });
