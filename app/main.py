@@ -28,6 +28,7 @@ from core.config import get_settings
 from core.database import get_db, init_database
 from core.gateway import connection_manager, protocol_server_manager, sync_active_protocol_servers
 from core.push_notifications import get_push_service
+from core.runtime_health import register_task, set_runtime_state
 from core.valhalla import check_valhalla_health, set_valhalla_url
 from integrations.engine import integration_poll_task
 from models import AlertHistory, Company, Device, User
@@ -110,9 +111,11 @@ class RedisPubSub:
             await client.ping()
             self.redis_client = client
             self.available = True
+            set_runtime_state("redis_pubsub", {"available": True, "mode": "redis"})
             logger.info("Redis connected for Pub/Sub at %s", redis_url)
         except Exception as exc:
             self.available = False
+            set_runtime_state("redis_pubsub", {"available": False, "mode": "in_process", "error": str(exc)})
             logger.warning(
                 "Redis not available (%s) — WebSocket pub/sub will use "
                 "in-process broadcasting only. Start Redis to enable "
@@ -126,11 +129,13 @@ class RedisPubSub:
             except Exception as exc:
                 logger.debug("Redis publish failed: %s", exc)
                 self.available = False
+                set_runtime_state("redis_pubsub", {"available": False, "mode": "in_process", "error": str(exc)})
 
     async def close(self):
         if self.redis_client:
             try:
                 await self.redis_client.aclose()
+                set_runtime_state("redis_pubsub", {"available": False, "mode": "closed"})
             except Exception:
                 pass
 
@@ -433,6 +438,9 @@ async def lifespan(app: FastAPI):
     alert_task    = asyncio.create_task(periodic_alert_task())
     poll_task     = asyncio.create_task(integration_poll_task(process_position_callback))
     schedule_task = asyncio.create_task(periodic_schedule_task())
+    register_task("alert_engine", alert_task)
+    register_task("integration_polling", poll_task)
+    register_task("schedule_runner", schedule_task)
     logger.info("Routario Platform started successfully")
 
     yield

@@ -33,6 +33,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Callable, Coroutine, Any
 from core.database import get_db
+from core.runtime_health import mark_task_error, mark_task_success
 from sqlalchemy import select, update
 from models.models import Device, user_device_association, PositionRecord
 from integrations.integration_model import IntegrationAccount
@@ -164,6 +165,7 @@ async def integration_poll_task(
         await _init_last_seen(get_db())
         logger.info(f"Integration engine: seeded last-seen for {len(_last_seen_db)} devices")
     except Exception as e:
+        mark_task_error("integration_polling", e)
         logger.error(f"Integration engine: failed to seed last-seen: {e}", exc_info=True)
 
     TICK_SECONDS = 5
@@ -171,7 +173,9 @@ async def integration_poll_task(
     while True:
         try:
             await _run_poll_cycle(position_callback)
+            mark_task_success("integration_polling")
         except Exception as e:
+            mark_task_error("integration_polling", e)
             logger.error(f"Integration poll cycle error: {e}", exc_info=True)
 
         await asyncio.sleep(TICK_SECONDS)

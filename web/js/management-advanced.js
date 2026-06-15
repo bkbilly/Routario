@@ -479,7 +479,7 @@ function rtpRenderRoutesTable() {
     if (count) count.textContent = `${rows.length} route${rows.length !== 1 ? 's' : ''}`;
     rtpUpdateSortHeaders('section-routes', _rtpRouteSort);
     body.innerHTML = rows.length ? rows.map(r => `
-        <tr class="device-row" onclick="rtpEditRoute(${r.id})">
+        <tr class="device-row" ondblclick="rtpEditRoute(${r.id})" style="cursor:pointer;">
             <td>${rtpEsc(r.name)}</td>
             <td><span class="proto-badge">${rtpEsc(r.status)}</span></td>
             <td>${rtpEsc(rtpRouteValue(r, 'vehicle') || '-')}</td>
@@ -603,8 +603,12 @@ function rtpRenderBillingTable() {
         rtpUpdateSortHeaders('section-billing', _rtpBillingSort);
         body.innerHTML = rows.length ? rows.map(p => {
             const assigned = rtpCompaniesForPlan(p.id);
+            const rowAction = assigned.length ? `rtpOpenPlanDetailsModal(${p.id})` : `rtpEditPlan(${p.id})`;
+            const detailsButton = assigned.length
+                ? `<button class="btn btn-secondary" onclick="rtpOpenPlanDetailsModal(${p.id})"><i class="mdi mdi-eye"></i> Details</button>`
+                : '';
             return `
-                <tr class="device-row" onclick="rtpEditPlan(${p.id})">
+                <tr class="device-row" ondblclick="${rowAction}" style="cursor:pointer;">
                     <td>${rtpEsc(p.name)}</td>
                     <td>${rtpMoney(p.base_price_cents, p.currency)}</td>
                     <td>${p.included_devices} devices<br>${p.included_positions} positions<br>${p.included_api_calls} API calls</td>
@@ -612,7 +616,7 @@ function rtpRenderBillingTable() {
                     <td>${assigned.length ? assigned.map(c => rtpEsc(c.name)).join('<br>') : '<span class="stack-item-meta">Unassigned</span>'}</td>
                     <td style="text-align:center;">
                         <div class="table-actions" onclick="event.stopPropagation()">
-                            <button class="btn btn-secondary" onclick="rtpOpenPlanDetailsModal(${p.id})"><i class="mdi mdi-eye"></i> Details</button>
+                            ${detailsButton}
                             <button class="btn btn-secondary" onclick="rtpEditPlan(${p.id})"><i class="mdi mdi-pencil"></i> Edit</button>
                             <button class="icon-btn-danger" onclick="rtpDeletePlan(${p.id})" title="Delete"><i class="mdi mdi-delete"></i></button>
                         </div>
@@ -1050,22 +1054,143 @@ function rtpRenderHealthTable() {
     body.innerHTML = rows.length ? rows.map(row => `
         <tr>
             <td>${rtpEsc(row.name)}</td>
-            <td><span class="proto-badge">${row.ok ? 'ok' : row.optional ? 'optional' : 'fail'}</span></td>
+            <td><span class="proto-badge">${rtpHealthStatus(row)}</span></td>
             <td>${row.latency_ms ? `${row.latency_ms} ms` : '-'}</td>
-            <td>${rtpEsc(row.error || (row.degraded ? 'degraded' : ''))}</td>
+            <td>${rtpHealthDetails(row)}</td>
         </tr>
     `).join('') : '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted);">No health checks match.</td></tr>';
 }
 
+function rtpListenerLabel(listener) {
+    if (!listener) return '';
+    const transport = listener.protocol_type || listener.type || '';
+    const port = listener.port ? `:${listener.port}` : '';
+    return [listener.protocol, transport].filter(Boolean).join('/') + port;
+}
+
+function rtpHealthDetails(row) {
+    if (row.error) return rtpEsc(row.error);
+    if (row.degraded) return 'degraded';
+
+    if (row.name === 'protocol_listeners') {
+        const parts = [];
+        if (row.unknown_protocols?.length) {
+            parts.push(`Unknown: ${row.unknown_protocols.map(rtpEsc).join(', ')}`);
+        }
+        if (row.missing_listeners?.length) {
+            parts.push(`Missing: ${row.missing_listeners.map(l => rtpEsc(rtpListenerLabel(l))).join(', ')}`);
+        }
+        if (row.unhealthy_listeners?.length) {
+            parts.push(`Stopped: ${row.unhealthy_listeners.map(l => rtpEsc(rtpListenerLabel(l))).join(', ')}`);
+        }
+        if (row.unexpected_listeners?.length) {
+            parts.push(`Unexpected: ${row.unexpected_listeners.map(l => rtpEsc(rtpListenerLabel(l))).join(', ')}`);
+        }
+        if (row.integration_protocols?.length) {
+            parts.push(`Integration-only: ${row.integration_protocols.map(rtpEsc).join(', ')}`);
+        }
+        if (!parts.length) {
+            const active = row.active_protocols?.length ? row.active_protocols.join(', ') : 'none';
+            const running = row.running_listeners?.length ? row.running_listeners.map(rtpListenerLabel).join(', ') : 'none';
+            parts.push(`Active: ${rtpEsc(active)}; Running: ${rtpEsc(running)}`);
+        }
+        return parts.join('<br>');
+    }
+
+    if (row.name === 'background_tasks' && row.tasks) {
+        return Object.entries(row.tasks).map(([name, task]) => {
+            const status = task.ok ? 'ok' : 'fail';
+            const age = task.last_success_age_seconds == null ? 'no successful loop yet' : `${task.last_success_age_seconds}s since success`;
+            const error = task.last_error ? `; ${task.last_error}` : '';
+            return `${rtpEsc(name)}: ${status}, ${rtpEsc(age)}${rtpEsc(error)}`;
+        }).join('<br>');
+    }
+
+    if (row.name === 'ingestion') {
+        const latest = row.latest_position_age_seconds == null ? 'none' : `${row.latest_position_age_seconds}s ago`;
+        return `Active: ${row.active_devices ?? 0}; Online: ${row.online_devices ?? 0}; Latest: ${rtpEsc(latest)}; Stale >15m: ${row.stale_over_15m_count ?? 0}; Never seen: ${row.never_seen_count ?? 0}`;
+    }
+
+    if (row.name === 'integration_accounts') {
+        if (!row.accounts?.length) return 'No active integration accounts';
+        const errored = row.accounts.filter(a => a.last_error);
+        const sample = (errored.length ? errored : row.accounts).slice(0, 5).map(a => {
+            const devices = `${a.active_device_count ?? 0} device${a.active_device_count === 1 ? '' : 's'}`;
+            const auth = a.last_auth_at ? `auth ${new Date(a.last_auth_at).toLocaleString()}` : 'not authenticated yet';
+            const error = a.last_error ? `; ${a.last_error}` : '';
+            return `${rtpEsc(a.provider_id)}/${rtpEsc(a.account_label || 'default')}: ${devices}, ${rtpEsc(auth)}${rtpEsc(error)}`;
+        });
+        return `Accounts: ${row.active_accounts ?? 0}; Errors: ${row.accounts_with_errors ?? 0}<br>${sample.join('<br>')}`;
+    }
+
+    if (row.name === 'disk_capacity') {
+        return (row.paths || []).map(p => {
+            const used = p.used_percent == null ? '?' : `${p.used_percent}%`;
+            const free = p.free_bytes == null ? '' : `, free ${rtpFormatBytes(p.free_bytes)}`;
+            const state = p.ok ? (p.degraded ? 'degraded' : 'ok') : 'critical';
+            const error = p.error ? `; ${p.error}` : '';
+            return `${rtpEsc(p.label || p.path)}: ${state}, used ${used}${free}${rtpEsc(error)}`;
+        }).join('<br>');
+    }
+
+    if (row.name === 'database_pool') {
+        const parts = [
+            row.database_type,
+            row.pool_class,
+            row.size != null ? `size ${row.size}` : null,
+            row.checkedout != null ? `checked out ${row.checkedout}` : null,
+            row.overflow != null ? `overflow ${row.overflow}` : null,
+        ].filter(Boolean);
+        return `${rtpEsc(parts.join('; '))}${row.status ? `<br>${rtpEsc(row.status)}` : ''}`;
+    }
+
+    if (row.name === 'redis_mode') {
+        const error = row.error ? `; ${row.error}` : '';
+        return `Mode: ${rtpEsc(row.mode || 'unknown')}; Available: ${row.available ? 'yes' : 'no'}${rtpEsc(error)}`;
+    }
+
+    if (row.name === 'runtime') {
+        return [
+            `Version: ${row.app_version || '-'}`,
+            `Commit: ${row.git_commit || '-'}`,
+            `Uptime: ${row.uptime_seconds ?? 0}s`,
+            `Python: ${row.python_version || '-'}`,
+            `DB: ${row.database_type || '-'}`,
+        ].map(rtpEsc).join('; ');
+    }
+
+    return '';
+}
+
+function rtpFormatBytes(bytes) {
+    const value = Number(bytes);
+    if (!Number.isFinite(value)) return '-';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let size = value;
+    let unit = 0;
+    while (size >= 1024 && unit < units.length - 1) {
+        size /= 1024;
+        unit += 1;
+    }
+    return `${size.toFixed(unit ? 1 : 0)} ${units[unit]}`;
+}
+
 function rtpHealthValue(row, col) {
-    const status = row.ok ? 'ok' : row.optional ? 'optional' : 'fail';
+    const status = rtpHealthStatus(row);
     const values = {
         name: row.name,
         status,
         latency: Number(row.latency_ms) || 0,
-        details: row.error || (row.degraded ? 'degraded' : ''),
+        details: row.error || (row.degraded ? 'degraded' : JSON.stringify(row)),
     };
     return values[col];
+}
+
+function rtpHealthStatus(row) {
+    if (row.degraded) return 'degraded';
+    if (row.ok) return 'ok';
+    if (row.optional) return 'optional';
+    return 'fail';
 }
 
 function rtpSortHealth(col) {
