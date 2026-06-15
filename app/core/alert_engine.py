@@ -16,6 +16,7 @@ import rule_engine
 from models import Device, DeviceState, User, AlertHistory
 from models.schemas import AlertCreate, AlertType, Severity, NormalizedPosition
 from core.database import get_db
+from core.runtime_health import mark_task_error, mark_task_success
 from alerts import ALERT_REGISTRY
 from core.push_notifications import get_push_service
 from notifications import get_channel
@@ -311,7 +312,9 @@ async def periodic_alert_task():
                             await engine._dispatch_alert(device.users, device, result)
                     except Exception as e:
                         logger.error(f"Periodic alert check error ({alert_key}): {e}")
+            mark_task_success("alert_engine")
         except Exception as e:
+            mark_task_error("alert_engine", e)
             logger.error(f"Periodic alert task error: {e}")
 
 # Global singleton

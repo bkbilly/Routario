@@ -9,6 +9,7 @@ from datetime import datetime
 from sqlalchemy import delete, select
 
 from core.database import get_db
+from core.runtime_health import mark_task_error, mark_task_success
 from models.models import (
     ScheduledReport,
     ScheduledReportRun,
@@ -126,10 +127,12 @@ async def periodic_schedule_task() -> None:
 
             for schedule in due:
                 await _execute(schedule.id)
+            mark_task_success("schedule_runner")
 
         except asyncio.CancelledError:
             break
         except Exception as exc:
+            mark_task_error("schedule_runner", exc)
             logger.error("Schedule runner error: %s", exc, exc_info=True)
 
         await asyncio.sleep(_CHECK_INTERVAL)
