@@ -18,13 +18,22 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <link rel="stylesheet" href="css/user-settings.css">
     <script src="js/settings-nav.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
     <div class="container">
+        <div class="settings-tabs" id="settingsTabs">
+            <button class="settings-tab active" onclick="switchSettingsTab('profile')" id="settingsTabProfile"><i class="mdi mdi-account"></i> Profile</button>
+            <button class="settings-tab" onclick="switchSettingsTab('notifications')" id="settingsTabNotifications"><i class="mdi mdi-bell"></i> Notifications</button>
+            <button class="settings-tab" onclick="switchSettingsTab('webhooks')" id="settingsTabWebhooks"><i class="mdi mdi-link-variant"></i> Webhooks</button>
+            <button class="settings-tab" onclick="switchSettingsTab('apiKeys')" id="settingsTabApiKeys" style="display:none;"><i class="mdi mdi-key-variant"></i> API Keys</button>
+            <button class="settings-tab" onclick="switchSettingsTab('mfa')" id="settingsTabMfa" style="display:none;"><i class="mdi mdi-shield-key"></i> MFA</button>
+            <button class="settings-tab" onclick="switchSettingsTab('admin')" id="settingsTabAdmin" style="display:none;"><i class="mdi mdi-shield"></i> Admin</button>
+        </div>
 
         <form onsubmit="saveSettings(event)">
             <!-- Notifications -->
-            <div class="card">
+            <div class="card settings-section" id="settings-section-notifications" style="display:none;">
                 <div class="card-header">
                     <div class="card-icon"><i class="mdi mdi-email"></i></div>
                     <h2 class="card-title">Notification Channels</h2>
@@ -68,7 +77,7 @@
             </div>
 
             <!-- Webhooks -->
-            <div class="card">
+            <div class="card settings-section" id="settings-section-webhooks" style="display:none;">
                 <div class="card-header">
                     <div class="card-icon"><i class="mdi mdi-link-variant"></i></div>
                     <h2 class="card-title">Webhooks</h2>
@@ -100,7 +109,7 @@
             </div>
 
             <!-- Account Info -->
-            <div class="card" id="accountInfoCard" style="display:none;">
+            <div class="card settings-section" id="settings-section-profile">
                 <div class="card-header">
                     <div class="card-icon"><i class="mdi mdi-account"></i></div>
                     <h2 class="card-title">Account Information</h2>
@@ -134,7 +143,53 @@
             </div>
 
             <!-- Admin Panel (Hidden by default) -->
-            <div class="card" id="adminPanel" style="display: none;">
+            <div class="card settings-section" id="settings-section-apiKeys" style="display:none;">
+                <div class="card-header">
+                    <div class="card-icon"><i class="mdi mdi-key-variant"></i></div>
+                    <h2 class="card-title">API Keys</h2>
+                </div>
+                <p class="card-description">
+                    Create scoped REST API keys for integrations. New keys are shown once.
+                    <a href="/docs" target="_blank" style="color:var(--accent-primary);">Open Swagger REST API documentation</a>
+                </p>
+                <button type="button" class="btn btn-primary" onclick="openApiKeyModal()"><i class="mdi mdi-key-plus"></i> Create Key</button>
+                <div id="settingsApiKeyReveal" class="secret-box" style="display:none;"></div>
+                <div class="table-wrapper" style="margin-top:1rem;">
+                    <table class="channel-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Prefix</th>
+                                <th>Scopes</th>
+                                <th>Last Used</th>
+                                <th style="text-align:right;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="settingsApiKeyTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card settings-section" id="settings-section-mfa" style="display:none;">
+                <div class="card-header">
+                    <div class="card-icon"><i class="mdi mdi-shield-key"></i></div>
+                    <h2 class="card-title">Multi-Factor Authentication</h2>
+                </div>
+                <p class="card-description">Use an authenticator app or recovery code as a second factor when signing in.</p>
+                <div id="settingsMfaStatus" class="settings-list"></div>
+                <div class="form-group" id="settingsMfaCodeGroup" style="max-width:280px;margin-top:1rem;">
+                    <label class="form-label" id="settingsMfaCodeLabel">Authenticator or Recovery Code</label>
+                    <input type="text" id="settingsMfaCode" class="form-input" placeholder="123456" inputmode="numeric">
+                </div>
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:1rem;">
+                    <button type="button" class="btn btn-secondary" id="settingsMfaSetupBtn" onclick="setupSettingsMfa()"><i class="mdi mdi-qrcode"></i> Setup</button>
+                    <button type="button" class="btn btn-primary" id="settingsMfaEnableBtn" onclick="enableSettingsMfa()"><i class="mdi mdi-shield-check"></i> Enable</button>
+                    <button type="button" class="btn btn-danger" id="settingsMfaDisableBtn" onclick="disableSettingsMfa()"><i class="mdi mdi-shield-off"></i> Disable</button>
+                </div>
+                <div id="settingsMfaSetupBox" class="secret-box" style="display:none;"></div>
+            </div>
+
+            <div class="card settings-section" id="settings-section-admin" style="display: none;">
                 <div class="card-header">
                     <div class="card-icon card-icon-warning"><i class="mdi mdi-shield"></i></div>
                     <div style="flex:1;">
@@ -196,6 +251,27 @@
     </div>
 
     <div class="toast-container" id="toastContainer"></div>
+
+    <div class="modal" id="apiKeyModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Create API Key</h2>
+                <button type="button" class="modal-close" onclick="closeApiKeyModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Key Name</label>
+                <input type="text" id="settingsApiKeyName" class="form-input" placeholder="Automation key">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Scopes</label>
+                <div id="settingsApiKeyScopes" class="scope-grid"></div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeApiKeyModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="createSettingsApiKey()"><i class="mdi mdi-key-plus"></i> Create Key</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Scripts -->
     <script src="js/config.js"></script>

@@ -20,6 +20,12 @@ ALL_PERMISSIONS: List[str] = [
     "live_share",
     "view_management",
     "manage_users",
+    "manage_routes",
+    "manage_billing",
+    "view_audit",
+    "view_health",
+    "manage_api_keys",
+    "manage_mfa",
 ]
 
 PERMISSION_GROUPS = [
@@ -67,6 +73,17 @@ PERMISSION_GROUPS = [
         "perms": [
             ("view_management", "View Management"),
             ("manage_users",    "Manage Users"),
+            ("manage_routes",   "Manage Routes"),
+            ("manage_billing",  "Manage Billing"),
+            ("view_audit",      "View Audit Log"),
+            ("view_health",     "View Health Checks"),
+        ],
+    },
+    {
+        "label": "User Settings",
+        "perms": [
+            ("manage_api_keys", "Manage API Keys"),
+            ("manage_mfa",      "Manage MFA"),
         ],
     },
 ]

@@ -16,12 +16,13 @@ Access rules:
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from sqlalchemy import select, update, and_
 from sqlalchemy.orm import selectinload
 
 from core.database import get_db
 from core.auth import get_current_user, require_admin, require_company_admin, verify_device_access, require_permission
+from core.audit import write_audit_log
 from integrations.engine import clear_device_state, evict_auth_cache
 from integrations.integration_model import IntegrationAccount
 from models import User, Device, DeviceState, user_device_association
@@ -67,6 +68,7 @@ async def get_devices(current_user: User = Depends(require_permission("view_devi
 @router.post("", response_model=DeviceResponse)
 async def create_device(
     device_data: DeviceCreate,
+    request: Request,
     assign_to: Optional[int] = Query(None, description="User ID to assign device to"),
     caller: User = Depends(require_company_admin),
     _: User = Depends(require_permission("edit_devices")),
@@ -83,6 +85,7 @@ async def create_device(
     device = await db.create_device(device_data)
     target_user = assign_to if assign_to else caller.id
     await db.add_device_to_user(target_user, device.id)
+    await write_audit_log("device.created", actor=caller, company_id=device.company_id, target_type="device", target_id=device.id, request=request, metadata={"imei": device.imei, "protocol": device.protocol})
     return device
 
 
@@ -103,6 +106,7 @@ async def get_device(
 async def update_device(
     device_id: int,
     device_data: DeviceCreate,
+    request: Request,
     new_odometer: Optional[float] = Query(None),
     caller: User = Depends(verify_device_access),
 ):
@@ -129,11 +133,12 @@ async def update_device(
                 .where(DeviceState.device_id == device_id)
                 .values(total_odometer=new_odometer)
             )
+    await write_audit_log("device.updated", actor=caller, company_id=device.company_id, target_type="device", target_id=device.id, request=request)
     return device
 
 
 @router.delete("/{device_id}")
-async def delete_device(device_id: int, admin: User = Depends(require_company_admin), _: User = Depends(require_permission("edit_devices"))):
+async def delete_device(device_id: int, request: Request, admin: User = Depends(require_company_admin), _: User = Depends(require_permission("edit_devices"))):
     """Delete a device and all associated data. Admin only."""
     db = get_db()
 
@@ -152,6 +157,7 @@ async def delete_device(device_id: int, admin: User = Depends(require_company_ad
     success = await db.delete_device(device_id)
     if not success:
         raise HTTPException(status_code=404, detail="Device not found")
+    await write_audit_log("device.deleted", actor=admin, company_id=device.company_id, target_type="device", target_id=device_id, request=request, metadata={"imei": imei})
 
     # Clear in-memory polling state for this IMEI
     clear_device_state(imei)

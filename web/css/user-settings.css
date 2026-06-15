@@ -101,12 +101,133 @@ h1 {
 
 /* ── Cards ─────────────────────────────────────────────────── */
 
+.settings-tabs {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 1.25rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.settings-tabs::-webkit-scrollbar { display: none; }
+
+.settings-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.65rem 1.1rem;
+    font-family: var(--font-display);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color var(--transition-base), border-color var(--transition-base);
+    margin-bottom: -1px;
+}
+
+.settings-tab:hover { color: var(--text-primary); }
+
+.settings-tab.active {
+    color: var(--accent-primary);
+    border-bottom-color: var(--accent-primary);
+}
+
 .card {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: 16px;
     padding: 2rem;
     margin-bottom: 2rem;
+}
+
+.settings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+
+.settings-list-item {
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 0.75rem;
+}
+
+.settings-list-title {
+    font-weight: 700;
+    margin-bottom: 0.2rem;
+}
+
+.settings-list-meta {
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+}
+
+.scope-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+    padding: 0.65rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.scope-option {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid var(--border-color);
+    border-radius: 7px;
+    background: var(--bg-secondary);
+    cursor: pointer;
+    min-width: 0;
+}
+
+.scope-option input {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent-primary);
+    flex-shrink: 0;
+}
+
+.scope-option span {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+    .scope-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.secret-box {
+    margin-top: 0.8rem;
+    border: 1px solid rgba(245,158,11,0.35);
+    background: rgba(245,158,11,0.08);
+    color: var(--text-primary);
+    border-radius: 8px;
+    padding: 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    word-break: break-all;
+}
+
+#settingsMfaQr {
+    width: fit-content;
+    padding: 0.75rem;
+    background: #fff;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
 }
 
 .card-header {

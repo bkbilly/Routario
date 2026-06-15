@@ -9,12 +9,13 @@ from pathlib import Path
 import re
 from typing import List
 
-from fastapi import APIRouter, HTTPException, Query, Depends, File, UploadFile
+from fastapi import APIRouter, HTTPException, Query, Depends, File, UploadFile, Request
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from core.database import get_db
 from core.auth import require_admin
+from core.audit import write_audit_log
 from models import Company, User, Device, DeviceState
 from models.schemas import CompanyCreate, CompanyUpdate, CompanyResponse, UserResponse, DeviceResponse
 
@@ -118,12 +119,14 @@ async def get_all_companies(admin: User = Depends(require_admin)):
 
 
 @router.post("", response_model=CompanyResponse)
-async def create_company(data: CompanyCreate, admin: User = Depends(require_admin)):
+async def create_company(data: CompanyCreate, request: Request, admin: User = Depends(require_admin)):
     db = get_db()
     data.app_name = _clean_app_name(data.app_name)
     data.login_slug = _clean_login_slug(data.login_slug)
     await _ensure_login_slug_available(data.login_slug)
-    return await db.create_company(data)
+    company = await db.create_company(data)
+    await write_audit_log("company.created", actor=admin, company_id=company.id, target_type="company", target_id=company.id, request=request)
+    return company
 
 
 @router.get("/{company_id}", response_model=CompanyResponse)
@@ -136,7 +139,7 @@ async def get_company(company_id: int, admin: User = Depends(require_admin)):
 
 
 @router.put("/{company_id}", response_model=CompanyResponse)
-async def update_company(company_id: int, data: CompanyUpdate, admin: User = Depends(require_admin)):
+async def update_company(company_id: int, data: CompanyUpdate, request: Request, admin: User = Depends(require_admin)):
     db = get_db()
     if data.app_name is not None:
         data.app_name = _clean_app_name(data.app_name)
@@ -146,6 +149,7 @@ async def update_company(company_id: int, data: CompanyUpdate, admin: User = Dep
     company = await db.update_company(company_id, data)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+    await write_audit_log("company.updated", actor=admin, company_id=company_id, target_type="company", target_id=company_id, request=request)
     return company
 
 
@@ -216,11 +220,12 @@ async def delete_company_badge(company_id: int, admin: User = Depends(require_ad
 
 
 @router.delete("/{company_id}")
-async def delete_company(company_id: int, admin: User = Depends(require_admin)):
+async def delete_company(company_id: int, request: Request, admin: User = Depends(require_admin)):
     db = get_db()
     success = await db.delete_company(company_id)
     if not success:
         raise HTTPException(status_code=404, detail="Company not found")
+    await write_audit_log("company.deleted", actor=admin, company_id=company_id, target_type="company", target_id=company_id, request=request)
     return {"status": "deleted"}
 
 

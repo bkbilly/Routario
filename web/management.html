@@ -9,8 +9,11 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="css/device-management.css">
     <script src="js/settings-nav.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         .mgmt-tabs {
             display: flex;
@@ -55,6 +58,194 @@
             #userModal .modal-content { max-width: 95vw; }
             .drv-btn-label { display: none; }
         }
+        .admin-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 1rem;
+        }
+        .admin-panel {
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .admin-panel h3 {
+            font-size: 1rem;
+            margin-bottom: 0.85rem;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.8rem;
+            margin-bottom: 0.9rem;
+        }
+        .form-grid label span {
+            display: block;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            margin-bottom: 0.3rem;
+            font-weight: 600;
+        }
+        .stack-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+        }
+        .stack-item {
+            border: 1px solid var(--border-color);
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 0.75rem;
+        }
+        .stack-item-title {
+            font-weight: 700;
+            margin-bottom: 0.2rem;
+        }
+        .stack-item-meta {
+            color: var(--text-secondary);
+            font-size: 0.82rem;
+        }
+        .secret-box {
+            margin-top: 0.8rem;
+            border: 1px solid rgba(245,158,11,0.35);
+            background: rgba(245,158,11,0.08);
+            color: var(--text-primary);
+            border-radius: 8px;
+            padding: 0.75rem;
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            word-break: break-all;
+        }
+        .route-stop-row {
+            display: grid;
+            grid-template-columns: 36px minmax(120px, 1fr) 110px 110px 42px;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .route-stop-row label {
+            min-width: 0;
+        }
+        .route-order-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            align-self: stretch;
+            justify-content: center;
+        }
+        .route-order-controls .btn {
+            width: 32px;
+            height: 25px;
+            min-height: 0;
+            padding: 0 !important;
+            justify-content: center;
+            border-radius: 6px;
+        }
+        .route-order-controls i {
+            margin: 0;
+            line-height: 1;
+        }
+        #routePlanMap {
+            height: 360px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-bottom: 0.85rem;
+            background: var(--bg-tertiary);
+            overflow: hidden;
+        }
+        .icon-btn-danger {
+            width: 36px;
+            height: 36px;
+            padding: 0 !important;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent-danger) !important;
+            color: #fff !important;
+            border: 1px solid rgba(255,255,255,0.12) !important;
+            border-radius: 8px;
+        }
+        .icon-btn-danger i {
+            margin: 0;
+            line-height: 1;
+            font-size: 1rem;
+        }
+        .icon-btn-danger:hover {
+            background: #dc2626 !important;
+            transform: translateY(-1px);
+        }
+        .table-actions {
+            display: inline-flex;
+            gap: 0.35rem;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .table-actions .btn {
+            padding: 0.38rem 0.55rem;
+            min-height: 34px;
+        }
+        .company-checklist {
+            display: grid;
+            gap: 0.35rem;
+            max-height: 190px;
+            overflow: auto;
+            border: 1px solid var(--border-color);
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 0.5rem;
+        }
+        .company-check-item {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            padding: 0.45rem 0.55rem;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+        .company-check-item:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .company-check-item input {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--accent-primary);
+        }
+        .admin-filter-row {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            margin-bottom: 0.85rem;
+            flex-wrap: wrap;
+        }
+        .admin-filter-row .search-input-wrap {
+            flex: 1;
+            min-width: 220px;
+        }
+        @media (max-width: 800px) {
+            .admin-grid, .form-grid { grid-template-columns: 1fr; }
+            .route-stop-row {
+                grid-template-columns: 36px minmax(0, 1fr) 42px;
+                align-items: start;
+            }
+            .route-stop-row .route-order-controls {
+                grid-column: 1;
+                grid-row: 1 / span 3;
+            }
+            .route-stop-row label:nth-of-type(1) {
+                grid-column: 2;
+                grid-row: 1;
+            }
+            .route-stop-row label:nth-of-type(2),
+            .route-stop-row label:nth-of-type(3) {
+                grid-column: 2 / -1;
+            }
+            .route-stop-row .icon-btn-danger {
+                grid-column: 3;
+                grid-row: 1;
+            }
+        }
     </style>
 </head>
 <body>
@@ -76,6 +267,18 @@
         </button>
         <button class="mgmt-tab" id="mgmtTabClips" onclick="switchMgmtSection('clips')" style="display:none;">
             <i class="mdi mdi-video"></i> Clips
+        </button>
+        <button class="mgmt-tab" id="mgmtTabRoutes" onclick="switchMgmtSection('routes')" style="display:none;">
+            <i class="mdi mdi-map-marker-path"></i> Routes
+        </button>
+        <button class="mgmt-tab" id="mgmtTabBilling" onclick="switchMgmtSection('billing')" style="display:none;">
+            <i class="mdi mdi-credit-card-outline"></i> Billing
+        </button>
+        <button class="mgmt-tab" id="mgmtTabAudit" onclick="switchMgmtSection('audit')" style="display:none;">
+            <i class="mdi mdi-clipboard-text-clock"></i> Audit
+        </button>
+        <button class="mgmt-tab" id="mgmtTabHealth" onclick="switchMgmtSection('health')" style="display:none;">
+            <i class="mdi mdi-heart-pulse"></i> Health
         </button>
     </div>
 
@@ -239,6 +442,117 @@
                         </td>
                     </tr>
                 </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ── ROUTES SECTION ─────────────────────────────────────────── -->
+    <div id="section-routes" style="display:none;">
+        <div class="devices-search-bar">
+            <div class="search-input-wrap">
+                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                <input type="text" id="routesSearch" class="search-input" placeholder="Search routes..." oninput="rtpRenderRoutesTable()">
+            </div>
+            <span class="devices-count" id="routesCount"></span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="devices-table">
+                <thead>
+                    <tr>
+                        <th data-sort="name" data-sort-dir="asc" onclick="rtpSortRoutes('name')">Name</th>
+                        <th data-sort="status" onclick="rtpSortRoutes('status')">Status</th>
+                        <th data-sort="vehicle" onclick="rtpSortRoutes('vehicle')">Vehicle</th>
+                        <th data-sort="driver" onclick="rtpSortRoutes('driver')">Driver</th>
+                        <th data-sort="stops" onclick="rtpSortRoutes('stops')">Stops</th>
+                        <th data-sort="distance" onclick="rtpSortRoutes('distance')">Distance</th>
+                        <th data-sort="duration" onclick="rtpSortRoutes('duration')">Duration</th>
+                        <th style="width:300px;text-align:center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="routesTableBody">
+                    <tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading routes...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ── API KEYS SECTION ──────────────────────────────────────── -->
+    <!-- ── BILLING SECTION ───────────────────────────────────────── -->
+    <div id="section-billing" style="display:none;">
+        <div class="devices-search-bar">
+            <div class="search-input-wrap">
+                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                <input type="text" id="billingSearch" class="search-input" placeholder="Search billing plans..." oninput="rtpRenderBillingTable()">
+            </div>
+            <span class="devices-count" id="billingCount"></span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="devices-table">
+                <thead>
+                    <tr>
+                        <th data-sort="name" data-sort-dir="asc" onclick="rtpSortBilling('name')">Plan</th>
+                        <th data-sort="base" onclick="rtpSortBilling('base')">Base</th>
+                        <th data-sort="included" onclick="rtpSortBilling('included')">Included</th>
+                        <th data-sort="overage" onclick="rtpSortBilling('overage')">Overage</th>
+                        <th data-sort="companies" onclick="rtpSortBilling('companies')">Assigned Companies</th>
+                        <th style="width:360px;text-align:center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="billingPlansTableBody">
+                    <tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading plans...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ── AUDIT SECTION ─────────────────────────────────────────── -->
+    <div id="section-audit" style="display:none;">
+        <div class="devices-search-bar">
+            <div class="search-input-wrap">
+                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                <input type="text" id="auditSearch" class="search-input" placeholder="Search audit logs..." oninput="rtpRenderAuditTable()">
+            </div>
+            <span class="devices-count" id="auditCount"></span>
+            <button class="btn btn-secondary" onclick="rtpLoadAudit()"><i class="mdi mdi-refresh"></i> Refresh</button>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="devices-table">
+                <thead>
+                    <tr>
+                        <th data-sort="time" data-sort-dir="desc" onclick="rtpSortAudit('time')">Time</th>
+                        <th data-sort="action" onclick="rtpSortAudit('action')">Action</th>
+                        <th data-sort="user" onclick="rtpSortAudit('user')">User</th>
+                        <th data-sort="company" onclick="rtpSortAudit('company')">Company</th>
+                        <th data-sort="target" onclick="rtpSortAudit('target')">Target</th>
+                        <th data-sort="ip" onclick="rtpSortAudit('ip')">IP</th>
+                    </tr>
+                </thead>
+                <tbody id="auditTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ── HEALTH SECTION ────────────────────────────────────────── -->
+    <div id="section-health" style="display:none;">
+        <div class="devices-search-bar">
+            <div class="search-input-wrap">
+                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                <input type="text" id="healthSearch" class="search-input" placeholder="Search health checks..." oninput="rtpRenderHealthTable()">
+            </div>
+            <span class="devices-count" id="healthCount"></span>
+            <button class="btn btn-secondary" onclick="rtpLoadHealth()"><i class="mdi mdi-refresh"></i> Refresh</button>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="devices-table">
+                <thead>
+                    <tr>
+                        <th data-sort="name" data-sort-dir="asc" onclick="rtpSortHealth('name')">Check</th>
+                        <th data-sort="status" onclick="rtpSortHealth('status')">Status</th>
+                        <th data-sort="latency" onclick="rtpSortHealth('latency')">Latency</th>
+                        <th data-sort="details" onclick="rtpSortHealth('details')">Details</th>
+                    </tr>
+                </thead>
+                <tbody id="healthTableBody"></tbody>
             </table>
         </div>
     </div>
@@ -876,6 +1190,93 @@
     </div>
 </div>
 
+<div class="modal" id="routeModal">
+    <div class="modal-content wide">
+        <div class="modal-header">
+            <h2 class="modal-title" id="routeModalTitle">Route Planner</h2>
+            <button type="button" class="modal-close" onclick="rtpCloseRouteModal()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
+            <div id="routePlanMap"></div>
+            <div class="form-grid">
+                <label><span>Route Name</span><input id="rpName" class="form-input" placeholder="Morning deliveries"></label>
+                <label><span>Vehicle</span><select id="rpDevice" class="form-input"></select></label>
+                <label><span>Driver</span><select id="rpDriver" class="form-input"></select></label>
+            </div>
+            <div id="rpStops" class="stack-list"></div>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.85rem;">
+                <button type="button" class="btn btn-secondary" id="rpAddStopBtn" onclick="rtpAddStop()"><i class="mdi mdi-plus"></i> Blank Stop</button>
+                <button type="button" class="btn btn-secondary" id="rpNewBtn" onclick="rtpClearRouteForm()"><i class="mdi mdi-file-outline"></i> New</button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                <button type="button" class="btn btn-secondary" onclick="rtpCloseRouteModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="rpSaveBtn" onclick="rtpSaveRoute()"><i class="mdi mdi-content-save"></i> <span id="rpSaveLabel">Save Route</span></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="billingPlanModal">
+    <div class="modal-content" style="max-width:820px;height:auto;max-height:90vh;">
+        <div class="modal-header">
+            <h2 class="modal-title" id="billingPlanModalTitle">Billing Plan</h2>
+            <button type="button" class="modal-close" onclick="rtpClosePlanModal()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
+            <div class="form-grid">
+                <label><span>Name</span><input id="billPlanName" class="form-input" placeholder="Growth"><div class="form-help">Internal plan name shown in billing tables and company assignments.</div></label>
+                <label><span>Base Price</span><input id="billBase" class="form-input" type="number" min="0" placeholder="0"><div class="form-help">Fixed monthly amount charged before any usage overages.</div></label>
+                <label><span>Included Devices</span><input id="billIncDevices" class="form-input" type="number" min="0" value="0"><div class="form-help">Active devices included in the base monthly price.</div></label>
+                <label><span>Per Device</span><input id="billDevicePrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Monthly charge for each active device above the included amount.</div></label>
+                <label><span>Included Positions</span><input id="billIncPositions" class="form-input" type="number" min="0" value="0"><div class="form-help">Position messages included per month before overage billing starts.</div></label>
+                <label><span>Per 1000 Positions</span><input id="billPositionPrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Charge per started block of 1000 extra position messages.</div></label>
+                <label><span>Included API Calls</span><input id="billIncApi" class="form-input" type="number" min="0" value="0"><div class="form-help">REST API calls included per month for companies on this plan.</div></label>
+                <label><span>Per 1000 API Calls</span><input id="billApiPrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Charge per started block of 1000 API calls above the included amount.</div></label>
+                <label style="grid-column:1 / -1;">
+                    <span>Assigned Companies</span>
+                    <input id="billPlanCompanySearch" class="form-input" placeholder="Search companies..." oninput="rtpFilterPlanCompanies()" style="margin-bottom:0.5rem;">
+                    <div id="billPlanCompanies" class="company-checklist"></div>
+                    <div class="form-help">A plan can be assigned to multiple companies. Saving updates all selected assignments.</div>
+                </label>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                <button type="button" class="btn btn-secondary" onclick="rtpClosePlanModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="rtpCreatePlan()"><i class="mdi mdi-content-save"></i> <span id="billPlanSaveLabel">Create Plan</span></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="billingPlanDetailsModal">
+    <div class="modal-content" style="max-width:900px;height:auto;max-height:90vh;">
+        <div class="modal-header">
+            <h2 class="modal-title" id="billingPlanDetailsTitle">Billing Plan Details</h2>
+            <button type="button" class="modal-close" onclick="rtpClosePlanDetailsModal()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
+            <div class="form-grid">
+                <label><span>Company</span><select id="billDetailCompany" class="form-input"></select></label>
+                <label><span>Year</span><input id="billDetailYear" class="form-input" type="number"></label>
+                <label><span>Month</span><input id="billDetailMonth" class="form-input" type="number" min="1" max="12"></label>
+            </div>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+                <button type="button" class="btn btn-secondary" onclick="rtpDetailLoadUsage()"><i class="mdi mdi-chart-bar"></i> Load Usage</button>
+                <button type="button" class="btn btn-primary" onclick="rtpDetailGenerateInvoice()"><i class="mdi mdi-file-document-plus"></i> Draft Invoice</button>
+            </div>
+            <div id="billingPlanDetailsResult" class="stack-list"></div>
+        </div>
+        <div class="modal-footer">
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                <button type="button" class="btn btn-secondary" onclick="rtpClosePlanDetailsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="toast-container" id="toastContainer"></div>
 
 <script src="js/config.js"></script>
@@ -888,9 +1289,10 @@
 <script src="js/company-management.js"></script>
 <script src="js/drivers.js"></script>
 <script src="js/users-management.js"></script>
+<script src="js/management-advanced.js"></script>
 <script>
 (function () {
-    const SECTIONS = ['devices', 'companies', 'drivers', 'users', 'clips'];
+    const SECTIONS = ['devices', 'companies', 'drivers', 'users', 'clips', 'routes', 'billing', 'audit', 'health'];
 
     const _plusIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
     const _addActions = {
@@ -898,6 +1300,8 @@
         companies: { label: 'Add Company', fn: 'openAddCompanyModal()' },
         drivers:   { label: 'Add Driver',  fn: 'openDriverModal()' },
         users:     { label: 'Add User',    fn: 'openUserModal()' },
+        routes:    { label: 'Add Route',   fn: 'rtpOpenRouteModal()' },
+        billing:   { label: 'Create Plan', fn: 'rtpOpenPlanModal()' },
     };
 
     const _bellIcon = `<i class="mdi mdi-bell" style="font-size:15px;"></i>`;
@@ -908,7 +1312,28 @@
         companies: null,
         drivers:   'manage_drivers',
         users:     'manage_users',
+        routes:    'manage_routes',
+        billing:   'manage_billing',
     };
+
+    const _sectionPermissions = {
+        devices:   null,
+        companies: null,
+        drivers:   'manage_drivers',
+        users:     'manage_users',
+        clips:     null,
+        routes:    'manage_routes',
+        billing:   'manage_billing',
+        audit:     'view_audit',
+        health:    'view_health',
+    };
+
+    function _canAccessSection(name) {
+        const perm = _sectionPermissions[name];
+        if (name === 'companies') return localStorage.getItem('is_admin') === 'true';
+        if (name === 'users') return hasPermission('manage_users');
+        return !perm || hasPermission(perm);
+    }
 
     function _updateAddAction(name) {
         const el = document.getElementById('snAddAction');
@@ -931,10 +1356,15 @@
         drivers:   () => initDriversSection(),
         users:     () => initUsersSection(),
         clips:     () => initClipsSection(),
+        routes:    () => rtpInitRoutes(),
+        billing:   () => rtpInitBilling(),
+        audit:     () => rtpLoadAudit(),
+        health:    () => rtpLoadHealth(),
     };
 
     function switchMgmtSection(name, pushState) {
         if (!SECTIONS.includes(name)) name = 'devices';
+        if (!_canAccessSection(name)) name = 'devices';
         SECTIONS.forEach(s => {
             document.getElementById('section-' + s).style.display = s === name ? '' : 'none';
             const tab = document.getElementById('mgmtTab' + s.charAt(0).toUpperCase() + s.slice(1));
@@ -959,10 +1389,19 @@
             const ch = document.getElementById('userCompanyHeader');
             if (ch) ch.style.display = '';
         }
-        if ((isAdmin || isCompanyAdmin) && hasPermission('manage_users')) {
+        if (hasPermission('manage_users')) {
             const t = document.getElementById('mgmtTabUsers');
             if (t) t.style.display = '';
         }
+        [
+            ['Routes', 'manage_routes'],
+            ['Billing', 'manage_billing'],
+            ['Audit', 'view_audit'],
+            ['Health', 'view_health'],
+        ].forEach(([name, perm]) => {
+            const t = document.getElementById('mgmtTab' + name);
+            if (t && hasPermission(perm)) t.style.display = '';
+        });
         if (!hasPermission('manage_drivers')) {
             const t = document.getElementById('mgmtTabDrivers');
             if (t) t.style.display = 'none';

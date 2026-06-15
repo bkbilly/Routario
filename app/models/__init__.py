@@ -1,4 +1,10 @@
-from .models import Base, Company, User, Device, DeviceState, PositionRecord, Trip, Geofence, AlertHistory, CommandQueue, user_device_association, LocationShare, Driver, FuelLog, VoiceMessage, VoiceMessageRead, ScheduledReport, ScheduledReportRun
+from .models import (
+    Base, Company, User, Device, DeviceState, PositionRecord, Trip, Geofence,
+    AlertHistory, CommandQueue, user_device_association, LocationShare,
+    Driver, FuelLog, VoiceMessage, VoiceMessageRead, ScheduledReport,
+    ScheduledReportRun, AuditLog, ApiKey, BillingPlan, UsageEvent,
+    BillingInvoice, PlannedRoute, RouteStop,
+)
 from .schemas import (
     NormalizedPosition, DeviceCreate, DeviceResponse, DeviceStateResponse,
     UserCreate, UserUpdate, UserResponse, UserLogin, Token,

@@ -18,7 +18,7 @@ import jwt
 import uvicorn
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
@@ -469,9 +469,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Routario Platform API",
-    description="High-performance GPS tracking and IoT platform",
+    description=(
+        "High-performance GPS tracking and IoT platform.\n\n"
+        "Authentication: create an API key in User Settings -> API Keys, "
+        "click Authorize in Swagger, and paste the `rt_...` key. "
+        "Swagger adds the Bearer prefix automatically."
+    ),
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
 )
 
 app.add_middleware(
@@ -533,6 +540,325 @@ async def devices_page():
 @app.get("/user-settings.html")
 async def settings_page():
     return FileResponse("web/user-settings.html")
+
+@app.get("/docs", include_in_schema=False)
+async def swagger_docs_page():
+    return HTMLResponse("""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Routario REST API</title>
+    <link rel="icon" href="/icons/favicon.ico">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #131825;
+            --bg-tertiary: #1a2035;
+            --bg-hover: #202842;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --accent-primary: #3b82f6;
+            --accent-secondary: #06b6d4;
+            --accent-success: #22c55e;
+            --accent-warning: #f59e0b;
+            --accent-danger: #ef4444;
+            --border-color: #374151;
+            --font-display: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-display);
+        }
+        .rt-docs-nav {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1rem 1.5rem;
+            background: rgba(10, 14, 26, 0.86);
+            border-bottom: 1px solid var(--border-color);
+            backdrop-filter: blur(10px);
+        }
+        .rt-docs-title {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            min-width: 0;
+            font-weight: 800;
+            font-size: 1.25rem;
+        }
+        .rt-docs-title i { color: var(--accent-primary); font-size: 1.45rem; }
+        .rt-docs-title span {
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .rt-docs-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; }
+        .rt-docs-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.55rem 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        .rt-docs-btn:hover {
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+            background: var(--bg-hover);
+        }
+        #swagger-ui { max-width: 1320px; margin: 0 auto; padding: 1rem 1.5rem 2rem; }
+        .swagger-ui { color: var(--text-primary); font-family: var(--font-display); }
+        .swagger-ui .topbar { display: none; }
+        .swagger-ui .info { margin: 1rem 0 1.25rem; }
+        .swagger-ui .info .title {
+            color: var(--text-primary);
+            font-family: var(--font-display);
+            font-size: 1.8rem;
+        }
+        .swagger-ui .info p,
+        .swagger-ui .info li,
+        .swagger-ui .opblock-description-wrapper p,
+        .swagger-ui .opblock-external-docs-wrapper p,
+        .swagger-ui .opblock-title_normal p,
+        .swagger-ui .response-col_description__inner div,
+        .swagger-ui .response-col_description__inner p,
+        .swagger-ui table thead tr td,
+        .swagger-ui table thead tr th,
+        .swagger-ui .parameter__name,
+        .swagger-ui .parameter__type,
+        .swagger-ui .prop-format,
+        .swagger-ui .model-title,
+        .swagger-ui .model {
+            color: var(--text-secondary);
+            font-family: var(--font-display);
+        }
+        .swagger-ui .scheme-container,
+        .swagger-ui section.models,
+        .swagger-ui .opblock,
+        .swagger-ui .dialog-ux .modal-ux {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: none;
+        }
+        .swagger-ui .scheme-container { padding: 1rem; }
+        .swagger-ui .opblock .opblock-summary {
+            border-color: var(--border-color);
+        }
+        .swagger-ui .opblock-tag {
+            color: var(--text-primary);
+            border-bottom-color: var(--border-color);
+            font-family: var(--font-display);
+        }
+        .swagger-ui .opblock-tag:hover { background: var(--bg-hover); }
+        .swagger-ui .opblock .opblock-summary-operation-id,
+        .swagger-ui .opblock .opblock-summary-path,
+        .swagger-ui .opblock .opblock-summary-path__deprecated {
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+        }
+        .swagger-ui .opblock .opblock-summary-description { color: var(--text-secondary); }
+        .swagger-ui .opblock.opblock-get { border-color: rgba(34, 197, 94, 0.45); background: rgba(34, 197, 94, 0.06); }
+        .swagger-ui .opblock.opblock-post { border-color: rgba(59, 130, 246, 0.45); background: rgba(59, 130, 246, 0.06); }
+        .swagger-ui .opblock.opblock-put { border-color: rgba(245, 158, 11, 0.45); background: rgba(245, 158, 11, 0.06); }
+        .swagger-ui .opblock.opblock-delete { border-color: rgba(239, 68, 68, 0.45); background: rgba(239, 68, 68, 0.06); }
+        .swagger-ui .opblock-body,
+        .swagger-ui .responses-inner,
+        .swagger-ui .opblock-section-header {
+            background: transparent !important;
+            box-shadow: none !important;
+        }
+        .swagger-ui .opblock-section-header,
+        .swagger-ui .opblock .opblock-section-header {
+            background: var(--bg-secondary) !important;
+            border-color: var(--border-color) !important;
+        }
+        .swagger-ui .opblock-section-header h4,
+        .swagger-ui .responses-inner h4,
+        .swagger-ui .responses-inner h5,
+        .swagger-ui .tab li button.tablinks,
+        .swagger-ui label {
+            color: var(--text-primary);
+            font-family: var(--font-display);
+        }
+        .swagger-ui input,
+        .swagger-ui textarea,
+        .swagger-ui select {
+            background: var(--bg-tertiary) !important;
+            color: var(--text-primary) !important;
+            border: 1px solid var(--border-color) !important;
+            border-radius: 8px !important;
+            font-family: var(--font-mono);
+        }
+        .swagger-ui textarea.curl,
+        .swagger-ui .highlight-code,
+        .swagger-ui pre,
+        .swagger-ui code {
+            background: #070b14 !important;
+            color: #dbeafe !important;
+            font-family: var(--font-mono) !important;
+        }
+        .swagger-ui .json-schema-2020-12,
+        .swagger-ui .json-schema-2020-12-accordion,
+        .swagger-ui .json-schema-2020-12-accordion__children,
+        .swagger-ui .json-schema-2020-12-body,
+        .swagger-ui .json-schema-2020-12-keyword,
+        .swagger-ui .json-schema-2020-12-property,
+        .swagger-ui .json-schema-2020-12-property-name,
+        .swagger-ui .json-schema-2020-12__attribute,
+        .swagger-ui .json-schema-2020-12__attribute--primary,
+        .swagger-ui .model-box,
+        .swagger-ui .model-container,
+        .swagger-ui .model-example,
+        .swagger-ui .model-example__section,
+        .swagger-ui .model-toggle,
+        .swagger-ui .model-title,
+        .swagger-ui .prop-type,
+        .swagger-ui .property-row {
+            background: transparent !important;
+            color: var(--text-secondary) !important;
+            border-color: var(--border-color) !important;
+        }
+        .swagger-ui .json-schema-2020-12-accordion {
+            background: var(--bg-tertiary) !important;
+            border: 1px solid var(--border-color) !important;
+            border-radius: 8px !important;
+            margin: 0.35rem 0 !important;
+        }
+        .swagger-ui .json-schema-2020-12-accordion__children {
+            background: var(--bg-secondary) !important;
+            border-left: 1px solid var(--border-color) !important;
+        }
+        .swagger-ui .json-schema-2020-12-expand-deep-button,
+        .swagger-ui button.json-schema-2020-12-expand-deep-button {
+            background: var(--bg-tertiary) !important;
+            color: var(--text-primary) !important;
+            border: 1px solid var(--border-color) !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+            font-family: var(--font-display) !important;
+        }
+        .swagger-ui .json-schema-2020-12-expand-deep-button:hover,
+        .swagger-ui button.json-schema-2020-12-expand-deep-button:hover {
+            background: var(--bg-hover) !important;
+            border-color: var(--accent-primary) !important;
+            color: var(--accent-primary) !important;
+        }
+        .swagger-ui .json-schema-2020-12-accordion svg,
+        .swagger-ui .json-schema-2020-12-expand-deep-button svg,
+        .swagger-ui .model-toggle::after {
+            color: var(--text-secondary) !important;
+            fill: var(--text-secondary) !important;
+        }
+        .swagger-ui .json-schema-2020-12__title,
+        .swagger-ui .json-schema-2020-12-property-name,
+        .swagger-ui .json-schema-2020-12__attribute--primary,
+        .swagger-ui .prop-name {
+            color: var(--text-primary) !important;
+        }
+        .swagger-ui .btn,
+        .swagger-ui .btn.authorize,
+        .swagger-ui .btn.execute,
+        .swagger-ui .btn.try-out__btn {
+            border-radius: 8px;
+            border-color: var(--border-color);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-family: var(--font-display);
+            box-shadow: none;
+        }
+        .swagger-ui .btn:hover,
+        .swagger-ui .btn.authorize:hover {
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+            background: var(--bg-hover);
+        }
+        .swagger-ui .btn.execute {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            color: white;
+        }
+        .swagger-ui .authorization__btn svg,
+        .swagger-ui .btn.authorize svg { fill: var(--accent-primary); }
+        .swagger-ui .dialog-ux .modal-ux-header,
+        .swagger-ui .dialog-ux .modal-ux-content {
+            background: var(--bg-secondary);
+            border-color: var(--border-color);
+            color: var(--text-primary);
+        }
+        .swagger-ui .dialog-ux .modal-ux-header h3 { color: var(--text-primary); }
+        .swagger-ui .response-col_status,
+        .swagger-ui .response-col_links,
+        .swagger-ui .parameters-col_name,
+        .swagger-ui .parameters-col_description {
+            color: var(--text-secondary);
+        }
+        .swagger-ui table tbody tr td { border-color: var(--border-color); }
+        .swagger-ui svg { fill: currentColor; }
+        @media (max-width: 720px) {
+            .rt-docs-nav { align-items: flex-start; flex-direction: column; }
+            #swagger-ui { padding: 0.75rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="rt-docs-nav">
+        <div class="rt-docs-title"><i class="mdi mdi-api"></i><span>Routario REST API</span></div>
+        <div class="rt-docs-actions">
+            <a class="rt-docs-btn" href="/user-settings.html#apiKeys"><i class="mdi mdi-key-variant"></i> API Keys</a>
+            <a class="rt-docs-btn" href="/openapi.json"><i class="mdi mdi-code-json"></i> OpenAPI JSON</a>
+            <a class="rt-docs-btn" href="/"><i class="mdi mdi-view-dashboard"></i> App</a>
+        </div>
+    </div>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script>
+        window.ui = SwaggerUIBundle({
+            url: '/openapi.json',
+            dom_id: '#swagger-ui',
+            deepLinking: true,
+            persistAuthorization: true,
+            displayRequestDuration: true,
+            filter: true,
+            tryItOutEnabled: false,
+            syntaxHighlight: { activate: true, theme: 'agate' },
+            layout: 'BaseLayout',
+        });
+    </script>
+</body>
+</html>
+    """)
+
+@app.get("/api-docs", include_in_schema=False)
+async def api_docs_shortcut():
+    return RedirectResponse("/docs")
+
+@app.get("/api-docs.html", include_in_schema=False)
+async def api_docs_page():
+    return RedirectResponse("/docs")
 
 
 @app.get("/branding/company/{company_id}/metadata")
