@@ -116,5 +116,12 @@
 <script src="js/impersonation.js"></script>
 <script src="js/company-management.js"></script>
 <script src="js/voice-ptt.js"></script>
+<script>
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.getElementById('companyModal')?.classList.contains('active')) {
+        closeCompanyModal();
+    }
+});
+</script>
 </body>
 </html>

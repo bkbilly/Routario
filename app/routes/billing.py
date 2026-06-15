@@ -9,6 +9,7 @@ from sqlalchemy import func, select, update
 
 from core.audit import write_audit_log
 from core.auth import require_company_admin
+from core.currency import cents_at_rate, currency_snapshot
 from core.database import get_db
 from models import BillingInvoice, BillingPlan, Company, Device, PositionRecord, UsageEvent, User
 
@@ -22,7 +23,7 @@ def _require_billing_permission(user: User) -> None:
 
 class BillingPlanIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
-    currency: str = Field("USD", min_length=3, max_length=3)
+    currency: str = Field("EUR", min_length=3, max_length=3)
     base_price_cents: int = Field(0, ge=0)
     included_devices: int = Field(0, ge=0)
     included_positions: int = Field(0, ge=0)
@@ -270,14 +271,18 @@ async def generate_invoice(company_id: int, request: Request, year: int = Query(
     usage = await _usage(company_id, start, end)
     plan_stub = SimpleNamespace(**plan_data)
     amount, lines = _invoice_lines(plan_stub, usage)
+    currency, exchange_rate = currency_snapshot(current_user)
+    amount_display_cents = cents_at_rate(amount, exchange_rate)
 
     async with db.get_session() as session:
         invoice = BillingInvoice(
             company_id=company_id,
             period_start=start,
             period_end=end,
-            currency=plan_data["currency"],
+            currency=currency,
+            exchange_rate=exchange_rate,
             amount_cents=amount,
+            amount_display_cents=amount_display_cents,
             status="draft",
             line_items=lines,
         )
@@ -290,7 +295,9 @@ async def generate_invoice(company_id: int, request: Request, year: int = Query(
             "period_start": invoice.period_start,
             "period_end": invoice.period_end,
             "currency": invoice.currency,
+            "exchange_rate": invoice.exchange_rate,
             "amount_cents": invoice.amount_cents,
+            "amount_display_cents": invoice.amount_display_cents,
             "status": invoice.status,
             "line_items": invoice.line_items,
             "usage": usage,
@@ -314,7 +321,9 @@ async def list_invoices(company_id: int, current_user: User = Depends(require_co
                 "period_start": inv.period_start,
                 "period_end": inv.period_end,
                 "currency": inv.currency,
+                "exchange_rate": inv.exchange_rate,
                 "amount_cents": inv.amount_cents,
+                "amount_display_cents": inv.amount_display_cents,
                 "status": inv.status,
                 "line_items": inv.line_items or [],
                 "created_at": inv.created_at,

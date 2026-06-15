@@ -8,6 +8,7 @@ let _usrUsers     = [];
 let _usrCompanies = [];
 let _usrDevices   = [];
 let _usrEditing   = null;
+let _usrMfaSetupPending = false;
 let _usrSortCol   = 'username';
 let _usrSortDir   = 1;
 
@@ -140,7 +141,7 @@ function filterUsers() { _usrRender(); }
 function sortUsers(col) {
     if (_usrSortCol === col) _usrSortDir = -_usrSortDir;
     else { _usrSortCol = col; _usrSortDir = 1; }
-    document.querySelectorAll('#section-users .devices-table th[data-sort]').forEach(th => {
+    document.querySelectorAll('#section-users .devices-table th[data-sort], #settings-section-users .devices-table th[data-sort]').forEach(th => {
         th.dataset.sortDir = th.dataset.sort === col ? (_usrSortDir === 1 ? 'asc' : 'desc') : '';
     });
     _usrRender();
@@ -163,6 +164,7 @@ function openUserModal(userId = null) {
     document.getElementById('userModalPassword').value = '';
     document.getElementById('userPasswordLabel').textContent = isNew ? 'Password *' : 'Password (leave blank to keep)';
     document.getElementById('userModalUnits').value = _usrEditing?.units || 'metric';
+    document.getElementById('userModalCurrency').value = _usrEditing?.currency || 'EUR';
 
     const roleSelect = document.getElementById('userModalRole');
     roleSelect.innerHTML = _usrIsAdmin
@@ -191,6 +193,7 @@ function openUserModal(userId = null) {
     }
     onUserRoleChange();
     _usrRenderPermissions();
+    usrInitMfaPanel();
 
     document.getElementById('userDeleteBtn').style.display =
         (isNew || _usrEditing?.id === _usrMyId) ? 'none' : 'inline-flex';
@@ -264,6 +267,130 @@ function onUserRoleChange() {
 function closeUserModal() {
     document.getElementById('userModal').classList.remove('active');
     _usrEditing = null;
+    _usrMfaSetupPending = false;
+}
+
+async function _usrJson(url, options = {}) {
+    const res = await apiFetch(url, options);
+    if (!res.ok) {
+        let detail = `Request failed (${res.status})`;
+        try {
+            detail = (await res.json()).detail || detail;
+        } catch (_) {}
+        throw new Error(Array.isArray(detail) ? detail.map(_usrFmtError).join(', ') : detail);
+    }
+    return res.json();
+}
+
+async function usrInitMfaPanel() {
+    const group = document.getElementById('userModalMfaGroup');
+    if (!group) return;
+    _usrMfaSetupPending = false;
+    document.getElementById('userModalMfaSetupBox').style.display = 'none';
+    document.getElementById('userModalMfaSetupBox').innerHTML = '';
+    document.getElementById('userModalMfaCode').value = '';
+
+    if (!_usrEditing || !hasPermission('manage_mfa')) {
+        group.style.display = 'none';
+        return;
+    }
+
+    group.style.display = '';
+    _usrRenderMfaControls(false, true, 'Loading MFA status...');
+    try {
+        const status = await _usrJson(`${API_BASE}/mfa/users/${_usrEditing.id}/status`);
+        _usrRenderMfaControls(Boolean(status.enabled));
+    } catch (e) {
+        _usrRenderMfaControls(false, true, e.message || 'Unable to load MFA status');
+    }
+}
+
+function _usrRenderMfaControls(enabled, disabled = false, message = null) {
+    const isSelf = _usrEditing?.id === _usrMyId;
+    const statusEl = document.getElementById('userModalMfaStatus');
+    const codeGroup = document.getElementById('userModalMfaCodeGroup');
+    const codeLabel = document.getElementById('userModalMfaCodeLabel');
+    const setupBtn = document.getElementById('userModalMfaSetupBtn');
+    const enableBtn = document.getElementById('userModalMfaEnableBtn');
+    const disableBtn = document.getElementById('userModalMfaDisableBtn');
+    const setupBox = document.getElementById('userModalMfaSetupBox');
+
+    statusEl.textContent = message || (enabled ? 'MFA is enabled for this user.' : 'MFA is not enabled for this user.');
+    setupBtn.disabled = disabled;
+    enableBtn.disabled = disabled;
+    disableBtn.disabled = disabled;
+
+    setupBtn.style.display = !enabled ? 'inline-flex' : 'none';
+    enableBtn.style.display = !enabled && _usrMfaSetupPending ? 'inline-flex' : 'none';
+    disableBtn.style.display = enabled ? 'inline-flex' : 'none';
+    codeGroup.style.display = ((!enabled && _usrMfaSetupPending) || (enabled && isSelf)) ? '' : 'none';
+    codeLabel.textContent = enabled && isSelf ? 'Authenticator or Recovery Code' : 'Authenticator Code';
+    if (enabled) setupBox.style.display = 'none';
+}
+
+async function usrSetupMfa() {
+    if (!_usrEditing) return;
+    try {
+        const data = await _usrJson(`${API_BASE}/mfa/users/${_usrEditing.id}/setup`, { method: 'POST' });
+        const box = document.getElementById('userModalMfaSetupBox');
+        box.style.display = '';
+        box.innerHTML = `
+            <div id="userModalMfaQr" style="display:flex;justify-content:center;margin-bottom:0.75rem;"></div>
+            <div style="font-size:0.78rem;color:var(--text-secondary);font-family:var(--font-sans);margin-bottom:0.35rem;">Recovery codes</div>
+            <div>${(data.recovery_codes || []).map(_usrEsc).join('<br>')}</div>
+        `;
+        if (window.QRCode && data.provisioning_uri) {
+            new QRCode(document.getElementById('userModalMfaQr'), {
+                text: data.provisioning_uri,
+                width: 160,
+                height: 160,
+                colorDark: '#111827',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H,
+            });
+        }
+        _usrMfaSetupPending = true;
+        document.getElementById('userModalMfaCode').value = '';
+        _usrRenderMfaControls(false);
+    } catch (e) {
+        showAlert(e.message || 'MFA setup failed', 'error');
+    }
+}
+
+async function usrEnableMfa() {
+    if (!_usrEditing) return;
+    const code = document.getElementById('userModalMfaCode').value.trim();
+    if (!code) {
+        document.getElementById('userModalMfaCode').focus();
+        return;
+    }
+    try {
+        await _usrJson(`${API_BASE}/mfa/users/${_usrEditing.id}/enable`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code }),
+        });
+        showAlert('MFA enabled', 'success');
+        await usrInitMfaPanel();
+    } catch (e) {
+        showAlert(e.message || 'MFA enable failed', 'error');
+    }
+}
+
+async function usrDisableMfa() {
+    if (!_usrEditing) return;
+    const code = document.getElementById('userModalMfaCode').value.trim();
+    try {
+        await _usrJson(`${API_BASE}/mfa/users/${_usrEditing.id}/disable`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: code || null }),
+        });
+        showAlert('MFA disabled', 'success');
+        await usrInitMfaPanel();
+    } catch (e) {
+        showAlert(e.message || 'MFA disable failed', 'error');
+    }
 }
 
 async function saveUser() {
@@ -285,6 +412,7 @@ async function saveUser() {
 
     const isMe = !isNew && _usrEditing?.id === _usrMyId;
     const units = document.getElementById('userModalUnits').value;
+    const currency = document.getElementById('userModalCurrency').value;
 
     // Collect permissions from checkboxes (only when not super admin role)
     // Company admins cannot change their own permissions — leave them untouched
@@ -296,6 +424,7 @@ async function saveUser() {
     const payload = {
         email,
         units,
+        currency,
         ...(!isMe && { is_admin: role === 'admin', is_company_admin: role === 'company_admin' }),
         company_id: companyId,
         ...(permissions !== null && { permissions }),
@@ -320,6 +449,12 @@ async function saveUser() {
                 showAlert(detail || 'Save failed', 'error');
             }
         } else {
+            const saved = await res.json();
+            if (saved.id === _usrMyId) {
+                localStorage.setItem('units', saved.units || units);
+                localStorage.setItem('currency', saved.currency || currency);
+                window.dispatchEvent(new Event('routario:currencychange'));
+            }
             showAlert(isNew ? 'User created' : 'User updated', 'success');
             closeUserModal();
             await _usrLoad();

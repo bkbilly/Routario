@@ -51,9 +51,54 @@ async function rtpLoadCommon() {
     [_rtpDevices, _rtpDrivers, _rtpCompanies] = await Promise.all(reqs);
 }
 
-function rtpMoney(cents, currency = 'USD') {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format((Number(cents) || 0) / 100);
+function rtpMoney(cents, currency = 'EUR', exchangeRate = null) {
+    if (exchangeRate != null && typeof fmtMoneyCentsAtRate === 'function') {
+        return fmtMoneyCentsAtRate(cents, currency, exchangeRate);
+    }
+    if (typeof fmtMoneyCents === 'function') return fmtMoneyCents(cents);
+    const displayCurrency = currency || 'EUR';
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: displayCurrency }).format((Number(cents) || 0) / 100);
 }
+
+function rtpInvoiceMoney(cents, invoice) {
+    return rtpMoney(cents, invoice?.currency || 'EUR', invoice?.exchange_rate ?? 1);
+}
+
+function rtpCurrencyInput(cents, digits = 2) {
+    const eur = (Number(cents) || 0) / 100;
+    return typeof currencyInputValue === 'function' ? currencyInputValue(eur, digits) : eur.toFixed(digits);
+}
+
+function rtpCurrencyCentsFromInput(id) {
+    const value = document.getElementById(id)?.value;
+    const eur = typeof currencyInputToBase === 'function'
+        ? currencyInputToBase(value)
+        : Number(value || 0);
+    return Math.round(Number(eur || 0) * 100);
+}
+
+function rtpApplyBillingCurrencyLabels() {
+    const cur = typeof userCurrency === 'function' ? userCurrency() : 'EUR';
+    const labels = {
+        billBaseLabel: `Base Price (${cur})`,
+        billDevicePriceLabel: `Per Device (${cur})`,
+        billPositionPriceLabel: `Per 1000 Positions (${cur})`,
+        billApiPriceLabel: `Per 1000 API Calls (${cur})`,
+    };
+    Object.entries(labels).forEach(([id, text]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    });
+}
+
+window.addEventListener('routario:currencychange', () => {
+    rtpApplyBillingCurrencyLabels();
+    if (typeof rtpRenderBillingTable === 'function') rtpRenderBillingTable();
+    if (document.getElementById('billingPlanModal')?.classList.contains('active')) {
+        const plan = _rtpEditingPlanId ? _rtpPlans.find(p => Number(p.id) === Number(_rtpEditingPlanId)) : null;
+        rtpFillPlanForm(plan);
+    }
+});
 
 function rtpCompareValues(a, b, dir = 'asc') {
     const av = a ?? '';
@@ -592,15 +637,16 @@ function rtpCompaniesForPlan(planId) {
 }
 
 function rtpFillPlanForm(plan = null) {
+    rtpApplyBillingCurrencyLabels();
     _rtpEditingPlanId = plan?.id || null;
     document.getElementById('billPlanName').value = plan?.name || '';
-    document.getElementById('billBase').value = plan ? (plan.base_price_cents / 100) : '';
+    document.getElementById('billBase').value = plan ? rtpCurrencyInput(plan.base_price_cents) : '';
     document.getElementById('billIncDevices').value = plan?.included_devices ?? 0;
-    document.getElementById('billDevicePrice').value = plan ? (plan.price_per_device_cents / 100) : 0;
+    document.getElementById('billDevicePrice').value = plan ? rtpCurrencyInput(plan.price_per_device_cents) : 0;
     document.getElementById('billIncPositions').value = plan?.included_positions ?? 0;
-    document.getElementById('billPositionPrice').value = plan ? (plan.price_per_1000_positions_cents / 100) : 0;
+    document.getElementById('billPositionPrice').value = plan ? rtpCurrencyInput(plan.price_per_1000_positions_cents) : 0;
     document.getElementById('billIncApi').value = plan?.included_api_calls ?? 0;
-    document.getElementById('billApiPrice').value = plan ? (plan.price_per_1000_api_calls_cents / 100) : 0;
+    document.getElementById('billApiPrice').value = plan ? rtpCurrencyInput(plan.price_per_1000_api_calls_cents) : 0;
     const search = document.getElementById('billPlanCompanySearch');
     if (search) search.value = '';
     _rtpPlanCompanySelection = new Set(plan ? rtpCompaniesForPlan(plan.id).map(c => Number(c.id)) : []);
@@ -673,32 +719,194 @@ function rtpClosePlanDetailsModal() {
     if (modal) modal.classList.remove('active');
 }
 
-async function rtpDetailLoadUsage() {
+async function rtpDetailGenerateBillingSummary() {
     const companyId = document.getElementById('billDetailCompany').value;
     const year = document.getElementById('billDetailYear').value;
     const month = document.getElementById('billDetailMonth').value;
+    const plan = _rtpPlans.find(p => Number(p.id) === Number(_rtpDetailPlanId));
+    const company = rtpBillingCompanies().find(c => Number(c.id) === Number(companyId));
     if (!companyId) return showAlert('Select a company first', 'error');
     try {
-        const data = await rtpJson(`${API_BASE}/billing/companies/${companyId}/usage?year=${year}&month=${month}`);
-        const u = data.usage;
+        const usageData = await rtpJson(`${API_BASE}/billing/companies/${companyId}/usage?year=${year}&month=${month}`);
+        const inv = await rtpJson(`${API_BASE}/billing/companies/${companyId}/invoices?year=${year}&month=${month}`, { method: 'POST' });
+        const u = usageData.usage || inv.usage || {};
+        const overageDevices = Math.max(0, (u.active_devices || 0) - (plan?.included_devices || 0));
+        const overagePositions = Math.max(0, (u.positions || 0) - (plan?.included_positions || 0));
+        const overageApi = Math.max(0, (u.api_calls || 0) - (plan?.included_api_calls || 0));
+        const period = new Date(Number(year), Number(month) - 1, 1).toLocaleString(undefined, { month: 'long', year: 'numeric' });
+        const lineAmount = label => (inv.line_items || []).find(x => x.label === label)?.amount_cents || 0;
+        const rows = [
+            {
+                metric: 'Base subscription',
+                used: 1,
+                included: '-',
+                overage: '-',
+                rate: rtpInvoiceMoney(plan?.base_price_cents || 0, inv),
+                amount: plan?.base_price_cents || 0,
+            },
+            {
+                metric: 'Active devices',
+                used: u.active_devices || 0,
+                included: plan?.included_devices || 0,
+                overage: overageDevices,
+                rate: rtpInvoiceMoney(plan?.price_per_device_cents || 0, inv),
+                amount: lineAmount('Additional active devices'),
+            },
+            {
+                metric: 'Position messages',
+                used: u.positions || 0,
+                included: plan?.included_positions || 0,
+                overage: overagePositions,
+                rate: `${rtpInvoiceMoney(plan?.price_per_1000_positions_cents || 0, inv)} / 1000`,
+                amount: lineAmount('Additional position messages'),
+            },
+            {
+                metric: 'API calls',
+                used: u.api_calls || 0,
+                included: plan?.included_api_calls || 0,
+                overage: overageApi,
+                rate: `${rtpInvoiceMoney(plan?.price_per_1000_api_calls_cents || 0, inv)} / 1000`,
+                amount: lineAmount('Additional API calls'),
+            },
+        ];
         document.getElementById('billingPlanDetailsResult').innerHTML = `
-            <div class="stack-item"><div class="stack-item-title">Usage</div>
-            <div class="stack-item-meta">${u.active_devices} active devices · ${u.positions} positions · ${u.api_calls} API calls</div></div>
+            <div class="stack-item">
+                <div class="stack-item-title">${rtpEsc(company?.name || 'Company')} - ${rtpEsc(period)}</div>
+                <div class="stack-item-meta">Plan: ${rtpEsc(plan?.name || 'Billing plan')}</div>
+                <div style="overflow-x:auto;margin-top:0.75rem;">
+                    <table class="devices-table">
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>Used</th>
+                                <th>Included</th>
+                                <th>Overage</th>
+                                <th>Rate</th>
+                                <th style="text-align:right;">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows.map(row => `
+                                <tr>
+                                    <td>${rtpEsc(row.metric)}</td>
+                                    <td>${rtpEsc(row.used)}</td>
+                                    <td>${rtpEsc(row.included)}</td>
+                                    <td>${rtpEsc(row.overage)}</td>
+                                    <td>${rtpEsc(row.rate)}</td>
+                                    <td style="text-align:right;">${rtpInvoiceMoney(row.amount, inv)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <div style="display:flex;justify-content:flex-end;margin-top:0.85rem;font-weight:800;font-size:1rem;">
+                    Draft Total: ${rtpInvoiceMoney(inv.amount_cents, inv)}
+                </div>
+            </div>
         `;
     } catch (e) { showAlert(e.message, 'error'); }
 }
 
-async function rtpDetailGenerateInvoice() {
+async function rtpPrintBillingDetails() {
     const companyId = document.getElementById('billDetailCompany').value;
     const year = document.getElementById('billDetailYear').value;
     const month = document.getElementById('billDetailMonth').value;
-    if (!companyId) return showAlert('Select a company first', 'error');
+    const plan = _rtpPlans.find(p => Number(p.id) === Number(_rtpDetailPlanId));
+    const company = rtpBillingCompanies().find(c => Number(c.id) === Number(companyId));
+    if (!companyId || !plan || !company) return showAlert('Select a company first', 'error');
     try {
-        const inv = await rtpJson(`${API_BASE}/billing/companies/${companyId}/invoices?year=${year}&month=${month}`, { method: 'POST' });
-        document.getElementById('billingPlanDetailsResult').innerHTML = `
-            <div class="stack-item"><div class="stack-item-title">Draft Invoice ${rtpMoney(inv.amount_cents, inv.currency)}</div>
-            <div class="stack-item-meta">${(inv.line_items || []).map(x => `${rtpEsc(x.label)}: ${rtpMoney(x.amount_cents, inv.currency)}`).join('<br>')}</div></div>
-        `;
+        const usageData = await rtpJson(`${API_BASE}/billing/companies/${companyId}/usage?year=${year}&month=${month}`);
+        const invoice = await rtpJson(`${API_BASE}/billing/companies/${companyId}/invoices?year=${year}&month=${month}`, { method: 'POST' });
+        const usage = usageData.usage || invoice.usage || {};
+        const period = new Date(Number(year), Number(month) - 1, 1).toLocaleString(undefined, { month: 'long', year: 'numeric' });
+        const lines = invoice.line_items || [];
+        const rows = lines.map(line => `
+            <tr>
+                <td>${rtpEsc(line.label || '-')}</td>
+                <td>${rtpEsc(line.quantity ?? 1)}</td>
+                <td>${rtpEsc(line.unit || 'month')}</td>
+                <td>${line.billable_units ?? '-'}</td>
+                <td class="money">${rtpInvoiceMoney(line.amount_cents, invoice)}</td>
+            </tr>
+        `).join('');
+        const overageDevices = Math.max(0, (usage.active_devices || 0) - (plan.included_devices || 0));
+        const overagePositions = Math.max(0, (usage.positions || 0) - (plan.included_positions || 0));
+        const overageApi = Math.max(0, (usage.api_calls || 0) - (plan.included_api_calls || 0));
+        const html = `<!DOCTYPE html>
+<html>
+<head>
+    <title>${rtpEsc(company.name)} ${rtpEsc(period)} Billing</title>
+    <style>
+        @page { size: A4; margin: 16mm; }
+        * { box-sizing: border-box; }
+        body { margin: 0; color: #111827; font-family: Arial, sans-serif; font-size: 12px; line-height: 1.45; }
+        .page { width: 100%; }
+        .header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #1f2937; padding-bottom: 14px; margin-bottom: 18px; }
+        .brand { font-size: 24px; font-weight: 800; color: #1d4ed8; }
+        .subtitle { color: #6b7280; margin-top: 4px; }
+        .meta { text-align: right; color: #374151; }
+        h2 { font-size: 14px; margin: 18px 0 8px; color: #111827; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+        .box { border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; background: #f9fafb; }
+        .label { color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px; }
+        .value { font-weight: 700; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+        th { background: #f3f4f6; color: #374151; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+        th, td { border-bottom: 1px solid #e5e7eb; padding: 8px; vertical-align: top; }
+        .money { text-align: right; white-space: nowrap; }
+        .total { display: flex; justify-content: flex-end; margin-top: 14px; }
+        .total-box { min-width: 240px; border: 2px solid #1f2937; border-radius: 8px; padding: 12px; }
+        .total-row { display: flex; justify-content: space-between; gap: 20px; font-size: 16px; font-weight: 800; }
+        .notes { margin-top: 18px; color: #6b7280; font-size: 11px; }
+        @media print { .no-print { display: none; } }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="header">
+            <div>
+                <div class="brand">Routario</div>
+                <div class="subtitle">Monthly usage and draft billing report</div>
+            </div>
+            <div class="meta">
+                <strong>${rtpEsc(company.name)}</strong><br>
+                ${rtpEsc(period)}<br>
+                Generated ${new Date().toLocaleString()}
+            </div>
+        </div>
+        <div class="grid">
+            <div class="box"><div class="label">Plan</div><div class="value">${rtpEsc(plan.name)}</div></div>
+            <div class="box"><div class="label">Base Price</div><div class="value">${rtpInvoiceMoney(plan.base_price_cents, invoice)}</div></div>
+            <div class="box"><div class="label">Draft Total</div><div class="value">${rtpInvoiceMoney(invoice.amount_cents, invoice)}</div></div>
+            <div class="box"><div class="label">Currency</div><div class="value">${rtpEsc(invoice.currency || 'EUR')}</div></div>
+            <div class="box"><div class="label">Exchange Rate</div><div class="value">1 EUR = ${Number(invoice.exchange_rate || 1).toFixed(4)} ${rtpEsc(invoice.currency || 'EUR')}</div></div>
+            <div class="box"><div class="label">Base Total</div><div class="value">${rtpMoney(invoice.amount_cents, 'EUR', 1)}</div></div>
+        </div>
+        <h2>Usage Summary</h2>
+        <table>
+            <thead><tr><th>Metric</th><th>Included</th><th>Used</th><th>Overage</th><th>Overage Rate</th></tr></thead>
+            <tbody>
+                <tr><td>Active devices</td><td>${plan.included_devices}</td><td>${usage.active_devices || 0}</td><td>${overageDevices}</td><td>${rtpInvoiceMoney(plan.price_per_device_cents, invoice)} / device</td></tr>
+                <tr><td>Position messages</td><td>${plan.included_positions}</td><td>${usage.positions || 0}</td><td>${overagePositions}</td><td>${rtpInvoiceMoney(plan.price_per_1000_positions_cents, invoice)} / 1000</td></tr>
+                <tr><td>API calls</td><td>${plan.included_api_calls}</td><td>${usage.api_calls || 0}</td><td>${overageApi}</td><td>${rtpInvoiceMoney(plan.price_per_1000_api_calls_cents, invoice)} / 1000</td></tr>
+            </tbody>
+        </table>
+        <h2>Billing Lines</h2>
+        <table>
+            <thead><tr><th>Description</th><th>Quantity</th><th>Unit</th><th>Billable Units</th><th class="money">Amount</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="5">No billable lines.</td></tr>'}</tbody>
+        </table>
+        <div class="total"><div class="total-box"><div class="total-row"><span>Total</span><span>${rtpInvoiceMoney(invoice.amount_cents, invoice)}</span></div></div></div>
+        <div class="notes">This is a draft billing report based on recorded Routario usage for the selected period. Review before issuing a final invoice.</div>
+    </div>
+</body>
+</html>`;
+        const win = window.open('', '_blank');
+        if (!win) throw new Error('Popup blocked. Allow popups to open the printable report.');
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+        win.focus();
     } catch (e) { showAlert(e.message, 'error'); }
 }
 
@@ -707,13 +915,14 @@ async function rtpCreatePlan() {
         const wasEditing = Boolean(_rtpEditingPlanId);
         const payload = {
             name: document.getElementById('billPlanName').value.trim(),
-            base_price_cents: Math.round(Number(document.getElementById('billBase').value || 0) * 100),
+            currency: 'EUR',
+            base_price_cents: rtpCurrencyCentsFromInput('billBase'),
             included_devices: Number(document.getElementById('billIncDevices').value || 0),
-            price_per_device_cents: Math.round(Number(document.getElementById('billDevicePrice').value || 0) * 100),
+            price_per_device_cents: rtpCurrencyCentsFromInput('billDevicePrice'),
             included_positions: Number(document.getElementById('billIncPositions').value || 0),
-            price_per_1000_positions_cents: Math.round(Number(document.getElementById('billPositionPrice').value || 0) * 100),
+            price_per_1000_positions_cents: rtpCurrencyCentsFromInput('billPositionPrice'),
             included_api_calls: Number(document.getElementById('billIncApi').value || 0),
-            price_per_1000_api_calls_cents: Math.round(Number(document.getElementById('billApiPrice').value || 0) * 100),
+            price_per_1000_api_calls_cents: rtpCurrencyCentsFromInput('billApiPrice'),
         };
         if (!payload.name) throw new Error('Plan name is required');
         const url = _rtpEditingPlanId ? `${API_BASE}/billing/plans/${_rtpEditingPlanId}` : `${API_BASE}/billing/plans`;

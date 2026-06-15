@@ -146,5 +146,17 @@
 <script src="js/config.js"></script>
 <script src="js/drivers.js"></script>
 <script src="js/voice-ptt.js"></script>
+<script>
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    const closers = [
+        ['assignModal', () => closeAssignModal()],
+        ['driverModal', () => closeDriverModal()],
+    ];
+    for (const [id, fn] of closers) {
+        if (document.getElementById(id)?.classList.contains('active')) { fn(); break; }
+    }
+});
+</script>
 </body>
 </html>

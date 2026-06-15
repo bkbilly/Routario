@@ -22,34 +22,68 @@
 </head>
 <body>
     <div class="container">
-        <div class="settings-tabs" id="settingsTabs">
-            <button class="settings-tab active" onclick="switchSettingsTab('profile')" id="settingsTabProfile"><i class="mdi mdi-account"></i> Profile</button>
-            <button class="settings-tab" onclick="switchSettingsTab('notifications')" id="settingsTabNotifications"><i class="mdi mdi-bell"></i> Notifications</button>
-            <button class="settings-tab" onclick="switchSettingsTab('webhooks')" id="settingsTabWebhooks"><i class="mdi mdi-link-variant"></i> Webhooks</button>
-            <button class="settings-tab" onclick="switchSettingsTab('apiKeys')" id="settingsTabApiKeys" style="display:none;"><i class="mdi mdi-key-variant"></i> API Keys</button>
-            <button class="settings-tab" onclick="switchSettingsTab('mfa')" id="settingsTabMfa" style="display:none;"><i class="mdi mdi-shield-key"></i> MFA</button>
-            <button class="settings-tab" onclick="switchSettingsTab('admin')" id="settingsTabAdmin" style="display:none;"><i class="mdi mdi-shield"></i> Admin</button>
+        <div class="mgmt-tabs settings-tabs" id="settingsTabs">
+            <button class="mgmt-tab settings-tab active" onclick="switchSettingsTab('users')" id="settingsTabUsers" style="display:none;"><i class="mdi mdi-account-group"></i> Users</button>
+            <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('notifications')" id="settingsTabNotifications"><i class="mdi mdi-bell"></i> Notifications</button>
+            <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('webhooks')" id="settingsTabWebhooks"><i class="mdi mdi-link-variant"></i> Webhooks</button>
+            <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('apiKeys')" id="settingsTabApiKeys" style="display:none;"><i class="mdi mdi-key-variant"></i> API Keys</button>
+            <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('admin')" id="settingsTabAdmin" style="display:none;"><i class="mdi mdi-shield"></i> Admin</button>
         </div>
 
-        <form onsubmit="saveSettings(event)">
-            <!-- Notifications -->
-            <div class="card settings-section" id="settings-section-notifications" style="display:none;">
-                <div class="card-header">
-                    <div class="card-icon"><i class="mdi mdi-email"></i></div>
-                    <h2 class="card-title">Notification Channels</h2>
-                </div>
-                <p class="card-description">
-                    Configure services to receive alerts (e.g., Telegram, Discord, Email).<br>
-                    <span class="card-help">
-                        <i class="mdi mdi-book-open-variant"></i> <strong>How to format URLs:</strong>
-                        <a href="https://appriseit.com/services/" target="_blank">
-                            Read Apprise Documentation ↗
-                        </a>
-                    </span>
+        <div>
+            <!-- Users -->
+            <div class="settings-section" id="settings-section-users" style="display:none;">
+                <p class="settings-section-description">
+                    Manage user profiles, permissions, assigned devices, unit preferences, currency, and MFA.
                 </p>
-                
+                <div class="devices-search-bar">
+                    <div class="search-input-wrap">
+                        <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                        <input type="text" id="userSearch" class="search-input"
+                            placeholder="Search by username or email&#8230;"
+                            oninput="filterUsers()">
+                    </div>
+                    <span class="devices-count" id="userCount"></span>
+                </div>
                 <div class="table-wrapper">
-                    <table class="channel-table">
+                    <table class="devices-table settings-table" id="usersTable">
+                        <thead>
+                            <tr>
+                                <th data-sort="username" data-sort-dir="asc" onclick="sortUsers('username')">Username</th>
+                                <th data-sort="email" onclick="sortUsers('email')">Email</th>
+                                <th id="userCompanyHeader" data-sort="company" onclick="sortUsers('company')" style="display:none;">Company</th>
+                                <th data-sort="role" onclick="sortUsers('role')">Role</th>
+                                <th data-sort="created" onclick="sortUsers('created')">Created</th>
+                                <th style="width:320px;text-align:center;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <tr>
+                                <td colspan="6" style="text-align:center;padding:3rem;color:var(--text-muted);">
+                                    <div class="loading" style="margin:0 auto 1rem;"></div>
+                                    Loading users&#8230;
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Notifications -->
+            <div class="settings-section" id="settings-section-notifications">
+                <p class="settings-section-description">
+                    Configure services to receive alerts, such as Telegram, Discord, or Email.
+                    <a href="https://appriseit.com/services/" target="_blank">Read Apprise Documentation</a>
+                </p>
+                <div class="devices-search-bar">
+                    <div class="search-input-wrap">
+                        <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                        <input type="text" id="notificationSearch" class="search-input" placeholder="Search notification channels..." oninput="renderChannels()">
+                    </div>
+                    <span class="devices-count" id="channelCount"></span>
+                </div>
+                <div class="table-wrapper">
+                    <table class="devices-table settings-table">
                         <thead>
                             <tr>
                                 <th>Name</th>
@@ -63,32 +97,22 @@
                     </table>
                 </div>
 
-                <div class="add-form-inline">
-                    <div class="form-group">
-                        <label class="form-label">Channel Name</label>
-                        <input type="text" id="newChannelName" class="form-input" placeholder="e.g. My Phone">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Apprise URL</label>
-                        <input type="text" id="newChannelUrl" class="form-input" placeholder="tgram://bot_token/chat_id">
-                    </div>
-                    <button type="button" class="btn btn-primary btn-small" onclick="addChannel()">Add</button>
-                </div>
             </div>
 
             <!-- Webhooks -->
-            <div class="card settings-section" id="settings-section-webhooks" style="display:none;">
-                <div class="card-header">
-                    <div class="card-icon"><i class="mdi mdi-link-variant"></i></div>
-                    <h2 class="card-title">Webhooks</h2>
-                </div>
-                <p class="card-description">
-                    POST live position data to one or more URLs on every device update.
-                    Works with Home Assistant, Zapier, n8n, or any HTTP endpoint.
+            <div class="settings-section" id="settings-section-webhooks" style="display:none;">
+                <p class="settings-section-description">
+                    POST live position data to one or more URLs on every device update. Works with Home Assistant, Zapier, n8n, or any HTTP endpoint.
                 </p>
-
+                <div class="devices-search-bar">
+                    <div class="search-input-wrap">
+                        <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                        <input type="text" id="webhookSearch" class="search-input" placeholder="Search webhooks..." oninput="renderWebhooks()">
+                    </div>
+                    <span class="devices-count" id="webhookCount"></span>
+                </div>
                 <div class="table-wrapper">
-                    <table class="channel-table">
+                    <table class="devices-table settings-table">
                         <thead>
                             <tr>
                                 <th>URL</th>
@@ -99,63 +123,24 @@
                     </table>
                 </div>
 
-                <div class="add-form-inline">
-                    <div class="form-group">
-                        <label class="form-label">Webhook URL</label>
-                        <input type="url" id="newWebhookUrl" class="form-input" placeholder="https://your-server.com/webhook">
-                    </div>
-                    <button type="button" class="btn btn-primary btn-small" onclick="addWebhook()">Add</button>
-                </div>
             </div>
 
-            <!-- Account Info -->
-            <div class="card settings-section" id="settings-section-profile">
-                <div class="card-header">
-                    <div class="card-icon"><i class="mdi mdi-account"></i></div>
-                    <h2 class="card-title">Account Information</h2>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Username</label>
-                        <input type="text" id="username" class="form-input" disabled style="opacity: 0.6;">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Email Address</label>
-                        <input type="email" id="email" class="form-input" required>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">New Password</label>
-                    <input type="password" id="password" class="form-input" placeholder="Leave blank to keep current">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Unit System</label>
-                    <select id="unitSystem" class="form-input" style="max-width:200px;">
-                        <option value="metric">Metric (km, km/h, m)</option>
-                        <option value="imperial">Imperial (mi, mph, ft)</option>
-                    </select>
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary" id="saveBtn">
-                        Save Profile Changes
-                    </button>
-                </div>
-            </div>
-
-            <!-- Admin Panel (Hidden by default) -->
-            <div class="card settings-section" id="settings-section-apiKeys" style="display:none;">
-                <div class="card-header">
-                    <div class="card-icon"><i class="mdi mdi-key-variant"></i></div>
-                    <h2 class="card-title">API Keys</h2>
-                </div>
-                <p class="card-description">
+            <!-- API Keys -->
+            <div class="settings-section" id="settings-section-apiKeys" style="display:none;">
+                <p class="settings-section-description">
                     Create scoped REST API keys for integrations. New keys are shown once.
-                    <a href="/docs" target="_blank" style="color:var(--accent-primary);">Open Swagger REST API documentation</a>
+                    <a href="/docs" target="_blank">Open Swagger REST API documentation</a>
                 </p>
-                <button type="button" class="btn btn-primary" onclick="openApiKeyModal()"><i class="mdi mdi-key-plus"></i> Create Key</button>
+                <div class="devices-search-bar">
+                    <div class="search-input-wrap">
+                        <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                        <input type="text" id="settingsApiKeySearch" class="search-input" placeholder="Search API keys..." oninput="renderSettingsApiKeys()">
+                    </div>
+                    <span class="devices-count" id="settingsApiKeyCount"></span>
+                </div>
                 <div id="settingsApiKeyReveal" class="secret-box" style="display:none;"></div>
                 <div class="table-wrapper" style="margin-top:1rem;">
-                    <table class="channel-table">
+                    <table class="devices-table settings-table">
                         <thead>
                             <tr>
                                 <th>Name</th>
@@ -168,25 +153,6 @@
                         <tbody id="settingsApiKeyTableBody"></tbody>
                     </table>
                 </div>
-            </div>
-
-            <div class="card settings-section" id="settings-section-mfa" style="display:none;">
-                <div class="card-header">
-                    <div class="card-icon"><i class="mdi mdi-shield-key"></i></div>
-                    <h2 class="card-title">Multi-Factor Authentication</h2>
-                </div>
-                <p class="card-description">Use an authenticator app or recovery code as a second factor when signing in.</p>
-                <div id="settingsMfaStatus" class="settings-list"></div>
-                <div class="form-group" id="settingsMfaCodeGroup" style="max-width:280px;margin-top:1rem;">
-                    <label class="form-label" id="settingsMfaCodeLabel">Authenticator or Recovery Code</label>
-                    <input type="text" id="settingsMfaCode" class="form-input" placeholder="123456" inputmode="numeric">
-                </div>
-                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:1rem;">
-                    <button type="button" class="btn btn-secondary" id="settingsMfaSetupBtn" onclick="setupSettingsMfa()"><i class="mdi mdi-qrcode"></i> Setup</button>
-                    <button type="button" class="btn btn-primary" id="settingsMfaEnableBtn" onclick="enableSettingsMfa()"><i class="mdi mdi-shield-check"></i> Enable</button>
-                    <button type="button" class="btn btn-danger" id="settingsMfaDisableBtn" onclick="disableSettingsMfa()"><i class="mdi mdi-shield-off"></i> Disable</button>
-                </div>
-                <div id="settingsMfaSetupBox" class="secret-box" style="display:none;"></div>
             </div>
 
             <div class="card settings-section" id="settings-section-admin" style="display: none;">
@@ -247,10 +213,189 @@
                     </div>
                 </div>
             </div>
-        </form>
+        </div>
     </div>
 
     <div class="toast-container" id="toastContainer"></div>
+
+    <div class="modal" id="userModal">
+        <div class="modal-content" style="max-width:860px;height:auto;max-height:90vh;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="userModalTitle">Add User</h2>
+                <button type="button" class="modal-close" onclick="closeUserModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
+                <div id="userModalBody">
+                    <div>
+                        <div class="form-group">
+                            <label class="form-label">Username *</label>
+                            <input type="text" id="userModalUsername" class="form-input" placeholder="johndoe" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email *</label>
+                            <input type="email" id="userModalEmail" class="form-input" placeholder="john@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" id="userPasswordLabel">Password *</label>
+                            <input type="password" id="userModalPassword" class="form-input" autocomplete="new-password">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Role *</label>
+                            <select id="userModalRole" class="form-input" onchange="onUserRoleChange()"></select>
+                        </div>
+                        <div class="form-group" id="userModalCompanyGroup" style="display:none;">
+                            <label class="form-label">Company *</label>
+                            <select id="userModalCompany" class="form-input">
+                                <option value="">— Select company —</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Unit System</label>
+                            <select id="userModalUnits" class="form-input">
+                                <option value="metric">Metric (km, km/h, m)</option>
+                                <option value="imperial">Imperial (mi, mph, ft)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Currency</label>
+                            <select id="userModalCurrency" class="form-input">
+                                <option value="EUR">Euro (€)</option>
+                                <option value="USD">US Dollar ($)</option>
+                                <option value="GBP">British Pound (£)</option>
+                                <option value="CHF">Swiss Franc (CHF)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="userModalMfaGroup" style="display:none;">
+                            <label class="form-label">Multi-Factor Authentication</label>
+                            <div style="border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;background:var(--bg-secondary);">
+                                <div id="userModalMfaStatus" style="font-size:0.86rem;color:var(--text-secondary);margin-bottom:0.7rem;"></div>
+                                <div id="userModalMfaSetupBox" class="secret-box" style="display:none;margin:0 0 0.75rem 0;"></div>
+                                <div id="userModalMfaCodeGroup" style="display:none;margin-bottom:0.75rem;">
+                                    <label class="form-label" id="userModalMfaCodeLabel" style="font-size:0.78rem;">Authenticator Code</label>
+                                    <input type="text" id="userModalMfaCode" class="form-input" placeholder="123456" inputmode="numeric" autocomplete="one-time-code">
+                                </div>
+                                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                                    <button type="button" class="btn btn-secondary" id="userModalMfaSetupBtn" onclick="usrSetupMfa()"><i class="mdi mdi-qrcode"></i> Setup</button>
+                                    <button type="button" class="btn btn-primary" id="userModalMfaEnableBtn" onclick="usrEnableMfa()" style="display:none;"><i class="mdi mdi-shield-check"></i> Enable</button>
+                                    <button type="button" class="btn btn-danger" id="userModalMfaDisableBtn" onclick="usrDisableMfa()" style="display:none;"><i class="mdi mdi-shield-off"></i> Disable</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group" id="userModalPermissionsGroup">
+                        <label class="form-label" style="display:flex;align-items:center;justify-content:space-between;">
+                            <span>Permissions</span>
+                            <span id="userModalPermHint" style="font-size:0.75rem;color:var(--text-muted);font-weight:400;"></span>
+                        </label>
+                        <div id="userModalPermissions" style="border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;display:flex;flex-direction:column;gap:0.75rem;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" id="userDeleteBtn" onclick="usrDelete(_usrEditing?.id)" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+                <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                    <button type="button" class="btn btn-secondary" onclick="closeUserModal()">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="userSaveBtn" onclick="saveUser()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="userAssignModal">
+        <div class="modal-content" style="max-width:480px;height:auto;max-height:75vh;">
+            <div class="modal-header">
+                <h2 class="modal-title">Devices for <span id="userAssignName" class="modal-highlight"></span></h2>
+                <button type="button" class="modal-close" onclick="usrCloseAssignModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="modal-scrollable" style="padding:1.25rem;">
+                <div class="form-group">
+                    <input type="text" class="form-input" id="userDeviceSearch" placeholder="Search devices&#8230;" oninput="usrFilterDeviceList()">
+                </div>
+                <div id="userDeviceAssignList" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="usrCloseAssignModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="userNotifyModal">
+        <div class="modal-content" style="max-width:620px;height:auto;max-height:75vh;">
+            <div class="modal-header">
+                <h2 class="modal-title">Send Notification</h2>
+                <button type="button" class="modal-close" onclick="usrCloseNotifyModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="modal-scrollable" style="display:flex;gap:1.25rem;padding:1.25rem;flex-wrap:wrap;align-items:stretch;">
+                <div style="flex:1;min-width:180px;min-height:0;display:flex;flex-direction:column;gap:0.5rem;">
+                    <label class="form-label">To <span id="userNotifyCount" style="font-size:0.78rem;color:var(--accent-primary);font-weight:600;margin-left:0.25rem;"></span></label>
+                    <input type="text" id="userNotifySearch" class="form-input" placeholder="Search users&#8230;" oninput="usrFilterNotifyUsers()">
+                    <div id="userNotifyList" style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:0.15rem;"></div>
+                </div>
+                <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:0.75rem;">
+                    <div class="form-group">
+                        <label class="form-label">Title</label>
+                        <input type="text" id="userNotifyTitle" class="form-input" placeholder="Notification title" maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Message</label>
+                        <textarea id="userNotifyMessage" class="form-input" rows="6" placeholder="Notification message" maxlength="500" style="resize:vertical;"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                    <button type="button" class="btn btn-secondary" onclick="usrCloseNotifyModal()">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="userNotifySendBtn" onclick="usrSendNotification()">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="notificationChannelModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Add Notification Channel</h2>
+                <button type="button" class="modal-close" onclick="closeChannelModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="modal-scrollable">
+                <div class="form-group">
+                    <label class="form-label">Channel Name</label>
+                    <input type="text" id="newChannelName" class="form-input" placeholder="e.g. My Phone">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Apprise URL</label>
+                    <input type="text" id="newChannelUrl" class="form-input" placeholder="tgram://bot_token/chat_id">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                    <button type="button" class="btn btn-secondary" onclick="closeChannelModal()">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="addChannel()"><i class="mdi mdi-plus"></i> Add Channel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="webhookModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Add Webhook</h2>
+                <button type="button" class="modal-close" onclick="closeWebhookModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="modal-scrollable">
+                <div class="form-group">
+                    <label class="form-label">Webhook URL</label>
+                    <input type="url" id="newWebhookUrl" class="form-input" placeholder="https://your-server.com/webhook">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                    <button type="button" class="btn btn-secondary" onclick="closeWebhookModal()">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="addWebhook()"><i class="mdi mdi-plus"></i> Add Webhook</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="modal" id="apiKeyModal">
         <div class="modal-content">
@@ -258,17 +403,21 @@
                 <h2 class="modal-title">Create API Key</h2>
                 <button type="button" class="modal-close" onclick="closeApiKeyModal()"><i class="mdi mdi-close"></i></button>
             </div>
-            <div class="form-group">
-                <label class="form-label">Key Name</label>
-                <input type="text" id="settingsApiKeyName" class="form-input" placeholder="Automation key">
+            <div class="modal-scrollable">
+                <div class="form-group">
+                    <label class="form-label">Key Name</label>
+                    <input type="text" id="settingsApiKeyName" class="form-input" placeholder="Automation key">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Scopes</label>
+                    <div id="settingsApiKeyScopes" class="scope-grid"></div>
+                </div>
             </div>
-            <div class="form-group">
-                <label class="form-label">Scopes</label>
-                <div id="settingsApiKeyScopes" class="scope-grid"></div>
-            </div>
-            <div class="form-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeApiKeyModal()">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="createSettingsApiKey()"><i class="mdi mdi-key-plus"></i> Create Key</button>
+            <div class="modal-footer">
+                <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                    <button type="button" class="btn btn-secondary" onclick="closeApiKeyModal()">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="createSettingsApiKey()"><i class="mdi mdi-key-plus"></i> Create Key</button>
+                </div>
             </div>
         </div>
     </div>
@@ -277,6 +426,7 @@
     <script src="js/config.js"></script>
     <script src="js/units.js"></script>
     <script src="js/impersonation.js"></script>
+    <script src="js/users-management.js"></script>
     <script src="js/user-settings.js"></script>
     <script src="js/pwa.js"></script>
     <script>

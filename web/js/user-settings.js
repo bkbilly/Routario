@@ -5,8 +5,9 @@ const IS_COMPANY_ADMIN = localStorage.getItem('is_company_admin') === 'true';
 const MY_COMPANY_ID    = parseInt(localStorage.getItem('company_id') || '0') || null;
 let channels = [];
 let webhooks = [];
+let settingsApiKeys = [];
 let settingsApiKeyScopesLoaded = false;
-let settingsMfaSetupPending = false;
+let currentSettingsTab = hasPermission('manage_users') ? 'users' : 'notifications';
 
 function settingsEsc(value) {
     return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
@@ -33,20 +34,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         const companyLink = document.getElementById('companyMgmtLink');
         if (companyLink) companyLink.style.display = IS_ADMIN ? '' : 'none';
     }
+    if (IS_ADMIN) {
+        const ch = document.getElementById('userCompanyHeader');
+        if (ch) ch.style.display = '';
+    }
     const hash = window.location.hash.replace('#', '');
-    switchSettingsTab(['profile', 'notifications', 'webhooks', 'apiKeys', 'mfa', 'admin'].includes(hash) ? hash : 'profile', false);
+    switchSettingsTab(['users', 'notifications', 'webhooks', 'apiKeys', 'admin'].includes(hash) ? hash : currentSettingsTab, false);
 });
 
 document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeApiKeyModal();
+    if (e.key !== 'Escape') return;
+    closeChannelModal();
+    closeWebhookModal();
+    closeApiKeyModal();
+    closeUserModal();
+    usrCloseAssignModal();
+    usrCloseNotifyModal();
 });
 
 function switchSettingsTab(name, pushState = true) {
-    const sections = ['profile', 'notifications', 'webhooks', 'apiKeys', 'mfa', 'admin'];
-    if (!sections.includes(name)) name = 'profile';
-    if (name === 'admin' && !(IS_ADMIN || IS_COMPANY_ADMIN)) name = 'profile';
-    if (name === 'apiKeys' && !hasPermission('manage_api_keys')) name = 'profile';
-    if (name === 'mfa' && !hasPermission('manage_mfa')) name = 'profile';
+    const fallback = hasPermission('manage_users') ? 'users' : 'notifications';
+    const sections = ['users', 'notifications', 'webhooks', 'apiKeys', 'admin'];
+    if (!sections.includes(name)) name = fallback;
+    if (name === 'users' && !hasPermission('manage_users')) name = 'notifications';
+    if (name === 'admin' && !(IS_ADMIN || IS_COMPANY_ADMIN)) name = fallback;
+    if (name === 'apiKeys' && !hasPermission('manage_api_keys')) name = fallback;
+    currentSettingsTab = name;
     sections.forEach(section => {
         const panel = document.getElementById(`settings-section-${section}`);
         if (panel) panel.style.display = section === name ? '' : 'none';
@@ -54,20 +67,61 @@ function switchSettingsTab(name, pushState = true) {
         if (tab) tab.classList.toggle('active', section === name);
     });
     if (pushState) history.replaceState(null, '', '#' + name);
+    if (name === 'users') initUsersSection();
     if (name === 'apiKeys') initSettingsApiKeys();
-    if (name === 'mfa') initSettingsMfa();
+    updateSettingsGearAction(name);
 }
 
 function applySettingsPermissions() {
+    const usersTab = document.getElementById('settingsTabUsers');
+    if (usersTab) usersTab.style.display = hasPermission('manage_users') ? '' : 'none';
     const apiTab = document.getElementById('settingsTabApiKeys');
     if (apiTab) apiTab.style.display = hasPermission('manage_api_keys') ? '' : 'none';
-    const mfaTab = document.getElementById('settingsTabMfa');
-    if (mfaTab) mfaTab.style.display = hasPermission('manage_mfa') ? '' : 'none';
+}
+
+function closeSettingsGearMenu() {
+    document.getElementById('snDropdown')?.classList.remove('open');
+    document.getElementById('snGearBtn')?.classList.remove('active');
+}
+
+function updateSettingsGearAction(name = currentSettingsTab) {
+    const el = document.getElementById('snSettingsAction');
+    if (!el) return;
+    const actions = {
+        users: hasPermission('manage_users') ? {
+            label: 'Add User',
+            icon: 'mdi-account-plus',
+            fn: 'openUserModal()',
+        } : null,
+        notifications: {
+            label: 'Add Notification Channel',
+            icon: 'mdi-bell-plus',
+            fn: 'openChannelModal()',
+        },
+        webhooks: {
+            label: 'Add Webhook',
+            icon: 'mdi-link-plus',
+            fn: 'openWebhookModal()',
+        },
+        apiKeys: hasPermission('manage_api_keys') ? {
+            label: 'Create API Key',
+            icon: 'mdi-key-plus',
+            fn: 'openApiKeyModal()',
+        } : null,
+    };
+    const action = actions[name];
+    const primary = action
+        ? `<button class="header-menu-item" onclick="${action.fn}; closeSettingsGearMenu()"><span class="header-menu-item-icon"><i class="mdi ${action.icon}" style="font-size:15px;"></i></span><span>${settingsEsc(action.label)}</span></button>`
+        : '';
+    const notify = name === 'users' && hasPermission('manage_users')
+        ? `<button class="header-menu-item" onclick="usrOpenNotifyModal(); closeSettingsGearMenu()"><span class="header-menu-item-icon"><i class="mdi mdi-bell" style="font-size:15px;"></i></span><span>Send Notification</span></button>`
+        : '';
+    el.innerHTML = primary + notify;
 }
 
 window.addEventListener('hashchange', () => {
     const hash = window.location.hash.replace('#', '');
-    switchSettingsTab(hash || 'profile', false);
+    switchSettingsTab(hash || currentSettingsTab, false);
 });
 
 async function loadSettings() {
@@ -82,9 +136,6 @@ async function loadSettings() {
             user = await res.json();
         }
 
-        document.getElementById('username').value = user.username || '';
-        document.getElementById('email').value = user.email || '';
-        document.getElementById('unitSystem').value = user.units || 'metric';
         webhooks = user.webhook_urls || [];
         renderWebhooks();
 
@@ -99,22 +150,26 @@ async function loadSettings() {
 
 function renderWebhooks() {
     const tbody = document.getElementById('webhookListBody');
-    if (!webhooks.length) {
-        tbody.innerHTML = `<tr><td colspan="2" style="color:var(--text-muted);padding:1rem 0;">No webhooks configured.</td></tr>`;
+    const q = (document.getElementById('webhookSearch')?.value || '').toLowerCase();
+    const rows = webhooks.filter(url => url.toLowerCase().includes(q));
+    const count = document.getElementById('webhookCount');
+    if (count) count.textContent = `${rows.length} webhook${rows.length !== 1 ? 's' : ''}`;
+    if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="2" style="color:var(--text-muted);padding:2rem;text-align:center;">No webhooks found.</td></tr>`;
         return;
     }
-    tbody.innerHTML = webhooks.map((url, i) => `
-        <tr>
-            <td style="font-family:monospace;font-size:0.8rem;word-break:break-all;">${url}</td>
+    tbody.innerHTML = rows.map(url => `
+        <tr class="device-row">
+            <td style="font-family:var(--font-mono);font-size:0.82rem;word-break:break-all;">${settingsEsc(url)}</td>
             <td style="text-align:right;">
-                <button class="btn btn-danger"
-                        onclick="removeWebhook(${i})">Remove</button>
+                <button type="button" class="btn btn-danger btn-small"
+                        onclick="removeWebhook(${webhooks.indexOf(url)})"><i class="mdi mdi-delete"></i> Remove</button>
             </td>
         </tr>
     `).join('');
 }
 
-function addWebhook() {
+async function addWebhook() {
     const url = document.getElementById('newWebhookUrl').value.trim();
     if (!url) return;
     try { new URL(url); } catch { showAlert('Invalid URL', 'error'); return; }
@@ -122,7 +177,8 @@ function addWebhook() {
     webhooks.push(url);
     document.getElementById('newWebhookUrl').value = '';
     renderWebhooks();
-    saveWebhooks();
+    await saveWebhooks();
+    closeWebhookModal();
 }
 
 function removeWebhook(index) {
@@ -148,20 +204,29 @@ async function saveWebhooks() {
 function renderChannels() {
     const body = document.getElementById('channelListBody');
     body.innerHTML = '';
+    const q = (document.getElementById('notificationSearch')?.value || '').toLowerCase();
+    const rows = channels.filter(channel =>
+        (channel.name || '').toLowerCase().includes(q) ||
+        (channel.url || '').toLowerCase().includes(q)
+    );
+    const count = document.getElementById('channelCount');
+    if (count) count.textContent = `${rows.length} channel${rows.length !== 1 ? 's' : ''}`;
     
-    if (channels.length === 0) {
-        body.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 2rem;">No notification channels configured.</td></tr>';
+    if (rows.length === 0) {
+        body.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 2rem;">No notification channels found.</td></tr>';
         return;
     }
     
-    channels.forEach((channel, index) => {
+    rows.forEach(channel => {
+        const index = channels.indexOf(channel);
         const tr = document.createElement('tr');
+        tr.className = 'device-row';
         tr.innerHTML = `
-            <td class="channel-name-cell">${channel.name}</td>
-            <td class="channel-url-cell">${maskUrl(channel.url)}</td>
+            <td class="channel-name-cell"><span class="device-row-name">${settingsEsc(channel.name)}</span></td>
+            <td class="channel-url-cell">${settingsEsc(maskUrl(channel.url))}</td>
             <td style="text-align: right;">
-                <button type="button" class="btn btn-danger" onclick="removeChannel(${index})">
-                    Remove
+                <button type="button" class="btn btn-danger btn-small" onclick="removeChannel(${index})">
+                    <i class="mdi mdi-delete"></i> Remove
                 </button>
             </td>
         `;
@@ -207,6 +272,7 @@ async function addChannel() {
     renderChannels();
 
     await saveChannels();
+    closeChannelModal();
 }
 
 async function removeChannel(index) {
@@ -216,48 +282,26 @@ async function removeChannel(index) {
     await saveChannels();
 }
 
-async function saveSettings(e) {
-    e.preventDefault();
-    const btn = document.getElementById('saveBtn');
-    btn.disabled = true;
-    btn.textContent = 'Saving Settings...';
-
-    const selectedUnits = document.getElementById('unitSystem').value;
-    const payload = {
-        email: document.getElementById('email').value,
-        notification_channels: channels,
-        units: selectedUnits,
-    };
-
-    const password = document.getElementById('password').value;
-    if (password) {
-        payload.password = password;
-    }
-
-    try {
-        const res = await apiFetch(`${API_BASE}/users/${USER_ID}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (res.ok) {
-            showAlert('Profile updated successfully', 'success');
-            localStorage.setItem('units', selectedUnits);
-            document.getElementById('password').value = '';
-        } else {
-            const err = await res.json();
-            throw new Error(err.detail || 'Failed to update settings');
-        }
-    } catch (error) {
-        console.error('Save settings error:', error);
-        showAlert(error.message, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.textContent = 'Save Profile Changes';
-    }
+function openChannelModal() {
+    document.getElementById('newChannelName').value = '';
+    document.getElementById('newChannelUrl').value = '';
+    document.getElementById('notificationChannelModal').classList.add('active');
+    setTimeout(() => document.getElementById('newChannelName')?.focus(), 50);
 }
 
+function closeChannelModal() {
+    document.getElementById('notificationChannelModal')?.classList.remove('active');
+}
+
+function openWebhookModal() {
+    document.getElementById('newWebhookUrl').value = '';
+    document.getElementById('webhookModal').classList.add('active');
+    setTimeout(() => document.getElementById('newWebhookUrl')?.focus(), 50);
+}
+
+function closeWebhookModal() {
+    document.getElementById('webhookModal')?.classList.remove('active');
+}
 
 // Show backup panel for admins
 if (localStorage.getItem('is_admin') === 'true') {
@@ -356,19 +400,22 @@ async function settingsJson(url, options = {}) {
     return res.json();
 }
 
+async function ensureSettingsApiKeyScopes() {
+    if (settingsApiKeyScopesLoaded) return;
+    const data = await settingsJson(`${API_BASE}/api-keys/scopes`);
+    document.getElementById('settingsApiKeyScopes').innerHTML =
+        data.scopes.map(s => `
+            <label class="scope-option">
+                <input type="checkbox" value="${settingsEsc(s)}" checked>
+                <span>${settingsEsc(s)}</span>
+            </label>
+        `).join('');
+    settingsApiKeyScopesLoaded = true;
+}
+
 async function initSettingsApiKeys() {
     try {
-        if (!settingsApiKeyScopesLoaded) {
-            const data = await settingsJson(`${API_BASE}/api-keys/scopes`);
-            document.getElementById('settingsApiKeyScopes').innerHTML =
-                data.scopes.map(s => `
-                    <label class="scope-option">
-                        <input type="checkbox" value="${settingsEsc(s)}" checked>
-                        <span>${settingsEsc(s)}</span>
-                    </label>
-                `).join('');
-            settingsApiKeyScopesLoaded = true;
-        }
+        await ensureSettingsApiKeyScopes();
         await loadSettingsApiKeys();
     } catch (e) {
         showAlert(e.message, 'error');
@@ -378,11 +425,25 @@ async function initSettingsApiKeys() {
 async function loadSettingsApiKeys() {
     const body = document.getElementById('settingsApiKeyTableBody');
     if (!body) return;
-    body.innerHTML = '<tr><td colspan="5" style="color:var(--text-muted);padding:1rem 0;text-align:center;">Loading API keys...</td></tr>';
-    const keys = (await settingsJson(`${API_BASE}/api-keys`)).filter(k => k.is_active);
-    body.innerHTML = keys.length ? keys.map(k => `
-        <tr>
-            <td>${settingsEsc(k.name)}</td>
+    body.innerHTML = '<tr><td colspan="5" style="color:var(--text-muted);padding:2rem;text-align:center;">Loading API keys...</td></tr>';
+    settingsApiKeys = (await settingsJson(`${API_BASE}/api-keys`)).filter(k => k.is_active);
+    renderSettingsApiKeys();
+}
+
+function renderSettingsApiKeys() {
+    const body = document.getElementById('settingsApiKeyTableBody');
+    if (!body) return;
+    const q = (document.getElementById('settingsApiKeySearch')?.value || '').toLowerCase();
+    const rows = settingsApiKeys.filter(k =>
+        (k.name || '').toLowerCase().includes(q) ||
+        (k.key_prefix || '').toLowerCase().includes(q) ||
+        (k.scopes || []).join(' ').toLowerCase().includes(q)
+    );
+    const count = document.getElementById('settingsApiKeyCount');
+    if (count) count.textContent = `${rows.length} key${rows.length !== 1 ? 's' : ''}`;
+    body.innerHTML = rows.length ? rows.map(k => `
+        <tr class="device-row">
+            <td><span class="device-row-name">${settingsEsc(k.name)}</span></td>
             <td style="font-family:var(--font-mono);font-size:0.82rem;">${settingsEsc(k.key_prefix)}...</td>
             <td style="font-size:0.82rem;color:var(--text-secondary);">${(k.scopes || []).map(settingsEsc).join(', ') || 'no scopes'}</td>
             <td style="white-space:nowrap;color:var(--text-secondary);font-size:0.82rem;">${k.last_used_at ? new Date(k.last_used_at).toLocaleString() : 'Never'}</td>
@@ -390,10 +451,16 @@ async function loadSettingsApiKeys() {
                 <button type="button" class="btn btn-danger btn-small" onclick="revokeSettingsApiKey(${k.id})"><i class="mdi mdi-key-remove"></i> Revoke</button>
             </td>
         </tr>
-    `).join('') : '<tr><td colspan="5" style="color:var(--text-muted);padding:1rem 0;text-align:center;">No active API keys.</td></tr>';
+    `).join('') : '<tr><td colspan="5" style="color:var(--text-muted);padding:2rem;text-align:center;">No active API keys found.</td></tr>';
 }
 
-function openApiKeyModal() {
+async function openApiKeyModal() {
+    try {
+        await ensureSettingsApiKeyScopes();
+    } catch (e) {
+        showAlert(e.message, 'error');
+        return;
+    }
     document.getElementById('settingsApiKeyName').value = '';
     document.querySelectorAll('#settingsApiKeyScopes input[type="checkbox"]').forEach(cb => { cb.checked = true; });
     document.getElementById('apiKeyModal').classList.add('active');
@@ -432,92 +499,6 @@ async function revokeSettingsApiKey(id) {
         await settingsJson(`${API_BASE}/api-keys/${id}`, { method: 'DELETE' });
         await loadSettingsApiKeys();
         showAlert('API key deleted', 'success');
-    } catch (e) {
-        showAlert(e.message, 'error');
-    }
-}
-
-async function initSettingsMfa() {
-    try {
-        const s = await settingsJson(`${API_BASE}/mfa/status`);
-        document.getElementById('settingsMfaStatus').innerHTML =
-            `<div class="settings-list-item">MFA is <strong>${s.enabled ? 'enabled' : 'disabled'}</strong>.</div>`;
-        renderSettingsMfaControls(Boolean(s.enabled));
-    } catch (e) {
-        showAlert(e.message, 'error');
-    }
-}
-
-function renderSettingsMfaControls(enabled) {
-    const setupBtn = document.getElementById('settingsMfaSetupBtn');
-    const enableBtn = document.getElementById('settingsMfaEnableBtn');
-    const disableBtn = document.getElementById('settingsMfaDisableBtn');
-    const codeGroup = document.getElementById('settingsMfaCodeGroup');
-    const codeLabel = document.getElementById('settingsMfaCodeLabel');
-    const setupBox = document.getElementById('settingsMfaSetupBox');
-
-    if (enabled) {
-        settingsMfaSetupPending = false;
-        setupBtn.style.display = 'none';
-        enableBtn.style.display = 'none';
-        disableBtn.style.display = 'inline-flex';
-        codeGroup.style.display = '';
-        codeLabel.textContent = 'Authenticator or Recovery Code';
-        if (setupBox) setupBox.style.display = 'none';
-    } else {
-        setupBtn.style.display = 'inline-flex';
-        enableBtn.style.display = settingsMfaSetupPending ? 'inline-flex' : 'none';
-        disableBtn.style.display = 'none';
-        codeGroup.style.display = settingsMfaSetupPending ? '' : 'none';
-        codeLabel.textContent = 'Authenticator Code';
-    }
-}
-
-async function setupSettingsMfa() {
-    try {
-        const data = await settingsJson(`${API_BASE}/mfa/setup`, { method: 'POST' });
-        settingsMfaSetupPending = true;
-        const box = document.getElementById('settingsMfaSetupBox');
-        box.style.display = '';
-        box.innerHTML = `<div id="settingsMfaQr"></div><strong>Secret:</strong><br>${settingsEsc(data.secret)}<br><br><strong>Recovery Codes:</strong><br>${data.recovery_codes.map(settingsEsc).join('<br>')}`;
-        const qrEl = document.getElementById('settingsMfaQr');
-        if (window.QRCode && qrEl) {
-            new QRCode(qrEl, { text: data.provisioning_uri, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
-        } else if (qrEl) {
-            qrEl.textContent = data.provisioning_uri;
-        }
-        renderSettingsMfaControls(false);
-    } catch (e) {
-        showAlert(e.message, 'error');
-    }
-}
-
-async function enableSettingsMfa() {
-    try {
-        await settingsJson(`${API_BASE}/mfa/enable`, {
-            method: 'POST',
-            body: JSON.stringify({ code: document.getElementById('settingsMfaCode').value }),
-        });
-        showAlert('MFA enabled', 'success');
-        settingsMfaSetupPending = false;
-        document.getElementById('settingsMfaCode').value = '';
-        await initSettingsMfa();
-    } catch (e) {
-        showAlert(e.message, 'error');
-    }
-}
-
-async function disableSettingsMfa() {
-    try {
-        await settingsJson(`${API_BASE}/mfa/disable`, {
-            method: 'POST',
-            body: JSON.stringify({ code: document.getElementById('settingsMfaCode').value }),
-        });
-        showAlert('MFA disabled', 'success');
-        settingsMfaSetupPending = false;
-        document.getElementById('settingsMfaCode').value = '';
-        document.getElementById('settingsMfaSetupBox').style.display = 'none';
-        await initSettingsMfa();
     } catch (e) {
         showAlert(e.message, 'error');
     }
