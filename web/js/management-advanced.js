@@ -479,7 +479,7 @@ function rtpRenderRoutesTable() {
     if (count) count.textContent = `${rows.length} route${rows.length !== 1 ? 's' : ''}`;
     rtpUpdateSortHeaders('section-routes', _rtpRouteSort);
     body.innerHTML = rows.length ? rows.map(r => `
-        <tr>
+        <tr class="device-row" onclick="rtpEditRoute(${r.id})">
             <td>${rtpEsc(r.name)}</td>
             <td><span class="proto-badge">${rtpEsc(r.status)}</span></td>
             <td>${rtpEsc(rtpRouteValue(r, 'vehicle') || '-')}</td>
@@ -487,7 +487,7 @@ function rtpRenderRoutesTable() {
             <td>${(r.stops || []).length}</td>
             <td>${(r.distance_km || 0).toFixed(1)} km</td>
             <td>${(r.duration_minutes || 0).toFixed(0)} min</td>
-            <td style="text-align:center;"><div class="table-actions">${rtpRouteActions(r)}</div></td>
+            <td style="text-align:center;"><div class="table-actions" onclick="event.stopPropagation()">${rtpRouteActions(r)}</div></td>
         </tr>
     `).join('') : '<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">No planned routes match.</td></tr>';
 }
@@ -604,14 +604,14 @@ function rtpRenderBillingTable() {
         body.innerHTML = rows.length ? rows.map(p => {
             const assigned = rtpCompaniesForPlan(p.id);
             return `
-                <tr>
+                <tr class="device-row" onclick="rtpEditPlan(${p.id})">
                     <td>${rtpEsc(p.name)}</td>
                     <td>${rtpMoney(p.base_price_cents, p.currency)}</td>
                     <td>${p.included_devices} devices<br>${p.included_positions} positions<br>${p.included_api_calls} API calls</td>
                     <td>${rtpMoney(p.price_per_device_cents, p.currency)} / device<br>${rtpMoney(p.price_per_1000_positions_cents, p.currency)} / 1000 positions<br>${rtpMoney(p.price_per_1000_api_calls_cents, p.currency)} / 1000 API calls</td>
                     <td>${assigned.length ? assigned.map(c => rtpEsc(c.name)).join('<br>') : '<span class="stack-item-meta">Unassigned</span>'}</td>
                     <td style="text-align:center;">
-                        <div class="table-actions">
+                        <div class="table-actions" onclick="event.stopPropagation()">
                             <button class="btn btn-secondary" onclick="rtpOpenPlanDetailsModal(${p.id})"><i class="mdi mdi-eye"></i> Details</button>
                             <button class="btn btn-secondary" onclick="rtpEditPlan(${p.id})"><i class="mdi mdi-pencil"></i> Edit</button>
                             <button class="icon-btn-danger" onclick="rtpDeletePlan(${p.id})" title="Delete"><i class="mdi mdi-delete"></i></button>

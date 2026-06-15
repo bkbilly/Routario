@@ -43,7 +43,10 @@ Redis is **optional**. When not available, Routario falls back to in-process Web
 |---|---|---|
 | `API_HOST` | `0.0.0.0` | Bind address for the FastAPI server |
 | `API_PORT` | `8000` | HTTP port for the web interface and API |
-| `API_WORKERS` | `4` | Number of Uvicorn worker processes |
+| `API_WORKERS` | `4` | Reserved for external deployment tooling. The built-in `python app/main.py` launcher starts one Uvicorn process. |
+
+!!! note "Multiple workers"
+    Protocol listeners, cloud integration polling, alert checks, and scheduled report jobs run inside the application process. If you deploy with multiple API worker processes using external tooling, make sure only one process owns protocol listeners and background jobs, or split those responsibilities into a dedicated worker.
 
 ---
 
@@ -85,8 +88,10 @@ On first startup, Routario creates an admin account using these values. If the u
 
 | Variable | Default | Description |
 |---|---|---|
-| `TCP_HOST` | `0.0.0.0` | Bind address for all TCP protocol servers |
-| `UDP_HOST` | `0.0.0.0` | Bind address for all UDP protocol servers |
+| `TCP_HOST` | `0.0.0.0` | Bind address for TCP protocol listeners |
+| `UDP_HOST` | `0.0.0.0` | Bind address for UDP protocol listeners |
+
+Protocol ports are opened only for protocols used by active devices. Creating, updating, deactivating, or deleting devices resynchronizes the running listeners.
 
 ---
 

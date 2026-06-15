@@ -12,7 +12,7 @@ Protocol decoders live in `app/protocols/`. Each decoder handles one device prot
 2. Subclass `BaseProtocolDecoder` and implement `decode()` and optionally `encode_command()`.
 3. Decorate the class with `@ProtocolRegistry.register("your_protocol")`.
 
-Routario starts a TCP/UDP server on the port defined by `PORT` automatically — no changes to `main.py` required.
+Routario registers the decoder automatically. The TCP/UDP listener on the port defined by `PORT` starts when at least one active device is configured with that protocol, and stops again when no active devices use it. No changes to `main.py` are required.
 
 ```python
 from . import BaseProtocolDecoder, ProtocolRegistry

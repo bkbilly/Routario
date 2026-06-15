@@ -26,20 +26,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadSettings();
     applySettingsPermissions();
 
-    if (IS_ADMIN || IS_COMPANY_ADMIN) {
-        const adminTab = document.getElementById('settingsTabAdmin');
-        if (adminTab) adminTab.style.display = '';
+    if ((IS_ADMIN || IS_COMPANY_ADMIN) && hasPermission('manage_backups')) {
+        const backupsTab = document.getElementById('settingsTabBackups');
+        if (backupsTab) backupsTab.style.display = '';
         const backupSection = document.getElementById('backupSection');
-        if (backupSection) backupSection.style.display = IS_ADMIN ? '' : 'none';
-        const companyLink = document.getElementById('companyMgmtLink');
-        if (companyLink) companyLink.style.display = IS_ADMIN ? '' : 'none';
+        if (backupSection) backupSection.style.display = '';
     }
     if (IS_ADMIN) {
         const ch = document.getElementById('userCompanyHeader');
         if (ch) ch.style.display = '';
     }
-    const hash = window.location.hash.replace('#', '');
-    switchSettingsTab(['users', 'notifications', 'webhooks', 'apiKeys', 'admin'].includes(hash) ? hash : currentSettingsTab, false);
+    const hash = normalizeSettingsTab(window.location.hash.replace('#', ''));
+    switchSettingsTab(['users', 'notifications', 'webhooks', 'apiKeys', 'backups'].includes(hash) ? hash : currentSettingsTab, false);
 });
 
 document.addEventListener('keydown', e => {
@@ -53,11 +51,12 @@ document.addEventListener('keydown', e => {
 });
 
 function switchSettingsTab(name, pushState = true) {
+    name = normalizeSettingsTab(name);
     const fallback = hasPermission('manage_users') ? 'users' : 'notifications';
-    const sections = ['users', 'notifications', 'webhooks', 'apiKeys', 'admin'];
+    const sections = ['users', 'notifications', 'webhooks', 'apiKeys', 'backups'];
     if (!sections.includes(name)) name = fallback;
     if (name === 'users' && !hasPermission('manage_users')) name = 'notifications';
-    if (name === 'admin' && !(IS_ADMIN || IS_COMPANY_ADMIN)) name = fallback;
+    if (name === 'backups' && !((IS_ADMIN || IS_COMPANY_ADMIN) && hasPermission('manage_backups'))) name = fallback;
     if (name === 'apiKeys' && !hasPermission('manage_api_keys')) name = fallback;
     currentSettingsTab = name;
     sections.forEach(section => {
@@ -72,11 +71,17 @@ function switchSettingsTab(name, pushState = true) {
     updateSettingsGearAction(name);
 }
 
+function normalizeSettingsTab(name) {
+    return name === 'admin' ? 'backups' : name;
+}
+
 function applySettingsPermissions() {
     const usersTab = document.getElementById('settingsTabUsers');
     if (usersTab) usersTab.style.display = hasPermission('manage_users') ? '' : 'none';
     const apiTab = document.getElementById('settingsTabApiKeys');
     if (apiTab) apiTab.style.display = hasPermission('manage_api_keys') ? '' : 'none';
+    const backupTab = document.getElementById('settingsTabBackups');
+    if (backupTab) backupTab.style.display = ((IS_ADMIN || IS_COMPANY_ADMIN) && hasPermission('manage_backups')) ? '' : 'none';
 }
 
 function closeSettingsGearMenu() {
@@ -120,7 +125,7 @@ function updateSettingsGearAction(name = currentSettingsTab) {
 }
 
 window.addEventListener('hashchange', () => {
-    const hash = window.location.hash.replace('#', '');
+    const hash = normalizeSettingsTab(window.location.hash.replace('#', ''));
     switchSettingsTab(hash || currentSettingsTab, false);
 });
 
@@ -303,12 +308,6 @@ function closeWebhookModal() {
     document.getElementById('webhookModal')?.classList.remove('active');
 }
 
-// Show backup panel for admins
-if (localStorage.getItem('is_admin') === 'true') {
-    const bp = document.getElementById('backupPanel');
-    if (bp) bp.style.display = 'block';
-}
-
 async function downloadBackup() {
     const btn = document.getElementById('backupDownloadBtn');
     btn.disabled    = true;
@@ -341,7 +340,7 @@ function handleRestoreFile(input) {
     const nameEl = document.getElementById('restoreFileName');
     const confirmBtn = document.getElementById('restoreConfirmBtn');
     if (!_restoreFile) {
-        nameEl.textContent = 'No file selected';
+        nameEl.textContent = 'Choose backup file';
         confirmBtn.style.display = 'none';
         return;
     }
@@ -352,8 +351,8 @@ function handleRestoreFile(input) {
 async function confirmRestore() {
     if (!_restoreFile) return;
     if (!confirm(
-        'WARNING: This will REPLACE all data with the backup.\n\n' +
-        'The platform will need to be restarted after restore.\n\n' +
+        'WARNING: This will REPLACE company data with the backup.\n\n' +
+        'Other companies and super admin accounts will not be changed.\n\n' +
         'Are you absolutely sure?'
     )) return;
 
@@ -375,18 +374,18 @@ async function confirmRestore() {
             throw new Error(err.detail || 'Restore failed');
         }
         const data = await res.json();
-        showAlert(`Restore complete. Backup from ${data.created_at}. Please restart the server.`, 'success', 8000);
+        showAlert(`Restore complete. Backup from ${data.created_at}.`, 'success', 8000);
 
         // Reset UI
         _restoreFile = null;
         document.getElementById('restoreFileInput').value      = '';
-        document.getElementById('restoreFileName').textContent  = '';
+        document.getElementById('restoreFileName').textContent  = 'Choose backup file';
         document.getElementById('restoreConfirmBtn').style.display = 'none';
     } catch (e) {
         showAlert('Restore failed: ' + e.message, 'error');
     } finally {
         btn.disabled    = false;
-        btn.innerHTML = '<i class="mdi mdi-alert"></i> Restore — this will overwrite all data';
+        btn.innerHTML = '<i class="mdi mdi-database-sync"></i> Restore Company Data';
     }
 }
 

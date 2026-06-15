@@ -1,19 +1,23 @@
 # Administration
 
-Routario includes several tools for managing the platform itself, accessible only to admin accounts.
+Routario includes several tools for managing users, companies, security, backups, billing, and operational visibility. Access is role- and permission-based, so company admins only see and manage data inside their own company unless they are super admins.
 
 ---
 
 ## Backup & Restore
 
-Routario can export a complete snapshot of the database and restore from a previous backup — useful before upgrades, migrations, or as part of a regular maintenance routine.
+Routario can export a portable backup archive and restore from a previous backup. Backup scope depends on the account:
 
-!!! warning "Admin only"
-    Backup and restore endpoints require an admin account. Regular users cannot access them.
+- **Super Admins** can download and restore full platform backups.
+- **Company Admins** with the **Backup & Restore** permission can download and restore only their own company data.
+- **Regular users** cannot access backup or restore, even if they have other settings permissions.
+
+!!! warning "Scoped restore"
+    Company backups are bound to the company they were created from. Restoring a company backup only affects that company and is rejected for other companies.
 
 ### Download a backup
 
-Navigate to **Admin Panel → Backup → Download Backup**, or call the API directly:
+Navigate to **User Settings → Backups → Create Backup**, or call the API directly:
 
 ```bash
 TOKEN=$(curl -s http://localhost:8000/api/login \
@@ -29,17 +33,17 @@ curl -H "Authorization: Bearer $TOKEN" \
 The archive is a `.tar.gz` file containing:
 
 - **`manifest.json`** — backup metadata.
-- **`db.json`** — a full JSON dump of every database table.
-- **`uploads/`** — uploaded files, when `web/uploads` exists.
+- **`db.json`** — a JSON dump of the full platform for super admins, or company-scoped rows for company admins.
+- **`uploads/`** — related uploaded files, when `web/uploads` exists.
 
 The dump is compatible with any SQLAlchemy-supported database (PostgreSQL, MySQL, SQLite), so backups can be used to migrate between database engines.
 
 ### Restore from a backup
 
 !!! danger "Destructive operation"
-    Restoring a backup **replaces all existing data**. Every table is cleared before the backup data is inserted. This cannot be undone — take a fresh backup first if in doubt.
+    Restoring a super-admin backup replaces platform data. Restoring a company backup replaces data for that company. This cannot be undone - take a fresh backup first if in doubt.
 
-Upload a previously downloaded archive via **Admin Panel → Backup → Restore**, or use the API:
+Upload a previously downloaded archive via **User Settings → Backups → Restore Backup**, or use the API:
 
 ```bash
 TOKEN=$(curl -s http://localhost:8000/api/login \
@@ -54,7 +58,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 ### Scheduling automated backups
 
-Routario does not have a built-in scheduler for backups. Use a cron job on the host or a container orchestrator to call the download endpoint on a schedule:
+Routario does not have a built-in scheduler for backups. Use a cron job on the host or a container orchestrator to call the download endpoint on a schedule. Use a super-admin token for full backups, or a company-admin token with **Backup & Restore** permission for company-scoped backups:
 
 ```cron
 # Daily backup at 02:00, kept for 30 days
@@ -71,7 +75,7 @@ Admins can temporarily act as any user in the system to diagnose permission or c
 - All actions taken during impersonation are performed in the context of that user's account (device visibility, notification channels, etc.).
 - Impersonation ends when the admin explicitly exits the session.
 
-Access via **Admin Panel → Users → Impersonate** next to any non-admin account.
+Access via **Management → Users → Impersonate** next to any non-admin account.
 
 ---
 
@@ -81,7 +85,7 @@ Routario uses a three-tier role hierarchy:
 
 | Role | Capabilities |
 |---|---|
-| **Super Admin** | Full access — manage all users, devices, companies, backup/restore, and impersonation |
+| **Super Admin** | Full access - manage all users, devices, companies, backup/restore, and impersonation |
 | **Company Admin** | Manage users and devices within their assigned company; cannot access other companies or system-level settings |
 | **Regular User** | Can only view devices they have been explicitly assigned |
 
@@ -94,7 +98,7 @@ Super admins have full control over all user accounts:
 - **Delete users** — cascades to remove the user's device assignments and notification channels.
 - **Assign devices** — grant or revoke access to specific devices per user.
 
-Access via **Admin Panel → Users**.
+Access via **Management → Users**.
 
 ### Managing users (company admin)
 
@@ -113,12 +117,93 @@ On top of the three-tier role hierarchy, users can be granted fine-grained permi
 | **Fleet Operations** | Manage Drivers, Manage Fuel, Manage Maintenance, Manage Logbook |
 | **Zones** | Manage Geofences |
 | **Communication & Sharing** | Voice PTT, Live Share |
-| **Administration** | View Management, Manage Users |
+| **Administration** | View Management, Manage Users, Manage Routes, Manage Billing, View Audit Log, View Health Checks |
+| **User Settings** | Manage API Keys, Manage MFA, Backup & Restore |
 
 - **Super Admins** always have all permissions and cannot be restricted.
 - **Permission capping** — a user can only grant permissions they hold themselves; they cannot escalate another user beyond their own access level.
+- **Backup & Restore** can only be assigned to company admins. Normal users cannot back up or restore company data.
 
-Permissions are configured per user via **Admin Panel → Users → Edit**.
+Permissions are configured per user via **Management → Users → Edit**.
+
+---
+
+## API Keys
+
+Users with **Manage API Keys** can create scoped API keys for automation and integrations. Super admins can manage all keys, company admins can manage keys in their company, and regular users with the permission can manage their own keys.
+
+Available key scopes:
+
+| Scope | Allows |
+|---|---|
+| `devices:read` | Read device data |
+| `devices:write` | Create or update device data |
+| `positions:read` | Read position/history data |
+| `commands:send` | Send device commands |
+| `reports:read` | Run reports |
+| `routes:read` | Read planned routes |
+| `routes:write` | Create and update planned routes |
+| `billing:read` | Read billing data |
+
+API keys are shown only once when created. Stored keys are hashed, can be expired, and can be revoked.
+
+---
+
+## Multi-Factor Authentication
+
+Users with **Manage MFA** can set up authenticator-app MFA and recovery codes for themselves. Users who also have **Manage Users** can manage MFA for users they are allowed to administer.
+
+- Super admins can manage MFA across the platform.
+- Company admins can manage MFA only for users in their company.
+- Disabling MFA for your own account requires a valid authenticator code or recovery code.
+- Admin-disabling MFA for another managed user does not require that user's current code.
+
+---
+
+## Audit Log
+
+Users with **View Audit Log** can review recorded administrative and security events from **Management → Audit Log**.
+
+- Company admins see only audit events for their own company.
+- Super admins can filter across companies.
+- Filters include action, actor, company, date range, limit, and offset.
+
+---
+
+## Health Checks
+
+The health endpoints are useful for uptime checks and deployment readiness checks:
+
+| Endpoint | Purpose |
+|---|---|
+| `/health/live` | Basic process liveness |
+| `/health/ready` | Database, disk, Redis, and Valhalla readiness |
+| `/health` | Alias for readiness |
+
+Readiness requires the database and disk checks to pass. Redis is optional. Valhalla is reported separately and marked degraded when Valhalla is enabled but unavailable.
+
+---
+
+## Route Planning
+
+Users with **Manage Routes** can create planned routes with stops, assign them to devices and drivers, preview route geometry, and track route status.
+
+- Planned routes are company-scoped.
+- Route geometry uses Valhalla when available and falls back to straight-line geometry when routing is unavailable.
+- Routes can be moved through statuses such as planned, started, paused, completed, and cancelled.
+- Once a route is started or paused, core route details such as name, assigned device, assigned driver, and stops cannot be edited.
+- Starting a route requires an assigned vehicle.
+
+---
+
+## Billing
+
+Users with **Manage Billing** can view billing information for their company. Super admins can manage billing plans and generate invoices.
+
+- Billing plans define base price, included devices, included position records, included API calls, and overage rates.
+- Company billing settings include plan, currency, tax rate, billing email, billing address, and billing status.
+- Usage is calculated from active devices, stored position records, and API usage events.
+- Invoices store a snapshot of billing currency, exchange rate, totals, tax, and usage at generation time.
 
 ---
 
@@ -134,7 +219,7 @@ Companies let you partition users and devices into isolated groups. A user or de
 - **Custom icon** — optionally upload a company app icon. Routario generates the common PWA icon sizes from it.
 - **Custom badge** — optionally upload a notification badge icon. This is stored separately because Android notification badges have stricter shape requirements.
 
-Access via **Admin Panel → Companies** (super admin only).
+Access via **Management → Companies** (super admin only).
 
 ### Company branding
 

@@ -1,6 +1,8 @@
 # Supported Devices
 
-Routario includes built-in native decoders for the most popular GPS tracker protocols. Each decoder runs on its own TCP/UDP port and handles the full device lifecycle — login, position, heartbeat, and outbound commands.
+Routario includes built-in native decoders for the most popular GPS tracker protocols. Each protocol has its own TCP/UDP port and handles the full device lifecycle — login, position, heartbeat, and outbound commands.
+
+Protocol decoders are registered at startup, but listeners are opened only for protocols used by active devices. When the last active device using a protocol is removed or changed to another protocol, Routario stops that unused listener.
 
 !!! info "Cloud devices"
     Devices already connected to **Wialon**, **Flespi Cloud**, **Traccar**, **3D Tracking**, **GPS-Server.net**, or **Google Find Hub** can be pulled in via cloud integrations — no direct connection needed. See [Cloud Integrations](integrations.md).

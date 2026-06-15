@@ -173,7 +173,7 @@ python app/main.py
 
 ## Firewall & Port Forwarding
 
-Each GPS protocol listens on its own dedicated TCP (and sometimes UDP) port. Open these in your firewall and forward them from your router if running behind NAT.
+Each native GPS protocol uses its own dedicated TCP (and sometimes UDP) port. Routario opens listeners only for protocols used by active devices, so expose only the protocol ports you actually configure.
 
 Refer to the [Protocol Reference](devices.md#protocol-reference) table for the complete port list.
 

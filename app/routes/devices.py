@@ -21,6 +21,7 @@ from sqlalchemy import select, update, and_
 from sqlalchemy.orm import selectinload
 
 from core.database import get_db
+from core.gateway import sync_active_protocol_servers
 from core.auth import get_current_user, require_admin, require_company_admin, verify_device_access, require_permission
 from core.audit import write_audit_log
 from integrations.engine import clear_device_state, evict_auth_cache
@@ -85,6 +86,7 @@ async def create_device(
     device = await db.create_device(device_data)
     target_user = assign_to if assign_to else caller.id
     await db.add_device_to_user(target_user, device.id)
+    await sync_active_protocol_servers()
     await write_audit_log("device.created", actor=caller, company_id=device.company_id, target_type="device", target_id=device.id, request=request, metadata={"imei": device.imei, "protocol": device.protocol})
     return device
 
@@ -133,6 +135,7 @@ async def update_device(
                 .where(DeviceState.device_id == device_id)
                 .values(total_odometer=new_odometer)
             )
+    await sync_active_protocol_servers()
     await write_audit_log("device.updated", actor=caller, company_id=device.company_id, target_type="device", target_id=device.id, request=request)
     return device
 
@@ -161,6 +164,7 @@ async def delete_device(device_id: int, request: Request, admin: User = Depends(
 
     # Clear in-memory polling state for this IMEI
     clear_device_state(imei)
+    await sync_active_protocol_servers()
 
     # If this was an integration device, clean up the IntegrationAccount when
     # no other device belonging to the same user still references it.
