@@ -185,6 +185,14 @@
             .health-table td {
                 display: table-cell !important;
             }
+            .routes-table th,
+            .routes-table td {
+                display: table-cell !important;
+            }
+            .routes-table .route-distance-col,
+            .routes-table .route-duration-col {
+                display: none !important;
+            }
             .health-table {
                 min-width: 560px;
             }
@@ -573,15 +581,15 @@
             <span class="devices-count" id="routesCount"></span>
         </div>
         <div style="overflow-x:auto;">
-            <table class="devices-table">
+            <table class="devices-table routes-table">
                 <thead>
                     <tr>
                         <th data-sort="name" data-sort-dir="asc" onclick="rtpSortRoutes('name')">Name</th>
                         <th data-sort="status" onclick="rtpSortRoutes('status')">Status</th>
                         <th data-sort="vehicle" onclick="rtpSortRoutes('vehicle')">Vehicle</th>
                         <th data-sort="stops" onclick="rtpSortRoutes('stops')">Stops</th>
-                        <th data-sort="distance" onclick="rtpSortRoutes('distance')">Distance</th>
-                        <th data-sort="duration" onclick="rtpSortRoutes('duration')">Duration</th>
+                        <th class="route-distance-col" data-sort="distance" onclick="rtpSortRoutes('distance')">Distance</th>
+                        <th class="route-duration-col" data-sort="duration" onclick="rtpSortRoutes('duration')">Duration</th>
                         <th style="width:300px;text-align:center;">Actions</th>
                     </tr>
                 </thead>
@@ -610,7 +618,7 @@
                         <th data-sort="base" onclick="rtpSortBilling('base')">Base</th>
                         <th data-sort="included" onclick="rtpSortBilling('included')">Included</th>
                         <th data-sort="overage" onclick="rtpSortBilling('overage')">Overage</th>
-                        <th data-sort="companies" onclick="rtpSortBilling('companies')">Assigned Companies</th>
+                        <th data-sort="companies" onclick="rtpSortBilling('companies')">Companies</th>
                         <th style="width:360px;text-align:center;">Actions</th>
                     </tr>
                 </thead>
@@ -1244,7 +1252,7 @@
                 <label><span>Included API Calls</span><input id="billIncApi" class="form-input" type="number" min="0" value="0"><div class="form-help">REST API calls included per month for companies on this plan.</div></label>
                 <label><span id="billApiPriceLabel">Per 1000 API Calls</span><input id="billApiPrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Charge per started block of 1000 API calls above the included amount.</div></label>
                 <label style="grid-column:1 / -1;">
-                    <span>Assigned Companies</span>
+                    <span>Companies</span>
                     <input id="billPlanCompanySearch" class="form-input" placeholder="Search companies..." oninput="rtpFilterPlanCompanies()" style="margin-bottom:0.5rem;">
                     <div id="billPlanCompanies" class="company-checklist"></div>
                     <div class="form-help">A plan can be assigned to multiple companies. Saving updates all selected assignments.</div>

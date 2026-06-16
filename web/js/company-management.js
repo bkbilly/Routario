@@ -134,7 +134,7 @@ function renderTable(list) {
             <td>${c.billing_plan_id ? `<span class="proto-badge">${_esc(_companyBillingPlanName(c) || 'Assigned')}</span>` : '<span style="color:var(--text-muted);">No active plan</span>'}</td>
             <td style="font-size:0.85rem;color:var(--text-secondary);">${formatDate(c.created_at)}</td>
             <td style="text-align:right;white-space:nowrap;">
-                <button class="btn btn-secondary tbl-btn" onclick="openEditModal(${c.id})"><i class="mdi mdi-pencil"></i> Edit</button>
+                <button class="btn btn-secondary tbl-btn" onclick="openEditModal(${c.id})"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Edit</span></button>
             </td>
         </tr>`).join('');
 }

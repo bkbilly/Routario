@@ -562,7 +562,7 @@ function rtpRouteActions(route) {
     const status = String(route.status || 'draft').toLowerCase();
     const isEditable = !rtpIsRouteLocked(status);
     const actions = [
-        `<button class="btn btn-secondary" onclick="rtpEditRoute(${route.id})"><i class="mdi ${isEditable ? 'mdi-pencil' : 'mdi-eye'}"></i> ${isEditable ? 'Edit' : 'View'}</button>`,
+        `<button class="btn btn-secondary" onclick="rtpEditRoute(${route.id})"><i class="mdi ${isEditable ? 'mdi-pencil' : 'mdi-eye'}"></i> <span class="drv-btn-label">${isEditable ? 'Edit' : 'View'}</span></button>`,
     ];
     if ((status === 'planned' || status === 'draft') && route.device_id) {
         actions.push(`<button class="btn btn-secondary" onclick="rtpStartRoute(${route.id})"><i class="mdi mdi-play"></i> Start</button>`);
@@ -768,8 +768,8 @@ function rtpRenderRoutesTable() {
             <td><span class="proto-badge route-status-badge ${rtpRouteStatusClass(r.status)}">${rtpEsc(r.status)}</span></td>
             <td>${rtpEsc(rtpRouteValue(r, 'vehicle') || '-')}</td>
             <td>${rtpRouteStopsProgress(r)}</td>
-            <td>${(r.distance_km || 0).toFixed(1)} km</td>
-            <td>${(r.duration_minutes || 0).toFixed(0)} min</td>
+            <td class="route-distance-col">${(r.distance_km || 0).toFixed(1)} km</td>
+            <td class="route-duration-col">${(r.duration_minutes || 0).toFixed(0)} min</td>
             <td style="text-align:center;"><div class="table-actions" onclick="event.stopPropagation()">${rtpRouteActions(r)}</div></td>
         </tr>
     `).join('') : '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);">No planned routes match.</td></tr>';
@@ -913,7 +913,7 @@ function rtpRenderBillingTable() {
                     <td style="text-align:center;">
                         <div class="table-actions" onclick="event.stopPropagation()">
                             ${detailsButton}
-                            <button class="btn btn-secondary" onclick="rtpEditPlan(${p.id})"><i class="mdi mdi-pencil"></i> Edit</button>
+                            <button class="btn btn-secondary" onclick="rtpEditPlan(${p.id})"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Edit</span></button>
                         </div>
                     </td>
                 </tr>
