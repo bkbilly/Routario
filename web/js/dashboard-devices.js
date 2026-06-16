@@ -206,8 +206,12 @@ function updateSidebarTimes() {
 }
 
 // Select Device
-function selectDevice(deviceId, { zoom = true } = {}) {
+async function selectDevice(deviceId, { zoom = true } = {}) {
     selectedDevice = deviceId;
+    let assignedRoute = null;
+    if (typeof onDashboardDeviceSelectedForRoutes === 'function') {
+        assignedRoute = await onDashboardDeviceSelectedForRoutes(deviceId);
+    }
     document.querySelectorAll('.device-card').forEach(card => card.classList.remove('active'));
     const card = document.getElementById(`device-card-${deviceId}`);
     if (card) {
@@ -226,6 +230,17 @@ function selectDevice(deviceId, { zoom = true } = {}) {
     const marker = markers[deviceId];
     if (marker) {
         if (zoom) {
+            const hasActiveRoute = assignedRoute && typeof DASHBOARD_ACTIVE_ROUTE_STATUSES !== 'undefined'
+                && DASHBOARD_ACTIVE_ROUTE_STATUSES.has(String(assignedRoute.status || '').toLowerCase());
+            if (hasActiveRoute && typeof fitDashboardRouteWithVehicle === 'function') {
+                const openPopup = () => marker.openPopup();
+                map.once('moveend', openPopup);
+                const fitted = fitDashboardRouteWithVehicle(assignedRoute, marker.getLatLng());
+                if (fitted) {
+                    return;
+                }
+                map.off('moveend', openPopup);
+            }
             const targetZoom = 15;
             const currentZoom = map.getZoom();
             const zoomDelta   = Math.abs(targetZoom - currentZoom);

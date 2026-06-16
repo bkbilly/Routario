@@ -224,6 +224,9 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
             });
             return;
         }
+        if (typeof hideDashboardRouteLayerForHistory === 'function') {
+            hideDashboardRouteLayerForHistory();
+        }
         document.getElementById('historySlider').max = historyData.length - 1;
         document.getElementById('historySlider').value = 0;
 
@@ -421,6 +424,9 @@ function exitHistoryMode() {
         if (markers[d.id] && !clusterGroup.hasLayer(markers[d.id])) clusterGroup.addLayer(markers[d.id]);
         if (accuracyCircles[d.id] && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
     });
+    if (typeof restoreDashboardRouteLayerAfterHistory === 'function') {
+        restoreDashboardRouteLayerAfterHistory();
+    }
 
     // Hide history footer
     const footer = document.getElementById('historyControls');

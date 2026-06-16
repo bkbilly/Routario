@@ -338,6 +338,202 @@ body::before {
     transform: scaleY(1);
 }
 
+.selected-route-panel {
+    margin: 0 0 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.selected-route-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.65rem;
+}
+
+.selected-route-eyebrow {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.selected-route-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.selected-route-header-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.35rem;
+    flex: 0 0 auto;
+}
+
+.selected-route-pager {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.selected-route-pager button {
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.selected-route-pager button:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+}
+
+.selected-route-status {
+    flex: 0 0 auto;
+    padding: 0.15rem 0.45rem;
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 4px;
+    color: #7dd3fc;
+    background: rgba(56, 189, 248, 0.1);
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.selected-route-progress-bar {
+    height: 6px;
+    background: var(--bg-primary);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.selected-route-progress-bar span {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #38bdf8, #10b981);
+}
+
+.selected-route-progress-meta {
+    margin-top: 0.35rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.selected-route-next {
+    display: grid;
+    gap: 0.15rem;
+    margin-top: 0.65rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.selected-route-next span {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.selected-route-next strong {
+    font-size: 0.86rem;
+    color: var(--text-primary);
+}
+
+.selected-route-next small {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+}
+
+.selected-route-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
+    margin-top: 0.75rem;
+}
+
+.selected-route-actions .btn {
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.45rem 0.25rem;
+    font-size: 0.68rem;
+    line-height: 1.05;
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    text-align: center;
+    white-space: normal;
+}
+
+.selected-route-actions .btn i {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+@media (max-width: 420px) {
+    .selected-route-actions {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+.route-stop-marker {
+    border-radius: 50%;
+    border: 2px solid #0f172a;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.route-stop-marker span {
+    display: flex;
+    width: 26px;
+    height: 26px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.route-stop-marker.pending span { background: #38bdf8; }
+.route-stop-marker.arrived span { background: #f59e0b; }
+.route-stop-marker.done span { background: #10b981; }
+.route-stop-marker.waypoint.pending span { background: #f59e0b; }
+.route-stop-marker.waypoint.arrived span { background: #f97316; }
+
+.route-plan-stop-marker {
+    border-radius: 50%;
+    border: 2px solid #0f172a;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.route-plan-stop-marker span {
+    display: flex;
+    width: 26px;
+    height: 26px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
 .device-header {
     display: flex;
     justify-content: space-between;

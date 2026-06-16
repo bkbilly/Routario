@@ -319,6 +319,14 @@ async def process_position_callback(position: NormalizedPosition):
         device = await db.get_device_by_imei(position.imei)
         if not device or not device.state:
             return
+        try:
+            from services.route_progress import process_route_progress_for_position
+            await process_route_progress_for_position(position, device)
+        except Exception as exc:
+            logger.error("Route progress processing error: %s", exc, exc_info=True)
+        device = await db.get_device_by_imei(position.imei)
+        if not device or not device.state:
+            return
         alert_engine = get_alert_engine()
         await alert_engine.process_position_alerts(position, device, device.state)
         await ws_manager.broadcast_position_update(position, device)
@@ -995,7 +1003,7 @@ async def _websocket_redis_loop(websocket: WebSocket, user_id: int):
     pubsub = r.pubsub()
     try:
         db = get_db()
-        devices = await db.get_user_devices(user_id)
+        devices = await db.get_websocket_devices_for_user(user_id)
         channels = [f"device:{d.id}" for d in devices]
         if channels:
             await pubsub.subscribe(*channels)
