@@ -59,6 +59,20 @@ class RoutePreviewIn(BaseModel):
     stops: list[RouteStopIn] = Field(default_factory=list)
 
 
+def _naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def _route_stop_values(stop: RouteStopIn) -> dict:
+    values = stop.model_dump()
+    values["planned_arrival"] = _naive_utc(values.get("planned_arrival"))
+    return values
+
+
 def _route_payload(route: PlannedRoute) -> dict:
     return {
         "id": route.id,
@@ -236,7 +250,7 @@ async def create_route(data: PlannedRouteIn, request: Request, current_user: Use
         session.add(route)
         await session.flush()
         for stop in sorted(data.stops, key=lambda s: s.sequence):
-            session.add(RouteStop(route_id=route.id, **stop.model_dump()))
+            session.add(RouteStop(route_id=route.id, **_route_stop_values(stop)))
         await session.flush()
         await session.refresh(route, ["stops"])
         payload = _route_payload(route)
@@ -309,7 +323,7 @@ async def update_route(route_id: int, data: PlannedRouteUpdate, request: Request
             route.distance_km = distance
             route.duration_minutes = duration
             for stop in sorted(data.stops, key=lambda s: s.sequence):
-                session.add(RouteStop(route_id=route.id, **stop.model_dump()))
+                session.add(RouteStop(route_id=route.id, **_route_stop_values(stop)))
         route.updated_at = datetime.utcnow()
         await session.flush()
         await session.refresh(route, ["stops"])
@@ -331,9 +345,9 @@ async def update_stop_status(route_id: int, stop_id: int, data: StopStatusIn, re
             raise HTTPException(status_code=403, detail="Forbidden")
         stop.status = data.status
         if "arrived_at" in data.model_fields_set:
-            stop.arrived_at = data.arrived_at
+            stop.arrived_at = _naive_utc(data.arrived_at)
         if "completed_at" in data.model_fields_set:
-            stop.completed_at = data.completed_at
+            stop.completed_at = _naive_utc(data.completed_at)
         if data.notes is not None:
             stop.notes = data.notes
         route.updated_at = datetime.utcnow()
