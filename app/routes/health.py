@@ -2,6 +2,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -100,8 +101,6 @@ def _check_database_pool() -> dict:
     db = get_db()
     pool = db.engine.sync_engine.pool
     row = {
-        "ok": True,
-        "optional": True,
         "database_type": "sqlite" if getattr(db, "_is_sqlite", False) else "postgresql" if getattr(db, "_is_postgres", False) else "other",
         "pool_class": pool.__class__.__name__,
     }
@@ -113,7 +112,17 @@ def _check_database_pool() -> dict:
             except Exception:
                 pass
     try:
-        row["status"] = pool.status()
+        status_text = pool.status()
+        row["pool_status"] = status_text
+        for key, pattern in {
+            "pool_size": r"Pool size:\s*(-?\d+)",
+            "connections_in_pool": r"Connections in pool:\s*(-?\d+)",
+            "current_overflow": r"Current Overflow:\s*(-?\d+)",
+            "current_checked_out": r"Current Checked out connections:\s*(-?\d+)",
+        }.items():
+            match = re.search(pattern, status_text)
+            if match:
+                row[key] = int(match.group(1))
     except Exception:
         pass
     return row
@@ -122,11 +131,9 @@ def _check_database_pool() -> dict:
 def _check_redis_mode() -> dict:
     state = runtime_state_snapshot().get("redis_pubsub") or {}
     return {
-        "ok": True,
-        "optional": True,
         "available": bool(state.get("available")),
         "mode": state.get("mode") or "unknown",
-        "error": state.get("error"),
+        "pubsub_error": state.get("error"),
     }
 
 
@@ -356,18 +363,29 @@ async def live():
 @router.get("/health/ready")
 async def ready(response: Response):
     settings = get_settings()
+    database_check = await _check_db()
+    database_check.update(_check_database_pool())
+
+    disk_check = _check_disk()
+    disk_capacity = _check_disk_capacity()
+    disk_check.update({
+        "degraded": disk_capacity.get("degraded", False),
+        "capacity_ok": disk_capacity.get("ok", True),
+        "paths": disk_capacity.get("paths", []),
+    })
+
+    redis_check = await _check_redis()
+    redis_check.update(_check_redis_mode())
+
     checks = {
-        "database": await _check_db(),
-        "disk": _check_disk(),
-        "redis": await _check_redis(),
+        "database": database_check,
+        "disk": disk_check,
+        "redis": redis_check,
         "valhalla": {"ok": is_valhalla_available(), "optional": not settings.valhalla_enabled},
         "protocol_listeners": await _check_protocol_listeners(),
         "background_tasks": _check_background_tasks(),
         "ingestion": await _check_ingestion_freshness(),
         "integration_accounts": await _check_integration_accounts(),
-        "disk_capacity": _check_disk_capacity(),
-        "database_pool": _check_database_pool(),
-        "redis_mode": _check_redis_mode(),
         "runtime": _check_runtime(),
     }
     required_ok = (

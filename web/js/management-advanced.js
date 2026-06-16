@@ -1031,14 +1031,14 @@ function rtpSortAudit(col) {
 async function rtpLoadHealth() {
     const body = document.getElementById('healthTableBody');
     if (!body) return;
-    body.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading health checks...</td></tr>';
+    body.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading health checks...</td></tr>';
     try {
         const res = await fetch('/health/ready');
         const data = await res.json();
         _rtpHealthRows = Object.entries(data.checks || {}).map(([name, check]) => ({ name, ...check }));
         rtpRenderHealthTable();
     } catch (e) {
-        body.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted);">${rtpEsc(e.message)}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted);">${rtpEsc(e.message)}</td></tr>`;
     }
 }
 
@@ -1054,11 +1054,10 @@ function rtpRenderHealthTable() {
     body.innerHTML = rows.length ? rows.map(row => `
         <tr>
             <td>${rtpEsc(row.name)}</td>
-            <td><span class="proto-badge">${rtpHealthStatus(row)}</span></td>
-            <td>${row.latency_ms ? `${row.latency_ms} ms` : '-'}</td>
+            <td><span class="proto-badge health-status health-status-${rtpHealthStatus(row)}">${rtpHealthStatus(row)}</span></td>
             <td>${rtpHealthDetails(row)}</td>
         </tr>
-    `).join('') : '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted);">No health checks match.</td></tr>';
+    `).join('') : '<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted);">No health checks match.</td></tr>';
 }
 
 function rtpListenerLabel(listener) {
@@ -1069,97 +1068,160 @@ function rtpListenerLabel(listener) {
 }
 
 function rtpHealthDetails(row) {
-    if (row.error) return rtpEsc(row.error);
-    if (row.degraded) return 'degraded';
+    if (row.name === 'database') {
+        const metrics = [
+            ...rtpLatencyMetrics(row),
+            ['DB', row.database_type || '-'],
+            ['Pool', row.pool_class || '-'],
+            ['Pool size', row.pool_size ?? row.size ?? '-'],
+            ['In pool', row.connections_in_pool ?? row.checkedin ?? '-'],
+            ['Checked out', row.current_checked_out ?? row.checkedout ?? '-'],
+            ['Overflow', row.current_overflow ?? row.overflow ?? '-'],
+        ];
+        const lines = row.error ? [['Error', row.error]] : [];
+        return rtpHealthBox(metrics, lines, row.error ? 'danger' : '');
+    }
+
+    if (row.name === 'disk') {
+        const worst = Math.max(...(row.paths || []).map(p => Number(p.used_percent) || 0), 0);
+        const metrics = [
+            ['Writable', row.ok ? 'yes' : 'no', row.ok ? 'ok' : 'danger'],
+            ['Worst usage', `${worst}%`, worst >= 95 ? 'danger' : worst >= 85 ? 'warn' : 'ok'],
+        ];
+        const lines = (row.paths || []).map(p => {
+            const used = p.used_percent == null ? '?' : `${p.used_percent}%`;
+            const free = p.free_bytes == null ? '-' : rtpFormatBytes(p.free_bytes);
+            const state = p.ok ? (p.degraded ? 'degraded' : 'ok') : 'critical';
+            const error = p.error ? `; ${p.error}` : '';
+            return [p.label || p.path, `${state}, used ${used}, free ${free}${error}`];
+        });
+        if (row.error) lines.unshift(['Error', row.error]);
+        return rtpHealthBox(metrics, lines, row.error ? 'danger' : '');
+    }
+
+    if (row.name === 'redis') {
+        const metrics = [
+            ...rtpLatencyMetrics(row),
+            ['Reachable', row.ok ? 'yes' : 'no', row.ok ? 'ok' : 'info'],
+            ['Pub/sub', row.available ? 'redis' : (row.mode || 'fallback'), row.available ? 'ok' : 'info'],
+        ];
+        const lines = [];
+        if (row.error) lines.push(['Ping', row.error]);
+        if (row.pubsub_error && row.pubsub_error !== row.error) lines.push(['Pub/sub', row.pubsub_error]);
+        return rtpHealthBox(metrics, lines);
+    }
+
+    if (row.error) return rtpHealthBox([], [['Error', row.error]], 'danger');
 
     if (row.name === 'protocol_listeners') {
-        const parts = [];
+        const metrics = [
+            ['Active', row.active_protocols?.length || 0],
+            ['Expected', row.expected_listeners?.length || 0],
+            ['Running', row.running_listeners?.filter(l => l.running)?.length || 0],
+        ];
+        const lines = [];
         if (row.unknown_protocols?.length) {
-            parts.push(`Unknown: ${row.unknown_protocols.map(rtpEsc).join(', ')}`);
+            lines.push(['Unknown', row.unknown_protocols.join(', ')]);
         }
         if (row.missing_listeners?.length) {
-            parts.push(`Missing: ${row.missing_listeners.map(l => rtpEsc(rtpListenerLabel(l))).join(', ')}`);
+            lines.push(['Missing', row.missing_listeners.map(rtpListenerLabel).join(', ')]);
         }
         if (row.unhealthy_listeners?.length) {
-            parts.push(`Stopped: ${row.unhealthy_listeners.map(l => rtpEsc(rtpListenerLabel(l))).join(', ')}`);
+            lines.push(['Stopped', row.unhealthy_listeners.map(rtpListenerLabel).join(', ')]);
         }
         if (row.unexpected_listeners?.length) {
-            parts.push(`Unexpected: ${row.unexpected_listeners.map(l => rtpEsc(rtpListenerLabel(l))).join(', ')}`);
+            lines.push(['Unexpected', row.unexpected_listeners.map(rtpListenerLabel).join(', ')]);
         }
         if (row.integration_protocols?.length) {
-            parts.push(`Integration-only: ${row.integration_protocols.map(rtpEsc).join(', ')}`);
+            lines.push(['Integration-only', row.integration_protocols.join(', ')]);
         }
-        if (!parts.length) {
-            const active = row.active_protocols?.length ? row.active_protocols.join(', ') : 'none';
-            const running = row.running_listeners?.length ? row.running_listeners.map(rtpListenerLabel).join(', ') : 'none';
-            parts.push(`Active: ${rtpEsc(active)}; Running: ${rtpEsc(running)}`);
-        }
-        return parts.join('<br>');
+        if (!lines.length) lines.push(['Listeners', row.running_listeners?.length ? row.running_listeners.map(rtpListenerLabel).join(', ') : 'none']);
+        return rtpHealthBox(metrics, lines);
     }
 
     if (row.name === 'background_tasks' && row.tasks) {
-        return Object.entries(row.tasks).map(([name, task]) => {
+        const tasks = Object.entries(row.tasks);
+        const metrics = [
+            ['Running', tasks.filter(([, task]) => task.running).length],
+            ['Total', tasks.length],
+        ];
+        const lines = tasks.map(([name, task]) => {
             const status = task.ok ? 'ok' : 'fail';
             const age = task.last_success_age_seconds == null ? 'no successful loop yet' : `${task.last_success_age_seconds}s since success`;
             const error = task.last_error ? `; ${task.last_error}` : '';
-            return `${rtpEsc(name)}: ${status}, ${rtpEsc(age)}${rtpEsc(error)}`;
-        }).join('<br>');
+            return [name, `${status}, ${age}${error}`];
+        });
+        return rtpHealthBox(metrics, lines);
     }
 
     if (row.name === 'ingestion') {
         const latest = row.latest_position_age_seconds == null ? 'none' : `${row.latest_position_age_seconds}s ago`;
-        return `Active: ${row.active_devices ?? 0}; Online: ${row.online_devices ?? 0}; Latest: ${rtpEsc(latest)}; Stale >15m: ${row.stale_over_15m_count ?? 0}; Never seen: ${row.never_seen_count ?? 0}`;
+        return rtpHealthBox(
+            [
+                ['Active', row.active_devices ?? 0],
+                ['Online', row.online_devices ?? 0],
+                ['With positions', row.devices_with_positions ?? 0],
+                ['Stale >15m', row.stale_over_15m_count ?? 0, row.stale_over_15m_count ? 'warn' : 'ok'],
+                ['Never seen', row.never_seen_count ?? 0, row.never_seen_count ? 'warn' : 'ok'],
+            ],
+            [['Latest position', latest]]
+        );
     }
 
     if (row.name === 'integration_accounts') {
-        if (!row.accounts?.length) return 'No active integration accounts';
+        if (!row.accounts?.length) return rtpHealthBox([['Accounts', 0]], [['Integrations', 'No active integration accounts']]);
         const errored = row.accounts.filter(a => a.last_error);
         const sample = (errored.length ? errored : row.accounts).slice(0, 5).map(a => {
             const devices = `${a.active_device_count ?? 0} device${a.active_device_count === 1 ? '' : 's'}`;
             const auth = a.last_auth_at ? `auth ${new Date(a.last_auth_at).toLocaleString()}` : 'not authenticated yet';
             const error = a.last_error ? `; ${a.last_error}` : '';
-            return `${rtpEsc(a.provider_id)}/${rtpEsc(a.account_label || 'default')}: ${devices}, ${rtpEsc(auth)}${rtpEsc(error)}`;
+            return [`${a.provider_id}/${a.account_label || 'default'}`, `${devices}, ${auth}${error}`];
         });
-        return `Accounts: ${row.active_accounts ?? 0}; Errors: ${row.accounts_with_errors ?? 0}<br>${sample.join('<br>')}`;
-    }
-
-    if (row.name === 'disk_capacity') {
-        return (row.paths || []).map(p => {
-            const used = p.used_percent == null ? '?' : `${p.used_percent}%`;
-            const free = p.free_bytes == null ? '' : `, free ${rtpFormatBytes(p.free_bytes)}`;
-            const state = p.ok ? (p.degraded ? 'degraded' : 'ok') : 'critical';
-            const error = p.error ? `; ${p.error}` : '';
-            return `${rtpEsc(p.label || p.path)}: ${state}, used ${used}${free}${rtpEsc(error)}`;
-        }).join('<br>');
-    }
-
-    if (row.name === 'database_pool') {
-        const parts = [
-            row.database_type,
-            row.pool_class,
-            row.size != null ? `size ${row.size}` : null,
-            row.checkedout != null ? `checked out ${row.checkedout}` : null,
-            row.overflow != null ? `overflow ${row.overflow}` : null,
-        ].filter(Boolean);
-        return `${rtpEsc(parts.join('; '))}${row.status ? `<br>${rtpEsc(row.status)}` : ''}`;
-    }
-
-    if (row.name === 'redis_mode') {
-        const error = row.error ? `; ${row.error}` : '';
-        return `Mode: ${rtpEsc(row.mode || 'unknown')}; Available: ${row.available ? 'yes' : 'no'}${rtpEsc(error)}`;
+        return rtpHealthBox(
+            [
+                ['Accounts', row.active_accounts ?? 0],
+                ['Errors', row.accounts_with_errors ?? 0, row.accounts_with_errors ? 'danger' : 'ok'],
+            ],
+            sample
+        );
     }
 
     if (row.name === 'runtime') {
-        return [
-            `Version: ${row.app_version || '-'}`,
-            `Commit: ${row.git_commit || '-'}`,
-            `Uptime: ${row.uptime_seconds ?? 0}s`,
-            `Python: ${row.python_version || '-'}`,
-            `DB: ${row.database_type || '-'}`,
-        ].map(rtpEsc).join('; ');
+        return rtpHealthBox(
+            [
+                ['Version', row.app_version || '-'],
+                ['Commit', row.git_commit || '-'],
+                ['Uptime', `${row.uptime_seconds ?? 0}s`],
+                ['Python', row.python_version || '-'],
+                ['DB', row.database_type || '-'],
+            ],
+            [['Platform', row.platform || '-']]
+        );
     }
 
+    if (row.degraded) return rtpHealthBox([], [['State', 'degraded']], 'warn');
     return '';
+}
+
+function rtpLatencyMetrics(row) {
+    return row.latency_ms == null ? [] : [['Latency', `${row.latency_ms} ms`]];
+}
+
+function rtpHealthBox(metrics = [], lines = [], tone = '') {
+    const metricHtml = metrics.length ? `<div class="health-metrics">${metrics.map(([label, value, metricTone]) => rtpHealthMetric(label, value, metricTone)).join('')}</div>` : '';
+    const lineHtml = lines.length ? `<div class="health-lines">${lines.map(([label, value]) => `
+        <div class="health-line">
+            <span class="health-line-label">${rtpEsc(label)}</span>
+            <span class="health-line-value">${rtpEsc(value)}</span>
+        </div>
+    `).join('')}</div>` : '';
+    const toneClass = tone ? ` health-details-${tone}` : '';
+    return `<div class="health-details${toneClass}">${metricHtml}${lineHtml}</div>`;
+}
+
+function rtpHealthMetric(label, value, tone = '') {
+    const toneClass = tone ? ` health-chip-${tone}` : '';
+    return `<span class="health-metric${toneClass}"><span>${rtpEsc(label)}</span><strong>${rtpEsc(value)}</strong></span>`;
 }
 
 function rtpFormatBytes(bytes) {

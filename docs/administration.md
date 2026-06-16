@@ -177,7 +177,7 @@ The health endpoints are useful for uptime checks and deployment readiness check
 | Endpoint | Purpose |
 |---|---|
 | `/health/live` | Basic process liveness |
-| `/health/ready` | Database, disk, Redis, Valhalla, protocol listeners, background tasks, ingestion freshness, integration accounts, storage capacity, database pool, and runtime info |
+| `/health/ready` | Database, disk, Redis, Valhalla, protocol listeners, background tasks, ingestion freshness, integration accounts, and runtime info |
 | `/health` | Alias for readiness |
 
 Readiness requires the database, disk, expected protocol listeners, and background tasks to pass. Redis is optional. Valhalla is reported separately and marked degraded when Valhalla is enabled but unavailable.
@@ -188,9 +188,9 @@ The readiness payload also includes:
 - **Background tasks** — verifies alert checks, integration polling, and scheduled report processing are still running and recently completed a loop.
 - **Ingestion freshness** — reports active devices, online devices, latest position age, never-seen devices, and stale device samples.
 - **Integration accounts** — reports active integration accounts, assigned device counts, last authentication time, and last error.
-- **Storage capacity** — reports free/used space for upload paths, including dashcam and voice uploads.
-- **Database pool** — reports pool class, size, checked-out connections, overflow, and database type when available.
-- **Redis mode** — shows whether WebSocket pub/sub is using Redis or in-process fallback.
+- **Disk** — checks writeability and reports free/used space for upload paths, including dashcam and voice uploads.
+- **Database** — checks query latency and reports pool class, size, connections in pool, checked-out connections, overflow, and database type when available.
+- **Redis** — checks reachability and shows whether WebSocket pub/sub is using Redis or in-process fallback.
 - **Runtime** — shows app version, git commit when available, process start time, uptime, Python version, platform, and database type.
 
 ---
