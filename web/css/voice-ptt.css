@@ -27,6 +27,7 @@
     display: flex;
     border-bottom: 1px solid var(--border-color);
     overflow-x: auto;
+    overflow-y: hidden;
     scrollbar-width: none;
     flex-shrink: 0;
 }
@@ -409,4 +410,3 @@
     .ptt-hist-table thead th { padding: 0.22rem 0.4rem; }
     .ptt-hist-table tbody td { padding: 0.3rem 0.4rem; }
 }
-

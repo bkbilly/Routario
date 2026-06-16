@@ -21,7 +21,11 @@
             gap: 0.25rem;
             border-bottom: 2px solid var(--border-color);
             margin-bottom: 1.5rem;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
         }
+        .page-tabs::-webkit-scrollbar { display: none; }
         .page-tab {
             padding: 0.55rem 1.1rem;
             font-size: 0.875rem;

@@ -416,8 +416,43 @@
         location.reload(true);
     }
 
+    function enableMouseWheelTabScroll(root = document) {
+        const selector = '.mgmt-tabs, .settings-tabs, .modal-tabs, .command-tabs, .page-tabs, .ptt-modal-tabs, .lb-tabs-scroll';
+        root.querySelectorAll(selector).forEach((tabs) => {
+            if (tabs.dataset.wheelScrollBound === 'true') return;
+            tabs.dataset.wheelScrollBound = 'true';
+
+            tabs.addEventListener('wheel', (event) => {
+                if (tabs.scrollWidth <= tabs.clientWidth) return;
+
+                const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+                    ? event.deltaX
+                    : event.deltaY;
+                if (!delta) return;
+
+                const maxScroll = tabs.scrollWidth - tabs.clientWidth;
+                const canScrollLeft = tabs.scrollLeft > 0;
+                const canScrollRight = tabs.scrollLeft < maxScroll;
+                if ((delta < 0 && !canScrollLeft) || (delta > 0 && !canScrollRight)) return;
+
+                event.preventDefault();
+                tabs.scrollLeft += delta;
+            }, { passive: false });
+        });
+    }
+
     // ── Toggle logic ──────────────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', async () => {
+        enableMouseWheelTabScroll();
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === Node.ELEMENT_NODE) enableMouseWheelTabScroll(node);
+                });
+            });
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+
         await permissionsReady;
         const nav = _buildNav();
         const container = document.querySelector('.container');

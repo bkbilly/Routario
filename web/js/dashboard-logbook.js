@@ -54,6 +54,28 @@ window.addEventListener('routario:currencychange', () => {
     }
 });
 
+document.addEventListener('DOMContentLoaded', () => {
+    const tabs = document.querySelector('.lb-tabs-scroll');
+    if (!tabs) return;
+
+    tabs.addEventListener('wheel', (event) => {
+        if (tabs.scrollWidth <= tabs.clientWidth) return;
+
+        const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+            ? event.deltaX
+            : event.deltaY;
+        if (!delta) return;
+
+        const maxScroll = tabs.scrollWidth - tabs.clientWidth;
+        const canScrollLeft = tabs.scrollLeft > 0;
+        const canScrollRight = tabs.scrollLeft < maxScroll;
+        if ((delta < 0 && !canScrollLeft) || (delta > 0 && !canScrollRight)) return;
+
+        event.preventDefault();
+        tabs.scrollLeft += delta;
+    }, { passive: false });
+});
+
 // ── Open / Close ──────────────────────────────────────────────────────────────
 function openLogbookModal(deviceId) {
     _logbookDeviceId = deviceId;
