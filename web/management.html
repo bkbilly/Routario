@@ -51,6 +51,99 @@
         .health-table {
             min-width: 720px;
         }
+        .health-status {
+            border: 1px solid transparent;
+            font-weight: 700;
+        }
+        .health-status-ok {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: rgba(16, 185, 129, 0.28);
+            color: var(--accent-success, #10b981);
+        }
+        .health-status-degraded {
+            background: rgba(245, 158, 11, 0.15);
+            border-color: rgba(245, 158, 11, 0.3);
+            color: var(--accent-warning, #f59e0b);
+        }
+        .health-status-optional {
+            background: rgba(59, 130, 246, 0.14);
+            border-color: rgba(59, 130, 246, 0.28);
+            color: var(--accent-primary, #3b82f6);
+        }
+        .health-status-fail {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: var(--accent-danger, #ef4444);
+        }
+        .health-details {
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
+            line-height: 1.35;
+        }
+        .health-metrics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+        }
+        .health-metric,
+        .health-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.2rem 0.45rem;
+            border-radius: 999px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+        .health-metric strong {
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+        .health-chip-ok {
+            background: rgba(16, 185, 129, 0.12);
+            border-color: rgba(16, 185, 129, 0.24);
+            color: var(--accent-success, #10b981);
+        }
+        .health-chip-warn {
+            background: rgba(245, 158, 11, 0.12);
+            border-color: rgba(245, 158, 11, 0.24);
+            color: var(--accent-warning, #f59e0b);
+        }
+        .health-chip-danger {
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.24);
+            color: var(--accent-danger, #ef4444);
+        }
+        .health-chip-info {
+            background: rgba(59, 130, 246, 0.12);
+            border-color: rgba(59, 130, 246, 0.24);
+            color: var(--accent-primary, #3b82f6);
+        }
+        .health-lines {
+            display: grid;
+            gap: 0.25rem;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+        .health-line {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.45rem;
+            min-width: 0;
+        }
+        .health-line-label {
+            color: var(--text-muted);
+            flex: 0 0 auto;
+            font-weight: 600;
+        }
+        .health-line-value {
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
         @media (max-width: 768px) {
             .audit-table th,
             .audit-table td,
@@ -517,7 +610,6 @@
                     <tr>
                         <th data-sort="name" data-sort-dir="asc" onclick="rtpSortHealth('name')">Check</th>
                         <th data-sort="status" onclick="rtpSortHealth('status')">Status</th>
-                        <th data-sort="latency" onclick="rtpSortHealth('latency')">Latency</th>
                         <th data-sort="details" onclick="rtpSortHealth('details')">Details</th>
                     </tr>
                 </thead>
