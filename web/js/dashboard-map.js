@@ -304,7 +304,7 @@ function updateDeviceMarker(deviceId, state) {
             .bindPopup(popupContent);
         clusterGroup.addLayer(markers[deviceId]);
 
-        markers[deviceId].on('click', () => selectDevice(deviceId, { zoom: false }));
+        markers[deviceId].on('click', () => selectDevice(deviceId));
 
         markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
 
@@ -554,6 +554,9 @@ function handleWebSocketMessage(message) {
             if (!historyDeviceId) {
                 updateDeviceMarker(message.device_id, devices[devIdx]);
                 updateSidebarCard(message.device_id);
+                if (selectedDevice === message.device_id && typeof refreshSelectedDashboardRoute === 'function') {
+                    refreshSelectedDashboardRoute({ force: true });
+                }
             }
         }
         updateStats();
@@ -571,6 +574,10 @@ function handleWebSocketMessage(message) {
             toastMessage = message.data.message;
         }
         showAlert({ title, message: toastMessage, type: message.data.severity || 'info' });
+    } else if (message.type === 'route_update') {
+        if (typeof applyDashboardRouteUpdate === 'function') {
+            applyDashboardRouteUpdate(message.data);
+        }
     }
 }
 

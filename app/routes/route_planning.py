@@ -1,8 +1,10 @@
-from datetime import datetime
+import json
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
@@ -12,7 +14,7 @@ from core.auth import require_api_scope_or_permission
 from core.config import get_settings
 from core.database import get_db
 from core.spatial import calculate_distance_km
-from models import Device, Driver, PlannedRoute, RouteStop, User
+from models import Device, PlannedRoute, RouteStop, User
 
 router = APIRouter(prefix="/api/planned-routes", tags=["route-planning"])
 
@@ -25,6 +27,9 @@ class RouteStopIn(BaseModel):
     longitude: float = Field(..., ge=-180, le=180)
     planned_arrival: Optional[datetime] = None
     service_minutes: int = Field(0, ge=0)
+    stop_kind: str = Field("stop", pattern="^(stop|waypoint)$")
+    arrival_radius_m: int = Field(50, ge=5, le=5000)
+    dwell_seconds: int = Field(0, ge=0, le=86400)
     notes: Optional[str] = None
 
 
@@ -32,7 +37,6 @@ class PlannedRouteIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     company_id: Optional[int] = None
     device_id: Optional[int] = None
-    driver_id: Optional[int] = None
     status: str = "draft"
     stops: list[RouteStopIn] = Field(default_factory=list)
 
@@ -40,7 +44,6 @@ class PlannedRouteIn(BaseModel):
 class PlannedRouteUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     device_id: Optional[int] = None
-    driver_id: Optional[int] = None
     status: Optional[str] = None
     stops: Optional[list[RouteStopIn]] = None
 
@@ -62,7 +65,6 @@ def _route_payload(route: PlannedRoute) -> dict:
         "company_id": route.company_id,
         "name": route.name,
         "device_id": route.device_id,
-        "driver_id": route.driver_id,
         "status": route.status,
         "route_geometry": route.route_geometry,
         "distance_km": route.distance_km,
@@ -80,6 +82,9 @@ def _route_payload(route: PlannedRoute) -> dict:
                 "longitude": s.longitude,
                 "planned_arrival": s.planned_arrival,
                 "service_minutes": s.service_minutes,
+                "stop_kind": s.stop_kind,
+                "arrival_radius_m": s.arrival_radius_m,
+                "dwell_seconds": s.dwell_seconds,
                 "status": s.status,
                 "arrived_at": s.arrived_at,
                 "completed_at": s.completed_at,
@@ -88,6 +93,36 @@ def _route_payload(route: PlannedRoute) -> dict:
             for s in (route.stops or [])
         ],
     }
+
+
+async def _broadcast_route_update(payload: dict, current_user: User) -> None:
+    device_id = payload.get("device_id")
+    if not device_id:
+        return
+    data = jsonable_encoder(payload)
+    message = {
+        "type": "route_update",
+        "device_id": device_id,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data": data,
+    }
+    try:
+        from main import get_ws_manager, redis_pubsub
+        ws = get_ws_manager()
+        if redis_pubsub.available:
+            await redis_pubsub.publish(f"device:{device_id}", message)
+        else:
+            await ws._broadcast_direct(device_id, message)
+            db = get_db()
+            for uid in list(ws.active_connections.keys()):
+                if uid == current_user.id:
+                    continue
+                user = await db.get_user(uid)
+                if user and (user.is_admin or (user.is_company_admin and user.company_id == payload.get("company_id"))):
+                    await ws._send_to_user(uid, json.dumps(message))
+        await ws._send_to_user(current_user.id, json.dumps(message))
+    except Exception:
+        pass
 
 
 async def _calculate_route(stops: list[RouteStopIn]) -> tuple[Optional[dict], Optional[float], Optional[float]]:
@@ -133,17 +168,13 @@ async def _calculate_route(stops: list[RouteStopIn]) -> tuple[Optional[dict], Op
     )
 
 
-async def _assert_company_objects(company_id: Optional[int], device_id: Optional[int], driver_id: Optional[int]) -> None:
+async def _assert_company_objects(company_id: Optional[int], device_id: Optional[int]) -> None:
     db = get_db()
     async with db.get_session() as session:
         if device_id is not None:
             device = await session.get(Device, device_id)
             if not device or device.company_id != company_id:
                 raise HTTPException(status_code=400, detail="Device does not belong to route company")
-        if driver_id is not None:
-            driver = await session.get(Driver, driver_id)
-            if not driver or driver.company_id != company_id:
-                raise HTTPException(status_code=400, detail="Driver does not belong to route company")
 
 
 @router.get("")
@@ -180,7 +211,14 @@ async def create_route(data: PlannedRouteIn, request: Request, current_user: Use
     if not (current_user.is_admin or current_user.is_company_admin):
         raise HTTPException(status_code=403, detail="Company admin access required")
     company_id = data.company_id if current_user.is_admin else current_user.company_id
-    await _assert_company_objects(company_id, data.device_id, data.driver_id)
+    if current_user.is_admin and data.device_id is not None:
+        db = get_db()
+        async with db.get_session() as session:
+            device = await session.get(Device, data.device_id)
+            if not device:
+                raise HTTPException(status_code=400, detail="Device does not belong to route company")
+            company_id = device.company_id
+    await _assert_company_objects(company_id, data.device_id)
     geometry, distance, duration = await _calculate_route(data.stops)
     db = get_db()
     async with db.get_session() as session:
@@ -188,7 +226,7 @@ async def create_route(data: PlannedRouteIn, request: Request, current_user: Use
             company_id=company_id,
             name=data.name,
             device_id=data.device_id,
-            driver_id=data.driver_id,
+            driver_id=None,
             status=data.status,
             route_geometry=geometry,
             distance_km=distance,
@@ -203,6 +241,7 @@ async def create_route(data: PlannedRouteIn, request: Request, current_user: Use
         await session.refresh(route, ["stops"])
         payload = _route_payload(route)
     await write_audit_log("route.created", actor=current_user, company_id=company_id, target_type="planned_route", target_id=payload["id"], request=request)
+    await _broadcast_route_update(payload, current_user)
     return payload
 
 
@@ -232,36 +271,37 @@ async def update_route(route_id: int, data: PlannedRouteUpdate, request: Request
         if not current_user.is_admin and route.company_id != current_user.company_id:
             raise HTTPException(status_code=403, detail="Forbidden")
         locked_statuses = {"active", "started", "in_progress", "paused", "stopped"}
-        edit_fields = {"name", "device_id", "driver_id", "stops"}
+        edit_fields = {"name", "device_id", "stops"}
         if route.status in locked_statuses and edit_fields.intersection(data.model_fields_set):
             raise HTTPException(status_code=400, detail="Started or paused routes cannot be edited")
         next_device_id = data.device_id if "device_id" in data.model_fields_set else route.device_id
-        next_driver_id = data.driver_id if "driver_id" in data.model_fields_set else route.driver_id
         next_company_id = route.company_id
-        if next_company_id is None:
-            if next_device_id is not None:
-                device = await session.get(Device, next_device_id)
-                if not device:
-                    raise HTTPException(status_code=400, detail="Device does not belong to route company")
-                next_company_id = device.company_id
-            elif next_driver_id is not None:
-                driver = await session.get(Driver, next_driver_id)
-                if not driver:
-                    raise HTTPException(status_code=400, detail="Driver does not belong to route company")
-                next_company_id = driver.company_id
+        if next_device_id is not None and (current_user.is_admin or next_company_id is None):
+            device = await session.get(Device, next_device_id)
+            if not device:
+                raise HTTPException(status_code=400, detail="Device does not belong to route company")
+            next_company_id = device.company_id
             if next_company_id is not None:
                 route.company_id = next_company_id
-        await _assert_company_objects(next_company_id, next_device_id, next_driver_id)
+        await _assert_company_objects(next_company_id, next_device_id)
         if data.status in {"active", "started", "in_progress"} and not next_device_id:
             raise HTTPException(status_code=400, detail="Assign a vehicle before starting this route")
         if data.name is not None:
             route.name = data.name
         if "device_id" in data.model_fields_set:
             route.device_id = data.device_id
-        if "driver_id" in data.model_fields_set:
-            route.driver_id = data.driver_id
+            route.driver_id = None
+        previous_status = route.status
         if data.status is not None:
             route.status = data.status
+            if (
+                previous_status in {"completed", "cancelled"}
+                and data.status not in {"completed", "cancelled"}
+            ):
+                for stop in route.stops or []:
+                    stop.status = "pending"
+                    stop.arrived_at = None
+                    stop.completed_at = None
         if data.stops is not None:
             await session.execute(delete(RouteStop).where(RouteStop.route_id == route.id))
             geometry, distance, duration = await _calculate_route(data.stops)
@@ -275,6 +315,7 @@ async def update_route(route_id: int, data: PlannedRouteUpdate, request: Request
         await session.refresh(route, ["stops"])
         payload = _route_payload(route)
     await write_audit_log("route.updated", actor=current_user, company_id=payload["company_id"], target_type="planned_route", target_id=route_id, request=request)
+    await _broadcast_route_update(payload, current_user)
     return payload
 
 
@@ -297,7 +338,11 @@ async def update_stop_status(route_id: int, stop_id: int, data: StopStatusIn, re
             stop.notes = data.notes
         route.updated_at = datetime.utcnow()
         company_id = route.company_id
+        await session.flush()
+        result = await session.execute(select(PlannedRoute).where(PlannedRoute.id == route_id).options(selectinload(PlannedRoute.stops)))
+        payload = _route_payload(result.scalar_one())
     await write_audit_log("route.stop_updated", actor=current_user, company_id=company_id, target_type="route_stop", target_id=stop_id, request=request, metadata={"route_id": route_id, "status": data.status})
+    await _broadcast_route_update(payload, current_user)
     return {"status": "updated"}
 
 

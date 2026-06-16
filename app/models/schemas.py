@@ -23,6 +23,8 @@ class AlertType(str, Enum):
     HARSH_BRAKE = "harsh_brake"
     HARSH_ACCEL = "harsh_accel"
     UNAUTHORIZED_DRIVER = "unauthorized_driver"
+    ROUTE_WAYPOINT_SKIPPED = "route_waypoint_skipped"
+    ROUTE_OFF_ROUTE = "route_off_route"
     CUSTOM = "custom"
     NOTIFICATION = "notification"
 

@@ -1,7 +1,6 @@
 'use strict';
 
 let _rtpDevices = [];
-let _rtpDrivers = [];
 let _rtpCompanies = [];
 let _rtpPlans = [];
 let _rtpRoutesLoaded = false;
@@ -13,6 +12,7 @@ let _rtpDetailPlanId = null;
 let _rtpMap = null;
 let _rtpStopLayer = null;
 let _rtpRouteLine = null;
+let _rtpTileLayer = null;
 let _rtpRouteGeometry = null;
 let _rtpRouteGeometrySignature = '';
 let _rtpPreviewTimer = null;
@@ -31,6 +31,21 @@ function rtpEsc(value) {
     return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
 }
 
+function rtpDateTime(value) {
+    if (!value) return '-';
+    const date = rtpDate(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleString();
+}
+
+function rtpDate(value) {
+    if (!value) return new Date(NaN);
+    if (typeof value === 'string' && !value.includes('Z') && !value.includes('+')) {
+        return new Date(`${value}Z`);
+    }
+    return new Date(value);
+}
+
 async function rtpJson(url, options = {}) {
     const res = await apiFetch(url, options);
     if (!res.ok) {
@@ -45,10 +60,9 @@ async function rtpLoadCommon() {
     const isAdmin = localStorage.getItem('is_admin') === 'true';
     const reqs = [
         rtpJson(`${API_BASE}/devices`).catch(() => []),
-        rtpJson(`${API_BASE}/drivers`).catch(() => []),
         isAdmin ? rtpJson(`${API_BASE}/companies`).catch(() => []) : Promise.resolve([]),
     ];
-    [_rtpDevices, _rtpDrivers, _rtpCompanies] = await Promise.all(reqs);
+    [_rtpDevices, _rtpCompanies] = await Promise.all(reqs);
 }
 
 function rtpMoney(cents, currency = 'EUR', exchangeRate = null) {
@@ -138,10 +152,8 @@ async function rtpInitRoutes() {
 
 function rtpPopulateRouteSelectors() {
     const devSel = document.getElementById('rpDevice');
-    const drvSel = document.getElementById('rpDriver');
-    if (!devSel || !drvSel) return;
+    if (!devSel) return;
     devSel.innerHTML = '<option value="">Unassigned</option>' + _rtpDevices.map(d => `<option value="${d.id}">${rtpEsc(d.name)}</option>`).join('');
-    drvSel.innerHTML = '<option value="">Unassigned</option>' + _rtpDrivers.map(d => `<option value="${d.id}">${rtpEsc(d.name)}</option>`).join('');
 }
 
 function rtpInitRouteMap() {
@@ -149,8 +161,8 @@ function rtpInitRouteMap() {
         setTimeout(() => _rtpMap?.invalidateSize(), 50);
         return;
     }
-    _rtpMap = L.map('routePlanMap', { zoomControl: true, attributionControl: false }).setView([39.0742, 21.8243], 6);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(_rtpMap);
+    _rtpMap = L.map('routePlanMap', { zoomControl: true, attributionControl: true }).setView([39.0742, 21.8243], 6);
+    rtpApplyRouteMapTileLayer();
     _rtpStopLayer = L.layerGroup().addTo(_rtpMap);
     _rtpMap.on('click', e => {
         if (_rtpRouteReadonly) return;
@@ -159,22 +171,96 @@ function rtpInitRouteMap() {
     setTimeout(() => _rtpMap.invalidateSize(), 100);
 }
 
+function rtpApplyRouteMapTileLayer() {
+    if (!_rtpMap || !window.L) return;
+    const tileKey = localStorage.getItem('mapTileLayer') || 'openstreetmap_dark';
+    const tiles = typeof MAP_TILES !== 'undefined' ? MAP_TILES : rtpRouteMapTiles();
+    const tile = tiles[tileKey] || tiles.openstreetmap_dark;
+    if (_rtpTileLayer) _rtpMap.removeLayer(_rtpTileLayer);
+    _rtpTileLayer = L.tileLayer(tile.url, {
+        attribution: tile.attribution,
+        maxZoom: tile.maxZoom,
+    }).addTo(_rtpMap);
+    const tileContainer = _rtpTileLayer.getContainer();
+    if (tileContainer) tileContainer.style.filter = tile.cssFilter || '';
+}
+
+function rtpRouteMapTiles() {
+    return {
+        openstreetmap_dark: {
+            url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19,
+            cssFilter: 'invert(100%) hue-rotate(180deg)',
+        },
+        openstreetmap: {
+            url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19,
+        },
+        stadia_dark: {
+            url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
+            attribution: '© <a href="https://stadiamaps.com/">Stadia Maps</a>',
+            maxZoom: 20,
+        },
+        google_streets: {
+            url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+            attribution: '© Google Maps',
+            maxZoom: 21,
+        },
+        google_satellite: {
+            url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+            attribution: '© Google Maps',
+            maxZoom: 21,
+        },
+        google_hybrid: {
+            url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+            attribution: '© Google Maps',
+            maxZoom: 21,
+        },
+        carto_dark: {
+            url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+            attribution: '© <a href="https://carto.com/">CARTO</a>',
+            maxZoom: 19,
+        },
+        carto_light: {
+            url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+            attribution: '© <a href="https://carto.com/">CARTO</a>',
+            maxZoom: 19,
+        },
+        esri_satellite: {
+            url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            attribution: '© Esri, Maxar, Earthstar Geographics',
+            maxZoom: 19,
+        },
+    };
+}
+
 function rtpAddStop(stop = {}) {
     const box = document.getElementById('rpStops');
     const row = document.createElement('div');
     row.className = 'route-stop-row stack-item';
+    const stopKind = stop.stop_kind || 'stop';
+    const radius = Number.isFinite(Number(stop.arrival_radius_m)) ? Number(stop.arrival_radius_m) : 50;
+    const dwell = Number.isFinite(Number(stop.dwell_seconds)) ? Number(stop.dwell_seconds) : 0;
     row.innerHTML = `
         <div class="route-order-controls">
             <button type="button" class="btn btn-secondary" onclick="rtpMoveStop(this, -1)" title="Move up"><i class="mdi mdi-chevron-up"></i></button>
             <button type="button" class="btn btn-secondary" onclick="rtpMoveStop(this, 1)" title="Move down"><i class="mdi mdi-chevron-down"></i></button>
         </div>
         <label><span>Name</span><input class="form-input rp-stop-name" value="${rtpEsc(stop.name || '')}" placeholder="Stop name"></label>
+        <label><span>Type</span><select class="form-input rp-stop-kind">
+            <option value="stop" ${stopKind === 'stop' ? 'selected' : ''}>Stop</option>
+            <option value="waypoint" ${stopKind === 'waypoint' ? 'selected' : ''}>Waypoint</option>
+        </select></label>
         <label><span>Latitude</span><input class="form-input rp-lat" type="number" step="0.000001" value="${stop.latitude ?? ''}"></label>
         <label><span>Longitude</span><input class="form-input rp-lng" type="number" step="0.000001" value="${stop.longitude ?? ''}"></label>
+        <label><span>Radius m</span><input class="form-input rp-radius" type="number" min="5" max="5000" step="5" value="${radius}"></label>
+        <label><span>Dwell sec</span><input class="form-input rp-dwell" type="number" min="0" max="86400" step="5" value="${dwell}"></label>
         <button class="icon-btn-danger" onclick="this.closest('.route-stop-row').remove(); rtpRefreshRouteMap();" title="Remove"><i class="mdi mdi-delete"></i></button>
     `;
     box.appendChild(row);
-    row.querySelectorAll('input').forEach(input => input.addEventListener('input', rtpRefreshRouteMap));
+    row.querySelectorAll('input, select').forEach(input => input.addEventListener('input', rtpRefreshRouteMap));
     rtpNormalizeStopOrder();
     rtpRefreshRouteMap();
 }
@@ -186,6 +272,9 @@ function rtpCollectStops() {
         name: row.querySelector('.rp-stop-name').value.trim() || null,
         latitude: parseFloat(row.querySelector('.rp-lat').value),
         longitude: parseFloat(row.querySelector('.rp-lng').value),
+        stop_kind: row.querySelector('.rp-stop-kind')?.value || 'stop',
+        arrival_radius_m: Math.max(5, Math.min(5000, parseInt(row.querySelector('.rp-radius')?.value || '50', 10) || 50)),
+        dwell_seconds: Math.max(0, Math.min(86400, parseInt(row.querySelector('.rp-dwell')?.value || '0', 10) || 0)),
     })).filter(s => Number.isFinite(s.latitude) && Number.isFinite(s.longitude));
 }
 
@@ -251,6 +340,49 @@ function rtpGeometryLatLngs(geometry) {
     return [];
 }
 
+function rtpStopColor(stop) {
+    return String(stop.stop_kind || 'stop').toLowerCase() === 'waypoint' ? '#f59e0b' : '#38bdf8';
+}
+
+function rtpStopIcon(stop, index) {
+    const color = rtpStopColor(stop);
+    return L.divIcon({
+        className: 'route-plan-stop-marker',
+        html: `<span style="background:${color};">${index + 1}</span>`,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13],
+    });
+}
+
+function rtpExtendBoundsByRadius(bounds, lat, lng, radiusM) {
+    const radius = Number(radiusM || 0);
+    if (!Number.isFinite(radius) || radius <= 0) return;
+    const latitude = Number(lat);
+    const longitude = Number(lng);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+
+    const latDelta = radius / 111320;
+    const lngScale = Math.max(Math.abs(Math.cos(latitude * Math.PI / 180)), 0.01);
+    const lngDelta = radius / (111320 * lngScale);
+    bounds.extend([latitude - latDelta, longitude - lngDelta]);
+    bounds.extend([latitude + latDelta, longitude + lngDelta]);
+}
+
+function rtpRouteBounds(stops, lineLatLngs = []) {
+    const bounds = L.latLngBounds([]);
+    lineLatLngs.forEach(ll => {
+        const point = L.latLng(ll);
+        if (point && Number.isFinite(point.lat) && Number.isFinite(point.lng)) bounds.extend(point);
+    });
+    stops.forEach(stop => {
+        if (!Number.isFinite(Number(stop.latitude)) || !Number.isFinite(Number(stop.longitude))) return;
+        const ll = L.latLng(Number(stop.latitude), Number(stop.longitude));
+        bounds.extend(ll);
+        rtpExtendBoundsByRadius(bounds, ll.lat, ll.lng, stop.arrival_radius_m || 50);
+    });
+    return bounds;
+}
+
 function rtpScheduleRoutePreview(stops, signature) {
     if (stops.length < 2) return;
     clearTimeout(_rtpPreviewTimer);
@@ -282,9 +414,19 @@ function rtpRefreshRouteMap(schedulePreview = true) {
         _rtpRouteLine = null;
     }
     stops.forEach((s, idx) => {
-        L.marker([s.latitude, s.longitude], { draggable: !_rtpRouteReadonly })
+        const color = rtpStopColor(s);
+        const ll = [s.latitude, s.longitude];
+        L.circle(ll, {
+            radius: Number(s.arrival_radius_m || 50),
+            color,
+            weight: 1,
+            opacity: 0.75,
+            fillColor: color,
+            fillOpacity: 0.08,
+            interactive: false,
+        }).addTo(_rtpStopLayer);
+        L.marker(ll, { draggable: !_rtpRouteReadonly, icon: rtpStopIcon(s, idx) })
             .addTo(_rtpStopLayer)
-            .bindTooltip(String(idx + 1), { permanent: true, direction: 'top' })
             .on('dragend', ev => {
                 const rows = [...document.querySelectorAll('#rpStops .route-stop-row')];
                 const row = rows[idx];
@@ -303,14 +445,41 @@ function rtpRefreshRouteMap(schedulePreview = true) {
     }
 }
 
+function rtpFitRouteMap() {
+    if (!_rtpMap) return;
+    _rtpMap.invalidateSize();
+    const stops = rtpCollectStops().sort((a, b) => a.sequence - b.sequence);
+    const signature = rtpStopSignature(stops);
+    const geometryLatLngs = _rtpRouteGeometrySignature === signature ? rtpGeometryLatLngs(_rtpRouteGeometry) : [];
+    const lineLatLngs = geometryLatLngs.length > 1 ? geometryLatLngs : [];
+    const bounds = rtpRouteBounds(stops, lineLatLngs);
+    if (bounds.isValid()) {
+        _rtpMap.fitBounds(bounds.pad(0.16), {
+            padding: [24, 24],
+            maxZoom: 16,
+            animate: false,
+        });
+    }
+}
+
+function rtpFitRouteMapSoon() {
+    [0, 120, 300, 650].forEach(delay => {
+        setTimeout(() => {
+            if (!_rtpMap || !document.getElementById('routeModal')?.classList.contains('active')) return;
+            rtpFitRouteMap();
+        }, delay);
+    });
+}
+
 function rtpClearRouteForm() {
     _rtpEditingRouteId = null;
     rtpSetRouteReadonly(false);
     document.getElementById('rpName').value = '';
     document.getElementById('rpDevice').value = '';
-    document.getElementById('rpDriver').value = '';
     document.getElementById('rpStops').innerHTML = '';
     document.getElementById('rpSaveLabel').textContent = 'Save Route';
+    const deleteBtn = document.getElementById('rpDeleteBtn');
+    if (deleteBtn) deleteBtn.style.display = 'none';
     _rtpRouteGeometry = null;
     _rtpRouteGeometrySignature = '';
     rtpNormalizeStopOrder();
@@ -323,7 +492,7 @@ function rtpIsRouteLocked(status) {
 
 function rtpSetRouteReadonly(readonly) {
     _rtpRouteReadonly = Boolean(readonly);
-    ['rpName', 'rpDevice', 'rpDriver'].forEach(id => {
+    ['rpName', 'rpDevice'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             el.disabled = _rtpRouteReadonly;
@@ -334,7 +503,7 @@ function rtpSetRouteReadonly(readonly) {
         const el = document.getElementById(id);
         if (el) el.style.display = _rtpRouteReadonly ? 'none' : '';
     });
-    document.querySelectorAll('#rpStops input, #rpStops button').forEach(el => {
+    document.querySelectorAll('#rpStops input, #rpStops select, #rpStops button').forEach(el => {
         el.disabled = _rtpRouteReadonly;
         el.style.opacity = _rtpRouteReadonly ? '0.65' : '';
     });
@@ -355,7 +524,6 @@ async function rtpOpenRouteModal(id = null) {
             _rtpEditingRouteId = r.id;
             document.getElementById('rpName').value = r.name || '';
             document.getElementById('rpDevice').value = r.device_id || '';
-            document.getElementById('rpDriver').value = r.driver_id || '';
             document.getElementById('rpStops').innerHTML = '';
             _rtpRouteGeometry = r.route_geometry || null;
             rtpSetRouteReadonly(readonly);
@@ -364,12 +532,17 @@ async function rtpOpenRouteModal(id = null) {
             document.getElementById('rpSaveLabel').textContent = 'Update Route';
             const title = document.getElementById('routeModalTitle');
             if (title) title.textContent = readonly ? 'View Route' : 'Edit Route';
+            const deleteBtn = document.getElementById('rpDeleteBtn');
+            if (deleteBtn) deleteBtn.style.display = '';
             rtpSetRouteReadonly(readonly);
             rtpRefreshRouteMap(false);
+            rtpFitRouteMapSoon();
         } else {
             rtpClearRouteForm();
             const title = document.getElementById('routeModalTitle');
             if (title) title.textContent = 'Route Planner';
+            const deleteBtn = document.getElementById('rpDeleteBtn');
+            if (deleteBtn) deleteBtn.style.display = 'none';
         }
     } catch (e) { showAlert(e.message, 'error'); }
 }
@@ -388,27 +561,46 @@ function rtpCompanyForSelectedRouteDevice() {
 function rtpRouteActions(route) {
     const status = String(route.status || 'draft').toLowerCase();
     const isEditable = !rtpIsRouteLocked(status);
-    const hasVehicle = Boolean(route.device_id);
-    const actions = [`<button class="btn btn-secondary" onclick="rtpEditRoute(${route.id})"><i class="mdi ${isEditable ? 'mdi-pencil' : 'mdi-eye'}"></i> ${isEditable ? 'Edit' : 'View'}</button>`];
-
-    if (status === 'active' || status === 'started' || status === 'in_progress') {
-        actions.push(`<button class="btn btn-secondary" onclick="rtpSetRouteStatus(${route.id}, 'paused')"><i class="mdi mdi-pause"></i> Pause</button>`);
-        actions.push(`<button class="btn btn-secondary" onclick="rtpSetRouteStatus(${route.id}, 'completed')"><i class="mdi mdi-check"></i> Complete</button>`);
-    } else if (status === 'completed') {
-        actions.push(`<button class="btn btn-secondary" onclick="rtpSetRouteStatus(${route.id}, 'draft')"><i class="mdi mdi-restore"></i> Reopen</button>`);
-    } else if (status === 'paused' || status === 'stopped') {
-        if (hasVehicle) actions.push(`<button class="btn btn-secondary" onclick="rtpStartRoute(${route.id})"><i class="mdi mdi-play"></i> Resume</button>`);
-        actions.push(`<button class="btn btn-secondary" onclick="rtpSetRouteStatus(${route.id}, 'completed')"><i class="mdi mdi-check"></i> Complete</button>`);
-    } else {
-        if (hasVehicle) actions.push(`<button class="btn btn-secondary" onclick="rtpStartRoute(${route.id})"><i class="mdi mdi-play"></i> Start</button>`);
+    const actions = [
+        `<button class="btn btn-secondary" onclick="rtpEditRoute(${route.id})"><i class="mdi ${isEditable ? 'mdi-pencil' : 'mdi-eye'}"></i> ${isEditable ? 'Edit' : 'View'}</button>`,
+    ];
+    if ((status === 'planned' || status === 'draft') && route.device_id) {
+        actions.push(`<button class="btn btn-secondary" onclick="rtpStartRoute(${route.id})"><i class="mdi mdi-play"></i> Start</button>`);
     }
-
-    actions.push(`<button class="icon-btn-danger" onclick="rtpDeleteRoute(${route.id})" title="Delete"><i class="mdi mdi-delete"></i></button>`);
+    if (status === 'active' || status === 'started' || status === 'in_progress') {
+        actions.push(`<button class="btn btn-secondary" onclick="rtpSetRouteStatus(${route.id}, 'completed')"><i class="mdi mdi-flag-checkered"></i> Finish</button>`);
+    }
+    if ((status === 'paused' || status === 'stopped') && route.device_id) {
+        actions.push(`<button class="btn btn-secondary" onclick="rtpStartRoute(${route.id})"><i class="mdi mdi-play"></i> Resume</button>`);
+    }
+    if (status === 'completed') {
+        actions.push(`<button class="btn btn-secondary" onclick="rtpOpenRouteDetails(${route.id})"><i class="mdi mdi-clipboard-text-clock-outline"></i> Details</button>`);
+        actions.push(`<button class="btn btn-secondary" onclick="rtpSetRouteStatus(${route.id}, 'draft')"><i class="mdi mdi-restore"></i> Reopen</button>`);
+    }
     return actions.join('');
 }
 
 function rtpRouteById(id) {
     return _rtpRouteRows.find(r => Number(r.id) === Number(id));
+}
+
+function rtpRouteStatusClass(status) {
+    const value = String(status || 'draft').toLowerCase();
+    if (value === 'active' || value === 'started' || value === 'in_progress') return 'route-status-active';
+    if (value === 'planned' || value === 'draft') return 'route-status-planned';
+    if (value === 'paused' || value === 'stopped') return 'route-status-paused';
+    if (value === 'completed') return 'route-status-completed';
+    if (value === 'cancelled') return 'route-status-cancelled';
+    return 'route-status-default';
+}
+
+function rtpBroadcastRouteUpdate(route) {
+    if (!route) return;
+    try {
+        const bc = new BroadcastChannel('routario_route_updates');
+        bc.postMessage({ type: 'route_update', route });
+        bc.close();
+    } catch (_) {}
 }
 
 async function rtpStartRoute(id) {
@@ -418,6 +610,93 @@ async function rtpStartRoute(id) {
         return;
     }
     await rtpSetRouteStatus(id, 'active');
+}
+
+function rtpRouteTimelineDates(route) {
+    const stops = (route?.stops || []).slice().sort((a, b) => Number(a.sequence || 0) - Number(b.sequence || 0));
+    const activityDates = stops
+        .flatMap(stop => [stop.arrived_at, stop.completed_at])
+        .filter(Boolean)
+        .map(value => rtpDate(value))
+        .filter(date => !Number.isNaN(date.getTime()))
+        .sort((a, b) => a - b);
+    const completedDates = stops
+        .map(stop => stop.completed_at ? rtpDate(stop.completed_at) : null)
+        .filter(date => date && !Number.isNaN(date.getTime()))
+        .sort((a, b) => b - a);
+    const routeUpdated = route?.updated_at ? rtpDate(route.updated_at) : null;
+    return {
+        firstActivity: activityDates[0] || null,
+        completedAt: String(route?.status || '').toLowerCase() === 'completed'
+            ? (completedDates[0] || (!Number.isNaN(routeUpdated?.getTime()) ? routeUpdated : null))
+            : null,
+    };
+}
+
+async function rtpOpenRouteDetails(id) {
+    try {
+        const route = await rtpJson(`${API_BASE}/planned-routes/${id}`);
+        const modal = document.getElementById('routeDetailsModal');
+        const body = document.getElementById('routeDetailsBody');
+        if (!modal || !body) return;
+        const device = _rtpDevices.find(d => Number(d.id) === Number(route.device_id));
+        const stops = (route.stops || []).slice().sort((a, b) => Number(a.sequence || 0) - Number(b.sequence || 0));
+        const completedStops = stops.filter(stop => String(stop.status || '').toLowerCase() === 'completed').length;
+        const timeline = rtpRouteTimelineDates(route);
+        const status = String(route.status || 'draft');
+        const rows = stops.map((stop, idx) => `
+            <tr>
+                <td>${idx + 1}</td>
+                <td>${rtpEsc(stop.name || `Point ${idx + 1}`)}</td>
+                <td>${rtpEsc(stop.stop_kind || 'stop')}</td>
+                <td><span class="proto-badge">${rtpEsc(stop.status || 'pending')}</span></td>
+                <td>${rtpEsc(rtpDateTime(stop.arrived_at))}</td>
+                <td>${rtpEsc(rtpDateTime(stop.completed_at))}</td>
+                <td>${Number(stop.arrival_radius_m || 50)}m</td>
+                <td>${Number(stop.dwell_seconds || 0)}s</td>
+                <td>${Number(stop.latitude).toFixed(6)}, ${Number(stop.longitude).toFixed(6)}</td>
+                <td>${rtpEsc(stop.notes || '-')}</td>
+            </tr>
+        `).join('');
+        body.innerHTML = `
+            <div class="form-grid" style="margin-bottom:1rem;">
+                <div class="stack-item"><div class="stack-item-title">Status</div><div class="stack-item-meta">${rtpEsc(status)}</div></div>
+                <div class="stack-item"><div class="stack-item-title">Vehicle</div><div class="stack-item-meta">${rtpEsc(device?.name || '-')}</div></div>
+                <div class="stack-item"><div class="stack-item-title">Progress</div><div class="stack-item-meta">${completedStops}/${stops.length} points complete</div></div>
+                <div class="stack-item"><div class="stack-item-title">Planned Distance</div><div class="stack-item-meta">${Number(route.distance_km || 0).toFixed(1)} km</div></div>
+                <div class="stack-item"><div class="stack-item-title">Planned Duration</div><div class="stack-item-meta">${Number(route.duration_minutes || 0).toFixed(0)} min</div></div>
+                <div class="stack-item"><div class="stack-item-title">Created</div><div class="stack-item-meta">${rtpEsc(rtpDateTime(route.created_at))}</div></div>
+                <div class="stack-item"><div class="stack-item-title">Updated</div><div class="stack-item-meta">${rtpEsc(rtpDateTime(route.updated_at))}</div></div>
+                <div class="stack-item"><div class="stack-item-title">First Activity</div><div class="stack-item-meta">${rtpEsc(rtpDateTime(timeline.firstActivity))}</div></div>
+                <div class="stack-item"><div class="stack-item-title">Completed</div><div class="stack-item-meta">${rtpEsc(rtpDateTime(timeline.completedAt))}</div></div>
+            </div>
+            <div style="overflow-x:auto;">
+                <table class="devices-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Point</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Arrived</th>
+                            <th>Completed</th>
+                            <th>Radius</th>
+                            <th>Dwell</th>
+                            <th>Coordinates</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows || '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);">No route points configured.</td></tr>'}</tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('routeDetailsTitle').textContent = route.name || 'Route Details';
+        modal.classList.add('active');
+    } catch (e) { showAlert(e.message, 'error'); }
+}
+
+function rtpCloseRouteDetails() {
+    document.getElementById('routeDetailsModal')?.classList.remove('active');
 }
 
 async function rtpSaveRoute() {
@@ -430,9 +709,9 @@ async function rtpSaveRoute() {
             name,
             company_id: rtpCompanyForSelectedRouteDevice(),
             device_id: parseInt(document.getElementById('rpDevice').value || '0', 10) || null,
-            driver_id: parseInt(document.getElementById('rpDriver').value || '0', 10) || null,
             stops,
         };
+        if (!_rtpEditingRouteId) payload.status = 'planned';
         const url = _rtpEditingRouteId ? `${API_BASE}/planned-routes/${_rtpEditingRouteId}` : `${API_BASE}/planned-routes`;
         await rtpJson(url, { method: _rtpEditingRouteId ? 'PUT' : 'POST', body: JSON.stringify(payload) });
         showAlert(_rtpEditingRouteId ? 'Route updated' : 'Route saved', 'success');
@@ -445,26 +724,31 @@ async function rtpSaveRoute() {
 async function rtpLoadRoutes() {
     const body = document.getElementById('routesTableBody');
     if (!body) return;
-    body.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading routes...</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading routes...</td></tr>';
     try {
         _rtpRouteRows = await rtpJson(`${API_BASE}/planned-routes`);
         rtpRenderRoutesTable();
-    } catch (e) { body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">${rtpEsc(e.message)}</td></tr>`; }
+    } catch (e) { body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);">${rtpEsc(e.message)}</td></tr>`; }
 }
 
 function rtpRouteValue(route, col) {
     const device = _rtpDevices.find(d => d.id === route.device_id);
-    const driver = _rtpDrivers.find(d => d.id === route.driver_id);
+    const stops = route.stops || [];
     const values = {
         name: route.name,
         status: route.status,
         vehicle: device?.name || '',
-        driver: driver?.name || '',
-        stops: (route.stops || []).length,
+        stops: stops.length,
         distance: Number(route.distance_km) || 0,
         duration: Number(route.duration_minutes) || 0,
     };
     return values[col];
+}
+
+function rtpRouteStopsProgress(route) {
+    const stops = route.stops || [];
+    const completed = stops.filter(stop => String(stop.status || '').toLowerCase() === 'completed').length;
+    return `${completed}/${stops.length}`;
 }
 
 function rtpRenderRoutesTable() {
@@ -472,7 +756,7 @@ function rtpRenderRoutesTable() {
     if (!body) return;
     const q = (document.getElementById('routesSearch')?.value || '').toLowerCase();
     const rows = _rtpRouteRows.filter(r => [
-        r.name, r.status, rtpRouteValue(r, 'vehicle'), rtpRouteValue(r, 'driver'), (r.stops || []).length,
+        r.name, r.status, rtpRouteValue(r, 'vehicle'), (r.stops || []).length,
     ].join(' ').toLowerCase().includes(q));
     rows.sort((a, b) => rtpCompareValues(rtpRouteValue(a, _rtpRouteSort.col), rtpRouteValue(b, _rtpRouteSort.col), _rtpRouteSort.dir));
     const count = document.getElementById('routesCount');
@@ -481,15 +765,14 @@ function rtpRenderRoutesTable() {
     body.innerHTML = rows.length ? rows.map(r => `
         <tr class="device-row" ondblclick="rtpEditRoute(${r.id})" style="cursor:pointer;">
             <td>${rtpEsc(r.name)}</td>
-            <td><span class="proto-badge">${rtpEsc(r.status)}</span></td>
+            <td><span class="proto-badge route-status-badge ${rtpRouteStatusClass(r.status)}">${rtpEsc(r.status)}</span></td>
             <td>${rtpEsc(rtpRouteValue(r, 'vehicle') || '-')}</td>
-            <td>${rtpEsc(rtpRouteValue(r, 'driver') || '-')}</td>
-            <td>${(r.stops || []).length}</td>
+            <td>${rtpRouteStopsProgress(r)}</td>
             <td>${(r.distance_km || 0).toFixed(1)} km</td>
             <td>${(r.duration_minutes || 0).toFixed(0)} min</td>
             <td style="text-align:center;"><div class="table-actions" onclick="event.stopPropagation()">${rtpRouteActions(r)}</div></td>
         </tr>
-    `).join('') : '<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">No planned routes match.</td></tr>';
+    `).join('') : '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);">No planned routes match.</td></tr>';
 }
 
 function rtpSortRoutes(col) {
@@ -503,7 +786,8 @@ async function rtpEditRoute(id) {
 
 async function rtpSetRouteStatus(id, status) {
     try {
-        await rtpJson(`${API_BASE}/planned-routes/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
+        const route = await rtpJson(`${API_BASE}/planned-routes/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
+        rtpBroadcastRouteUpdate(route);
         await rtpLoadRoutes();
     } catch (e) { showAlert(e.message, 'error'); }
 }
@@ -512,6 +796,18 @@ async function rtpDeleteRoute(id) {
     if (!confirm('Delete this route?')) return;
     try {
         await rtpJson(`${API_BASE}/planned-routes/${id}`, { method: 'DELETE' });
+        await rtpLoadRoutes();
+    } catch (e) { showAlert(e.message, 'error'); }
+}
+
+async function rtpDeleteCurrentRoute() {
+    if (!_rtpEditingRouteId) return;
+    const id = _rtpEditingRouteId;
+    if (!confirm('Delete this route?')) return;
+    try {
+        await rtpJson(`${API_BASE}/planned-routes/${id}`, { method: 'DELETE' });
+        rtpCloseRouteModal();
+        rtpClearRouteForm();
         await rtpLoadRoutes();
     } catch (e) { showAlert(e.message, 'error'); }
 }
@@ -618,7 +914,6 @@ function rtpRenderBillingTable() {
                         <div class="table-actions" onclick="event.stopPropagation()">
                             ${detailsButton}
                             <button class="btn btn-secondary" onclick="rtpEditPlan(${p.id})"><i class="mdi mdi-pencil"></i> Edit</button>
-                            <button class="icon-btn-danger" onclick="rtpDeletePlan(${p.id})" title="Delete"><i class="mdi mdi-delete"></i></button>
                         </div>
                     </td>
                 </tr>
@@ -657,6 +952,8 @@ function rtpFillPlanForm(plan = null) {
     rtpRenderPlanCompanyChecklist(plan);
     const label = document.getElementById('billPlanSaveLabel');
     if (label) label.textContent = plan ? 'Update Plan' : 'Create Plan';
+    const deleteBtn = document.getElementById('billPlanDeleteBtn');
+    if (deleteBtn) deleteBtn.style.display = plan ? '' : 'none';
 }
 
 function rtpRenderPlanCompanyChecklist(plan = _rtpPlans.find(p => p.id === _rtpEditingPlanId) || null) {

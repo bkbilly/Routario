@@ -64,6 +64,7 @@ async function jumpToAlert(alert) {
         speeding: 'mdi-speedometer', geofence_enter: 'mdi-map-marker-check', geofence_exit: 'mdi-map-marker-minus',
         offline: 'mdi-wifi-off', towing: 'mdi-tow-truck', low_battery: 'mdi-battery-low',
         power_cut: 'mdi-power-plug-off', sos: 'mdi-alarm-light', tampering: 'mdi-alert',
+        route_waypoint_skipped: 'mdi-map-marker-off', route_off_route: 'mdi-map-marker-path',
     };
     const icon  = `<i class="mdi ${ICON_MAP[alert.alert_type] || 'mdi-bell'}"></i>`;
     const title = alert.alert_type === 'custom' && alert.alert_metadata?.rule_name
@@ -129,6 +130,8 @@ function _buildAlertItem(alert, { dimmed = false, clickable = true, dismissable 
         sos:            'mdi-alarm-light',
         tampering:      'mdi-alert',
         notification:   'mdi-message-badge',
+        route_waypoint_skipped: 'mdi-map-marker-off',
+        route_off_route: 'mdi-map-marker-path',
     };
     const icon = `<i class="mdi ${ICON_MAP[alert.alert_type] || 'mdi-bell'}"></i>`;
 

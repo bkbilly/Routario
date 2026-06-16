@@ -76,6 +76,39 @@
             border-color: rgba(239, 68, 68, 0.3);
             color: var(--accent-danger, #ef4444);
         }
+        .route-status-badge {
+            border: 1px solid transparent;
+        }
+        .route-status-planned {
+            background: rgba(59, 130, 246, 0.14);
+            border-color: rgba(59, 130, 246, 0.28);
+            color: var(--accent-primary, #3b82f6);
+        }
+        .route-status-active {
+            background: rgba(6, 182, 212, 0.16);
+            border-color: rgba(6, 182, 212, 0.32);
+            color: #06b6d4;
+        }
+        .route-status-paused {
+            background: rgba(245, 158, 11, 0.15);
+            border-color: rgba(245, 158, 11, 0.3);
+            color: var(--accent-warning, #f59e0b);
+        }
+        .route-status-completed {
+            background: rgba(34, 197, 94, 0.13);
+            border-color: rgba(34, 197, 94, 0.28);
+            color: #22c55e;
+        }
+        .route-status-cancelled {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: var(--accent-danger, #ef4444);
+        }
+        .route-status-default {
+            background: rgba(148, 163, 184, 0.14);
+            border-color: rgba(148, 163, 184, 0.25);
+            color: var(--text-secondary, #94a3b8);
+        }
         .health-details {
             display: flex;
             flex-direction: column;
@@ -219,7 +252,7 @@
         }
         .route-stop-row {
             display: grid;
-            grid-template-columns: 36px minmax(120px, 1fr) 110px 110px 42px;
+            grid-template-columns: 36px minmax(120px, 1fr) 118px 110px 110px 96px 96px 42px;
             gap: 0.5rem;
             align-items: center;
         }
@@ -252,6 +285,22 @@
             margin-bottom: 0.85rem;
             background: var(--bg-tertiary);
             overflow: hidden;
+        }
+        .route-plan-stop-marker {
+            border-radius: 50%;
+            border: 2px solid #0f172a;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+        }
+        .route-plan-stop-marker span {
+            display: flex;
+            width: 26px;
+            height: 26px;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            color: white;
+            font-size: 0.72rem;
+            font-weight: 800;
         }
         .icon-btn-danger {
             width: 36px;
@@ -339,7 +388,10 @@
                 grid-row: 1;
             }
             .route-stop-row label:nth-of-type(2),
-            .route-stop-row label:nth-of-type(3) {
+            .route-stop-row label:nth-of-type(3),
+            .route-stop-row label:nth-of-type(4),
+            .route-stop-row label:nth-of-type(5),
+            .route-stop-row label:nth-of-type(6) {
                 grid-column: 2 / -1;
             }
             .route-stop-row .icon-btn-danger {
@@ -527,7 +579,6 @@
                         <th data-sort="name" data-sort-dir="asc" onclick="rtpSortRoutes('name')">Name</th>
                         <th data-sort="status" onclick="rtpSortRoutes('status')">Status</th>
                         <th data-sort="vehicle" onclick="rtpSortRoutes('vehicle')">Vehicle</th>
-                        <th data-sort="driver" onclick="rtpSortRoutes('driver')">Driver</th>
                         <th data-sort="stops" onclick="rtpSortRoutes('stops')">Stops</th>
                         <th data-sort="distance" onclick="rtpSortRoutes('distance')">Distance</th>
                         <th data-sort="duration" onclick="rtpSortRoutes('duration')">Duration</th>
@@ -535,7 +586,7 @@
                     </tr>
                 </thead>
                 <tbody id="routesTableBody">
-                    <tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading routes...</td></tr>
+                    <tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading routes...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -1144,7 +1195,6 @@
             <div class="form-grid">
                 <label><span>Route Name</span><input id="rpName" class="form-input" placeholder="Morning deliveries"></label>
                 <label><span>Vehicle</span><select id="rpDevice" class="form-input"></select></label>
-                <label><span>Driver</span><select id="rpDriver" class="form-input"></select></label>
             </div>
             <div id="rpStops" class="stack-list"></div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.85rem;">
@@ -1153,10 +1203,26 @@
             </div>
         </div>
         <div class="modal-footer">
+            <button type="button" class="btn btn-danger" id="rpDeleteBtn" onclick="rtpDeleteCurrentRoute()" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
             <div style="display:flex;gap:0.75rem;margin-left:auto;">
                 <button type="button" class="btn btn-secondary" onclick="rtpCloseRouteModal()">Cancel</button>
                 <button type="button" class="btn btn-primary" id="rpSaveBtn" onclick="rtpSaveRoute()"><i class="mdi mdi-content-save"></i> <span id="rpSaveLabel">Save Route</span></button>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="routeDetailsModal">
+    <div class="modal-content wide" style="max-width:980px;">
+        <div class="modal-header">
+            <h2 class="modal-title" id="routeDetailsTitle">Route Details</h2>
+            <button type="button" class="modal-close" onclick="rtpCloseRouteDetails()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
+            <div id="routeDetailsBody"></div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="rtpCloseRouteDetails()">Close</button>
         </div>
     </div>
 </div>
@@ -1186,6 +1252,7 @@
             </div>
         </div>
         <div class="modal-footer">
+            <button type="button" class="btn btn-danger" id="billPlanDeleteBtn" onclick="rtpDeletePlan(_rtpEditingPlanId)" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
             <div style="display:flex;gap:0.75rem;margin-left:auto;">
                 <button type="button" class="btn btn-secondary" onclick="rtpClosePlanModal()">Cancel</button>
                 <button type="button" class="btn btn-primary" onclick="rtpCreatePlan()"><i class="mdi mdi-content-save"></i> <span id="billPlanSaveLabel">Create Plan</span></button>
@@ -1362,6 +1429,7 @@
         const closers = [
             ['billingPlanDetailsModal', () => rtpClosePlanDetailsModal()],
             ['billingPlanModal', () => rtpClosePlanModal()],
+            ['routeDetailsModal', () => rtpCloseRouteDetails()],
             ['routeModal',       () => rtpCloseRouteModal()],
             ['driverModal',      () => closeDriverModal()],
             ['alertEditorModal', () => closeAlertEditor()],

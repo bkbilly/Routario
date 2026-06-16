@@ -299,6 +299,9 @@ class DatabaseService:
                 longitude FLOAT NOT NULL,
                 planned_arrival DATETIME,
                 service_minutes INTEGER DEFAULT 0,
+                stop_kind VARCHAR(30) DEFAULT 'stop',
+                arrival_radius_m INTEGER DEFAULT 50,
+                dwell_seconds INTEGER DEFAULT 0,
                 status VARCHAR(30) DEFAULT 'pending',
                 arrived_at DATETIME,
                 completed_at DATETIME,
@@ -308,6 +311,9 @@ class DatabaseService:
             "ALTER TABLE billing_invoices ALTER COLUMN currency SET DEFAULT 'EUR'",
             "ALTER TABLE billing_invoices ADD COLUMN exchange_rate FLOAT DEFAULT 1.0",
             "ALTER TABLE billing_invoices ADD COLUMN amount_display_cents INTEGER DEFAULT 0",
+            "ALTER TABLE route_stops ADD COLUMN stop_kind VARCHAR(30) DEFAULT 'stop'",
+            "ALTER TABLE route_stops ADD COLUMN arrival_radius_m INTEGER DEFAULT 50",
+            "ALTER TABLE route_stops ADD COLUMN dwell_seconds INTEGER DEFAULT 0",
         ]
         if self._is_postgres:
             migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP")
@@ -788,6 +794,23 @@ class DatabaseService:
                 .join(Device.users)
                 .where(User.id == user_id)
                 .options(selectinload(Device.state).selectinload(DeviceState.current_driver))
+            )
+            return result.scalars().all()
+
+    async def get_websocket_devices_for_user(self, user_id: int) -> List[Device]:
+        async with self.get_session() as session:
+            user = await session.get(User, user_id)
+            if not user:
+                return []
+            q = select(Device).options(selectinload(Device.state).selectinload(DeviceState.current_driver))
+            if user.is_admin:
+                result = await session.execute(q)
+                return result.scalars().all()
+            if user.is_company_admin and user.company_id is not None:
+                result = await session.execute(q.where(Device.company_id == user.company_id))
+                return result.scalars().all()
+            result = await session.execute(
+                q.join(Device.users).where(User.id == user_id)
             )
             return result.scalars().all()
 
