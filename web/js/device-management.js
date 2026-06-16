@@ -368,7 +368,7 @@ function renderDeviceTable(list) {
             <td style="font-family:var(--font-mono);font-size:0.85rem;">${odometer}</td>
             <td style="text-align:right;white-space:nowrap;">
                 ${cmds ? `<button class="btn btn-secondary tbl-btn" onclick="openDeviceModal(${d.id},'commands')" title="Commands"><i class="mdi mdi-antenna"></i></button>` : ''}
-                <button class="btn btn-secondary tbl-btn" onclick="openDeviceModal(${d.id},'general')"><i class="mdi mdi-pencil"></i> Edit</button>
+                <button class="btn btn-secondary tbl-btn" onclick="openDeviceModal(${d.id},'general')"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Edit</span></button>
             </td>
         </tr>`;
     }).join('');
