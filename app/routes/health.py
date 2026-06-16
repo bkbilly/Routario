@@ -377,11 +377,28 @@ async def ready(response: Response):
     redis_check = await _check_redis()
     redis_check.update(_check_redis_mode())
 
+    valhalla_enabled = bool(settings.valhalla_enabled)
+    valhalla_available = is_valhalla_available()
+    valhalla_check = {
+        "ok": valhalla_available,
+        "optional": not valhalla_enabled,
+        "enabled": valhalla_enabled,
+        "available": valhalla_available,
+        "url": settings.valhalla_url.rstrip("/") if settings.valhalla_url else "",
+        "message": (
+            "Valhalla is reachable and route/speed services can use it."
+            if valhalla_enabled and valhalla_available
+            else "Valhalla is disabled in configuration."
+            if not valhalla_enabled
+            else "Valhalla is enabled but not reachable."
+        ),
+    }
+
     checks = {
         "database": database_check,
         "disk": disk_check,
         "redis": redis_check,
-        "valhalla": {"ok": is_valhalla_available(), "optional": not settings.valhalla_enabled},
+        "valhalla": valhalla_check,
         "protocol_listeners": await _check_protocol_listeners(),
         "background_tasks": _check_background_tasks(),
         "ingestion": await _check_ingestion_freshness(),

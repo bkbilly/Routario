@@ -1408,6 +1408,20 @@ function rtpHealthDetails(row) {
         return rtpHealthBox(metrics, lines);
     }
 
+    if (row.name === 'valhalla') {
+        const enabled = row.enabled !== false && row.optional !== true;
+        const metrics = [
+            ['Enabled', enabled ? 'yes' : 'no', enabled ? 'ok' : 'info'],
+            ['Reachable', row.available || row.ok ? 'yes' : 'no', row.available || row.ok ? 'ok' : (enabled ? 'danger' : 'info')],
+        ];
+        const lines = [
+            ['URL', row.url || '-'],
+            ['State', row.message || (row.ok ? 'available' : enabled ? 'unreachable' : 'disabled')],
+        ];
+        if (row.error) lines.push(['Error', row.error]);
+        return rtpHealthBox(metrics, lines, row.degraded ? 'warn' : '');
+    }
+
     if (row.error) return rtpHealthBox([], [['Error', row.error]], 'danger');
 
     if (row.name === 'protocol_listeners') {
