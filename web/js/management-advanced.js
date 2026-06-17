@@ -1003,16 +1003,44 @@ function rtpOpenPlanDetailsModal(id) {
     const plan = _rtpPlans.find(p => p.id === id);
     if (!plan) return;
     _rtpDetailPlanId = id;
-    document.getElementById('billingPlanDetailsTitle').textContent = `${plan.name} Details`;
-    const assigned = rtpCompaniesForPlan(id);
+    rtpOpenCompanyBillingReportModal(null, id, true);
+}
+
+function rtpOpenCompanyBillingReportModal(companyId = null, planId = null, lockPlan = false) {
+    _rtpDetailPlanId = planId || null;
+    const selectedPlan = planId ? _rtpPlans.find(p => Number(p.id) === Number(planId)) : null;
+    document.getElementById('billingPlanDetailsTitle').textContent = lockPlan && selectedPlan
+        ? `Billing Report - ${selectedPlan.name}`
+        : 'Company Billing Report';
     const now = new Date();
+    const companies = lockPlan && planId ? rtpCompaniesForPlan(planId) : rtpBillingCompanies();
+    const selectedCompany = companyId
+        ? companies.find(c => Number(c.id) === Number(companyId))
+        : companies.find(c => planId && Number(c.billing_plan_id) === Number(planId)) || companies[0];
+    const selectedPlanId = planId || selectedCompany?.billing_plan_id || _rtpPlans[0]?.id || '';
+    const planWrap = document.getElementById('billDetailPlanWrap');
+    if (planWrap) planWrap.style.display = lockPlan ? 'none' : '';
     document.getElementById('billDetailYear').value = now.getFullYear();
     document.getElementById('billDetailMonth').value = now.getMonth() + 1;
-    document.getElementById('billDetailCompany').innerHTML = assigned.length
-        ? assigned.map(c => `<option value="${c.id}">${rtpEsc(c.name)}</option>`).join('')
-        : '<option value="">No assigned companies</option>';
+    document.getElementById('billDetailPeriod').value = 'month';
+    document.getElementById('billDetailPlan').innerHTML = _rtpPlans.length
+        ? _rtpPlans.map(p => `<option value="${p.id}" ${Number(p.id) === Number(selectedPlanId) ? 'selected' : ''}>${rtpEsc(p.name)}</option>`).join('')
+        : '<option value="">No billing plans</option>';
+    document.getElementById('billDetailCompany').innerHTML = companies.length
+        ? companies.map(c => `<option value="${c.id}" ${Number(c.id) === Number(selectedCompany?.id) ? 'selected' : ''}>${rtpEsc(c.name)}</option>`).join('')
+        : '<option value="">No companies</option>';
     document.getElementById('billingPlanDetailsResult').innerHTML = '';
+    rtpUpdateBillingPeriodControls();
     document.getElementById('billingPlanDetailsModal').classList.add('active');
+}
+
+function rtpBillingCompanyChanged() {
+    const companyId = document.getElementById('billDetailCompany')?.value;
+    const company = rtpBillingCompanies().find(c => Number(c.id) === Number(companyId));
+    const planSelect = document.getElementById('billDetailPlan');
+    if (planSelect) {
+        planSelect.value = String(company?.billing_plan_id || _rtpPlans[0]?.id || '');
+    }
 }
 
 function rtpClosePlanDetailsModal() {
@@ -1020,30 +1048,108 @@ function rtpClosePlanDetailsModal() {
     if (modal) modal.classList.remove('active');
 }
 
-async function rtpDetailGenerateBillingSummary() {
+function rtpUpdateBillingPeriodControls() {
+    const period = document.getElementById('billDetailPeriod')?.value || 'month';
+    const monthWrap = document.getElementById('billDetailMonthWrap');
+    if (monthWrap) monthWrap.style.display = period === 'year' ? 'none' : '';
+}
+
+function rtpBillingReportContext() {
     const companyId = document.getElementById('billDetailCompany').value;
-    const year = document.getElementById('billDetailYear').value;
-    const month = document.getElementById('billDetailMonth').value;
-    const plan = _rtpPlans.find(p => Number(p.id) === Number(_rtpDetailPlanId));
+    const planId = document.getElementById('billDetailPlan').value || _rtpDetailPlanId;
+    const year = Number(document.getElementById('billDetailYear').value);
+    const month = Number(document.getElementById('billDetailMonth').value);
+    const periodType = document.getElementById('billDetailPeriod')?.value || 'month';
+    const plan = _rtpPlans.find(p => Number(p.id) === Number(planId));
     const company = rtpBillingCompanies().find(c => Number(c.id) === Number(companyId));
+    return { companyId, planId, year, month, periodType, plan, company };
+}
+
+async function rtpFetchBillingReport(ctx) {
+    if (ctx.periodType !== 'year') {
+        const qs = `year=${ctx.year}&month=${ctx.month}&plan_id=${ctx.planId}`;
+        const usageData = await rtpJson(`${API_BASE}/billing/companies/${ctx.companyId}/usage?year=${ctx.year}&month=${ctx.month}`);
+        const invoice = await rtpJson(`${API_BASE}/billing/companies/${ctx.companyId}/invoices?${qs}`, { method: 'POST' });
+        return {
+            invoice,
+            usage: usageData.usage || invoice.usage || {},
+            monthRows: [],
+            periodLabel: new Date(ctx.year, ctx.month - 1, 1).toLocaleString(undefined, { month: 'long', year: 'numeric' }),
+        };
+    }
+
+    const months = [];
+    for (let m = 1; m <= 12; m += 1) {
+        const qs = `year=${ctx.year}&month=${m}&plan_id=${ctx.planId}`;
+        const usageData = await rtpJson(`${API_BASE}/billing/companies/${ctx.companyId}/usage?year=${ctx.year}&month=${m}`);
+        const invoice = await rtpJson(`${API_BASE}/billing/companies/${ctx.companyId}/invoices?${qs}`, { method: 'POST' });
+        months.push({ month: m, label: new Date(ctx.year, m - 1, 1).toLocaleString(undefined, { month: 'short' }), usage: usageData.usage || invoice.usage || {}, invoice });
+    }
+    const firstInvoice = months[0]?.invoice || {};
+    const usage = months.reduce((acc, row) => {
+        acc.active_devices += Number(row.usage.active_devices || 0);
+        acc.positions += Number(row.usage.positions || 0);
+        acc.api_calls += Number(row.usage.api_calls || 0);
+        return acc;
+    }, { active_devices: 0, positions: 0, api_calls: 0 });
+    const amount = months.reduce((sum, row) => sum + Number(row.invoice.amount_cents || 0), 0);
+    const lineMap = new Map();
+    months.forEach(row => {
+        (row.invoice.line_items || []).forEach(line => {
+            const key = `${line.label || '-'}|${line.unit || 'month'}`;
+            const current = lineMap.get(key) || {
+                label: line.label || '-',
+                quantity: 0,
+                unit: line.unit || 'month',
+                billable_units: 0,
+                amount_cents: 0,
+            };
+            current.quantity += Number(line.quantity || 0);
+            current.billable_units += Number(line.billable_units || 0);
+            current.amount_cents += Number(line.amount_cents || 0);
+            lineMap.set(key, current);
+        });
+    });
+    const lineItems = [...lineMap.values()]
+        .filter(line => line.amount_cents > 0 || line.label === 'Free inactive period')
+        .map(line => ({
+            ...line,
+            billable_units: line.billable_units || undefined,
+        }));
+    return {
+        invoice: { ...firstInvoice, amount_cents: amount, line_items: lineItems, usage },
+        usage,
+        monthRows: months,
+        periodLabel: String(ctx.year),
+    };
+}
+
+async function rtpDetailGenerateBillingSummary() {
+    const ctx = rtpBillingReportContext();
+    const { companyId, planId, plan, company } = ctx;
     if (!companyId) return showAlert('Select a company first', 'error');
+    if (!planId || !plan) return showAlert('Select a billing plan first', 'error');
     try {
-        const usageData = await rtpJson(`${API_BASE}/billing/companies/${companyId}/usage?year=${year}&month=${month}`);
-        const inv = await rtpJson(`${API_BASE}/billing/companies/${companyId}/invoices?year=${year}&month=${month}`, { method: 'POST' });
-        const u = usageData.usage || inv.usage || {};
+        const report = await rtpFetchBillingReport(ctx);
+        const inv = report.invoice;
+        const u = report.usage;
         const overageDevices = Math.max(0, (u.active_devices || 0) - (plan?.included_devices || 0));
         const overagePositions = Math.max(0, (u.positions || 0) - (plan?.included_positions || 0));
         const overageApi = Math.max(0, (u.api_calls || 0) - (plan?.included_api_calls || 0));
-        const period = new Date(Number(year), Number(month) - 1, 1).toLocaleString(undefined, { month: 'long', year: 'numeric' });
-        const lineAmount = label => (inv.line_items || []).find(x => x.label === label)?.amount_cents || 0;
+        const lineAmount = label => report.monthRows.length
+            ? report.monthRows.reduce((sum, row) => sum + Number((row.invoice.line_items || []).find(x => x.label === label)?.amount_cents || 0), 0)
+            : (inv.line_items || []).find(x => x.label === label)?.amount_cents || 0;
+        const activeBillingMonths = report.monthRows.length
+            ? report.monthRows.filter(row => Number(row.invoice.amount_cents || 0) > 0).length
+            : (lineAmount('Base subscription') > 0 ? 1 : 0);
         const rows = [
             {
                 metric: 'Base subscription',
-                used: 1,
+                used: activeBillingMonths,
                 included: '-',
                 overage: '-',
                 rate: rtpInvoiceMoney(plan?.base_price_cents || 0, inv),
-                amount: plan?.base_price_cents || 0,
+                amount: lineAmount('Base subscription'),
             },
             {
                 metric: 'Active devices',
@@ -1070,9 +1176,27 @@ async function rtpDetailGenerateBillingSummary() {
                 amount: lineAmount('Additional API calls'),
             },
         ];
+        const monthRows = report.monthRows.length ? `
+            <div style="overflow-x:auto;margin-top:0.75rem;">
+                <table class="devices-table">
+                    <thead><tr><th>Month</th><th>Devices</th><th>Positions</th><th>API Calls</th><th style="text-align:right;">Amount</th></tr></thead>
+                    <tbody>
+                        ${report.monthRows.map(row => `
+                            <tr>
+                                <td>${rtpEsc(row.label)}</td>
+                                <td>${row.usage.active_devices || 0}</td>
+                                <td>${row.usage.positions || 0}</td>
+                                <td>${row.usage.api_calls || 0}</td>
+                                <td style="text-align:right;">${rtpInvoiceMoney(row.invoice.amount_cents || 0, row.invoice)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        ` : '';
         document.getElementById('billingPlanDetailsResult').innerHTML = `
             <div class="stack-item">
-                <div class="stack-item-title">${rtpEsc(company?.name || 'Company')} - ${rtpEsc(period)}</div>
+                <div class="stack-item-title">${rtpEsc(company?.name || 'Company')} - ${rtpEsc(report.periodLabel)}</div>
                 <div class="stack-item-meta">Plan: ${rtpEsc(plan?.name || 'Billing plan')}</div>
                 <div style="overflow-x:auto;margin-top:0.75rem;">
                     <table class="devices-table">
@@ -1100,6 +1224,7 @@ async function rtpDetailGenerateBillingSummary() {
                         </tbody>
                     </table>
                 </div>
+                ${monthRows}
                 <div style="display:flex;justify-content:flex-end;margin-top:0.85rem;font-weight:800;font-size:1rem;">
                     Draft Total: ${rtpInvoiceMoney(inv.amount_cents, inv)}
                 </div>
@@ -1109,17 +1234,14 @@ async function rtpDetailGenerateBillingSummary() {
 }
 
 async function rtpPrintBillingDetails() {
-    const companyId = document.getElementById('billDetailCompany').value;
-    const year = document.getElementById('billDetailYear').value;
-    const month = document.getElementById('billDetailMonth').value;
-    const plan = _rtpPlans.find(p => Number(p.id) === Number(_rtpDetailPlanId));
-    const company = rtpBillingCompanies().find(c => Number(c.id) === Number(companyId));
-    if (!companyId || !plan || !company) return showAlert('Select a company first', 'error');
+    const ctx = rtpBillingReportContext();
+    const { companyId, planId, plan, company } = ctx;
+    if (!companyId || !plan || !company || !planId) return showAlert('Select a company and billing plan first', 'error');
     try {
-        const usageData = await rtpJson(`${API_BASE}/billing/companies/${companyId}/usage?year=${year}&month=${month}`);
-        const invoice = await rtpJson(`${API_BASE}/billing/companies/${companyId}/invoices?year=${year}&month=${month}`, { method: 'POST' });
-        const usage = usageData.usage || invoice.usage || {};
-        const period = new Date(Number(year), Number(month) - 1, 1).toLocaleString(undefined, { month: 'long', year: 'numeric' });
+        const report = await rtpFetchBillingReport(ctx);
+        const invoice = report.invoice;
+        const usage = report.usage;
+        const period = report.periodLabel;
         const lines = invoice.line_items || [];
         const rows = lines.map(line => `
             <tr>
@@ -1130,6 +1252,15 @@ async function rtpPrintBillingDetails() {
                 <td class="money">${rtpInvoiceMoney(line.amount_cents, invoice)}</td>
             </tr>
         `).join('');
+        const monthlyRows = report.monthRows.length ? report.monthRows.map(row => `
+            <tr>
+                <td>${rtpEsc(row.label)}</td>
+                <td>${row.usage.active_devices || 0}</td>
+                <td>${row.usage.positions || 0}</td>
+                <td>${row.usage.api_calls || 0}</td>
+                <td class="money">${rtpInvoiceMoney(row.invoice.amount_cents || 0, row.invoice)}</td>
+            </tr>
+        `).join('') : '';
         const overageDevices = Math.max(0, (usage.active_devices || 0) - (plan.included_devices || 0));
         const overagePositions = Math.max(0, (usage.positions || 0) - (plan.included_positions || 0));
         const overageApi = Math.max(0, (usage.api_calls || 0) - (plan.included_api_calls || 0));
@@ -1192,6 +1323,11 @@ async function rtpPrintBillingDetails() {
                 <tr><td>API calls</td><td>${plan.included_api_calls}</td><td>${usage.api_calls || 0}</td><td>${overageApi}</td><td>${rtpInvoiceMoney(plan.price_per_1000_api_calls_cents, invoice)} / 1000</td></tr>
             </tbody>
         </table>
+        ${monthlyRows ? `<h2>Monthly Breakdown</h2>
+        <table>
+            <thead><tr><th>Month</th><th>Devices</th><th>Positions</th><th>API Calls</th><th class="money">Amount</th></tr></thead>
+            <tbody>${monthlyRows}</tbody>
+        </table>` : ''}
         <h2>Billing Lines</h2>
         <table>
             <thead><tr><th>Description</th><th>Quantity</th><th>Unit</th><th>Billable Units</th><th class="money">Amount</th></tr></thead>

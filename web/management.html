@@ -1277,9 +1277,11 @@
         </div>
         <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
             <div class="form-grid">
-                <label><span>Company</span><select id="billDetailCompany" class="form-input"></select></label>
+                <label><span>Company</span><select id="billDetailCompany" class="form-input" onchange="rtpBillingCompanyChanged()"></select></label>
+                <label id="billDetailPlanWrap"><span>Billing Plan</span><select id="billDetailPlan" class="form-input"></select></label>
+                <label><span>Report Period</span><select id="billDetailPeriod" class="form-input" onchange="rtpUpdateBillingPeriodControls()"><option value="month">Month</option><option value="year">Year</option></select></label>
                 <label><span>Year</span><input id="billDetailYear" class="form-input" type="number"></label>
-                <label><span>Month</span><input id="billDetailMonth" class="form-input" type="number" min="1" max="12"></label>
+                <label id="billDetailMonthWrap"><span>Month</span><input id="billDetailMonth" class="form-input" type="number" min="1" max="12"></label>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
                 <button type="button" class="btn btn-primary" onclick="rtpDetailGenerateBillingSummary()"><i class="mdi mdi-calculator-variant"></i> Generate Billing Summary</button>
