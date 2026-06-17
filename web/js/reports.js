@@ -15,6 +15,10 @@ let _allDrivers          = [];
 let _selectedDriverIds   = new Set(); // empty = all visible drivers
 let _reportDefs          = [];
 let _reportDefMap        = {};
+let _auditRows           = [];
+let _healthRows          = [];
+let _auditSort           = { col: 'time', dir: 'desc' };
+let _healthSort          = { col: 'name', dir: 'asc' };
 
 const _IS_ADMIN         = localStorage.getItem('is_admin') === 'true';
 const _IS_COMPANY_ADMIN = localStorage.getItem('is_company_admin') === 'true';
@@ -23,7 +27,15 @@ const _CAN_SEE_USERS    = _IS_ADMIN || _IS_COMPANY_ADMIN;
 document.addEventListener('DOMContentLoaded', async () => {
     checkLogin();
     await permissionsReady;
-    if (!hasPermission('view_reports')) { window.location.href = 'gps-dashboard.html'; return; }
+    if (!hasPermission('view_reports') && !hasPermission('view_audit') && !hasPermission('view_health')) {
+        window.location.href = 'gps-dashboard.html';
+        return;
+    }
+
+    document.getElementById('tabReports').style.display = hasPermission('view_reports') ? '' : 'none';
+    document.getElementById('tabSchedules').style.display = hasPermission('view_reports') ? '' : 'none';
+    document.getElementById('tabAudit').style.display = hasPermission('view_audit') ? '' : 'none';
+    document.getElementById('tabHealth').style.display = hasPermission('view_health') ? '' : 'none';
 
     const now   = new Date();
     const start = new Date(now);
@@ -31,12 +43,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('endDate').value   = _fmtDate(now);
     document.getElementById('startDate').value = _fmtDate(start);
 
-    await _loadDevices();
-    if (_CAN_SEE_USERS) await _loadUsers();
-    await _loadDrivers();
-    await _loadReportTypes();
-    _updateDescription();
+    if (hasPermission('view_reports')) {
+        await _loadDevices();
+        if (_CAN_SEE_USERS) await _loadUsers();
+        await _loadDrivers();
+        await _loadReportTypes();
+        _updateDescription();
+    }
     _injectNavScheduleAction();
+    const hash = window.location.hash.replace('#', '');
+    switchTab(_validReportTab(hash) ? hash : hasPermission('view_reports') ? 'reports' : hasPermission('view_audit') ? 'audit' : 'health', false);
+
+    window.addEventListener('hashchange', () => {
+        const next = window.location.hash.replace('#', '');
+        switchTab(_validReportTab(next) ? next : 'reports', false);
+    });
 
     document.addEventListener('click', e => {
         const wrap = document.getElementById('vehSelectWrap');
@@ -675,13 +696,29 @@ function _esc(s) {
 
 let _activeTab = 'reports';
 
-function switchTab(tab) {
+function _validReportTab(tab) {
+    return ['reports', 'schedules', 'audit', 'health'].includes(tab);
+}
+
+function switchTab(tab, pushState = true) {
+    if (tab === 'reports' && !hasPermission('view_reports')) tab = hasPermission('view_audit') ? 'audit' : 'health';
+    if (tab === 'schedules' && !hasPermission('view_reports')) tab = hasPermission('view_audit') ? 'audit' : 'health';
+    if (tab === 'audit' && !hasPermission('view_audit')) tab = hasPermission('view_reports') ? 'reports' : 'health';
+    if (tab === 'health' && !hasPermission('view_health')) tab = hasPermission('view_reports') ? 'reports' : 'audit';
     _activeTab = tab;
     document.getElementById('tabReports').classList.toggle('active',   tab === 'reports');
     document.getElementById('tabSchedules').classList.toggle('active', tab === 'schedules');
+    document.getElementById('tabAudit').classList.toggle('active',     tab === 'audit');
+    document.getElementById('tabHealth').classList.toggle('active',    tab === 'health');
     document.getElementById('panelReports').style.display   = tab === 'reports'   ? '' : 'none';
     document.getElementById('panelSchedules').style.display = tab === 'schedules' ? '' : 'none';
+    document.getElementById('panelAudit').style.display     = tab === 'audit'     ? '' : 'none';
+    document.getElementById('panelHealth').style.display    = tab === 'health'    ? '' : 'none';
+    _injectNavScheduleAction();
+    if (pushState !== false) history.replaceState(null, '', '#' + tab);
     if (tab === 'schedules') _loadSchedules();
+    if (tab === 'audit') loadAudit();
+    if (tab === 'health') loadHealth();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -951,10 +988,244 @@ let _editingScheduleId = null;
 function _injectNavScheduleAction() {
     const el = document.getElementById('snAddAction');
     if (!el) return;
-    el.innerHTML = `<button class="header-menu-item" onclick="openScheduleModal(null);document.getElementById('snDropdown').classList.remove('open');document.getElementById('snGearBtn').classList.remove('active');">
+    const closeMenu = "document.getElementById('snDropdown').classList.remove('open');document.getElementById('snGearBtn').classList.remove('active');";
+    if (_activeTab === 'audit') {
+        el.innerHTML = `<button class="header-menu-item" onclick="loadAudit();${closeMenu}">
+            <span class="header-menu-item-icon"><i class="mdi mdi-refresh" style="font-size:15px;"></i></span>
+            <span>Refresh</span>
+        </button>`;
+        return;
+    }
+    if (_activeTab === 'health') {
+        el.innerHTML = `<button class="header-menu-item" onclick="loadHealth();${closeMenu}">
+            <span class="header-menu-item-icon"><i class="mdi mdi-refresh" style="font-size:15px;"></i></span>
+            <span>Refresh</span>
+        </button>`;
+        return;
+    }
+    el.innerHTML = hasPermission('view_reports') ? `<button class="header-menu-item" onclick="openScheduleModal(null);${closeMenu}">
         <span class="header-menu-item-icon"><i class="mdi mdi-calendar-plus" style="font-size:15px;"></i></span>
         <span>New Schedule</span>
-    </button>`;
+    </button>` : '';
+}
+
+async function loadAudit() {
+    const body = document.getElementById('auditTableBody');
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading audit logs...</td></tr>';
+    try {
+        const res = await apiFetch(`${API_BASE}/audit-logs?limit=500`);
+        if (!res.ok) throw new Error(`Request failed (${res.status})`);
+        _auditRows = await res.json();
+        renderAuditTable();
+    } catch (e) {
+        body.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">${_esc(e.message)}</td></tr>`;
+    }
+}
+
+function renderAuditTable() {
+    const body = document.getElementById('auditTableBody');
+    if (!body) return;
+    const q = (document.getElementById('auditSearch')?.value || '').toLowerCase();
+    const rows = _auditRows.filter(l => [
+        l.action, l.actor_username, l.actor_user_id, l.company_name, l.company_id,
+        l.target_type, l.target_id, l.ip_address, JSON.stringify(l.metadata || {})
+    ].join(' ').toLowerCase().includes(q));
+    rows.sort((a, b) => _compareValues(_auditValue(a, _auditSort.col), _auditValue(b, _auditSort.col), _auditSort.dir));
+    const count = document.getElementById('auditCount');
+    if (count) count.textContent = `${rows.length} event${rows.length !== 1 ? 's' : ''}`;
+    _updateSortHeaders('panelAudit', _auditSort);
+    body.innerHTML = rows.length ? rows.map(l => `
+        <tr>
+            <td style="white-space:nowrap;">${new Date(l.created_at).toLocaleString()}</td>
+            <td>${_esc(l.action)}</td>
+            <td>${_esc(l.actor_username || 'system')}${l.actor_user_id ? `<div class="stack-item-meta">#${l.actor_user_id}</div>` : ''}</td>
+            <td>${_esc(l.company_name || '-')}${l.company_id ? `<div class="stack-item-meta">#${l.company_id}</div>` : ''}</td>
+            <td>${_esc([l.target_type, l.target_id].filter(Boolean).join(' ')) || '-'}</td>
+            <td>${_esc(l.ip_address || '-')}</td>
+        </tr>
+    `).join('') : '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">No audit events match.</td></tr>';
+}
+
+function _auditValue(row, col) {
+    const values = {
+        time: row.created_at ? new Date(row.created_at).getTime() : 0,
+        action: row.action,
+        user: row.actor_username || 'system',
+        company: row.company_name || '',
+        target: [row.target_type, row.target_id].filter(Boolean).join(' '),
+        ip: row.ip_address || '',
+    };
+    return values[col];
+}
+
+function sortAudit(col) {
+    _auditSort = { col, dir: _auditSort.col === col && _auditSort.dir === 'asc' ? 'desc' : 'asc' };
+    renderAuditTable();
+}
+
+async function loadHealth() {
+    const body = document.getElementById('healthTableBody');
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading health checks...</td></tr>';
+    try {
+        const res = await fetch('/health/ready');
+        const data = await res.json();
+        _healthRows = Object.entries(data.checks || {}).map(([name, check]) => ({ name, ...check }));
+        renderHealthTable();
+    } catch (e) {
+        body.innerHTML = `<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted);">${_esc(e.message)}</td></tr>`;
+    }
+}
+
+function renderHealthTable() {
+    const body = document.getElementById('healthTableBody');
+    if (!body) return;
+    const q = (document.getElementById('healthSearch')?.value || '').toLowerCase();
+    const rows = _healthRows.filter(row => JSON.stringify(row).toLowerCase().includes(q));
+    rows.sort((a, b) => _compareValues(_healthValue(a, _healthSort.col), _healthValue(b, _healthSort.col), _healthSort.dir));
+    const count = document.getElementById('healthCount');
+    if (count) count.textContent = `${rows.length} check${rows.length !== 1 ? 's' : ''}`;
+    _updateSortHeaders('panelHealth', _healthSort);
+    body.innerHTML = rows.length ? rows.map(row => `
+        <tr>
+            <td>${_esc(row.name)}</td>
+            <td><span class="proto-badge health-status health-status-${_healthStatus(row)}">${_healthStatus(row)}</span></td>
+            <td>${_healthDetails(row)}</td>
+        </tr>
+    `).join('') : '<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted);">No health checks match.</td></tr>';
+}
+
+function _listenerLabel(listener) {
+    if (!listener) return '';
+    const transport = listener.protocol_type || listener.type || '';
+    const port = listener.port ? `:${listener.port}` : '';
+    return [listener.protocol, transport].filter(Boolean).join('/') + port;
+}
+
+function _healthDetails(row) {
+    if (row.name === 'database') {
+        const metrics = [..._latencyMetrics(row), ['DB', row.database_type || '-'], ['Pool', row.pool_class || '-'], ['Pool size', row.pool_size ?? row.size ?? '-'], ['In pool', row.connections_in_pool ?? row.checkedin ?? '-'], ['Checked out', row.current_checked_out ?? row.checkedout ?? '-'], ['Overflow', row.current_overflow ?? row.overflow ?? '-']];
+        return _healthBox(metrics, row.error ? [['Error', row.error]] : [], row.error ? 'danger' : '');
+    }
+    if (row.name === 'disk') {
+        const worst = Math.max(...(row.paths || []).map(p => Number(p.used_percent) || 0), 0);
+        const metrics = [['Writable', row.ok ? 'yes' : 'no', row.ok ? 'ok' : 'danger'], ['Worst usage', `${worst}%`, worst >= 95 ? 'danger' : worst >= 85 ? 'warn' : 'ok']];
+        const lines = (row.paths || []).map(p => [p.label || p.path, `${p.ok ? (p.degraded ? 'degraded' : 'ok') : 'critical'}, used ${p.used_percent == null ? '?' : `${p.used_percent}%`}, free ${p.free_bytes == null ? '-' : _formatBytes(p.free_bytes)}${p.error ? `; ${p.error}` : ''}`]);
+        if (row.error) lines.unshift(['Error', row.error]);
+        return _healthBox(metrics, lines, row.error ? 'danger' : '');
+    }
+    if (row.name === 'redis') {
+        const metrics = [..._latencyMetrics(row), ['Reachable', row.ok ? 'yes' : 'no', row.ok ? 'ok' : 'info'], ['Pub/sub', row.available ? 'redis' : (row.mode || 'fallback'), row.available ? 'ok' : 'info']];
+        const lines = [];
+        if (row.error) lines.push(['Ping', row.error]);
+        if (row.pubsub_error && row.pubsub_error !== row.error) lines.push(['Pub/sub', row.pubsub_error]);
+        return _healthBox(metrics, lines);
+    }
+    if (row.name === 'valhalla') {
+        const enabled = row.enabled !== false && row.optional !== true;
+        const metrics = [['Enabled', enabled ? 'yes' : 'no', enabled ? 'ok' : 'info'], ['Reachable', row.available || row.ok ? 'yes' : 'no', row.available || row.ok ? 'ok' : (enabled ? 'danger' : 'info')]];
+        const lines = [['URL', row.url || '-'], ['State', row.message || (row.ok ? 'available' : enabled ? 'unreachable' : 'disabled')]];
+        if (row.error) lines.push(['Error', row.error]);
+        return _healthBox(metrics, lines, row.degraded ? 'warn' : '');
+    }
+    if (row.error) return _healthBox([], [['Error', row.error]], 'danger');
+    if (row.name === 'protocol_listeners') {
+        const metrics = [['Active', row.active_protocols?.length || 0], ['Expected', row.expected_listeners?.length || 0], ['Running', row.running_listeners?.filter(l => l.running)?.length || 0]];
+        const lines = [];
+        if (row.unknown_protocols?.length) lines.push(['Unknown', row.unknown_protocols.join(', ')]);
+        if (row.missing_listeners?.length) lines.push(['Missing', row.missing_listeners.map(_listenerLabel).join(', ')]);
+        if (row.unhealthy_listeners?.length) lines.push(['Stopped', row.unhealthy_listeners.map(_listenerLabel).join(', ')]);
+        if (row.unexpected_listeners?.length) lines.push(['Unexpected', row.unexpected_listeners.map(_listenerLabel).join(', ')]);
+        if (row.integration_protocols?.length) lines.push(['Integration-only', row.integration_protocols.join(', ')]);
+        if (!lines.length) lines.push(['Listeners', row.running_listeners?.length ? row.running_listeners.map(_listenerLabel).join(', ') : 'none']);
+        return _healthBox(metrics, lines);
+    }
+    if (row.name === 'background_tasks' && row.tasks) {
+        const tasks = Object.entries(row.tasks);
+        const metrics = [['Running', tasks.filter(([, task]) => task.running).length], ['Total', tasks.length]];
+        const lines = tasks.map(([name, task]) => [name, `${task.ok ? 'ok' : 'fail'}, ${task.last_success_age_seconds == null ? 'no successful loop yet' : `${task.last_success_age_seconds}s since success`}${task.last_error ? `; ${task.last_error}` : ''}`]);
+        return _healthBox(metrics, lines);
+    }
+    if (row.name === 'ingestion') {
+        return _healthBox([
+            ['Active', row.active_devices ?? 0],
+            ['Online', row.online_devices ?? 0],
+            ['With positions', row.devices_with_positions ?? 0],
+            ['Stale >15m', row.stale_over_15m_count ?? 0, row.stale_over_15m_count ? 'warn' : 'ok'],
+            ['Never seen', row.never_seen_count ?? 0, row.never_seen_count ? 'warn' : 'ok'],
+        ], [['Latest position', row.latest_position_age_seconds == null ? 'none' : `${row.latest_position_age_seconds}s ago`]]);
+    }
+    if (row.name === 'integration_accounts') {
+        if (!row.accounts?.length) return _healthBox([['Accounts', 0]], [['Integrations', 'No active integration accounts']]);
+        const errored = row.accounts.filter(a => a.last_error);
+        const sample = (errored.length ? errored : row.accounts).slice(0, 5).map(a => [`${a.provider_id}/${a.account_label || 'default'}`, `${a.active_device_count ?? 0} device${a.active_device_count === 1 ? '' : 's'}, ${a.last_auth_at ? `auth ${new Date(a.last_auth_at).toLocaleString()}` : 'not authenticated yet'}${a.last_error ? `; ${a.last_error}` : ''}`]);
+        return _healthBox([['Accounts', row.active_accounts ?? 0], ['Errors', row.accounts_with_errors ?? 0, row.accounts_with_errors ? 'danger' : 'ok']], sample);
+    }
+    if (row.name === 'runtime') {
+        return _healthBox([['Version', row.app_version || '-'], ['Commit', row.git_commit || '-'], ['Uptime', `${row.uptime_seconds ?? 0}s`], ['Python', row.python_version || '-'], ['DB', row.database_type || '-']], [['Platform', row.platform || '-']]);
+    }
+    if (row.degraded) return _healthBox([], [['State', 'degraded']], 'warn');
+    return '';
+}
+
+function _latencyMetrics(row) {
+    return row.latency_ms == null ? [] : [['Latency', `${row.latency_ms} ms`]];
+}
+
+function _healthBox(metrics = [], lines = [], tone = '') {
+    const metricHtml = metrics.length ? `<div class="health-metrics">${metrics.map(([label, value, metricTone]) => _healthMetric(label, value, metricTone)).join('')}</div>` : '';
+    const lineHtml = lines.length ? `<div class="health-lines">${lines.map(([label, value]) => `<div class="health-line"><span class="health-line-label">${_esc(label)}</span><span class="health-line-value">${_esc(value)}</span></div>`).join('')}</div>` : '';
+    return `<div class="health-details${tone ? ` health-details-${tone}` : ''}">${metricHtml}${lineHtml}</div>`;
+}
+
+function _healthMetric(label, value, tone = '') {
+    return `<span class="health-metric${tone ? ` health-chip-${tone}` : ''}"><span>${_esc(label)}</span><strong>${_esc(value)}</strong></span>`;
+}
+
+function _formatBytes(bytes) {
+    const value = Number(bytes);
+    if (!Number.isFinite(value)) return '-';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let size = value;
+    let unit = 0;
+    while (size >= 1024 && unit < units.length - 1) {
+        size /= 1024;
+        unit += 1;
+    }
+    return `${size.toFixed(unit ? 1 : 0)} ${units[unit]}`;
+}
+
+function _healthValue(row, col) {
+    const status = _healthStatus(row);
+    return { name: row.name, status, latency: Number(row.latency_ms) || 0, details: row.error || (row.degraded ? 'degraded' : JSON.stringify(row)) }[col];
+}
+
+function _healthStatus(row) {
+    if (row.degraded) return 'degraded';
+    if (row.ok) return 'ok';
+    if (row.optional) return 'optional';
+    return 'fail';
+}
+
+function sortHealth(col) {
+    _healthSort = { col, dir: _healthSort.col === col && _healthSort.dir === 'asc' ? 'desc' : 'asc' };
+    renderHealthTable();
+}
+
+function _compareValues(a, b, dir = 'asc') {
+    const av = a ?? '';
+    const bv = b ?? '';
+    let result;
+    if (typeof av === 'number' && typeof bv === 'number') result = av - bv;
+    else result = String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' });
+    return dir === 'desc' ? -result : result;
+}
+
+function _updateSortHeaders(panelId, sortState) {
+    document.querySelectorAll(`#${panelId} th[data-sort]`).forEach(th => {
+        th.dataset.sortDir = th.dataset.sort === sortState.col ? sortState.dir : '';
+    });
 }
 
 async function openScheduleModal(scheduleIdOrObj) {

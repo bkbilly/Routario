@@ -339,7 +339,7 @@
                     : ''
                 }
 
-                ${(typeof hasPermission === 'function' && hasPermission('view_reports'))
+                ${(typeof hasPermission === 'function' && (hasPermission('view_reports') || hasPermission('view_audit') || hasPermission('view_health')))
                     ? `<a href="reports.html" class="header-menu-item${isReports ? ' active-page' : ''}">
                         <span class="header-menu-item-icon"><i class="mdi mdi-chart-bar" style="font-size:15px;"></i></span>
                         <span>Fleet Reports</span>${chevron}

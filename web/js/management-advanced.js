@@ -21,6 +21,7 @@ let _rtpRouteReadonly = false;
 let _rtpAuditRows = [];
 let _rtpHealthRows = [];
 let _rtpRouteRows = [];
+let _rtpCurrencyRates = [];
 let _rtpRouteSort = { col: 'name', dir: 'asc' };
 let _rtpBillingSort = { col: 'name', dir: 'asc' };
 let _rtpAuditSort = { col: 'time', dir: 'desc' };
@@ -861,6 +862,7 @@ async function rtpInitBilling() {
     if (_rtpBillingLoaded) return;
     _rtpBillingLoaded = true;
     await rtpLoadCommon();
+    await rtpLoadExchangeRates();
     await rtpLoadPlans();
 }
 
@@ -925,6 +927,99 @@ function rtpRenderBillingTable() {
 function rtpSortBilling(col) {
     _rtpBillingSort = { col, dir: _rtpBillingSort.col === col && _rtpBillingSort.dir === 'asc' ? 'desc' : 'asc' };
     rtpRenderBillingTable();
+}
+
+async function rtpLoadExchangeRates() {
+    _rtpCurrencyRates = await rtpJson(`${API_BASE}/currency/rates`);
+    if (typeof setCurrencyRates === 'function') setCurrencyRates(_rtpCurrencyRates);
+}
+
+function rtpRenderExchangeRates() {
+    const body = document.getElementById('exchangeRatesTableBody');
+    if (!body) return;
+    body.innerHTML = _rtpCurrencyRates.length ? _rtpCurrencyRates.map((row, idx) => `
+        <tr>
+            <td><input class="form-input" value="${rtpEsc(row.currency || '')}" maxlength="3" ${row.currency === 'EUR' ? 'readonly' : ''} oninput="rtpUpdateExchangeRateDraft(${idx}, 'currency', this.value.toUpperCase())"></td>
+            <td><input class="form-input" type="number" min="0.000001" step="0.000001" value="${Number(row.rate || 1)}" ${row.currency === 'EUR' ? 'readonly' : ''} oninput="rtpUpdateExchangeRateDraft(${idx}, 'rate', this.value)"></td>
+            <td>${rtpEsc(row.source || 'manual')}</td>
+            <td>${row.currency === 'EUR' ? '-' : row.updated_at ? rtpDateTime(row.updated_at) : '-'}</td>
+            <td style="text-align:center;">
+                ${row.currency === 'EUR' ? '' : `<button type="button" class="btn btn-secondary tbl-btn" onclick="rtpRemoveExchangeRateRow(${idx})"><i class="mdi mdi-delete"></i></button>`}
+            </td>
+        </tr>
+    `).join('') : '<tr><td colspan="5" style="text-align:center;padding:1rem;color:var(--text-muted);">No exchange rates configured.</td></tr>';
+}
+
+function rtpUpdateExchangeRateDraft(idx, key, value) {
+    if (!_rtpCurrencyRates[idx]) return;
+    _rtpCurrencyRates[idx][key] = key === 'rate' ? Number(value || 0) : String(value || '').toUpperCase();
+}
+
+function rtpAddExchangeRateRow() {
+    _rtpCurrencyRates.push({ currency: '', rate: 1, source: 'manual', updated_at: null });
+    rtpRenderExchangeRates();
+}
+
+function rtpRemoveExchangeRateRow(idx) {
+    _rtpCurrencyRates.splice(idx, 1);
+    rtpRenderExchangeRates();
+}
+
+async function rtpOpenExchangeRatesModal() {
+    try {
+        await rtpLoadExchangeRates();
+        rtpRenderExchangeRates();
+        document.getElementById('exchangeRatesModal')?.classList.add('active');
+    } catch (e) { showAlert(e.message, 'error'); }
+}
+
+function rtpCloseExchangeRatesModal() {
+    document.getElementById('exchangeRatesModal')?.classList.remove('active');
+}
+
+function rtpValidatedExchangeRates() {
+    const seen = new Set();
+    const rows = _rtpCurrencyRates.map(row => ({
+        currency: String(row.currency || '').trim().toUpperCase(),
+        rate: Number(row.rate),
+    })).filter(row => row.currency);
+    if (!rows.find(row => row.currency === 'EUR')) rows.unshift({ currency: 'EUR', rate: 1 });
+    rows.forEach(row => {
+        if (!/^[A-Z]{3}$/.test(row.currency)) throw new Error(`Invalid currency code: ${row.currency || '(blank)'}`);
+        if (!Number.isFinite(row.rate) || row.rate <= 0) throw new Error(`Invalid rate for ${row.currency}`);
+        if (seen.has(row.currency)) throw new Error(`Duplicate currency: ${row.currency}`);
+        seen.add(row.currency);
+    });
+    return rows.map(row => row.currency === 'EUR' ? { ...row, rate: 1 } : row);
+}
+
+async function rtpSaveExchangeRates() {
+    try {
+        const rates = rtpValidatedExchangeRates();
+        _rtpCurrencyRates = await rtpJson(`${API_BASE}/currency/rates`, {
+            method: 'PUT',
+            body: JSON.stringify({ rates }),
+        });
+        if (typeof setCurrencyRates === 'function') setCurrencyRates(_rtpCurrencyRates);
+        rtpRenderExchangeRates();
+        rtpRenderBillingTable();
+        rtpCloseExchangeRatesModal();
+        showAlert('Exchange rates saved', 'success');
+    } catch (e) { showAlert(e.message, 'error'); }
+}
+
+async function rtpRefreshExchangeRates() {
+    try {
+        const currencies = rtpValidatedExchangeRates().map(row => row.currency);
+        _rtpCurrencyRates = await rtpJson(`${API_BASE}/currency/rates/refresh`, {
+            method: 'POST',
+            body: JSON.stringify({ currencies }),
+        });
+        if (typeof setCurrencyRates === 'function') setCurrencyRates(_rtpCurrencyRates);
+        rtpRenderExchangeRates();
+        rtpRenderBillingTable();
+        showAlert('Exchange rates updated', 'success');
+    } catch (e) { showAlert(e.message, 'error'); }
 }
 
 function rtpBillingCompanies() {

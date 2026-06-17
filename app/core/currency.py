@@ -3,14 +3,39 @@ from decimal import Decimal
 
 BASE_CURRENCY = "EUR"
 
-# EUR-based display rates. These are intentionally centralized so the backend
-# snapshots the same rate family the frontend uses for conversion.
-CURRENCY_RATES: dict[str, Decimal] = {
+# EUR-based display rates. The database can override these values at runtime.
+DEFAULT_CURRENCY_RATES: dict[str, Decimal] = {
     "EUR": Decimal("1"),
     "USD": Decimal("1.08"),
     "GBP": Decimal("0.85"),
     "CHF": Decimal("0.95"),
 }
+CURRENCY_RATES: dict[str, Decimal] = dict(DEFAULT_CURRENCY_RATES)
+
+
+def set_currency_rates(rates: dict[str, float | int | str | Decimal]) -> None:
+    next_rates = {BASE_CURRENCY: Decimal("1")}
+    for code, rate in rates.items():
+        currency = (code or "").upper()
+        if len(currency) != 3:
+            continue
+        value = Decimal(str(rate))
+        if value <= 0:
+            continue
+        next_rates[currency] = value
+    CURRENCY_RATES.clear()
+    CURRENCY_RATES.update(next_rates)
+
+
+async def load_currency_rates() -> None:
+    from sqlalchemy import text
+    from core.database import get_db
+
+    db = get_db()
+    async with db.get_session() as session:
+        result = await session.execute(text("SELECT currency, rate FROM currency_rates"))
+        rates = {row.currency: row.rate for row in result.all()}
+    set_currency_rates(rates or DEFAULT_CURRENCY_RATES)
 
 
 def normalize_currency(currency: str | None) -> str:

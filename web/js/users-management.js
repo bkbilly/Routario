@@ -164,6 +164,7 @@ function openUserModal(userId = null) {
     document.getElementById('userModalPassword').value = '';
     document.getElementById('userPasswordLabel').textContent = isNew ? 'Password *' : 'Password (leave blank to keep)';
     document.getElementById('userModalUnits').value = _usrEditing?.units || 'metric';
+    usrRenderCurrencyOptions(_usrEditing?.currency || 'EUR');
     document.getElementById('userModalCurrency').value = _usrEditing?.currency || 'EUR';
 
     const roleSelect = document.getElementById('userModalRole');
@@ -199,6 +200,18 @@ function openUserModal(userId = null) {
         (isNew || _usrEditing?.id === _usrMyId) ? 'none' : 'inline-flex';
     document.getElementById('userModal').classList.add('active');
 }
+
+function usrRenderCurrencyOptions(selected = 'EUR') {
+    const select = document.getElementById('userModalCurrency');
+    if (!select) return;
+    const options = typeof CURRENCY_OPTIONS !== 'undefined' ? CURRENCY_OPTIONS : [['EUR', 'Euro (€)']];
+    select.innerHTML = options.map(([code, label]) => `<option value="${code}" ${code === selected ? 'selected' : ''}>${label}</option>`).join('');
+}
+
+window.addEventListener('routario:currencyrateschange', () => {
+    const select = document.getElementById('userModalCurrency');
+    if (select) usrRenderCurrencyOptions(select.value || 'EUR');
+});
 
 function _usrRenderPermissions() {
     const container = document.getElementById('userModalPermissions');

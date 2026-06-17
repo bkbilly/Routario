@@ -62,12 +62,47 @@ const CURRENCY_RATES = {
     CHF: 0.92,
 };
 
-const CURRENCY_OPTIONS = [
+let CURRENCY_OPTIONS = [
     ['EUR', 'Euro (€)'],
     ['USD', 'US Dollar ($)'],
     ['GBP', 'British Pound (£)'],
     ['CHF', 'Swiss Franc (CHF)'],
 ];
+
+function currencyName(code) {
+    const currency = String(code || 'EUR').toUpperCase();
+    try {
+        const label = new Intl.DisplayNames([navigator.language || 'en'], { type: 'currency' }).of(currency);
+        return label ? `${label} (${currency})` : currency;
+    } catch {
+        return currency;
+    }
+}
+
+function setCurrencyRates(rates) {
+    Object.keys(CURRENCY_RATES).forEach(code => delete CURRENCY_RATES[code]);
+    CURRENCY_RATES.EUR = 1;
+    (rates || []).forEach(row => {
+        const code = String(row.currency || '').toUpperCase();
+        const rate = Number(row.rate);
+        if (/^[A-Z]{3}$/.test(code) && Number.isFinite(rate) && rate > 0) {
+            CURRENCY_RATES[code] = rate;
+        }
+    });
+    CURRENCY_OPTIONS = Object.keys(CURRENCY_RATES)
+        .sort((a, b) => a === 'EUR' ? -1 : b === 'EUR' ? 1 : a.localeCompare(b))
+        .map(code => [code, currencyName(code)]);
+    window.dispatchEvent(new Event('routario:currencyrateschange'));
+}
+
+async function loadCurrencyRates() {
+    if (typeof apiFetch !== 'function' || typeof API_BASE === 'undefined' || !localStorage.getItem('auth_token')) return;
+    try {
+        const res = await apiFetch(`${API_BASE}/currency/rates`);
+        if (!res.ok) return;
+        setCurrencyRates(await res.json());
+    } catch {}
+}
 
 function userCurrency() {
     const cur = String(localStorage.getItem('currency') || 'EUR').toUpperCase();
@@ -143,3 +178,7 @@ function currencyInputToBase(value, currency = userCurrency()) {
 function currencyLabel(baseLabel) {
     return `${baseLabel} (${userCurrency()})`;
 }
+
+window.addEventListener('DOMContentLoaded', () => {
+    loadCurrencyRates();
+});

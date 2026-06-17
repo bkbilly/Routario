@@ -275,6 +275,12 @@ class DatabaseService:
                 line_items JSON DEFAULT '[]',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )""",
+            """CREATE TABLE IF NOT EXISTS currency_rates (
+                currency VARCHAR(3) PRIMARY KEY,
+                rate FLOAT NOT NULL DEFAULT 1.0,
+                source VARCHAR(80) NOT NULL DEFAULT 'manual',
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )""",
             """CREATE TABLE IF NOT EXISTS planned_routes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
@@ -356,6 +362,21 @@ class DatabaseService:
                 await conn.execute(text("UPDATE billing_plans SET currency = 'EUR' WHERE currency = 'USD'"))
                 await conn.execute(text("UPDATE billing_invoices SET currency = 'EUR' WHERE currency = 'USD'"))
                 await conn.execute(text("UPDATE billing_invoices SET amount_display_cents = amount_cents WHERE amount_display_cents IS NULL OR amount_display_cents = 0"))
+        except Exception:
+            pass
+
+        try:
+            from core.currency import DEFAULT_CURRENCY_RATES
+            async with self.engine.begin() as conn:
+                for currency, rate in DEFAULT_CURRENCY_RATES.items():
+                    await conn.execute(
+                        text(
+                            "INSERT INTO currency_rates (currency, rate, source) "
+                            "SELECT :currency, :rate, :source "
+                            "WHERE NOT EXISTS (SELECT 1 FROM currency_rates WHERE currency = :currency)"
+                        ),
+                        {"currency": currency, "rate": float(rate), "source": "system" if currency == "EUR" else "default"},
+                    )
         except Exception:
             pass
 

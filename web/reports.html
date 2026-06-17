@@ -19,15 +19,20 @@
         .page-tabs {
             display: flex;
             gap: 0.25rem;
-            border-bottom: 2px solid var(--border-color);
-            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 1.25rem;
             overflow-x: auto;
             overflow-y: hidden;
             scrollbar-width: none;
+            -ms-overflow-style: none;
         }
         .page-tabs::-webkit-scrollbar { display: none; }
         .page-tab {
-            padding: 0.55rem 1.1rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.65rem 1.1rem;
+            font-family: var(--font-display);
             font-size: 0.875rem;
             font-weight: 600;
             border: none;
@@ -35,9 +40,9 @@
             color: var(--text-muted);
             cursor: pointer;
             border-bottom: 2px solid transparent;
-            margin-bottom: -2px;
-            border-radius: 6px 6px 0 0;
-            transition: color 0.15s, border-color 0.15s;
+            margin-bottom: -1px;
+            white-space: nowrap;
+            transition: color var(--transition-base), border-color var(--transition-base);
         }
         .page-tab:hover { color: var(--text-primary); }
         .page-tab.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
@@ -256,6 +261,104 @@
         .run-status-ok  { color: #22c55e; font-weight: 600; }
         .run-status-err { color: #ef4444; font-weight: 600; }
 
+        .audit-table,
+        .health-table {
+            min-width: 720px;
+        }
+        .health-status {
+            border: 1px solid transparent;
+            font-weight: 700;
+        }
+        .health-status-ok {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: rgba(16, 185, 129, 0.28);
+            color: var(--accent-success, #10b981);
+        }
+        .health-status-degraded {
+            background: rgba(245, 158, 11, 0.15);
+            border-color: rgba(245, 158, 11, 0.3);
+            color: var(--accent-warning, #f59e0b);
+        }
+        .health-status-optional {
+            background: rgba(59, 130, 246, 0.14);
+            border-color: rgba(59, 130, 246, 0.28);
+            color: var(--accent-primary, #3b82f6);
+        }
+        .health-status-fail {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: var(--accent-danger, #ef4444);
+        }
+        .health-details {
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
+            line-height: 1.35;
+        }
+        .health-metrics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+        }
+        .health-metric,
+        .health-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.2rem 0.45rem;
+            border-radius: 999px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+        .health-metric strong {
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+        .health-chip-ok {
+            background: rgba(16, 185, 129, 0.12);
+            border-color: rgba(16, 185, 129, 0.24);
+            color: var(--accent-success, #10b981);
+        }
+        .health-chip-warn {
+            background: rgba(245, 158, 11, 0.12);
+            border-color: rgba(245, 158, 11, 0.24);
+            color: var(--accent-warning, #f59e0b);
+        }
+        .health-chip-danger {
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.24);
+            color: var(--accent-danger, #ef4444);
+        }
+        .health-chip-info {
+            background: rgba(59, 130, 246, 0.12);
+            border-color: rgba(59, 130, 246, 0.24);
+            color: var(--accent-primary, #3b82f6);
+        }
+        .health-lines {
+            display: grid;
+            gap: 0.25rem;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+        .health-line {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.45rem;
+            min-width: 0;
+        }
+        .health-line-label {
+            color: var(--text-muted);
+            flex: 0 0 auto;
+            font-weight: 600;
+        }
+        .health-line-value {
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
         /* ── Schedule modal ──────────────────────────────────────── */
         #schedModal .modal-content { max-width: 800px; }
         .sched-two-col {
@@ -280,6 +383,12 @@
         </button>
         <button class="page-tab" id="tabSchedules" onclick="switchTab('schedules')">
             <i class="mdi mdi-calendar-clock"></i> Schedules
+        </button>
+        <button class="page-tab" id="tabAudit" onclick="switchTab('audit')" style="display:none;">
+            <i class="mdi mdi-clipboard-text-clock"></i> Audit
+        </button>
+        <button class="page-tab" id="tabHealth" onclick="switchTab('health')" style="display:none;">
+            <i class="mdi mdi-heart-pulse"></i> Health
         </button>
     </div>
 
@@ -417,6 +526,53 @@
         </div>
         <div class="no-data" id="schedNoData" style="display:none;">No schedules yet. Use the gear menu to create one.</div>
     </div><!-- /panelSchedules -->
+
+    <div id="panelAudit" style="display:none;">
+        <div class="devices-search-bar">
+            <div class="search-input-wrap">
+                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                <input type="text" id="auditSearch" class="search-input" placeholder="Search audit logs..." oninput="renderAuditTable()">
+            </div>
+            <span class="devices-count" id="auditCount"></span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="devices-table audit-table">
+                <thead>
+                    <tr>
+                        <th data-sort="time" data-sort-dir="desc" onclick="sortAudit('time')">Time</th>
+                        <th data-sort="action" onclick="sortAudit('action')">Action</th>
+                        <th data-sort="user" onclick="sortAudit('user')">User</th>
+                        <th data-sort="company" onclick="sortAudit('company')">Company</th>
+                        <th data-sort="target" onclick="sortAudit('target')">Target</th>
+                        <th data-sort="ip" onclick="sortAudit('ip')">IP</th>
+                    </tr>
+                </thead>
+                <tbody id="auditTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="panelHealth" style="display:none;">
+        <div class="devices-search-bar">
+            <div class="search-input-wrap">
+                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                <input type="text" id="healthSearch" class="search-input" placeholder="Search health checks..." oninput="renderHealthTable()">
+            </div>
+            <span class="devices-count" id="healthCount"></span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="devices-table health-table">
+                <thead>
+                    <tr>
+                        <th data-sort="name" data-sort-dir="asc" onclick="sortHealth('name')">Check</th>
+                        <th data-sort="status" onclick="sortHealth('status')">Status</th>
+                        <th data-sort="details" onclick="sortHealth('details')">Details</th>
+                    </tr>
+                </thead>
+                <tbody id="healthTableBody"></tbody>
+            </table>
+        </div>
+    </div>
 
 </div><!-- /container -->
 
