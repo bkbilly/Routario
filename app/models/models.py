@@ -493,6 +493,15 @@ class BillingInvoice(Base):
     company: Mapped["Company"] = relationship("Company")
 
 
+class CurrencyRate(Base):
+    __tablename__ = 'currency_rates'
+
+    currency:   Mapped[str]      = mapped_column(String(3), primary_key=True)
+    rate:       Mapped[float]    = mapped_column(Float, default=1.0, nullable=False)
+    source:     Mapped[str]      = mapped_column(String(80), default='manual', nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class PlannedRoute(Base):
     __tablename__ = 'planned_routes'
 

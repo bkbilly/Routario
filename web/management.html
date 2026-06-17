@@ -432,12 +432,6 @@
         <button class="mgmt-tab" id="mgmtTabBilling" onclick="switchMgmtSection('billing')" style="display:none;">
             <i class="mdi mdi-credit-card-outline"></i> Billing
         </button>
-        <button class="mgmt-tab" id="mgmtTabAudit" onclick="switchMgmtSection('audit')" style="display:none;">
-            <i class="mdi mdi-clipboard-text-clock"></i> Audit
-        </button>
-        <button class="mgmt-tab" id="mgmtTabHealth" onclick="switchMgmtSection('health')" style="display:none;">
-            <i class="mdi mdi-heart-pulse"></i> Health
-        </button>
     </div>
 
     <!-- ── DEVICES SECTION ──────────────────────────────────────────── -->
@@ -625,55 +619,6 @@
                 <tbody id="billingPlansTableBody">
                     <tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading plans...</td></tr>
                 </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- ── AUDIT SECTION ─────────────────────────────────────────── -->
-    <div id="section-audit" style="display:none;">
-        <div class="devices-search-bar">
-            <div class="search-input-wrap">
-                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
-                <input type="text" id="auditSearch" class="search-input" placeholder="Search audit logs..." oninput="rtpRenderAuditTable()">
-            </div>
-            <span class="devices-count" id="auditCount"></span>
-        </div>
-        <div style="overflow-x:auto;">
-            <table class="devices-table audit-table">
-                <thead>
-                    <tr>
-                        <th data-sort="time" data-sort-dir="desc" onclick="rtpSortAudit('time')">Time</th>
-                        <th data-sort="action" onclick="rtpSortAudit('action')">Action</th>
-                        <th data-sort="user" onclick="rtpSortAudit('user')">User</th>
-                        <th data-sort="company" onclick="rtpSortAudit('company')">Company</th>
-                        <th data-sort="target" onclick="rtpSortAudit('target')">Target</th>
-                        <th data-sort="ip" onclick="rtpSortAudit('ip')">IP</th>
-                    </tr>
-                </thead>
-                <tbody id="auditTableBody"></tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- ── HEALTH SECTION ────────────────────────────────────────── -->
-    <div id="section-health" style="display:none;">
-        <div class="devices-search-bar">
-            <div class="search-input-wrap">
-                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
-                <input type="text" id="healthSearch" class="search-input" placeholder="Search health checks..." oninput="rtpRenderHealthTable()">
-            </div>
-            <span class="devices-count" id="healthCount"></span>
-        </div>
-        <div style="overflow-x:auto;">
-            <table class="devices-table health-table">
-                <thead>
-                    <tr>
-                        <th data-sort="name" data-sort-dir="asc" onclick="rtpSortHealth('name')">Check</th>
-                        <th data-sort="status" onclick="rtpSortHealth('status')">Status</th>
-                        <th data-sort="details" onclick="rtpSortHealth('details')">Details</th>
-                    </tr>
-                </thead>
-                <tbody id="healthTableBody"></tbody>
             </table>
         </div>
     </div>
@@ -1269,6 +1214,39 @@
     </div>
 </div>
 
+<div class="modal" id="exchangeRatesModal">
+    <div class="modal-content" style="max-width:720px;height:auto;max-height:90vh;">
+        <div class="modal-header">
+            <h2 class="modal-title">Exchange Rates</h2>
+            <button type="button" class="modal-close" onclick="rtpCloseExchangeRatesModal()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
+            <div style="overflow-x:auto;">
+                <table class="devices-table">
+                    <thead>
+                        <tr>
+                            <th>Currency</th>
+                            <th>EUR Rate</th>
+                            <th>Source</th>
+                            <th>Updated</th>
+                            <th style="width:80px;text-align:center;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="exchangeRatesTableBody"></tbody>
+                </table>
+            </div>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.85rem;">
+                <button type="button" class="btn btn-secondary" onclick="rtpAddExchangeRateRow()"><i class="mdi mdi-plus"></i> Add Rate</button>
+                <button type="button" class="btn btn-secondary" onclick="rtpRefreshExchangeRates()"><i class="mdi mdi-refresh"></i> Update Current Rates</button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="rtpCloseExchangeRatesModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="rtpSaveExchangeRates()"><i class="mdi mdi-content-save"></i> Save Rates</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal" id="billingPlanDetailsModal">
     <div class="modal-content" style="max-width:900px;height:auto;max-height:90vh;">
         <div class="modal-header">
@@ -1311,7 +1289,7 @@
 <script src="js/management-advanced.js"></script>
 <script>
 (function () {
-    const SECTIONS = ['devices', 'companies', 'drivers', 'clips', 'routes', 'billing', 'audit', 'health'];
+    const SECTIONS = ['devices', 'companies', 'drivers', 'clips', 'routes', 'billing'];
 
     const _plusIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
     const _addActions = {
@@ -1340,8 +1318,6 @@
         clips:     null,
         routes:    'manage_routes',
         billing:   'manage_billing',
-        audit:     'view_audit',
-        health:    'view_health',
     };
 
     function _canAccessSection(name) {
@@ -1361,13 +1337,13 @@
         const notifyEl = document.getElementById('snNotifyAction');
         if (!notifyEl) return;
         notifyEl.innerHTML = '';
+        if (name === 'billing' && localStorage.getItem('is_admin') === 'true') {
+            notifyEl.innerHTML = `<button class="header-menu-item" onclick="rtpOpenExchangeRatesModal(); ${_closeMenu}"><span class="header-menu-item-icon"><i class="mdi mdi-swap-horizontal" style="font-size:15px;"></i></span><span>Exchange Rates</span></button>`;
+        }
 
         const refreshEl = document.getElementById('snRefreshAction');
         if (!refreshEl) return;
-        const refreshFn = name === 'audit' ? 'rtpLoadAudit()' : name === 'health' ? 'rtpLoadHealth()' : null;
-        refreshEl.innerHTML = refreshFn
-            ? `<button class="header-menu-item" onclick="${refreshFn}; ${_closeMenu}"><span class="header-menu-item-icon">${_refreshIcon}</span><span>Refresh</span></button>`
-            : '';
+        refreshEl.innerHTML = '';
     }
 
     const _sectionInits = {
@@ -1377,8 +1353,6 @@
         clips:     () => initClipsSection(),
         routes:    () => rtpInitRoutes(),
         billing:   () => rtpInitBilling(),
-        audit:     () => rtpLoadAudit(),
-        health:    () => rtpLoadHealth(),
     };
 
     function switchMgmtSection(name, pushState) {
@@ -1409,8 +1383,6 @@
         [
             ['Routes', 'manage_routes'],
             ['Billing', 'manage_billing'],
-            ['Audit', 'view_audit'],
-            ['Health', 'view_health'],
         ].forEach(([name, perm]) => {
             const t = document.getElementById('mgmtTab' + name);
             if (t && hasPermission(perm)) t.style.display = '';
@@ -1437,6 +1409,7 @@
             return;
         }
         const closers = [
+            ['exchangeRatesModal', () => rtpCloseExchangeRatesModal()],
             ['billingPlanDetailsModal', () => rtpClosePlanDetailsModal()],
             ['billingPlanModal', () => rtpClosePlanModal()],
             ['routeDetailsModal', () => rtpCloseRouteDetails()],

@@ -25,6 +25,7 @@ from sqlalchemy import select
 from core.alert_engine import get_alert_engine, periodic_alert_task
 from core.schedule_runner import periodic_schedule_task
 from core.config import get_settings
+from core.currency import load_currency_rates
 from core.database import get_db, init_database
 from core.gateway import connection_manager, protocol_server_manager, sync_active_protocol_servers
 from core.push_notifications import get_push_service
@@ -399,6 +400,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
 
     await init_database(settings.database_url)
+    await load_currency_rates()
 
     # Create default admin on first run
     if settings.admin_password:
