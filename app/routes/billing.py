@@ -76,7 +76,9 @@ async def _usage(company_id: int, start: datetime, end: datetime) -> dict:
     db = get_db()
     async with db.get_session() as session:
         devices = (await session.execute(
-            select(func.count(Device.id)).where(Device.company_id == company_id, Device.is_active == True)
+            select(func.count(func.distinct(PositionRecord.device_id)))
+            .join(Device, PositionRecord.device_id == Device.id)
+            .where(Device.company_id == company_id, PositionRecord.device_time >= start, PositionRecord.device_time < end)
         )).scalar_one() or 0
         positions = (await session.execute(
             select(func.count(PositionRecord.id))
@@ -98,6 +100,11 @@ async def _usage(company_id: int, start: datetime, end: datetime) -> dict:
 
 
 def _invoice_lines(plan: BillingPlan, usage: dict) -> tuple[int, list[dict]]:
+    if not usage["active_devices"] and not usage["positions"] and not any(usage["events"].values()):
+        return 0, [
+            {"label": "Free inactive period", "quantity": 1, "unit": "period", "amount_cents": 0}
+        ]
+
     lines = [
         {"label": "Base subscription", "quantity": 1, "unit": "month", "amount_cents": plan.base_price_cents}
     ]
@@ -241,7 +248,14 @@ async def record_usage_event(data: UsageEventIn, request: Request, current_user:
 
 
 @router.post("/companies/{company_id}/invoices")
-async def generate_invoice(company_id: int, request: Request, year: int = Query(..., ge=2000), month: int = Query(..., ge=1, le=12), current_user: User = Depends(require_company_admin)):
+async def generate_invoice(
+    company_id: int,
+    request: Request,
+    year: int = Query(..., ge=2000),
+    month: int = Query(..., ge=1, le=12),
+    plan_id: Optional[int] = Query(None),
+    current_user: User = Depends(require_company_admin),
+):
     _require_billing_permission(current_user)
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Super admin access required")
@@ -251,13 +265,15 @@ async def generate_invoice(company_id: int, request: Request, year: int = Query(
         company = await session.get(Company, company_id)
         if not company:
             raise HTTPException(status_code=404, detail="Company not found")
-        if not company.billing_plan_id:
+        selected_plan_id = plan_id or company.billing_plan_id
+        if not selected_plan_id:
             raise HTTPException(status_code=400, detail="Company has no billing plan")
-        plan = await session.get(BillingPlan, company.billing_plan_id)
+        plan = await session.get(BillingPlan, selected_plan_id)
         if not plan:
-            raise HTTPException(status_code=400, detail="Company billing plan was not found")
+            raise HTTPException(status_code=400, detail="Billing plan was not found")
         plan_data = {
             "id": plan.id,
+            "name": plan.name,
             "currency": plan.currency,
             "base_price_cents": plan.base_price_cents,
             "included_devices": plan.included_devices,
@@ -301,6 +317,7 @@ async def generate_invoice(company_id: int, request: Request, year: int = Query(
             "status": invoice.status,
             "line_items": invoice.line_items,
             "usage": usage,
+            "plan": plan_data,
         }
     await write_audit_log("billing.invoice_generated", actor=current_user, company_id=company_id, target_type="billing_invoice", target_id=payload["id"], request=request)
     return payload
