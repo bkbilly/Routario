@@ -70,20 +70,15 @@ async function loadCompanyBillingPlans() {
 // ── Table ─────────────────────────────────────────────────────────
 
 function sortCompanies(col) {
-    if (companySortCol === col) {
-        companySortDir = -companySortDir;
-    } else {
-        companySortCol = col;
-        companySortDir = 1;
-    }
+    ({ col: companySortCol, dir: companySortDir } = RoutarioTables.toggleNumericSort(companySortCol, companySortDir, col));
     updateCompanySortHeaders();
     filterCompanies();
 }
 
 function updateCompanySortHeaders() {
-    document.querySelectorAll('.company-table th[data-sort]').forEach(th => {
-        th.dataset.sortDir = th.dataset.sort === companySortCol
-            ? (companySortDir === 1 ? 'asc' : 'desc') : '';
+    RoutarioTables.updateSortHeaders('.company-table', {
+        col: companySortCol,
+        dir: companySortDir === 1 ? 'asc' : 'desc',
     });
 }
 
@@ -121,8 +116,7 @@ function renderTable(list) {
     count.textContent = `${list.length} compan${list.length !== 1 ? 'ies' : 'y'}`;
 
     if (!list.length) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:3rem;color:var(--text-muted);">
-            <div style="font-size:2.5rem;margin-bottom:0.75rem;">&#127970;</div>No companies found</td></tr>`;
+        tbody.innerHTML = RoutarioTables.stateRow('<div style="font-size:2.5rem;margin-bottom:0.75rem;">&#127970;</div>No companies found', 6, { padding: '3rem' });
         return;
     }
 

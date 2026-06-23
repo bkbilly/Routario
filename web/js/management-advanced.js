@@ -29,7 +29,7 @@ let _rtpHealthSort = { col: 'name', dir: 'asc' };
 let _rtpPlanCompanySelection = new Set();
 
 function rtpEsc(value) {
-    return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
+    return RoutarioUI.escapeHtml(value);
 }
 
 function rtpDateTime(value) {
@@ -128,10 +128,7 @@ function rtpCompareValues(a, b, dir = 'asc') {
 }
 
 function rtpUpdateSortHeaders(sectionId, sortState) {
-    document.querySelectorAll(`#${sectionId} .devices-table th[data-sort]`).forEach(th => {
-        th.removeAttribute('data-sort-dir');
-        if (th.dataset.sort === sortState.col) th.setAttribute('data-sort-dir', sortState.dir);
-    });
+    RoutarioTables.updateSortHeaders(sectionId, sortState);
 }
 
 function rtpCurrentCompanyId() {
@@ -725,11 +722,11 @@ async function rtpSaveRoute() {
 async function rtpLoadRoutes() {
     const body = document.getElementById('routesTableBody');
     if (!body) return;
-    body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading routes...</td></tr>';
+    body.innerHTML = RoutarioTables.stateRow('Loading routes...', 7);
     try {
         _rtpRouteRows = await rtpJson(`${API_BASE}/planned-routes`);
         rtpRenderRoutesTable();
-    } catch (e) { body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);">${rtpEsc(e.message)}</td></tr>`; }
+    } catch (e) { body.innerHTML = RoutarioTables.stateRow(rtpEsc(e.message), 7); }
 }
 
 function rtpRouteValue(route, col) {
@@ -773,7 +770,7 @@ function rtpRenderRoutesTable() {
             <td class="route-duration-col">${(r.duration_minutes || 0).toFixed(0)} min</td>
             <td style="text-align:center;"><div class="table-actions" onclick="event.stopPropagation()">${rtpRouteActions(r)}</div></td>
         </tr>
-    `).join('') : '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);">No planned routes match.</td></tr>';
+    `).join('') : RoutarioTables.stateRow('No planned routes match.', 7);
 }
 
 function rtpSortRoutes(col) {
@@ -920,7 +917,7 @@ function rtpRenderBillingTable() {
                     </td>
                 </tr>
             `;
-        }).join('') : '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">No billing plans match.</td></tr>';
+        }).join('') : RoutarioTables.stateRow('No billing plans match.', 6);
     }
 }
 
@@ -947,7 +944,7 @@ function rtpRenderExchangeRates() {
                 ${row.currency === 'EUR' ? '' : `<button type="button" class="btn btn-secondary tbl-btn" onclick="rtpRemoveExchangeRateRow(${idx})"><i class="mdi mdi-delete"></i></button>`}
             </td>
         </tr>
-    `).join('') : '<tr><td colspan="5" style="text-align:center;padding:1rem;color:var(--text-muted);">No exchange rates configured.</td></tr>';
+    `).join('') : RoutarioTables.stateRow('No exchange rates configured.', 5, { padding: '1rem' });
 }
 
 function rtpUpdateExchangeRateDraft(idx, key, value) {
@@ -1506,12 +1503,12 @@ async function rtpDeletePlan(id) {
 async function rtpLoadAudit() {
     const body = document.getElementById('auditTableBody');
     if (!body) return;
-    body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading audit logs...</td></tr>';
+    body.innerHTML = RoutarioTables.stateRow('Loading audit logs...', 6);
     try {
         _rtpAuditRows = await rtpJson(`${API_BASE}/audit-logs?limit=500`);
         rtpRenderAuditTable();
     } catch (e) {
-        body.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">${rtpEsc(e.message)}</td></tr>`;
+        body.innerHTML = RoutarioTables.stateRow(rtpEsc(e.message), 6);
     }
 }
 
@@ -1536,7 +1533,7 @@ function rtpRenderAuditTable() {
             <td>${rtpEsc([l.target_type, l.target_id].filter(Boolean).join(' ')) || '-'}</td>
             <td>${rtpEsc(l.ip_address || '-')}</td>
         </tr>
-    `).join('') : '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">No audit events match.</td></tr>';
+    `).join('') : RoutarioTables.stateRow('No audit events match.', 6);
 }
 
 function rtpAuditValue(row, col) {
@@ -1559,14 +1556,14 @@ function rtpSortAudit(col) {
 async function rtpLoadHealth() {
     const body = document.getElementById('healthTableBody');
     if (!body) return;
-    body.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading health checks...</td></tr>';
+    body.innerHTML = RoutarioTables.stateRow('Loading health checks...', 3);
     try {
         const res = await fetch('/health/ready');
         const data = await res.json();
         _rtpHealthRows = Object.entries(data.checks || {}).map(([name, check]) => ({ name, ...check }));
         rtpRenderHealthTable();
     } catch (e) {
-        body.innerHTML = `<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted);">${rtpEsc(e.message)}</td></tr>`;
+        body.innerHTML = RoutarioTables.stateRow(rtpEsc(e.message), 3);
     }
 }
 
@@ -1585,7 +1582,7 @@ function rtpRenderHealthTable() {
             <td><span class="proto-badge health-status health-status-${rtpHealthStatus(row)}">${rtpHealthStatus(row)}</span></td>
             <td>${rtpHealthDetails(row)}</td>
         </tr>
-    `).join('') : '<tr><td colspan="3" style="text-align:center;padding:2rem;color:var(--text-muted);">No health checks match.</td></tr>';
+    `).join('') : RoutarioTables.stateRow('No health checks match.', 3);
 }
 
 function rtpListenerLabel(listener) {
