@@ -8,9 +8,14 @@ let webhooks = [];
 let settingsApiKeys = [];
 let settingsApiKeyScopesLoaded = false;
 let currentSettingsTab = hasPermission('manage_users') ? 'users' : 'notifications';
+const SETTINGS_TABS = ['users', 'notifications', 'webhooks', 'apiKeys', 'backups'].map(name => ({
+    name,
+    panelId: `settings-section-${name}`,
+    tabId: 'settingsTab' + name.charAt(0).toUpperCase() + name.slice(1),
+}));
 
 function settingsEsc(value) {
-    return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
+    return RoutarioUI.escapeHtml(value);
 }
 
 function maskUrl(url) {
@@ -36,7 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const ch = document.getElementById('userCompanyHeader');
         if (ch) ch.style.display = '';
     }
-    const hash = normalizeSettingsTab(window.location.hash.replace('#', ''));
+    const hash = normalizeSettingsTab(RoutarioTabs.hashValue());
     switchSettingsTab(['users', 'notifications', 'webhooks', 'apiKeys', 'backups'].includes(hash) ? hash : currentSettingsTab, false);
 });
 
@@ -59,13 +64,8 @@ function switchSettingsTab(name, pushState = true) {
     if (name === 'backups' && !((IS_ADMIN || IS_COMPANY_ADMIN) && hasPermission('manage_backups'))) name = fallback;
     if (name === 'apiKeys' && !hasPermission('manage_api_keys')) name = fallback;
     currentSettingsTab = name;
-    sections.forEach(section => {
-        const panel = document.getElementById(`settings-section-${section}`);
-        if (panel) panel.style.display = section === name ? '' : 'none';
-        const tab = document.getElementById('settingsTab' + section.charAt(0).toUpperCase() + section.slice(1));
-        if (tab) tab.classList.toggle('active', section === name);
-    });
-    if (pushState) history.replaceState(null, '', '#' + name);
+    RoutarioTabs.activate(SETTINGS_TABS, name);
+    if (pushState) RoutarioTabs.replaceHash(name);
     if (name === 'users') initUsersSection();
     if (name === 'apiKeys') initSettingsApiKeys();
     updateSettingsGearAction(name);
@@ -125,7 +125,7 @@ function updateSettingsGearAction(name = currentSettingsTab) {
 }
 
 window.addEventListener('hashchange', () => {
-    const hash = normalizeSettingsTab(window.location.hash.replace('#', ''));
+    const hash = normalizeSettingsTab(RoutarioTabs.hashValue());
     switchSettingsTab(hash || currentSettingsTab, false);
 });
 
@@ -160,7 +160,7 @@ function renderWebhooks() {
     const count = document.getElementById('webhookCount');
     if (count) count.textContent = `${rows.length} webhook${rows.length !== 1 ? 's' : ''}`;
     if (!rows.length) {
-        tbody.innerHTML = `<tr><td colspan="2" style="color:var(--text-muted);padding:2rem;text-align:center;">No webhooks found.</td></tr>`;
+        tbody.innerHTML = RoutarioTables.stateRow('No webhooks found.', 2);
         return;
     }
     tbody.innerHTML = rows.map(url => `
@@ -218,7 +218,7 @@ function renderChannels() {
     if (count) count.textContent = `${rows.length} channel${rows.length !== 1 ? 's' : ''}`;
     
     if (rows.length === 0) {
-        body.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 2rem;">No notification channels found.</td></tr>';
+        body.innerHTML = RoutarioTables.stateRow('No notification channels found.', 3);
         return;
     }
     
@@ -424,7 +424,7 @@ async function initSettingsApiKeys() {
 async function loadSettingsApiKeys() {
     const body = document.getElementById('settingsApiKeyTableBody');
     if (!body) return;
-    body.innerHTML = '<tr><td colspan="5" style="color:var(--text-muted);padding:2rem;text-align:center;">Loading API keys...</td></tr>';
+    body.innerHTML = RoutarioTables.stateRow('Loading API keys...', 5);
     settingsApiKeys = (await settingsJson(`${API_BASE}/api-keys`)).filter(k => k.is_active);
     renderSettingsApiKeys();
 }
@@ -450,7 +450,7 @@ function renderSettingsApiKeys() {
                 <button type="button" class="btn btn-danger btn-small" onclick="revokeSettingsApiKey(${k.id})"><i class="mdi mdi-key-remove"></i> Revoke</button>
             </td>
         </tr>
-    `).join('') : '<tr><td colspan="5" style="color:var(--text-muted);padding:2rem;text-align:center;">No active API keys found.</td></tr>';
+    `).join('') : RoutarioTables.stateRow('No active API keys found.', 5);
 }
 
 async function openApiKeyModal() {

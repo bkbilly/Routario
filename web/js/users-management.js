@@ -90,8 +90,7 @@ function _usrRender() {
     const tbody = document.getElementById('usersTableBody');
     if (!list.length) {
         const cols = _usrIsAdmin ? 6 : 5;
-        tbody.innerHTML = `<tr><td colspan="${cols}" style="text-align:center;padding:3rem;color:var(--text-muted);">
-            <div style="font-size:2.5rem;margin-bottom:0.75rem;">&#128100;</div>No users found</td></tr>`;
+        tbody.innerHTML = RoutarioTables.stateRow('<div style="font-size:2.5rem;margin-bottom:0.75rem;">&#128100;</div>No users found', cols, { padding: '3rem' });
         return;
     }
 
@@ -139,10 +138,10 @@ function _usrRender() {
 function filterUsers() { _usrRender(); }
 
 function sortUsers(col) {
-    if (_usrSortCol === col) _usrSortDir = -_usrSortDir;
-    else { _usrSortCol = col; _usrSortDir = 1; }
-    document.querySelectorAll('#section-users .devices-table th[data-sort], #settings-section-users .devices-table th[data-sort]').forEach(th => {
-        th.dataset.sortDir = th.dataset.sort === col ? (_usrSortDir === 1 ? 'asc' : 'desc') : '';
+    ({ col: _usrSortCol, dir: _usrSortDir } = RoutarioTables.toggleNumericSort(_usrSortCol, _usrSortDir, col));
+    RoutarioTables.updateSortHeaders('#section-users, #settings-section-users', {
+        col,
+        dir: _usrSortDir === 1 ? 'asc' : 'desc',
     });
     _usrRender();
 }

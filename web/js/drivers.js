@@ -77,8 +77,7 @@ function _render() {
 
     const tbody = document.getElementById('driversTableBody');
     if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:3rem;color:var(--text-muted);">
-            <div style="font-size:2.5rem;margin-bottom:0.75rem;">&#128100;</div>No drivers found</td></tr>`;
+        tbody.innerHTML = RoutarioTables.stateRow('<div style="font-size:2.5rem;margin-bottom:0.75rem;">&#128100;</div>No drivers found', 5, { padding: '3rem' });
         return;
     }
 
@@ -107,10 +106,10 @@ function _render() {
 function filterDrivers() { _render(); }
 
 function sortDrivers(col) {
-    if (_drvSortCol === col) _drvSortDir = -_drvSortDir;
-    else { _drvSortCol = col; _drvSortDir = 1; }
-    document.querySelectorAll('#section-drivers .devices-table th[data-sort]').forEach(th => {
-        th.dataset.sortDir = th.dataset.sort === col ? (_drvSortDir === 1 ? 'asc' : 'desc') : '';
+    ({ col: _drvSortCol, dir: _drvSortDir } = RoutarioTables.toggleNumericSort(_drvSortCol, _drvSortDir, col));
+    RoutarioTables.updateSortHeaders('#section-drivers, body > .container', {
+        col,
+        dir: _drvSortDir === 1 ? 'asc' : 'desc',
     });
     _render();
 }
@@ -384,5 +383,5 @@ async function deleteDriver() {
 
 
 function _esc(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return RoutarioUI.escapeHtml(s);
 }

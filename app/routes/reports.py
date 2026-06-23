@@ -16,6 +16,7 @@ from core.auth import require_permission
 from core.database import get_db
 from models import User
 from reports import get_report, get_report_definitions
+from reports.billing import billing_detail_payload
 from reports.common import parse_id_csv
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -119,6 +120,22 @@ async def trips_report(
     current_user: User = Depends(require_permission("view_reports")),
 ):
     return await _run_report("trips", current_user, start_date, end_date, device_ids=device_ids)
+
+
+@router.get("/billing/details")
+async def billing_report_details(
+    company_id: int = Query(...),
+    period: str = Query("this_month"),
+    current_user: User = Depends(require_permission("view_reports")),
+):
+    if not (current_user.is_admin or current_user.is_company_admin):
+        raise HTTPException(status_code=403, detail="Company admin access required")
+    db = get_db()
+    async with db.get_session() as session:
+        payload = await billing_detail_payload(session, current_user, company_id, period)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Billing detail not found")
+    return payload
 
 
 @router.get("/{report_key}")

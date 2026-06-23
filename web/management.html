@@ -10,6 +10,7 @@
     <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="css/tables.css">
     <link rel="stylesheet" href="css/device-management.css">
     <script src="js/settings-nav.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1280,6 +1281,7 @@
 <script src="js/config.js"></script>
 <script src="js/units.js"></script>
 <script src="js/impersonation.js"></script>
+<script src="js/ui-utils.js"></script>
 <script src="js/vehicle-icons.js"></script>
 <script src="js/device-management.js"></script>
 <script src="js/device-management-integrations.js"></script>
@@ -1290,6 +1292,11 @@
 <script>
 (function () {
     const SECTIONS = ['devices', 'companies', 'drivers', 'clips', 'routes', 'billing'];
+    const _sectionTabs = SECTIONS.map(s => ({
+        name: s,
+        panelId: 'section-' + s,
+        tabId: 'mgmtTab' + s.charAt(0).toUpperCase() + s.slice(1),
+    }));
 
     const _plusIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
     const _addActions = {
@@ -1358,13 +1365,9 @@
     function switchMgmtSection(name, pushState) {
         if (!SECTIONS.includes(name)) name = 'devices';
         if (!_canAccessSection(name)) name = 'devices';
-        SECTIONS.forEach(s => {
-            document.getElementById('section-' + s).style.display = s === name ? '' : 'none';
-            const tab = document.getElementById('mgmtTab' + s.charAt(0).toUpperCase() + s.slice(1));
-            if (tab) tab.classList.toggle('active', s === name);
-        });
+        RoutarioTabs.activate(_sectionTabs, name);
         _updateAddAction(name);
-        if (pushState !== false) history.replaceState(null, '', '#' + name);
+        if (pushState !== false) RoutarioTabs.replaceHash(name);
         _sectionInits[name]?.();
     }
 
@@ -1392,12 +1395,12 @@
             if (t) t.style.display = 'none';
         }
 
-        const hash = window.location.hash.replace('#', '');
+        const hash = RoutarioTabs.hashValue();
         switchMgmtSection(SECTIONS.includes(hash) ? hash : 'devices', false);
     });
 
     window.addEventListener('hashchange', () => {
-        const hash = window.location.hash.replace('#', '');
+        const hash = RoutarioTabs.hashValue();
         switchMgmtSection(SECTIONS.includes(hash) ? hash : 'devices', false);
     });
 

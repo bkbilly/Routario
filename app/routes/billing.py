@@ -1,17 +1,17 @@
-import math
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, update
+from sqlalchemy import select, update
 
 from core.audit import write_audit_log
 from core.auth import require_company_admin
 from core.currency import cents_at_rate, currency_snapshot
 from core.database import get_db
-from models import BillingInvoice, BillingPlan, Company, Device, PositionRecord, UsageEvent, User
+from models import BillingInvoice, BillingPlan, Company, UsageEvent, User
+from services.billing import billing_usage, invoice_lines, month_window
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
@@ -48,13 +48,6 @@ class UsageEventIn(BaseModel):
     metadata: dict = Field(default_factory=dict)
 
 
-def _month_window(year: int, month: int) -> tuple[datetime, datetime]:
-    start = datetime(year, month, 1)
-    if month == 12:
-        return start, datetime(year + 1, 1, 1)
-    return start, datetime(year, month + 1, 1)
-
-
 def _plan_payload(plan: BillingPlan) -> dict:
     return {
         "id": plan.id,
@@ -70,64 +63,6 @@ def _plan_payload(plan: BillingPlan) -> dict:
         "is_active": plan.is_active,
         "created_at": plan.created_at,
     }
-
-
-async def _usage(company_id: int, start: datetime, end: datetime) -> dict:
-    db = get_db()
-    async with db.get_session() as session:
-        devices = (await session.execute(
-            select(func.count(func.distinct(PositionRecord.device_id)))
-            .join(Device, PositionRecord.device_id == Device.id)
-            .where(Device.company_id == company_id, PositionRecord.device_time >= start, PositionRecord.device_time < end)
-        )).scalar_one() or 0
-        positions = (await session.execute(
-            select(func.count(PositionRecord.id))
-            .join(Device, PositionRecord.device_id == Device.id)
-            .where(Device.company_id == company_id, PositionRecord.device_time >= start, PositionRecord.device_time < end)
-        )).scalar_one() or 0
-        events = (await session.execute(
-            select(UsageEvent.metric, func.coalesce(func.sum(UsageEvent.quantity), 0))
-            .where(UsageEvent.company_id == company_id, UsageEvent.created_at >= start, UsageEvent.created_at < end)
-            .group_by(UsageEvent.metric)
-        )).all()
-        event_totals = {metric: int(total or 0) for metric, total in events}
-        return {
-            "active_devices": int(devices),
-            "positions": int(positions),
-            "api_calls": int(event_totals.get("api_call", 0)),
-            "events": event_totals,
-        }
-
-
-def _invoice_lines(plan: BillingPlan, usage: dict) -> tuple[int, list[dict]]:
-    if not usage["active_devices"] and not usage["positions"] and not any(usage["events"].values()):
-        return 0, [
-            {"label": "Free inactive period", "quantity": 1, "unit": "period", "amount_cents": 0}
-        ]
-
-    lines = [
-        {"label": "Base subscription", "quantity": 1, "unit": "month", "amount_cents": plan.base_price_cents}
-    ]
-    amount = plan.base_price_cents
-    extra_devices = max(0, usage["active_devices"] - plan.included_devices)
-    if extra_devices:
-        line_amount = extra_devices * plan.price_per_device_cents
-        amount += line_amount
-        lines.append({"label": "Additional active devices", "quantity": extra_devices, "unit": "device", "amount_cents": line_amount})
-    extra_positions = max(0, usage["positions"] - plan.included_positions)
-    if extra_positions:
-        units = math.ceil(extra_positions / 1000)
-        line_amount = units * plan.price_per_1000_positions_cents
-        amount += line_amount
-        lines.append({"label": "Additional position messages", "quantity": extra_positions, "unit": "position", "billable_units": units, "amount_cents": line_amount})
-    extra_api = max(0, usage["api_calls"] - plan.included_api_calls)
-    if extra_api:
-        units = math.ceil(extra_api / 1000)
-        line_amount = units * plan.price_per_1000_api_calls_cents
-        amount += line_amount
-        lines.append({"label": "Additional API calls", "quantity": extra_api, "unit": "call", "billable_units": units, "amount_cents": line_amount})
-    return amount, lines
-
 
 @router.get("/plans")
 async def list_plans(_: User = Depends(require_company_admin)):
@@ -231,8 +166,8 @@ async def company_usage(
     _require_billing_permission(current_user)
     if not current_user.is_admin and current_user.company_id != company_id:
         raise HTTPException(status_code=403, detail="Forbidden")
-    start, end = _month_window(year, month)
-    return {"company_id": company_id, "period_start": start, "period_end": end, "usage": await _usage(company_id, start, end)}
+    start, end = month_window(year, month)
+    return {"company_id": company_id, "period_start": start, "period_end": end, "usage": await billing_usage(company_id, start, end)}
 
 
 @router.post("/usage-events")
@@ -260,7 +195,7 @@ async def generate_invoice(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Super admin access required")
     db = get_db()
-    start, end = _month_window(year, month)
+    start, end = month_window(year, month)
     async with db.get_session() as session:
         company = await session.get(Company, company_id)
         if not company:
@@ -284,9 +219,9 @@ async def generate_invoice(
             "price_per_1000_api_calls_cents": plan.price_per_1000_api_calls_cents,
         }
 
-    usage = await _usage(company_id, start, end)
+    usage = await billing_usage(company_id, start, end)
     plan_stub = SimpleNamespace(**plan_data)
-    amount, lines = _invoice_lines(plan_stub, usage)
+    amount, lines = invoice_lines(plan_stub, usage)
     currency, exchange_rate = currency_snapshot(current_user)
     amount_display_cents = cents_at_rate(amount, exchange_rate)
 

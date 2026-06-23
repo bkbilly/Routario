@@ -283,20 +283,15 @@ async function _loadDriverOptions() {
 
 // ── Device Table ──────────────────────────────────────────────────
 function sortDevices(col) {
-    if (sortCol === col) {
-        sortDir = -sortDir;
-    } else {
-        sortCol = col;
-        sortDir = 1;
-    }
+    ({ col: sortCol, dir: sortDir } = RoutarioTables.toggleNumericSort(sortCol, sortDir, col));
     updateSortHeaders();
     filterDevices();
 }
 
 function updateSortHeaders() {
-    document.querySelectorAll('.devices-table th[data-sort]').forEach(th => {
-        const col = th.dataset.sort;
-        th.dataset.sortDir = col === sortCol ? (sortDir === 1 ? 'asc' : 'desc') : '';
+    RoutarioTables.updateSortHeaders('#section-devices, body > .container', {
+        col: sortCol,
+        dir: sortDir === 1 ? 'asc' : 'desc',
     });
 }
 
@@ -338,11 +333,7 @@ function renderDeviceTable(list) {
     count.textContent = `${list.length} device${list.length !== 1 ? 's' : ''}`;
 
     if (!list.length) {
-        tbody.innerHTML = `
-            <tr><td colspan="7" style="text-align:center;padding:3rem;color:var(--text-muted);">
-                <div style="font-size:2.5rem;margin-bottom:0.75rem;"><i class="mdi mdi-antenna"></i></div>
-                No devices found
-            </td></tr>`;
+        tbody.innerHTML = RoutarioTables.stateRow('<div style="font-size:2.5rem;margin-bottom:0.75rem;"><i class="mdi mdi-antenna"></i></div>No devices found', 7, { padding: '3rem' });
         return;
     }
 
@@ -1707,7 +1698,7 @@ function renderRawDataPage() {
     tbody.innerHTML = '';
 
     if (!slice.length) {
-        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:2rem;color:var(--text-muted);">No data available.</td></tr>';
+        tbody.innerHTML = RoutarioTables.stateRow('No data available.', 11);
         return;
     }
 

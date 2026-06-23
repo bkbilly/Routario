@@ -10,6 +10,7 @@
     <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="css/tables.css">
     <link rel="stylesheet" href="css/device-management.css">
     <script src="js/settings-nav.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -90,33 +91,7 @@
             margin-top: 0.2rem;
         }
 
-        /* ── Report table ────────────────────────────────────────── */
-        .report-table { width: 100%; border-collapse: collapse; }
-        .report-table th, .report-table td {
-            padding: 0.65rem 0.9rem;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
-            font-size: 0.875rem;
-        }
-        .report-table th {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-muted);
-            font-weight: 600;
-            cursor: pointer;
-            user-select: none;
-            white-space: nowrap;
-        }
-        .report-table th:hover { color: var(--text-primary); }
-        .report-table tr:hover td { background: var(--bg-tertiary); }
-        .report-table .total-row td {
-            font-weight: 600;
-            border-top: 2px solid var(--border-color);
-            color: var(--accent-primary);
-        }
         .no-data { text-align: center; color: var(--text-muted); padding: 3rem 1rem; }
-        .sort-arrow { font-size: 0.7rem; margin-left: 0.2rem; }
 
         /* ── Vehicle multi-select ────────────────────────────────── */
         .veh-select-wrap { position: relative; min-width: 190px; }
@@ -170,6 +145,35 @@
         #tripMapContainer { height: 100%; }
         #tripMapSpinner { display:none; position:absolute; inset:0; align-items:center; justify-content:center; background:var(--bg-card); color:var(--text-muted); gap:0.5rem; font-size:0.9rem; z-index:1000; }
 
+        /* ── Billing detail modal ───────────────────────────────── */
+        #billingDetailModal .modal-content { max-width: 980px; width: 95vw; max-height: 90vh; display: flex; flex-direction: column; }
+        #billingDetailBody { display: grid; gap: 1rem; }
+        .billing-detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 0.75rem;
+        }
+        .billing-detail-card {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-secondary);
+            padding: 0.8rem 0.9rem;
+        }
+        .billing-detail-card .k { color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .billing-detail-card .v { margin-top: 0.25rem; font-family: var(--font-mono); font-weight: 700; color: var(--text-primary); }
+        .billing-section-title {
+            font-family: var(--font-display);
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0.25rem 0 0.5rem;
+        }
+        .billing-detail-table { min-width: 620px; }
+        .billing-detail-table th,
+        .billing-detail-table td { padding: 0.55rem 0.7rem; font-size: 0.82rem; }
+        .billing-detail-muted { color: var(--text-muted); }
+        .report-table tr.table-row { cursor: pointer; }
+        .report-table tr.selected td { background: var(--bg-secondary); }
+
         /* ── Run viewer banner ───────────────────────────────────── */
         #runViewBanner {
             display: none;
@@ -195,27 +199,7 @@
             justify-content: flex-end;
             margin-bottom: 1rem;
         }
-        .sched-table { width: 100%; border-collapse: collapse; }
-        .sched-table th {
-            font-size: 0.72rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-muted);
-            font-weight: 600;
-            padding: 0.5rem 0.9rem;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
-            white-space: nowrap;
-        }
-        .sched-table td {
-            padding: 0.7rem 0.9rem;
-            font-size: 0.875rem;
-            border-bottom: 1px solid var(--border-color);
-            vertical-align: middle;
-        }
-        .sched-table tbody tr { cursor: pointer; transition: background 0.12s; }
-        .sched-table tbody tr:hover td { background: var(--bg-tertiary); }
-        .sched-table tbody tr.expanded td { background: var(--bg-secondary); }
+        .schedules-table tbody tr.expanded td { background: var(--bg-secondary); }
 
         .sched-badge {
             display: inline-block;
@@ -246,18 +230,8 @@
             font-weight: 600;
             margin-bottom: 0.5rem;
         }
-        .run-table { width: 100%; border-collapse: collapse; }
-        .run-table th {
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: var(--text-muted);
-            font-weight: 600;
-            padding: 0.35rem 0.75rem;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .run-table td { padding: 0.5rem 0.75rem; font-size: 0.82rem; border-bottom: 1px solid var(--border-color); }
+        .run-table th,
+        .run-table td { padding: 0.5rem 0.75rem; font-size: 0.82rem; }
         .run-status-ok  { color: #22c55e; font-weight: 600; }
         .run-status-err { color: #ef4444; font-weight: 600; }
 
@@ -497,7 +471,7 @@
         <div class="summary-bar" id="summaryBar" style="display:none;"></div>
 
         <div style="overflow-x:auto;">
-            <table class="report-table" id="reportTable" style="display:none;">
+            <table class="devices-table report-table" id="reportTable" style="display:none;">
                 <thead id="reportHead"></thead>
                 <tbody id="reportBody"></tbody>
             </table>
@@ -510,7 +484,7 @@
     <!-- Schedules tab                                                      -->
     <!-- ══════════════════════════════════════════════════════════════════ -->
     <div id="panelSchedules" style="display:none;">
-        <div class="devices-search-bar" style="margin-bottom:1rem;">
+        <div class="devices-search-bar">
             <div class="search-input-wrap">
                 <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
                 <input type="text" id="schedSearch" class="search-input" placeholder="Search by name, type, frequency…"
@@ -519,7 +493,7 @@
             <span class="devices-count" id="schedCount"></span>
         </div>
         <div style="overflow-x:auto;">
-            <table class="sched-table" id="schedTable">
+            <table class="devices-table schedules-table" id="schedTable">
                 <thead id="schedHead"></thead>
                 <tbody id="schedBody"></tbody>
             </table>
@@ -575,6 +549,26 @@
     </div>
 
 </div><!-- /container -->
+
+<!-- ── Billing Detail Modal ─────────────────────────────────────────────── -->
+<div class="modal" id="billingDetailModal">
+    <div class="modal-backdrop" onclick="closeBillingDetail()"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title" id="billingDetailTitle">Billing Details</h3>
+            <button class="modal-close" onclick="closeBillingDetail()">&times;</button>
+        </div>
+        <div class="modal-scrollable">
+            <div id="billingDetailBody"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeBillingDetail()">Close</button>
+            <button class="btn btn-primary" id="billingPdfBtn" onclick="exportBillingDetailPdf()" style="margin-left:auto;">
+                <i class="mdi mdi-file-pdf-box"></i> Export PDF
+            </button>
+        </div>
+    </div>
+</div>
 
 <!-- ── Trip Map Modal ────────────────────────────────────────────────────── -->
 <div class="modal" id="tripMapModal">
@@ -742,6 +736,7 @@
 
 <script src="js/config.js"></script>
 <script src="js/vehicle-icons.js"></script>
+<script src="js/ui-utils.js"></script>
 <script src="js/reports.js"></script>
 <script src="js/voice-ptt.js"></script>
 </body>
