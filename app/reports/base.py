@@ -17,13 +17,17 @@ class ReportDefinition:
     supports_user_filter: bool = False
     supports_driver_filter: bool = False
     supports_historical_toggle: bool = False
+    super_admin_required: bool = False
     company_admin_required: bool = False
     schedule_supported: bool = True
     schedule_uses_device_filter: bool = True
     schedule_uses_user_filter: bool = False
     controls: tuple[dict[str, Any], ...] = ()
+    schedule_controls: tuple[dict[str, Any], ...] = ()
 
     def public(self, user: Any) -> Optional[dict[str, Any]]:
+        if self.super_admin_required and not user.is_admin:
+            return None
         if self.company_admin_required and not (user.is_admin or user.is_company_admin):
             return None
         return {
@@ -36,11 +40,13 @@ class ReportDefinition:
             "supports_user_filter": self.supports_user_filter,
             "supports_driver_filter": self.supports_driver_filter,
             "supports_historical_toggle": self.supports_historical_toggle,
+            "super_admin_required": self.super_admin_required,
             "company_admin_required": self.company_admin_required,
             "schedule_supported": self.schedule_supported,
             "schedule_uses_device_filter": self.schedule_uses_device_filter,
             "schedule_uses_user_filter": self.schedule_uses_user_filter,
             "controls": list(self.controls),
+            "schedule_controls": list(self.schedule_controls),
         }
 
 

@@ -45,13 +45,22 @@ Each schedule stores:
 
 - report type
 - report-specific filters
+- backend-defined report options, such as breakdown or report period selectors
 - date range preset, when required
 - frequency: daily, weekly, or monthly
 - run time and timezone
 - number of stored runs to keep
+- optional notification channels
+- whether generated result files and related uploaded documents should be attached
 - active/paused state
 
-The background schedule runner dispatches through the same report registry used by manual reports, so scheduled and manual output share the same schema.
+Date ranges are stored as relative presets rather than fixed start/end dates, so a recurring schedule can run against windows such as the last 30 days or last calendar month.
+
+The background schedule runner dispatches through the same report registry used by manual reports, so scheduled and manual output share the same schema and report-specific options. When notification channels are selected, the runner sends the result to those channels and attaches a CSV plus printable HTML result file. Reports that expose related uploaded documents, such as logbook maintenance entries, can attach those documents too.
+
+Reports can expose different controls for manual runs and schedules. For example, manual billing reports can target any year/month, while scheduled billing reports use relative presets such as this month, last month, this year, or last year.
+
+The Audit report is available only to super admins and replaces the former standalone Audit tab.
 
 Stored runs can be opened later from the schedule history and exported as CSV.
 
@@ -59,7 +68,7 @@ Stored runs can be opened later from the schedule history and exported as CSV.
 
 ## CSV Export
 
-CSV output is generated from the same backend-provided column schema shown in the table. A report can hide a column from CSV by setting `csv` to `false` on that column.
+CSV output is generated from the same backend-provided column schema shown in the table. PDF export uses the same visible report rows in a print-friendly browser document. A report can hide a column from CSV/PDF by setting `csv` to `false` or `hidden` to `true` on that column.
 
 The report payload also defines the CSV filename.
 

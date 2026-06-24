@@ -17,7 +17,8 @@
         const dir = direction === 'desc' ? -1 : Number(direction) || 1;
         const active = activeKey === key;
         const arrow = active ? (dir === 1 ? ' ▲' : ' ▼') : '';
-        return `<th data-sort="${escapeHtml(key)}" onclick="${onClick}(${JSON.stringify(key)})">${escapeHtml(label)}<span class="sort-arrow">${arrow}</span></th>`;
+        const arg = escapeHtml(JSON.stringify(key));
+        return `<th data-sort="${escapeHtml(key)}" onclick="${onClick}(${arg})">${escapeHtml(label)}<span class="sort-arrow">${arrow}</span></th>`;
     }
 
     function updateSortHeaders(root, sortState) {

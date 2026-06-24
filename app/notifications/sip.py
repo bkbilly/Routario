@@ -44,7 +44,7 @@ class SipChannel(BaseNotificationChannel):
     def matches(cls, url: str) -> bool:
         return url.strip().lower().startswith("sip://")
 
-    async def send(self, url: str, title: str, message: str) -> bool:
+    async def send(self, url: str, title: str, message: str, attachments: list[str] | None = None) -> bool:
         params = self._parse_url(url)
         if not params:
             return False

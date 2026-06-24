@@ -31,7 +31,7 @@ def get_report(key: str) -> Report | None:
 
 
 def get_report_definitions(user) -> list[dict]:
-    order = ["summary", "trips", "daily", "drivers", "billing", "logbook", "geofences", "users", "sensors", "alerts"]
+    order = ["summary", "trips", "daily", "drivers", "billing", "logbook", "geofences", "users", "sensors", "alerts", "audit"]
     definitions = []
     for report in REPORT_REGISTRY.values():
         public = report.definition.public(user)

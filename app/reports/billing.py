@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, Optional
 
@@ -10,10 +10,55 @@ from reports.common import table_payload
 from services.billing import billing_usage, invoice_lines, month_window
 
 
+def _selected_year(options: Optional[dict[str, Any]], now: datetime) -> int:
+    try:
+        year = int((options or {}).get("year") or now.year)
+    except (TypeError, ValueError):
+        year = now.year
+    return max(1970, min(2100, year))
+
+
+def _selected_month(options: Optional[dict[str, Any]], now: datetime) -> int:
+    try:
+        month = int((options or {}).get("month") or now.month)
+    except (TypeError, ValueError):
+        month = now.month
+    return max(1, min(12, month))
+
+
+def _period_from_options(options: Optional[dict[str, Any]], now: Optional[datetime] = None) -> str:
+    now = now or datetime.utcnow()
+    values = options or {}
+    if values.get("billing_period"):
+        return str(values["billing_period"])
+    period_type = values.get("period_type") or "year"
+    year = _selected_year(values, now)
+    if period_type == "year":
+        return f"year:{year}"
+    return f"month:{year}-{_selected_month(values, now):02d}"
+
+
 def _period_window(period: str, now: Optional[datetime] = None) -> tuple[datetime, datetime, str, list[tuple[int, int, str]]]:
     now = now or datetime.utcnow()
     year = now.year
     month = now.month
+
+    if period.startswith("month:"):
+        try:
+            selected = datetime.strptime(period.split(":", 1)[1], "%Y-%m")
+            start, end = month_window(selected.year, selected.month)
+            label = start.strftime("%B %Y")
+            return start, end, label, [(selected.year, selected.month, label)]
+        except ValueError:
+            pass
+
+    if period.startswith("year:"):
+        try:
+            selected_year = int(period.split(":", 1)[1])
+            months = [(selected_year, m, datetime(selected_year, m, 1).strftime("%b")) for m in range(1, 13)]
+            return datetime(selected_year, 1, 1), datetime(selected_year + 1, 1, 1), str(selected_year), months
+        except ValueError:
+            pass
 
     if period == "last_month":
         if month == 1:
@@ -37,6 +82,16 @@ def _period_window(period: str, now: Optional[datetime] = None) -> tuple[datetim
     start, end = month_window(year, month)
     label = start.strftime("%B %Y")
     return start, end, label, [(year, month, label)]
+
+
+def _daily_windows(start: datetime, end: datetime) -> list[tuple[datetime, datetime, str]]:
+    days = []
+    cursor = start
+    while cursor < end:
+        next_day = min(cursor + timedelta(days=1), end)
+        days.append((cursor, next_day, cursor.strftime("%Y-%m-%d")))
+        cursor = next_day
+    return days
 
 
 def _plan_stub(plan: Any) -> SimpleNamespace:
@@ -102,6 +157,8 @@ async def billing_detail_payload(session, current_user: Any, company_id: int, pe
     events: dict[str, int] = {}
     line_totals: dict[tuple[str, str], dict] = {}
     monthly = []
+    breakdown = []
+    breakdown_grain = "daily" if len(months) == 1 else "monthly"
 
     for year, month, label in months:
         month_start, month_end = month_window(year, month)
@@ -141,6 +198,23 @@ async def billing_detail_payload(session, current_user: Any, company_id: int, pe
             "amount_display_cents": cents_at_rate(amount_cents, exchange_rate),
         })
 
+    if breakdown_grain == "daily":
+        day_start, day_end, _label = months[0]
+        period_start, period_end = month_window(day_start, day_end)
+        for start_day, end_day, label in _daily_windows(period_start, period_end):
+            usage = await billing_usage(company.id, start_day, end_day)
+            breakdown.append({
+                "label": label,
+                "period_start": start_day.isoformat(),
+                "period_end": end_day.isoformat(),
+                "usage": usage,
+                "line_items": [],
+                "amount_cents": 0,
+                "amount_display_cents": 0,
+            })
+    else:
+        breakdown = monthly
+
     return {
         "company": {
             "id": company.id,
@@ -164,6 +238,8 @@ async def billing_detail_payload(session, current_user: Any, company_id: int, pe
         },
         "line_items": _line_amounts(list(line_totals.values()), exchange_rate),
         "monthly": monthly,
+        "breakdown": breakdown,
+        "breakdown_grain": breakdown_grain,
         "total_cents": totals["amount_cents"],
         "total_display_cents": cents_at_rate(totals["amount_cents"], exchange_rate),
     }
@@ -180,15 +256,57 @@ class BillingReport(Report):
         schedule_uses_device_filter=False,
         controls=(
             {
-                "key": "period",
-                "label": "Period",
+                "key": "period_type",
+                "label": "Billing Period",
+                "type": "select",
+                "default": "year",
+                "options": [
+                    {"value": "year", "label": "Year"},
+                    {"value": "month", "label": "Month"},
+                ],
+            },
+            {
+                "key": "year",
+                "label": "Year",
+                "type": "number",
+                "default": datetime.utcnow().year,
+                "min": 1970,
+                "max": 2100,
+                "step": 1,
+            },
+            {
+                "key": "month",
+                "label": "Month",
+                "type": "select",
+                "default": datetime.utcnow().month,
+                "visible_when": {"key": "period_type", "value": "month"},
+                "options": [
+                    {"value": 1, "label": "January"},
+                    {"value": 2, "label": "February"},
+                    {"value": 3, "label": "March"},
+                    {"value": 4, "label": "April"},
+                    {"value": 5, "label": "May"},
+                    {"value": 6, "label": "June"},
+                    {"value": 7, "label": "July"},
+                    {"value": 8, "label": "August"},
+                    {"value": 9, "label": "September"},
+                    {"value": 10, "label": "October"},
+                    {"value": 11, "label": "November"},
+                    {"value": 12, "label": "December"},
+                ],
+            },
+        ),
+        schedule_controls=(
+            {
+                "key": "billing_period",
+                "label": "Billing Period",
                 "type": "select",
                 "default": "this_month",
                 "options": [
-                    {"value": "this_month", "label": "This month"},
-                    {"value": "last_month", "label": "Last month"},
                     {"value": "this_year", "label": "This year"},
                     {"value": "last_year", "label": "Last year"},
+                    {"value": "this_month", "label": "This month"},
+                    {"value": "last_month", "label": "Last month"},
                 ],
             },
         ),
@@ -208,7 +326,7 @@ class BillingReport(Report):
     ) -> dict:
         from models import BillingPlan, Company
 
-        period = (options or {}).get("period") or "this_month"
+        period = _period_from_options(options)
         start, end, period_label, months = _period_window(period)
         currency, exchange_rate = currency_snapshot(current_user)
 

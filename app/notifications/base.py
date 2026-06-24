@@ -21,6 +21,7 @@ Example:
 """
 
 from abc import ABC, abstractmethod
+from typing import Optional
 
 
 class BaseNotificationChannel(ABC):
@@ -36,7 +37,7 @@ class BaseNotificationChannel(ABC):
         ...
 
     @abstractmethod
-    async def send(self, url: str, title: str, message: str) -> bool:
+    async def send(self, url: str, title: str, message: str, attachments: Optional[list[str]] = None) -> bool:
         """
         Deliver the notification.
 

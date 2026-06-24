@@ -135,6 +135,15 @@
         .veh-opt:hover { background: var(--bg-tertiary); }
         .veh-opt input[type=checkbox] { accent-color: var(--accent-primary); flex-shrink: 0; }
         .veh-opt-divider { height: 1px; background: var(--border-color); margin: 0.3rem 0; }
+        .export-menu-wrap { position: relative; display: inline-flex; }
+        .export-menu { display: none; position: absolute; top: calc(100% + 0.35rem); right: 0; min-width: 130px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: var(--shadow-lg); padding: 0.35rem; z-index: 300; }
+        .export-menu.open { display: grid; gap: 0.15rem; }
+        .export-menu button { border: 0; background: transparent; color: var(--text-primary); padding: 0.55rem 0.65rem; border-radius: 6px; display: flex; align-items: center; gap: 0.45rem; cursor: pointer; text-align: left; font: inherit; }
+        .export-menu button:hover { background: var(--bg-tertiary); }
+        .channel-pill { display: inline-flex; align-items: center; gap: 0.4rem; border: 1px solid var(--border-color); border-radius: 999px; padding: 0.4rem 0.75rem; font-size: 0.85rem; cursor: pointer; transition: all 0.15s; color: var(--text-secondary); background: var(--bg-secondary); }
+        .channel-pill:hover { border-color: var(--accent-primary); }
+        .channel-pill.active { background: var(--accent-primary); border-color: var(--accent-primary); color: white; }
+        .channel-pill input { display: none; }
 
         /* ── Trip map modal ──────────────────────────────────────── */
         #tripMapModal .modal-content { max-width: 900px; width: 95vw; max-height: 90vh; padding: 0; display: flex; flex-direction: column; }
@@ -172,6 +181,8 @@
         .billing-detail-table td { padding: 0.55rem 0.7rem; font-size: 0.82rem; }
         .billing-detail-muted { color: var(--text-muted); }
         .report-table tr.table-row { cursor: pointer; }
+        .report-table th[data-sort] { cursor: pointer; user-select: none; }
+        .report-table th[data-sort]:hover { color: var(--accent-primary); }
         .report-table tr.selected td { background: var(--bg-secondary); }
 
         /* ── Run viewer banner ───────────────────────────────────── */
@@ -235,9 +246,31 @@
         .run-status-ok  { color: #22c55e; font-weight: 600; }
         .run-status-err { color: #ef4444; font-weight: 600; }
 
-        .audit-table,
-        .health-table {
+        .audit-table {
             min-width: 720px;
+        }
+        .health-table {
+            width: 100%;
+            table-layout: auto;
+        }
+        .health-table th,
+        .health-table td {
+            vertical-align: top;
+        }
+        .health-table th:nth-child(1),
+        .health-table td:nth-child(1) {
+            width: 9rem;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+        .health-table th:nth-child(2),
+        .health-table td:nth-child(2) {
+            width: 7rem;
+            white-space: nowrap;
+        }
+        .health-table th:nth-child(3),
+        .health-table td:nth-child(3) {
+            width: auto;
         }
         .health-status {
             border: 1px solid transparent;
@@ -332,6 +365,51 @@
             min-width: 0;
             overflow-wrap: anywhere;
         }
+        @media (max-width: 768px) {
+            .health-table {
+                min-width: 560px;
+                table-layout: auto;
+            }
+            .health-table th,
+            .health-table td {
+                padding: 0.5rem 0.4rem;
+                font-size: 0.74rem;
+            }
+            .health-table th:nth-child(1),
+            .health-table td:nth-child(1) {
+                width: 8rem;
+            }
+            .health-table th:nth-child(2),
+            .health-table td:nth-child(2) {
+                width: 6rem;
+            }
+            .health-table th:nth-child(3),
+            .health-table td:nth-child(3) {
+                display: table-cell;
+                width: auto;
+                min-width: 0;
+            }
+            .health-status {
+                padding: 0.15rem 0.35rem;
+                font-size: 0.68rem;
+                white-space: normal;
+            }
+            .health-metrics {
+                gap: 0.25rem;
+            }
+            .health-metric,
+            .health-chip {
+                padding: 0.15rem 0.3rem;
+                font-size: 0.68rem;
+                white-space: normal;
+            }
+            .health-lines {
+                font-size: 0.72rem;
+            }
+            .health-line {
+                gap: 0.3rem;
+            }
+        }
 
         /* ── Schedule modal ──────────────────────────────────────── */
         #schedModal .modal-content { max-width: 800px; }
@@ -358,9 +436,6 @@
         <button class="page-tab" id="tabSchedules" onclick="switchTab('schedules')">
             <i class="mdi mdi-calendar-clock"></i> Schedules
         </button>
-        <button class="page-tab" id="tabAudit" onclick="switchTab('audit')" style="display:none;">
-            <i class="mdi mdi-clipboard-text-clock"></i> Audit
-        </button>
         <button class="page-tab" id="tabHealth" onclick="switchTab('health')" style="display:none;">
             <i class="mdi mdi-heart-pulse"></i> Health
         </button>
@@ -377,9 +452,15 @@
             <button class="btn btn-secondary" onclick="exitRunView()">
                 <i class="mdi mdi-arrow-left"></i> Back to Schedules
             </button>
-            <button class="btn btn-secondary" id="runViewCsvBtn" onclick="exportCsvFromRun()">
-                <i class="mdi mdi-download"></i> Export CSV
-            </button>
+            <div class="export-menu-wrap" id="runExportMenuWrap">
+                <button class="btn btn-secondary" id="runExportBtn" onclick="toggleExportMenu(event, 'runExportMenu')">
+                    <i class="mdi mdi-download"></i> Export <i class="mdi mdi-chevron-down"></i>
+                </button>
+                <div class="export-menu" id="runExportMenu">
+                    <button type="button" onclick="exportCsvFromRun(); closeExportMenus();"><i class="mdi mdi-file-delimited"></i> CSV</button>
+                    <button type="button" onclick="exportPdfFromRun(); closeExportMenus();"><i class="mdi mdi-file-pdf-box"></i> PDF</button>
+                </div>
+            </div>
         </div>
 
         <!-- Live report controls (hidden in run-view mode) -->
@@ -458,12 +539,18 @@
                         </div>
                     </div>
                 </div>
-                <button class="btn btn-primary" onclick="generateReport()">
+                <button class="btn btn-primary" id="generateReportBtn" onclick="generateReport()">
                     <i class="mdi mdi-chart-bar"></i> Generate
                 </button>
-                <button class="btn btn-secondary" id="exportCsvBtn" onclick="exportCsv()" style="display:none;">
-                    <i class="mdi mdi-download"></i> Export CSV
-                </button>
+                <div class="export-menu-wrap" id="exportMenuWrap" style="display:none;">
+                    <button class="btn btn-secondary" id="exportBtn" onclick="toggleExportMenu(event, 'exportMenu')">
+                        <i class="mdi mdi-download"></i> Export <i class="mdi mdi-chevron-down"></i>
+                    </button>
+                    <div class="export-menu" id="exportMenu">
+                        <button type="button" onclick="exportCsv(); closeExportMenus();"><i class="mdi mdi-file-delimited"></i> CSV</button>
+                        <button type="button" onclick="exportPdf(); closeExportMenus();"><i class="mdi mdi-file-pdf-box"></i> PDF</button>
+                    </div>
+                </div>
             </div>
             <p id="reportDescription" style="margin:-0.75rem 0 1.25rem;font-size:0.85rem;color:var(--text-muted);"></p>
         </div>
@@ -500,31 +587,6 @@
         </div>
         <div class="no-data" id="schedNoData" style="display:none;">No schedules yet. Use the gear menu to create one.</div>
     </div><!-- /panelSchedules -->
-
-    <div id="panelAudit" style="display:none;">
-        <div class="devices-search-bar">
-            <div class="search-input-wrap">
-                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
-                <input type="text" id="auditSearch" class="search-input" placeholder="Search audit logs..." oninput="renderAuditTable()">
-            </div>
-            <span class="devices-count" id="auditCount"></span>
-        </div>
-        <div style="overflow-x:auto;">
-            <table class="devices-table audit-table">
-                <thead>
-                    <tr>
-                        <th data-sort="time" data-sort-dir="desc" onclick="sortAudit('time')">Time</th>
-                        <th data-sort="action" onclick="sortAudit('action')">Action</th>
-                        <th data-sort="user" onclick="sortAudit('user')">User</th>
-                        <th data-sort="company" onclick="sortAudit('company')">Company</th>
-                        <th data-sort="target" onclick="sortAudit('target')">Target</th>
-                        <th data-sort="ip" onclick="sortAudit('ip')">IP</th>
-                    </tr>
-                </thead>
-                <tbody id="auditTableBody"></tbody>
-            </table>
-        </div>
-    </div>
 
     <div id="panelHealth" style="display:none;">
         <div class="devices-search-bar">
@@ -607,6 +669,11 @@
                 <!-- ── Left column: what to report ─────────────────── -->
                 <div class="sched-col">
                     <div class="form-group">
+                        <label class="form-label">Send To</label>
+                        <div id="sfChannelList" style="display:flex;flex-wrap:wrap;gap:0.5rem;"></div>
+                    </div>
+
+                    <div class="form-group">
                         <label class="form-label">Report Type</label>
                         <select id="sfType" class="form-input" onchange="onSchedTypeChange()">
                             <option value="">Loading reports...</option>
@@ -624,6 +691,7 @@
                     <div class="form-group" id="sfDateRangeGroup">
                         <label class="form-label">Date Range</label>
                         <select id="sfDateRange" class="form-input">
+                            <option value="last_day">Last day</option>
                             <option value="last_7_days">Last 7 days</option>
                             <option value="last_14_days">Last 14 days</option>
                             <option value="last_30_days" selected>Last 30 days</option>
@@ -632,6 +700,8 @@
                             <option value="last_year">Last year</option>
                         </select>
                     </div>
+
+                    <div id="sfControlsGroup" style="display:contents;"></div>
 
                     <div class="form-group">
                         <label class="form-label">Vehicles</label>
@@ -715,6 +785,7 @@
                             Active
                         </label>
                     </div>
+
                 </div>
 
             </div>

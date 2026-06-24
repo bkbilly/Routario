@@ -371,18 +371,7 @@
 
                 <div class="header-menu-divider"></div>
 
-                ${isSettings ? `<div id="snSettingsAction"></div>
-                <button class="header-menu-item" onclick="_clearAppCache()">
-                    <span class="header-menu-item-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/>
-                            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
-                        </svg>
-                    </span>
-                    <span>Clear Cache</span>
-                </button>
-                <div class="header-menu-divider"></div>` : ''}
+                ${isSettings ? `<div id="snSettingsAction"></div><div class="header-menu-divider"></div>` : ''}
 
                 <button class="header-menu-item header-menu-danger" onclick="handleLogout()">
                     <span class="header-menu-item-icon">
@@ -403,17 +392,44 @@
     } // end _buildNav
 
     window._clearAppCache = async function _clearAppCache() {
+        const timestamp = Date.now();
+
+        const sameOrigin = (url) => {
+            try {
+                return new URL(url, location.href).origin === location.origin;
+            } catch (e) {
+                return false;
+            }
+        };
+
         try {
+            sessionStorage.clear();
+
+            const assetUrls = [
+                ...Array.from(document.scripts).map((script) => script.src).filter(Boolean),
+                ...Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map((link) => link.href).filter(Boolean),
+                `${location.origin}/sw.js`,
+            ].filter(sameOrigin);
+
             if ('caches' in window) {
                 const keys = await caches.keys();
-                await Promise.all(keys.map(k => caches.delete(k)));
+                await Promise.all(keys.map((key) => caches.delete(key)));
             }
             if ('serviceWorker' in navigator) {
                 const regs = await navigator.serviceWorker.getRegistrations();
-                await Promise.all(regs.map(r => r.unregister()));
+                await Promise.all(regs.map((registration) => registration.unregister()));
             }
-        } catch (e) { /* ignore */ }
-        location.reload(true);
+
+            await Promise.allSettled(
+                assetUrls.map((url) => fetch(url, { cache: 'reload' }))
+            );
+        } catch (e) {
+            console.warn('Cache clear failed, continuing with reload', e);
+        }
+
+        const next = new URL(location.href);
+        next.searchParams.set('cache_clear', timestamp);
+        location.replace(next.toString());
     }
 
     function enableMouseWheelTabScroll(root = document) {
