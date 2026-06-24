@@ -25,11 +25,11 @@ class AppriseChannel(BaseNotificationChannel):
         # which is handled by SipChannel earlier in the registry.
         return not url.strip().lower().startswith("sip://")
 
-    async def send(self, url: str, title: str, message: str) -> bool:
+    async def send(self, url: str, title: str, message: str, attachments: list[str] | None = None) -> bool:
         try:
             apobj = Apprise()
             apobj.add(url)
-            result = apobj.notify(title=title, body=message)
+            result = apobj.notify(title=title, body=message, attach=attachments or None)
             return bool(result)
         except Exception as e:
             logger.error(f"Apprise: failed to send to '{url}': {e}")

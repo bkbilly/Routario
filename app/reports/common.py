@@ -145,6 +145,12 @@ def date_range(name: str) -> Tuple[datetime, datetime]:
     now = datetime.utcnow()
     today = now.date()
 
+    if name == "last_day":
+        yesterday = today - timedelta(days=1)
+        return (
+            datetime.combine(yesterday, datetime.min.time()),
+            datetime.combine(yesterday, datetime.max.time().replace(microsecond=0)),
+        )
     if name == "last_7_days":
         return (
             datetime.combine(today - timedelta(days=7), datetime.min.time()),

@@ -128,6 +128,7 @@ class LogbookReport(Report):
                     "cost": entry.price,
                     "status": "Service Entry",
                     "notes": "Documents" if entry.documents else None,
+                    "documents": entry.documents or [],
                 })
 
             state_result = await session.execute(
@@ -193,6 +194,7 @@ class LogbookReport(Report):
                             f"{round_value(remaining_km, 0)} km remaining" if remaining_km is not None else
                             f"{days_remaining} days remaining" if days_remaining is not None else None
                         ),
+                        "documents": [],
                     })
 
         total_fuel = sum(float(r["liters"] or 0) for r in rows)
@@ -219,6 +221,7 @@ class LogbookReport(Report):
             {"key": "date", "label": "Date / Due", "type": "datetime_split", "empty": "-"},
             {"key": "description", "label": "Description", "type": "text", "max_width": 220},
             {"key": "odometer_km", "label": "Odometer / Due", "type": "number", "decimals": 0, "suffix": " km"},
+            {"key": "documents", "label": "Documents", "type": "text", "hidden": True, "csv": False},
         ]
         if logbook_type == "fuel":
             columns += [

@@ -15,16 +15,15 @@ let _allDrivers          = [];
 let _selectedDriverIds   = new Set(); // empty = all visible drivers
 let _reportDefs          = [];
 let _reportDefMap        = {};
-let _auditRows           = [];
 let _healthRows          = [];
-let _auditSort           = { col: 'time', dir: 'desc' };
 let _healthSort          = { col: 'name', dir: 'asc' };
 let _billingDetail       = null;
 let _selectedBillingKey  = null;
+let _sfControlValues     = {};
+let _notificationChannels = [];
 const _REPORT_TABS = [
     { name: 'reports', panelId: 'panelReports', tabId: 'tabReports' },
     { name: 'schedules', panelId: 'panelSchedules', tabId: 'tabSchedules' },
-    { name: 'audit', panelId: 'panelAudit', tabId: 'tabAudit' },
     { name: 'health', panelId: 'panelHealth', tabId: 'tabHealth' },
 ];
 
@@ -35,14 +34,13 @@ const _CAN_SEE_USERS    = _IS_ADMIN || _IS_COMPANY_ADMIN;
 document.addEventListener('DOMContentLoaded', async () => {
     checkLogin();
     await permissionsReady;
-    if (!hasPermission('view_reports') && !hasPermission('view_audit') && !hasPermission('view_health')) {
+    if (!hasPermission('view_reports') && !hasPermission('view_health')) {
         window.location.href = 'gps-dashboard.html';
         return;
     }
 
     document.getElementById('tabReports').style.display = hasPermission('view_reports') ? '' : 'none';
     document.getElementById('tabSchedules').style.display = hasPermission('view_reports') ? '' : 'none';
-    document.getElementById('tabAudit').style.display = hasPermission('view_audit') ? '' : 'none';
     document.getElementById('tabHealth').style.display = hasPermission('view_health') ? '' : 'none';
 
     const now   = new Date();
@@ -52,6 +50,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('startDate').value = _fmtDate(start);
 
     if (hasPermission('view_reports')) {
+        _notificationChannels = (await permissionsReady)?.notification_channels || [];
         await _loadDevices();
         if (_CAN_SEE_USERS) await _loadUsers();
         await _loadDrivers();
@@ -60,7 +59,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     _injectNavScheduleAction();
     const hash = RoutarioTabs.hashValue();
-    switchTab(_validReportTab(hash) ? hash : hasPermission('view_reports') ? 'reports' : hasPermission('view_audit') ? 'audit' : 'health', false);
+    switchTab(_validReportTab(hash) ? hash : hasPermission('view_reports') ? 'reports' : 'health', false);
 
     window.addEventListener('hashchange', () => {
         const next = RoutarioTabs.hashValue();
@@ -68,6 +67,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     document.addEventListener('click', e => {
+        closeExportMenus();
         const wrap = document.getElementById('vehSelectWrap');
         if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
         const uwrap = document.getElementById('userSelectWrap');
@@ -327,13 +327,30 @@ function _renderReportControls(controls) {
     const wrap = document.getElementById('reportControlsGroup');
     if (!wrap) return;
     const current = _getReportControlValues();
-    wrap.innerHTML = (controls || []).map(c => {
-        if (c.type !== 'select') return '';
+    wrap.innerHTML = _renderControlInputs(controls, current, 'report-control', 'onReportControlChange()');
+}
+
+function _renderControlInputs(controls, current, className, onchange) {
+    return (controls || []).map(c => {
+        if (c.visible_when && String(current[c.visible_when.key] ?? '') !== String(c.visible_when.value)) return '';
         const value = current[c.key] ?? c.default;
-        const options = (c.options || []).map(o => `<option value="${_esc(o.value)}" ${o.value === value ? 'selected' : ''}>${_esc(o.label)}</option>`).join('');
+        let input = '';
+        if (c.type === 'select') {
+            const options = (c.options || []).map(o => {
+                const selected = String(o.value) === String(value) ? 'selected' : '';
+                return `<option value="${_esc(o.value)}" ${selected}>${_esc(o.label)}</option>`;
+            }).join('');
+            input = `<select class="form-input ${className}" data-key="${_esc(c.key)}" onchange="${onchange}">${options}</select>`;
+        } else if (c.type === 'number') {
+            input = `<input type="number" class="form-input ${className}" data-key="${_esc(c.key)}"
+                value="${_esc(value)}" min="${_esc(c.min ?? '')}" max="${_esc(c.max ?? '')}" step="${_esc(c.step ?? 1)}"
+                onchange="${onchange}" oninput="${onchange}">`;
+        } else {
+            return '';
+        }
         return `<div class="form-group">
             <label class="form-label">${_esc(c.label)}</label>
-            <select class="form-input report-control" data-key="${_esc(c.key)}" onchange="onReportControlChange()">${options}</select>
+            ${input}
         </div>`;
     }).join('');
 }
@@ -348,6 +365,12 @@ function _getReportControlValues() {
     return values;
 }
 
+function _getScheduleControlValues() {
+    const values = {};
+    document.querySelectorAll('.schedule-control').forEach(el => { values[el.dataset.key] = el.value; });
+    return values;
+}
+
 function onReportTypeChange() {
     _reportData = [];
     _reportPayload = null;
@@ -357,7 +380,8 @@ function onReportTypeChange() {
     document.getElementById('reportTable').style.display = 'none';
     document.getElementById('noData').style.display = 'none';
     document.getElementById('summaryBar').style.display = 'none';
-    document.getElementById('exportCsvBtn').style.display = 'none';
+    document.getElementById('exportMenuWrap').style.display = 'none';
+    closeExportMenus();
     document.getElementById('historyCheck').checked = false;
     _syncReportFilters();
     _updateDescription();
@@ -382,7 +406,8 @@ function onReportControlChange() {
     document.getElementById('reportTable').style.display = 'none';
     document.getElementById('noData').style.display = 'none';
     document.getElementById('summaryBar').style.display = 'none';
-    document.getElementById('exportCsvBtn').style.display = 'none';
+    document.getElementById('exportMenuWrap').style.display = 'none';
+    closeExportMenus();
     _syncReportFilters();
 }
 
@@ -421,22 +446,53 @@ async function generateReport() {
     const endpoint = `${API_BASE}/reports/${encodeURIComponent(type)}${params.toString() ? `?${params}` : ''}`;
 
     try {
+        _setReportLoading(true);
         const res = await apiFetch(endpoint);
         if (!res.ok) { showAlert('Failed to load report.', 'error'); return; }
         const data = await res.json();
         _reportPayload = Array.isArray(data) ? { rows: data, columns: [] } : data;
         _reportData = _reportPayload.rows || [];
         if (def.supports_driver_filter) _mergeDriversFromTrips(_reportData);
-        _sortCol = null;
+        _sortCol = _reportPayload.default_sort?.key || null;
+        _sortDir = _reportPayload.default_sort?.dir || 1;
         _renderReport();
-    } catch (e) { console.error(e); showAlert('Error generating report.', 'error'); }
+    } catch (e) {
+        console.error(e);
+        showAlert('Error generating report.', 'error');
+    } finally {
+        _setReportLoading(false);
+    }
+}
+
+function _setReportLoading(isLoading) {
+    const btn = document.getElementById('generateReportBtn');
+    const table = document.getElementById('reportTable');
+    const noData = document.getElementById('noData');
+    const summary = document.getElementById('summaryBar');
+    const exportWrap = document.getElementById('exportMenuWrap');
+
+    if (btn) {
+        btn.disabled = isLoading;
+        btn.innerHTML = isLoading
+            ? '<i class="mdi mdi-loading mdi-spin"></i> Generating'
+            : '<i class="mdi mdi-chart-bar"></i> Generate';
+    }
+    if (isLoading) {
+        table.style.display = 'none';
+        summary.style.display = 'none';
+        exportWrap.style.display = 'none';
+        noData.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Generating report...';
+        noData.style.display = '';
+    } else {
+        noData.textContent = 'No data found for the selected period.';
+    }
 }
 
 function _renderReport() {
     const table   = document.getElementById('reportTable');
     const noData  = document.getElementById('noData');
     const sumBar  = document.getElementById('summaryBar');
-    const expBtn  = document.getElementById('exportCsvBtn');
+    const expWrap = document.getElementById('exportMenuWrap');
     const payload = _reportPayload || { rows: _reportData, columns: [] };
     const columns = (payload.columns || []).filter(c => c.hidden !== true);
 
@@ -444,7 +500,8 @@ function _renderReport() {
         table.style.display = 'none';
         noData.style.display = '';
         sumBar.style.display = 'none';
-        expBtn.style.display = 'none';
+        expWrap.style.display = 'none';
+        closeExportMenus();
         return;
     }
 
@@ -459,7 +516,20 @@ function _renderReport() {
 
     table.style.display = '';
     noData.style.display = 'none';
-    expBtn.style.display = '';
+    expWrap.style.display = 'inline-flex';
+}
+
+function toggleExportMenu(e, menuId) {
+    e.stopPropagation();
+    const menu = document.getElementById(menuId);
+    if (!menu) return;
+    const wasOpen = menu.classList.contains('open');
+    closeExportMenus();
+    if (!wasOpen) menu.classList.add('open');
+}
+
+function closeExportMenus() {
+    document.querySelectorAll('.export-menu.open').forEach(menu => menu.classList.remove('open'));
 }
 function sortReport(col) {
     ({ col: _sortCol, dir: _sortDir } = RoutarioTables.toggleNumericSort(_sortCol, _sortDir, col));
@@ -526,8 +596,7 @@ function _formatValue(value, col = {}, row = {}) {
         const empty = col.empty || '—';
         return col.empty_tone ? `<span style="color:var(--accent-${col.empty_tone},#eab308);">${_esc(empty)}</span>` : _esc(empty);
     }
-    if (col.type === 'datetime') return _fmtDatetime(value);
-    if (col.type === 'datetime_split') return _fmtDatetimeSplit(value);
+    if (col.type === 'datetime' || col.type === 'datetime_split') return _fmtDatetimeSplit(value);
     if (col.type === 'duration_minutes') return _fmtDuration(Number(value));
     if (col.type === 'currency_cents') {
         const currency = col.currency_key ? row[col.currency_key] : col.currency;
@@ -556,11 +625,57 @@ function _fmtMoneyCents(cents, currency = 'EUR') {
 
 function exportCsv() {
     if (!_reportPayload) return;
-    const columns = (_reportPayload.columns || []).filter(c => c.csv !== false && c.hidden !== true);
+    _exportPayloadCsv(_reportPayload, _reportData);
+}
+
+function _exportPayloadCsv(payload, data) {
+    const columns = (payload.columns || []).filter(c => c.csv !== false && c.hidden !== true);
     const headers = columns.map(c => c.label);
-    const sort = _sortCol ? { key: _sortCol, dir: _sortDir } : (_reportPayload.default_sort || {});
-    const rows = _sortedRowsBy(_reportData, sort.key || columns[0]?.key, sort.dir || 1);
-    _downloadCsv(headers, rows, r => columns.map(c => _plainValue(r[c.key], c)), _reportPayload.csv_filename || 'report.csv');
+    const sort = _sortCol ? { key: _sortCol, dir: _sortDir } : (payload.default_sort || {});
+    const rows = _sortedRowsBy(data || [], sort.key || columns[0]?.key, sort.dir || 1);
+    _downloadCsv(headers, rows, r => columns.map(c => _plainValue(r[c.key], c)), payload.csv_filename || 'report.csv');
+}
+
+function exportPdf() {
+    if (!_reportPayload) return;
+    _exportPayloadPdf(_reportPayload, _reportData, _reportDefMap[_reportPayload.type]?.label || 'Report');
+}
+
+function _exportPayloadPdf(payload, data, title = 'Report') {
+    const columns = (payload.columns || []).filter(c => c.csv !== false && c.hidden !== true);
+    const sort = _sortCol ? { key: _sortCol, dir: _sortDir } : (payload.default_sort || {});
+    const rows = _sortedRowsBy(data || [], sort.key || columns[0]?.key, sort.dir || 1);
+    const win = window.open('', '_blank');
+    if (!win) {
+        showAlert('Allow popups to export this PDF.', 'warning');
+        return;
+    }
+    const summary = (payload.summary || []).map(card =>
+        `<div class="summary"><strong>${_esc(card.label)}</strong><span>${_esc(card.value)}</span></div>`
+    ).join('');
+    const tableRows = rows.map(row => `<tr>${columns.map(c => `<td>${_esc(_plainValue(row[c.key], c))}</td>`).join('')}</tr>`).join('')
+        + (payload.total_row ? `<tr class="total">${columns.map((c, idx) => `<td>${idx === 0 ? _esc(payload.total_row[c.key] ?? 'Total') : _esc(_plainValue(payload.total_row[c.key], c))}</td>`).join('')}</tr>` : '');
+    win.document.write(`<!DOCTYPE html><html><head><title>${_esc(title)}</title>
+        <style>
+            body { font-family: Arial, sans-serif; color: #111827; margin: 24px; }
+            h1 { font-size: 22px; margin: 0 0 4px; }
+            .meta { color: #6b7280; margin-bottom: 16px; }
+            .summary-wrap { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+            .summary { border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; }
+            .summary strong { display: block; color: #6b7280; font-size: 10px; text-transform: uppercase; }
+            .summary span { display: block; margin-top: 4px; font-weight: 700; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #d1d5db; padding: 6px 8px; font-size: 11px; text-align: left; vertical-align: top; }
+            th { background: #f3f4f6; }
+            tr.total td { font-weight: 700; background: #f9fafb; }
+        </style></head><body>
+        <h1>${_esc(title)}</h1>
+        <div class="meta">${_esc(payload.start_date ? _fmtDatetime(payload.start_date) : '')}${payload.end_date ? ` - ${_esc(_fmtDatetime(payload.end_date))}` : ''}</div>
+        ${summary ? `<div class="summary-wrap">${summary}</div>` : ''}
+        <table><thead><tr>${columns.map(c => `<th>${_esc(c.label)}</th>`).join('')}</tr></thead><tbody>${tableRows}</tbody></table>
+        <script>window.onload = () => { window.print(); };</script>
+        </body></html>`);
+    win.document.close();
 }
 
 function _plainValue(value, col = {}) {
@@ -701,8 +816,8 @@ function _billingDetailHtml(detail, pdf = false) {
         </div>
 
         <div>
-            <div class="billing-section-title">${pdf ? '<h2>Monthly Breakdown</h2>' : 'Monthly Breakdown'}</div>
-            ${_billingMonthlyHtml(detail.monthly || [], currency)}
+            <div class="billing-section-title">${pdf ? `<h2>${_esc(_billingBreakdownTitle(detail))}</h2>` : _billingBreakdownTitle(detail)}</div>
+            ${_billingBreakdownHtml(detail.breakdown || detail.monthly || [], detail.breakdown_grain || 'monthly', currency)}
         </div>`;
 }
 
@@ -733,26 +848,29 @@ function _billingLinesTable(lines, currency) {
     </table></div>`;
 }
 
-function _billingMonthlyHtml(months, currency) {
-    if (!months.length) return '<div class="billing-detail-muted">No monthly usage found.</div>';
+function _billingBreakdownTitle(detail) {
+    return detail.breakdown_grain === 'daily' ? 'Daily Usage' : 'Monthly Breakdown';
+}
+
+function _billingBreakdownHtml(items, grain, currency) {
+    if (!items.length) return `<div class="billing-detail-muted">No ${grain === 'daily' ? 'daily' : 'monthly'} usage found.</div>`;
+    const billingCols = grain === 'daily' ? '' : '<th>Draft Total</th><th>Billing Lines</th>';
     return `<div style="overflow-x:auto;"><table class="devices-table billing-detail-table">
         <thead>
             <tr>
-                <th>Month</th>
+                <th>${grain === 'daily' ? 'Day' : 'Month'}</th>
                 <th>Active Devices</th>
                 <th>Positions</th>
                 <th>API Calls</th>
-                <th>Draft Total</th>
-                <th>Billing Lines</th>
+                ${billingCols}
             </tr>
         </thead>
-        <tbody>${months.map(month => `<tr>
-            <td><strong>${_esc(month.label || '-')}</strong></td>
-            <td>${_fmtInt(month.usage?.active_devices)}</td>
-            <td>${_fmtInt(month.usage?.positions)}</td>
-            <td>${_fmtInt(month.usage?.api_calls)}</td>
-            <td>${_fmtMoneyCents(month.amount_display_cents, currency)}</td>
-            <td>${_billingLineSummary(month.line_items || [], currency)}</td>
+        <tbody>${items.map(item => `<tr>
+            <td><strong>${_esc(item.label || '-')}</strong></td>
+            <td>${_fmtInt(item.usage?.active_devices)}</td>
+            <td>${_fmtInt(item.usage?.positions)}</td>
+            <td>${_fmtInt(item.usage?.api_calls)}</td>
+            ${grain === 'daily' ? '' : `<td>${_fmtMoneyCents(item.amount_display_cents, currency)}</td><td>${_billingLineSummary(item.line_items || [], currency)}</td>`}
         </tr>`).join('')}</tbody>
     </table></div>`;
 }
@@ -916,20 +1034,18 @@ function _esc(s) {
 let _activeTab = 'reports';
 
 function _validReportTab(tab) {
-    return ['reports', 'schedules', 'audit', 'health'].includes(tab);
+    return ['reports', 'schedules', 'health'].includes(tab);
 }
 
 function switchTab(tab, pushState = true) {
-    if (tab === 'reports' && !hasPermission('view_reports')) tab = hasPermission('view_audit') ? 'audit' : 'health';
-    if (tab === 'schedules' && !hasPermission('view_reports')) tab = hasPermission('view_audit') ? 'audit' : 'health';
-    if (tab === 'audit' && !hasPermission('view_audit')) tab = hasPermission('view_reports') ? 'reports' : 'health';
-    if (tab === 'health' && !hasPermission('view_health')) tab = hasPermission('view_reports') ? 'reports' : 'audit';
+    if (tab === 'reports' && !hasPermission('view_reports')) tab = 'health';
+    if (tab === 'schedules' && !hasPermission('view_reports')) tab = 'health';
+    if (tab === 'health' && !hasPermission('view_health')) tab = 'reports';
     _activeTab = tab;
     RoutarioTabs.activate(_REPORT_TABS, tab);
     _injectNavScheduleAction();
     if (pushState !== false) RoutarioTabs.replaceHash(tab);
     if (tab === 'schedules') _loadSchedules();
-    if (tab === 'audit') loadAudit();
     if (tab === 'health') loadHealth();
 }
 
@@ -951,7 +1067,7 @@ async function viewRun(schedId, runId, scheduleName, reportType, runAt) {
         // Show view banner, hide live controls
         document.getElementById('runViewBanner').style.display = 'flex';
         document.getElementById('liveControls').style.display  = 'none';
-        document.getElementById('exportCsvBtn').style.display  = 'none';
+        document.getElementById('exportMenuWrap').style.display  = 'none';
         document.getElementById('runViewLabel').textContent =
             `Viewing: ${_esc(scheduleName)}  ·  ${_fmtDatetime(runAt)}`;
 
@@ -967,7 +1083,8 @@ function exitRunView() {
     document.getElementById('reportTable').style.display   = 'none';
     document.getElementById('summaryBar').style.display    = 'none';
     document.getElementById('noData').style.display        = 'none';
-    document.getElementById('exportCsvBtn').style.display  = 'none';
+    document.getElementById('exportMenuWrap').style.display  = 'none';
+    closeExportMenus();
     _reportData = [];
     switchTab('schedules');
 }
@@ -975,8 +1092,8 @@ function exitRunView() {
 function _renderRunData(reportType, data) {
     _reportPayload = data || { rows: [], columns: [] };
     _reportData = data.rows || [];
-    _sortCol    = null;
-    _sortDir    = 1;
+    _sortCol    = _reportPayload.default_sort?.key || null;
+    _sortDir    = _reportPayload.default_sort?.dir || 1;
     _renderReport();
 }
 
@@ -985,11 +1102,16 @@ function exportCsvFromRun() {
     exportCsv();
 }
 
+function exportPdfFromRun() {
+    if (!_viewingRunData) return;
+    exportPdf();
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // Schedules list
 // ══════════════════════════════════════════════════════════════════════════════
 
-const _RANGE_LABELS = { last_7_days: 'Last 7 days', last_14_days: 'Last 14 days', last_30_days: 'Last 30 days', last_calendar_month: 'Last calendar month', last_quarter: 'Last quarter', last_year: 'Last year' };
+const _RANGE_LABELS = { last_day: 'Last day', last_7_days: 'Last 7 days', last_14_days: 'Last 14 days', last_30_days: 'Last 30 days', last_calendar_month: 'Last calendar month', last_quarter: 'Last quarter', last_year: 'Last year' };
 const _DOW          = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function _reportLabel(type) {
@@ -1204,13 +1326,6 @@ function _injectNavScheduleAction() {
     const el = document.getElementById('snAddAction');
     if (!el) return;
     const closeMenu = "document.getElementById('snDropdown').classList.remove('open');document.getElementById('snGearBtn').classList.remove('active');";
-    if (_activeTab === 'audit') {
-        el.innerHTML = `<button class="header-menu-item" onclick="loadAudit();${closeMenu}">
-            <span class="header-menu-item-icon"><i class="mdi mdi-refresh" style="font-size:15px;"></i></span>
-            <span>Refresh</span>
-        </button>`;
-        return;
-    }
     if (_activeTab === 'health') {
         el.innerHTML = `<button class="header-menu-item" onclick="loadHealth();${closeMenu}">
             <span class="header-menu-item-icon"><i class="mdi mdi-refresh" style="font-size:15px;"></i></span>
@@ -1222,61 +1337,6 @@ function _injectNavScheduleAction() {
         <span class="header-menu-item-icon"><i class="mdi mdi-calendar-plus" style="font-size:15px;"></i></span>
         <span>New Schedule</span>
     </button>` : '';
-}
-
-async function loadAudit() {
-    const body = document.getElementById('auditTableBody');
-    if (!body) return;
-    body.innerHTML = RoutarioTables.stateRow('Loading audit logs...', 6);
-    try {
-        const res = await apiFetch(`${API_BASE}/audit-logs?limit=500`);
-        if (!res.ok) throw new Error(`Request failed (${res.status})`);
-        _auditRows = await res.json();
-        renderAuditTable();
-    } catch (e) {
-        body.innerHTML = RoutarioTables.stateRow(_esc(e.message), 6);
-    }
-}
-
-function renderAuditTable() {
-    const body = document.getElementById('auditTableBody');
-    if (!body) return;
-    const q = (document.getElementById('auditSearch')?.value || '').toLowerCase();
-    const rows = _auditRows.filter(l => [
-        l.action, l.actor_username, l.actor_user_id, l.company_name, l.company_id,
-        l.target_type, l.target_id, l.ip_address, JSON.stringify(l.metadata || {})
-    ].join(' ').toLowerCase().includes(q));
-    rows.sort((a, b) => _compareValues(_auditValue(a, _auditSort.col), _auditValue(b, _auditSort.col), _auditSort.dir));
-    const count = document.getElementById('auditCount');
-    if (count) count.textContent = `${rows.length} event${rows.length !== 1 ? 's' : ''}`;
-    _updateSortHeaders('panelAudit', _auditSort);
-    body.innerHTML = rows.length ? rows.map(l => `
-        <tr>
-            <td style="white-space:nowrap;">${new Date(l.created_at).toLocaleString()}</td>
-            <td>${_esc(l.action)}</td>
-            <td>${_esc(l.actor_username || 'system')}${l.actor_user_id ? `<div class="stack-item-meta">#${l.actor_user_id}</div>` : ''}</td>
-            <td>${_esc(l.company_name || '-')}${l.company_id ? `<div class="stack-item-meta">#${l.company_id}</div>` : ''}</td>
-            <td>${_esc([l.target_type, l.target_id].filter(Boolean).join(' ')) || '-'}</td>
-            <td>${_esc(l.ip_address || '-')}</td>
-        </tr>
-    `).join('') : RoutarioTables.stateRow('No audit events match.', 6);
-}
-
-function _auditValue(row, col) {
-    const values = {
-        time: row.created_at ? new Date(row.created_at).getTime() : 0,
-        action: row.action,
-        user: row.actor_username || 'system',
-        company: row.company_name || '',
-        target: [row.target_type, row.target_id].filter(Boolean).join(' '),
-        ip: row.ip_address || '',
-    };
-    return values[col];
-}
-
-function sortAudit(col) {
-    _auditSort = RoutarioTables.toggleTextSort(_auditSort, col);
-    renderAuditTable();
 }
 
 async function loadHealth() {
@@ -1457,6 +1517,8 @@ async function openScheduleModal(scheduleIdOrObj) {
 
     _sfSelectedVehIds.clear();
     _sfSelectedUserIds.clear();
+    _sfControlValues = schedule?.options || {};
+    _renderSfChannels(schedule?.notification_channels || []);
 
     if (schedule) {
         document.getElementById('sfName').value        = schedule.name;
@@ -1524,14 +1586,40 @@ function _buildSfUserList() {
     _updateSfUserLabel();
 }
 
+function _renderSfChannels(selected = []) {
+    const list = document.getElementById('sfChannelList');
+    if (!list) return;
+    if (!_notificationChannels.length) {
+        list.innerHTML = '<span style="color:var(--text-muted);font-size:0.85rem;">No notification channels configured.</span>';
+        return;
+    }
+    const selectedSet = new Set(selected || []);
+    list.innerHTML = _notificationChannels.map(channel => `
+        <label class="channel-pill${selectedSet.has(channel.name) ? ' active' : ''}">
+            <input type="checkbox" class="sf-channel-cb" value="${_esc(channel.name)}" ${selectedSet.has(channel.name) ? 'checked' : ''} onchange="onSfChannelChange(this)">
+            <span>${_esc(channel.name)}</span>
+        </label>
+    `).join('');
+}
+
+function onSfChannelChange(cb) {
+    cb.closest('.channel-pill')?.classList.toggle('active', cb.checked);
+}
+
+function _getSelectedScheduleChannels() {
+    return [...document.querySelectorAll('.sf-channel-cb:checked')].map(cb => cb.value);
+}
+
 function onSchedTypeChange() {
     const t      = document.getElementById('sfType').value;
     const def    = _reportDefMap[t] || {};
     const isSens = def.supports_historical_toggle;
+    const current = { ..._sfControlValues, ..._getScheduleControlValues() };
 
     document.getElementById('sfHistGroup').style.display  = isSens ? '' : 'none';
     document.getElementById('sfUserGroup').style.display  = (def.schedule_uses_user_filter && _CAN_SEE_USERS) ? '' : 'none';
     document.getElementById('sfVehWrap').closest('.form-group').style.display = def.schedule_uses_device_filter === false ? 'none' : '';
+    _renderScheduleControls(def.schedule_controls?.length ? def.schedule_controls : (def.controls || []), current);
 
     // Date range: hidden for sensors when not in historical mode
     const needsRange = def.needs_date_range !== false || document.getElementById('sfHistorical').checked;
@@ -1540,6 +1628,17 @@ function onSchedTypeChange() {
 
 function onSchedHistChange() {
     onSchedTypeChange();
+}
+
+function onScheduleControlChange() {
+    _sfControlValues = _getScheduleControlValues();
+}
+
+function _renderScheduleControls(controls, current = _sfControlValues) {
+    const wrap = document.getElementById('sfControlsGroup');
+    if (!wrap) return;
+    wrap.innerHTML = _renderControlInputs(controls, current, 'schedule-control', 'onScheduleControlChange()');
+    _sfControlValues = _getScheduleControlValues();
 }
 
 function onSchedFreqChange() {
@@ -1624,6 +1723,10 @@ async function saveSchedule() {
         report_type:        rtype,
         filter_device_ids:  def.schedule_uses_device_filter === false ? [] : [..._sfSelectedVehIds],
         filter_user_ids:    [..._sfSelectedUserIds],
+        options:            _getScheduleControlValues(),
+        notification_channels: _getSelectedScheduleChannels(),
+        attach_results:     true,
+        attach_documents:   true,
         sensors_historical: historical,
         date_range:         needsRange ? dateRange : null,
         frequency:          freq,
@@ -1658,6 +1761,7 @@ async function saveSchedule() {
 
 // Close dropdowns in the schedule modal when clicking outside
 document.addEventListener('click', e => {
+    closeExportMenus();
     const vw = document.getElementById('sfVehWrap');
     if (vw && !vw.contains(e.target)) vw.classList.remove('open');
     const uw = document.getElementById('sfUserWrap');

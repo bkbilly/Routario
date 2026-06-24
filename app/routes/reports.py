@@ -36,6 +36,8 @@ async def _run_report(
     report = get_report(key)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    if report.definition.super_admin_required and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Super admin access required")
     if report.definition.company_admin_required and not (current_user.is_admin or current_user.is_company_admin):
         raise HTTPException(status_code=403, detail="Company admin access required")
     if report.definition.needs_date_range and (not start_date or not end_date):

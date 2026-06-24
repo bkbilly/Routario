@@ -1013,16 +1013,6 @@ h1 {
         justify-content: flex-end;
     }
 
-    /* Hide less important columns on mobile */
-    .devices-table th:nth-child(3),   /* Protocol */
-    .devices-table td:nth-child(3),
-    .devices-table th:nth-child(4),   /* Plate */
-    .devices-table td:nth-child(4),
-    .devices-table th:nth-child(7),   /* Odometer */
-    .devices-table td:nth-child(7) {
-        display: none;
-    }
-
     /* Make action buttons stack vertically */
     .device-actions {
         display: flex;
@@ -1042,13 +1032,7 @@ h1 {
         width: auto;
     }
 
-    /* Users table has different columns — reset generic hiding, hide Created instead */
-    #usersTable th:nth-child(3),
-    #usersTable td:nth-child(3),
-    #usersTable th:nth-child(4),
-    #usersTable td:nth-child(4) {
-        display: table-cell;
-    }
+    /* Users table has different columns — hide Created on compact screens */
     #usersTable th:nth-last-child(2),
     #usersTable td:nth-last-child(2) {
         display: none;

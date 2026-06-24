@@ -3,7 +3,7 @@ Report Schedule Routes — CRUD for scheduled reports and their run history.
 """
 import json
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 try:
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 except ImportError:
@@ -25,7 +25,7 @@ MAX_KEEP_RUNS = 100
 
 _VALID_FREQS      = {"daily", "weekly", "monthly"}
 _VALID_RANGES     = {
-    "last_7_days", "last_14_days", "last_30_days",
+    "last_day", "last_7_days", "last_14_days", "last_30_days",
     "last_calendar_month", "last_quarter", "last_year",
 }
 
@@ -87,6 +87,10 @@ class ScheduleCreate(BaseModel):
     report_type:        str
     filter_device_ids:  List[int]        = []
     filter_user_ids:    List[int]        = []
+    options:            Dict[str, Any]   = Field(default_factory=dict)
+    notification_channels: List[str]     = []
+    attach_results:     bool             = True
+    attach_documents:   bool             = True
     sensors_historical: bool             = False
     date_range:         Optional[str]    = None
     frequency:          str
@@ -100,8 +104,13 @@ class ScheduleCreate(BaseModel):
 
 class ScheduleUpdate(BaseModel):
     name:               Optional[str]       = None
+    report_type:        Optional[str]       = None
     filter_device_ids:  Optional[List[int]] = None
     filter_user_ids:    Optional[List[int]] = None
+    options:            Optional[Dict[str, Any]] = None
+    notification_channels: Optional[List[str]] = None
+    attach_results:     Optional[bool]      = None
+    attach_documents:   Optional[bool]      = None
     sensors_historical: Optional[bool]      = None
     date_range:         Optional[str]       = None
     frequency:          Optional[str]       = None
@@ -113,7 +122,36 @@ class ScheduleUpdate(BaseModel):
     is_active:          Optional[bool]      = None
 
 
-def _validate(data: ScheduleCreate) -> None:
+def _normalise_options(report, options: Optional[dict]) -> dict:
+    values = options or {}
+    clean = {}
+    controls = report.definition.schedule_controls or report.definition.controls or ()
+    for control in controls:
+        key = control.get("key")
+        if not key:
+            continue
+        value = values.get(key, control.get("default"))
+        if value is None:
+            continue
+        if control.get("type") == "select":
+            allowed = {str(option.get("value")) for option in control.get("options", [])}
+            value = str(value)
+            if allowed and value not in allowed:
+                raise HTTPException(400, f"Invalid option for {key}")
+        elif control.get("type") == "number":
+            try:
+                value = int(value)
+            except (TypeError, ValueError):
+                raise HTTPException(400, f"Invalid option for {key}")
+            if control.get("min") is not None and value < int(control["min"]):
+                raise HTTPException(400, f"Invalid option for {key}")
+            if control.get("max") is not None and value > int(control["max"]):
+                raise HTTPException(400, f"Invalid option for {key}")
+        clean[key] = value
+    return clean
+
+
+def _validate(data: ScheduleCreate) -> dict:
     if data.report_type not in valid_report_types():
         raise HTTPException(400, "Invalid report_type")
     report = get_report(data.report_type)
@@ -136,6 +174,7 @@ def _validate(data: ScheduleCreate) -> None:
         assert 0 <= h <= 23 and 0 <= m <= 59
     except Exception:
         raise HTTPException(400, "run_time must be HH:MM (24 h)")
+    return _normalise_options(report, data.options)
 
 
 def _utc_iso(dt: Optional[datetime]) -> Optional[str]:
@@ -150,6 +189,10 @@ def _to_dict(s: ScheduledReport, run_count: int = 0) -> dict:
         "report_type":        s.report_type,
         "filter_device_ids":  s.filter_device_ids or [],
         "filter_user_ids":    s.filter_user_ids or [],
+        "options":            s.report_options or {},
+        "notification_channels": s.notification_channels or [],
+        "attach_results":     s.attach_results,
+        "attach_documents":   s.attach_documents,
         "sensors_historical": s.sensors_historical,
         "date_range":         s.date_range,
         "frequency":          s.frequency,
@@ -192,7 +235,7 @@ async def create_schedule(
     data: ScheduleCreate,
     current_user: User = Depends(require_permission("view_reports")),
 ):
-    _validate(data)
+    options = _validate(data)
     report = get_report(data.report_type)
     if report and report.definition.company_admin_required and not (current_user.is_admin or current_user.is_company_admin):
         raise HTTPException(403, "Company admin access required")
@@ -207,6 +250,10 @@ async def create_schedule(
             report_type=data.report_type,
             filter_device_ids=data.filter_device_ids,
             filter_user_ids=data.filter_user_ids,
+            report_options=options,
+            notification_channels=data.notification_channels,
+            attach_results=data.attach_results,
+            attach_documents=data.attach_documents,
             sensors_historical=data.sensors_historical,
             date_range=data.date_range,
             frequency=data.frequency,
@@ -242,13 +289,26 @@ async def update_schedule(
         if not schedule:
             raise HTTPException(404, "Schedule not found")
 
-        report = get_report(schedule.report_type)
+        report_type = data.report_type or schedule.report_type
+        if report_type not in valid_report_types():
+            raise HTTPException(400, "Invalid report_type")
+        report = get_report(report_type)
+        if report and not report.definition.schedule_supported:
+            raise HTTPException(400, "Report type cannot be scheduled")
         if report and report.definition.company_admin_required and not (current_user.is_admin or current_user.is_company_admin):
             raise HTTPException(403, "Company admin access required")
 
+        if data.report_type        is not None:
+            schedule.report_type = data.report_type
+            if data.options is None:
+                schedule.report_options = _normalise_options(report, {})
         if data.name               is not None: schedule.name               = data.name
         if data.filter_device_ids  is not None: schedule.filter_device_ids  = data.filter_device_ids
         if data.filter_user_ids    is not None: schedule.filter_user_ids    = data.filter_user_ids
+        if data.options            is not None: schedule.report_options     = _normalise_options(report, data.options)
+        if data.notification_channels is not None: schedule.notification_channels = data.notification_channels
+        if data.attach_results     is not None: schedule.attach_results     = data.attach_results
+        if data.attach_documents   is not None: schedule.attach_documents   = data.attach_documents
         if data.sensors_historical is not None: schedule.sensors_historical = data.sensors_historical
         if data.date_range         is not None: schedule.date_range         = data.date_range
         if data.frequency          is not None: schedule.frequency          = data.frequency
@@ -258,6 +318,27 @@ async def update_schedule(
         if data.timezone           is not None: schedule.user_timezone      = data.timezone
         if data.keep_runs          is not None: schedule.keep_runs          = data.keep_runs
         if data.is_active          is not None: schedule.is_active          = data.is_active
+
+        merged = ScheduleCreate(
+            name=schedule.name,
+            report_type=schedule.report_type,
+            filter_device_ids=schedule.filter_device_ids or [],
+            filter_user_ids=schedule.filter_user_ids or [],
+            options=schedule.report_options or {},
+            notification_channels=schedule.notification_channels or [],
+            attach_results=schedule.attach_results,
+            attach_documents=schedule.attach_documents,
+            sensors_historical=schedule.sensors_historical,
+            date_range=schedule.date_range,
+            frequency=schedule.frequency,
+            run_time=schedule.run_time,
+            day_of_week=schedule.day_of_week,
+            day_of_month=schedule.day_of_month,
+            timezone=schedule.user_timezone,
+            keep_runs=schedule.keep_runs,
+            is_active=schedule.is_active,
+        )
+        schedule.report_options = _validate(merged)
 
         timing_changed = any(
             v is not None for v in [data.frequency, data.run_time, data.day_of_week, data.day_of_month, data.timezone]
