@@ -7,6 +7,9 @@ let channels = [];
 let webhooks = [];
 let settingsApiKeys = [];
 let settingsApiKeyScopesLoaded = false;
+let notificationSort = { col: 'name', dir: 1 };
+let webhookSort = { col: 'url', dir: 1 };
+let settingsApiKeySort = { col: 'name', dir: 1 };
 let currentSettingsTab = hasPermission('manage_users') ? 'users' : 'notifications';
 const SETTINGS_TABS = ['users', 'notifications', 'webhooks', 'apiKeys', 'backups'].map(name => ({
     name,
@@ -18,11 +21,43 @@ function settingsEsc(value) {
     return RoutarioUI.escapeHtml(value);
 }
 
-function maskUrl(url) {
-    const schemeEnd = url.indexOf('://');
-    if (schemeEnd === -1) return url.slice(0, 6) + '....';
-    const scheme = url.slice(0, schemeEnd + 3); // e.g. "pbul://"
-    return scheme + '....';
+function settingsCompareValues(a, b, dir = 1) {
+    const av = a === null || a === undefined || a === '' ? null : a;
+    const bv = b === null || b === undefined || b === '' ? null : b;
+    if (av === null && bv === null) return 0;
+    if (av === null) return 1;
+    if (bv === null) return -1;
+
+    if (av instanceof Date || bv instanceof Date) {
+        const at = av instanceof Date ? av.getTime() : new Date(av).getTime();
+        const bt = bv instanceof Date ? bv.getTime() : new Date(bv).getTime();
+        return ((Number.isNaN(at) ? 0 : at) - (Number.isNaN(bt) ? 0 : bt)) * dir;
+    }
+
+    if (typeof av === 'number' && typeof bv === 'number') {
+        return (av - bv) * dir;
+    }
+
+    return String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' }) * dir;
+}
+
+function settingsToggleSort(sortState, col) {
+    return RoutarioTables.toggleNumericSort(sortState.col, sortState.dir, col);
+}
+
+function sortNotificationChannels(col) {
+    notificationSort = settingsToggleSort(notificationSort, col);
+    renderChannels();
+}
+
+function sortWebhooks(col) {
+    webhookSort = settingsToggleSort(webhookSort, col);
+    renderWebhooks();
+}
+
+function sortSettingsApiKeys(col) {
+    settingsApiKeySort = settingsToggleSort(settingsApiKeySort, col);
+    renderSettingsApiKeys();
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -155,10 +190,17 @@ async function loadSettings() {
 
 function renderWebhooks() {
     const tbody = document.getElementById('webhookListBody');
+    if (!tbody) return;
     const q = (document.getElementById('webhookSearch')?.value || '').toLowerCase();
-    const rows = webhooks.filter(url => url.toLowerCase().includes(q));
+    const rows = webhooks
+        .filter(url => url.toLowerCase().includes(q))
+        .sort((a, b) => settingsCompareValues(a, b, webhookSort.dir));
     const count = document.getElementById('webhookCount');
     if (count) count.textContent = `${rows.length} webhook${rows.length !== 1 ? 's' : ''}`;
+    RoutarioTables.updateSortHeaders('settings-section-webhooks', {
+        col: webhookSort.col,
+        dir: webhookSort.dir === 1 ? 'asc' : 'desc',
+    });
     if (!rows.length) {
         tbody.innerHTML = RoutarioTables.stateRow('No webhooks found.', 2);
         return;
@@ -208,14 +250,21 @@ async function saveWebhooks() {
 
 function renderChannels() {
     const body = document.getElementById('channelListBody');
+    if (!body) return;
     body.innerHTML = '';
     const q = (document.getElementById('notificationSearch')?.value || '').toLowerCase();
-    const rows = channels.filter(channel =>
-        (channel.name || '').toLowerCase().includes(q) ||
-        (channel.url || '').toLowerCase().includes(q)
-    );
+    const rows = channels
+        .filter(channel =>
+            (channel.name || '').toLowerCase().includes(q) ||
+            (channel.url || '').toLowerCase().includes(q)
+        )
+        .sort((a, b) => settingsCompareValues(a[notificationSort.col], b[notificationSort.col], notificationSort.dir));
     const count = document.getElementById('channelCount');
     if (count) count.textContent = `${rows.length} channel${rows.length !== 1 ? 's' : ''}`;
+    RoutarioTables.updateSortHeaders('settings-section-notifications', {
+        col: notificationSort.col,
+        dir: notificationSort.dir === 1 ? 'asc' : 'desc',
+    });
     
     if (rows.length === 0) {
         body.innerHTML = RoutarioTables.stateRow('No notification channels found.', 3);
@@ -228,8 +277,11 @@ function renderChannels() {
         tr.className = 'device-row';
         tr.innerHTML = `
             <td class="channel-name-cell"><span class="device-row-name">${settingsEsc(channel.name)}</span></td>
-            <td class="channel-url-cell">${settingsEsc(maskUrl(channel.url))}</td>
+            <td class="channel-url-cell">${settingsEsc(channel.url)}</td>
             <td style="text-align: right;">
+                <button type="button" class="btn btn-secondary btn-small" id="channelTestBtn${index}" onclick="testChannel(${index})">
+                    <i class="mdi mdi-send-check"></i> Test
+                </button>
                 <button type="button" class="btn btn-danger btn-small" onclick="removeChannel(${index})">
                     <i class="mdi mdi-delete"></i> Remove
                 </button>
@@ -285,6 +337,39 @@ async function removeChannel(index) {
     renderChannels();
 
     await saveChannels();
+}
+
+async function testChannel(index) {
+    const channel = channels[index];
+    if (!channel) return;
+
+    const btn = document.getElementById(`channelTestBtn${index}`);
+    const original = btn?.innerHTML;
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Testing';
+    }
+
+    try {
+        const res = await apiFetch(`${API_BASE}/users/${USER_ID}/notifications/test`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: channel.name, url: channel.url }),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to send test notification');
+        }
+        showAlert('Test notification sent', 'success');
+    } catch (error) {
+        console.error('Test notification error:', error);
+        showAlert(error.message, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = original;
+        }
+    }
 }
 
 function openChannelModal() {
@@ -433,13 +518,19 @@ function renderSettingsApiKeys() {
     const body = document.getElementById('settingsApiKeyTableBody');
     if (!body) return;
     const q = (document.getElementById('settingsApiKeySearch')?.value || '').toLowerCase();
-    const rows = settingsApiKeys.filter(k =>
-        (k.name || '').toLowerCase().includes(q) ||
-        (k.key_prefix || '').toLowerCase().includes(q) ||
-        (k.scopes || []).join(' ').toLowerCase().includes(q)
-    );
+    const rows = settingsApiKeys
+        .filter(k =>
+            (k.name || '').toLowerCase().includes(q) ||
+            (k.key_prefix || '').toLowerCase().includes(q) ||
+            (k.scopes || []).join(' ').toLowerCase().includes(q)
+        )
+        .sort((a, b) => settingsCompareValues(settingsApiKeySortValue(a), settingsApiKeySortValue(b), settingsApiKeySort.dir));
     const count = document.getElementById('settingsApiKeyCount');
     if (count) count.textContent = `${rows.length} key${rows.length !== 1 ? 's' : ''}`;
+    RoutarioTables.updateSortHeaders('settings-section-apiKeys', {
+        col: settingsApiKeySort.col,
+        dir: settingsApiKeySort.dir === 1 ? 'asc' : 'desc',
+    });
     body.innerHTML = rows.length ? rows.map(k => `
         <tr class="device-row">
             <td><span class="device-row-name">${settingsEsc(k.name)}</span></td>
@@ -451,6 +542,13 @@ function renderSettingsApiKeys() {
             </td>
         </tr>
     `).join('') : RoutarioTables.stateRow('No active API keys found.', 5);
+}
+
+function settingsApiKeySortValue(key) {
+    if (settingsApiKeySort.col === 'prefix') return key.key_prefix || '';
+    if (settingsApiKeySort.col === 'scopes') return (key.scopes || []).join(', ');
+    if (settingsApiKeySort.col === 'last_used') return key.last_used_at ? new Date(key.last_used_at) : null;
+    return key.name || '';
 }
 
 async function openApiKeyModal() {

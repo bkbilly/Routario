@@ -148,6 +148,7 @@ class UserFleetReportModule(Report):
             [
                 {"key": "username", "label": "User", "type": "text", "detail_key": "email"},
                 {"key": "role", "label": "Role", "type": "text", "detail_key": "company_name"},
+                {"key": "timezone", "label": "Timezone", "type": "text"},
                 {"key": "assigned_devices", "label": "Vehicles", "type": "integer", "title_key": "assigned_device_names_text"},
                 {"key": "push_enabled", "label": "Push", "type": "bool_active", "detail_key": "push_updated_at"},
                 {"key": "notification_channel_count", "label": "Channels", "type": "integer", "title_key": "notification_channel_names_text"},

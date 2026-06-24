@@ -2,6 +2,7 @@
 
 let _reportData          = [];
 let _reportPayload       = null;
+let _lastReportPdfUrl    = null;
 let _sortCol             = null;
 let _sortDir             = 1;
 let _allDevices          = [];
@@ -15,9 +16,11 @@ let _allDrivers          = [];
 let _selectedDriverIds   = new Set(); // empty = all visible drivers
 let _reportDefs          = [];
 let _reportDefMap        = {};
+let _reportRenderToken   = 0;
 let _healthRows          = [];
 let _healthSort          = { col: 'name', dir: 'asc' };
 let _billingDetail       = null;
+let _billingDetailPdfUrl = null;
 let _selectedBillingKey  = null;
 let _sfControlValues     = {};
 let _notificationChannels = [];
@@ -374,8 +377,10 @@ function _getScheduleControlValues() {
 function onReportTypeChange() {
     _reportData = [];
     _reportPayload = null;
+    _lastReportPdfUrl = null;
     _selectedBillingKey = null;
     _billingDetail = null;
+    _billingDetailPdfUrl = null;
     _sensorsHistoryMode = false;
     document.getElementById('reportTable').style.display = 'none';
     document.getElementById('noData').style.display = 'none';
@@ -401,8 +406,10 @@ function onHistoryCheckChange() {
 function onReportControlChange() {
     _reportData = [];
     _reportPayload = null;
+    _lastReportPdfUrl = null;
     _selectedBillingKey = null;
     _billingDetail = null;
+    _billingDetailPdfUrl = null;
     document.getElementById('reportTable').style.display = 'none';
     document.getElementById('noData').style.display = 'none';
     document.getElementById('summaryBar').style.display = 'none';
@@ -444,9 +451,11 @@ async function generateReport() {
     }
 
     const endpoint = `${API_BASE}/reports/${encodeURIComponent(type)}${params.toString() ? `?${params}` : ''}`;
+    const pdfEndpoint = `${API_BASE}/reports/${encodeURIComponent(type)}/pdf${params.toString() ? `?${params}` : ''}`;
 
     try {
         _setReportLoading(true);
+        await _nextFrame();
         const res = await apiFetch(endpoint);
         if (!res.ok) { showAlert('Failed to load report.', 'error'); return; }
         const data = await res.json();
@@ -455,7 +464,8 @@ async function generateReport() {
         if (def.supports_driver_filter) _mergeDriversFromTrips(_reportData);
         _sortCol = _reportPayload.default_sort?.key || null;
         _sortDir = _reportPayload.default_sort?.dir || 1;
-        _renderReport();
+        _lastReportPdfUrl = pdfEndpoint;
+        await _renderReport();
     } catch (e) {
         console.error(e);
         showAlert('Error generating report.', 'error');
@@ -488,11 +498,21 @@ function _setReportLoading(isLoading) {
     }
 }
 
-function _renderReport() {
+function _nextFrame() {
+    return new Promise(resolve => {
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => resolve());
+        else setTimeout(resolve, 0);
+    });
+}
+
+async function _renderReport() {
+    const token = ++_reportRenderToken;
     const table   = document.getElementById('reportTable');
     const noData  = document.getElementById('noData');
     const sumBar  = document.getElementById('summaryBar');
     const expWrap = document.getElementById('exportMenuWrap');
+    const head    = document.getElementById('reportHead');
+    const body    = document.getElementById('reportBody');
     const payload = _reportPayload || { rows: _reportData, columns: [] };
     const columns = (payload.columns || []).filter(c => c.hidden !== true);
 
@@ -505,18 +525,34 @@ function _renderReport() {
         return;
     }
 
+    await _nextFrame();
+    if (token !== _reportRenderToken) return;
+
     const sort = _sortCol ? { key: _sortCol, dir: _sortDir } : (payload.default_sort || {});
     const rows = _sortedRowsBy(_reportData, sort.key || columns[0]?.key, sort.dir || 1);
     _tripRows = rows;
 
     _renderSummaryCards(payload.summary || []);
-    document.getElementById('reportHead').innerHTML = `<tr>${columns.map(c => _th(c.key, c.label)).join('')}</tr>`;
-    document.getElementById('reportBody').innerHTML = rows.map((row, idx) => _renderGenericRow(row, columns, payload.row_action, idx)).join('')
-        + (payload.total_row ? _renderTotalRow(payload.total_row, columns) : '');
-
+    head.innerHTML = `<tr>${columns.map(c => _th(c.key, c.label)).join('')}</tr>`;
+    body.innerHTML = '';
     table.style.display = '';
     noData.style.display = 'none';
     expWrap.style.display = 'inline-flex';
+
+    const chunkSize = rows.length > 1000 ? 100 : 250;
+    for (let start = 0; start < rows.length; start += chunkSize) {
+        if (token !== _reportRenderToken) return;
+        body.insertAdjacentHTML(
+            'beforeend',
+            rows.slice(start, start + chunkSize)
+                .map((row, offset) => _renderGenericRow(row, columns, payload.row_action, start + offset))
+                .join('')
+        );
+        await _nextFrame();
+    }
+
+    if (token !== _reportRenderToken) return;
+    if (payload.total_row) body.insertAdjacentHTML('beforeend', _renderTotalRow(payload.total_row, columns));
 }
 
 function toggleExportMenu(e, menuId) {
@@ -638,44 +674,60 @@ function _exportPayloadCsv(payload, data) {
 
 function exportPdf() {
     if (!_reportPayload) return;
-    _exportPayloadPdf(_reportPayload, _reportData, _reportDefMap[_reportPayload.type]?.label || 'Report');
+    if (_viewingRunData) {
+        _exportPayloadPdf(_reportPayload, _reportData, _reportDefMap[_reportPayload.type]?.label || 'Report');
+        return;
+    }
+    if (!_lastReportPdfUrl) {
+        showAlert('Generate the report again before exporting PDF.', 'warning');
+        return;
+    }
+    _downloadStyledReportPdf(_lastReportPdfUrl);
 }
 
-function _exportPayloadPdf(payload, data, title = 'Report') {
+async function _downloadStyledReportPdf(url) {
+    try {
+        const res = await apiFetch(url);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to export PDF');
+        }
+        const blob = await res.blob();
+        const disposition = res.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^"]+)"?/i);
+        _downloadBlob(blob, match?.[1] || 'report.pdf');
+    } catch (error) {
+        console.error(error);
+        showAlert(error.message || 'Failed to export PDF', 'error');
+    }
+}
+
+async function _exportPayloadPdf(payload, data, title = 'Report') {
     const columns = (payload.columns || []).filter(c => c.csv !== false && c.hidden !== true);
     const sort = _sortCol ? { key: _sortCol, dir: _sortDir } : (payload.default_sort || {});
     const rows = _sortedRowsBy(data || [], sort.key || columns[0]?.key, sort.dir || 1);
-    const win = window.open('', '_blank');
-    if (!win) {
-        showAlert('Allow popups to export this PDF.', 'warning');
-        return;
+    try {
+        const res = await apiFetch(`${API_BASE}/reports/export/pdf`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                title,
+                report_type: payload.type || 'report',
+                payload: { ...payload, rows },
+            }),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to export PDF');
+        }
+        const blob = await res.blob();
+        const disposition = res.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^"]+)"?/i);
+        _downloadBlob(blob, match?.[1] || 'report.pdf');
+    } catch (error) {
+        console.error(error);
+        showAlert(error.message || 'Failed to export PDF', 'error');
     }
-    const summary = (payload.summary || []).map(card =>
-        `<div class="summary"><strong>${_esc(card.label)}</strong><span>${_esc(card.value)}</span></div>`
-    ).join('');
-    const tableRows = rows.map(row => `<tr>${columns.map(c => `<td>${_esc(_plainValue(row[c.key], c))}</td>`).join('')}</tr>`).join('')
-        + (payload.total_row ? `<tr class="total">${columns.map((c, idx) => `<td>${idx === 0 ? _esc(payload.total_row[c.key] ?? 'Total') : _esc(_plainValue(payload.total_row[c.key], c))}</td>`).join('')}</tr>` : '');
-    win.document.write(`<!DOCTYPE html><html><head><title>${_esc(title)}</title>
-        <style>
-            body { font-family: Arial, sans-serif; color: #111827; margin: 24px; }
-            h1 { font-size: 22px; margin: 0 0 4px; }
-            .meta { color: #6b7280; margin-bottom: 16px; }
-            .summary-wrap { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
-            .summary { border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; }
-            .summary strong { display: block; color: #6b7280; font-size: 10px; text-transform: uppercase; }
-            .summary span { display: block; margin-top: 4px; font-weight: 700; }
-            table { width: 100%; border-collapse: collapse; }
-            th, td { border: 1px solid #d1d5db; padding: 6px 8px; font-size: 11px; text-align: left; vertical-align: top; }
-            th { background: #f3f4f6; }
-            tr.total td { font-weight: 700; background: #f9fafb; }
-        </style></head><body>
-        <h1>${_esc(title)}</h1>
-        <div class="meta">${_esc(payload.start_date ? _fmtDatetime(payload.start_date) : '')}${payload.end_date ? ` - ${_esc(_fmtDatetime(payload.end_date))}` : ''}</div>
-        ${summary ? `<div class="summary-wrap">${summary}</div>` : ''}
-        <table><thead><tr>${columns.map(c => `<th>${_esc(c.label)}</th>`).join('')}</tr></thead><tbody>${tableRows}</tbody></table>
-        <script>window.onload = () => { window.print(); };</script>
-        </body></html>`);
-    win.document.close();
 }
 
 function _plainValue(value, col = {}) {
@@ -716,6 +768,7 @@ async function showBillingDetail(companyId, period, rowKey) {
     const pdfBtn = document.getElementById('billingPdfBtn');
     title.textContent = 'Billing Details';
     body.innerHTML = '<div class="billing-detail-muted" style="padding:1rem;text-align:center;">Loading billing details…</div>';
+    _billingDetailPdfUrl = null;
     if (pdfBtn) pdfBtn.disabled = true;
     modal.classList.add('active');
 
@@ -724,6 +777,7 @@ async function showBillingDetail(companyId, period, rowKey) {
         const res = await apiFetch(`${API_BASE}/reports/billing/details?${params}`);
         if (!res.ok) throw new Error(`Request failed (${res.status})`);
         _billingDetail = await res.json();
+        _billingDetailPdfUrl = `${API_BASE}/reports/billing/details/pdf?${params}`;
         title.textContent = `${_billingDetail.company?.name || 'Company'} - ${_billingDetail.period?.label || 'Billing'}`;
         body.innerHTML = _billingDetailHtml(_billingDetail);
         if (pdfBtn) pdfBtn.disabled = false;
@@ -738,38 +792,22 @@ function closeBillingDetail() {
     document.getElementById('billingDetailModal')?.classList.remove('active');
 }
 
-function exportBillingDetailPdf() {
-    if (!_billingDetail) return;
-    const company = _billingDetail.company?.name || 'Billing Details';
-    const period = _billingDetail.period?.label || '';
-    const win = window.open('', '_blank');
-    if (!win) {
-        showAlert('Allow popups to export this PDF.', 'warning');
-        return;
+async function exportBillingDetailPdf() {
+    if (!_billingDetailPdfUrl) return;
+    const btn = document.getElementById('billingPdfBtn');
+    const original = btn?.innerHTML;
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Exporting';
     }
-    win.document.write(`<!DOCTYPE html>
-        <html><head><title>${_esc(company)} ${_esc(period)}</title>
-        <style>
-            body { font-family: Arial, sans-serif; color: #111827; margin: 24px; }
-            h1 { font-size: 22px; margin: 0 0 4px; }
-            h2 { font-size: 15px; margin: 20px 0 8px; }
-            .meta { color: #6b7280; margin-bottom: 18px; }
-            .billing-detail-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
-            .billing-detail-card { border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; }
-            .k { color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
-            .v { margin-top: 4px; font-weight: 700; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-            th, td { border: 1px solid #d1d5db; padding: 6px 8px; font-size: 12px; text-align: left; }
-            th { background: #f3f4f6; }
-            .billing-detail-muted { color: #6b7280; }
-            @media print { button { display: none; } }
-        </style></head><body>
-            <h1>${_esc(company)}</h1>
-            <div class="meta">${_esc(period)} billing details</div>
-            ${_billingDetailHtml(_billingDetail, true)}
-            <script>window.onload = () => { window.print(); };</script>
-        </body></html>`);
-    win.document.close();
+    try {
+        await _downloadStyledReportPdf(_billingDetailPdfUrl);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = original;
+        }
+    }
 }
 
 function _billingDetailHtml(detail, pdf = false) {

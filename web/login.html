@@ -171,6 +171,7 @@
                         localStorage.removeItem('company_login_slug');
                         localStorage.removeItem('company_login_slug_company_id');
                     }
+                    await syncUserTimezone();
                     window.location.href = '/gps-dashboard.html';
                 } else {
                     err.textContent = 'Invalid username or password';

@@ -15,6 +15,7 @@ from typing import List
 
 import jwt
 from fastapi import APIRouter, HTTPException, Query, Depends
+from pydantic import BaseModel
 from sqlalchemy import select, delete, update, func
 from sqlalchemy.exc import IntegrityError
 
@@ -22,6 +23,7 @@ from core.database import get_db
 from core.config import get_settings
 from core.auth import get_current_user, require_admin, require_company_admin, require_self_or_admin, require_permission
 from core.permissions import cap_permissions, ALL_PERMISSIONS
+from notifications import get_channel
 from models import User, Driver, user_device_association
 from models.schemas import UserCreate, UserUpdate, UserResponse, DeviceResponse
 from sqlalchemy import and_
@@ -42,6 +44,11 @@ def _user_integrity_detail(exc: IntegrityError) -> str:
     if "users.username" in msg or "username" in msg:
         return "Username already exists"
     return "User already exists"
+
+
+class NotificationTestRequest(BaseModel):
+    name: str
+    url: str
 
 
 async def _ensure_unique_user_identity(username: str | None = None, email: str | None = None, exclude_user_id: int | None = None):
@@ -103,6 +110,46 @@ async def get_user_devices(user_id: int, caller: User = Depends(require_company_
     _check_manage_users(caller)
     db = get_db()
     return await db.get_user_devices(user_id)
+
+
+@router.post("/{user_id}/notifications/test")
+async def test_user_notification_channel(
+    user_id: int,
+    payload: NotificationTestRequest,
+    caller: User = Depends(require_self_or_admin),
+):
+    """Send a test message through one of the user's saved notification channels."""
+    if caller.id != user_id:
+        _check_manage_users(caller)
+
+    db = get_db()
+    user = await db.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    channels = user.notification_channels or []
+    saved = next(
+        (
+            channel for channel in channels
+            if channel.get("name") == payload.name and channel.get("url") == payload.url
+        ),
+        None,
+    )
+    if not saved:
+        raise HTTPException(status_code=404, detail="Notification channel not found")
+
+    sender = get_channel(saved["url"])
+    if sender is None:
+        raise HTTPException(status_code=400, detail="Unsupported notification channel")
+
+    ok = await sender.send(
+        saved["url"],
+        "Routario test notification",
+        "This is a test notification from Routario.",
+    )
+    if not ok:
+        raise HTTPException(status_code=502, detail="Failed to send test notification")
+    return {"status": "sent"}
 
 
 @router.get("/{user_id}", response_model=UserResponse)

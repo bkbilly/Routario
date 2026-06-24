@@ -229,6 +229,30 @@ function formatDateToLocal(str) {
     return new Date(str).toLocaleString();
 }
 
+async function syncUserTimezone(user = null) {
+    const token = localStorage.getItem('auth_token');
+    const userId = localStorage.getItem('user_id');
+    if (!token || !userId || typeof Intl === 'undefined') return;
+
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!timezone || timezone === localStorage.getItem('timezone')) return;
+    if (user?.timezone === timezone) {
+        localStorage.setItem('timezone', timezone);
+        return;
+    }
+
+    try {
+        const res = await apiFetch(`${API_BASE}/users/${userId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ timezone }),
+        });
+        if (res.ok) localStorage.setItem('timezone', timezone);
+    } catch {
+        // Timezone is a convenience value; keep the app working if sync fails.
+    }
+}
+
 // Refresh permissions from the server on every page load so changes take
 // effect without requiring a logout.  Resolves with the user object (or null)
 // so callers can reuse the data without a second fetch.
@@ -257,7 +281,10 @@ const permissionsReady = (function () {
             localStorage.setItem('units', user.units);
         if (user.currency)
             localStorage.setItem('currency', user.currency);
+        if (user.timezone)
+            localStorage.setItem('timezone', user.timezone);
         applyCompanyBranding(user.company_id);
+        syncUserTimezone(user);
         return user;
     })
     .catch(() => null); // network failure: use cached value
