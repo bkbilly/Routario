@@ -31,13 +31,12 @@ def get_report(key: str) -> Report | None:
 
 
 def get_report_definitions(user) -> list[dict]:
-    order = ["summary", "trips", "daily", "drivers", "billing", "logbook", "geofences", "users", "sensors", "alerts", "audit"]
     definitions = []
     for report in REPORT_REGISTRY.values():
         public = report.definition.public(user)
         if public:
             definitions.append(public)
-    return sorted(definitions, key=lambda d: order.index(d["key"]) if d["key"] in order else len(order))
+    return sorted(definitions, key=lambda d: ((d.get("label") or "").casefold(), d.get("key") or ""))
 
 
 def valid_report_types() -> set[str]:

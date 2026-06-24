@@ -684,6 +684,9 @@ class DatabaseService:
                 user.units = user_data.units
             if user_data.currency is not None:
                 user.currency = user_data.currency.upper()
+            user_timezone = getattr(user_data, "timezone", None)
+            if user_timezone is not None:
+                user.timezone = user_timezone or "UTC"
             if user_data.webhook_urls is not None:
                 user.webhook_urls = user_data.webhook_urls
             if user_data.is_admin is not None:

@@ -206,6 +206,7 @@ class UserUpdate(BaseModel):
     language: Optional[str] = None
     units: Optional[str] = None
     currency: Optional[str] = None
+    timezone: Optional[str] = None
     is_admin: Optional[bool] = None
     is_company_admin: Optional[bool] = None
     company_id: Optional[int] = None
@@ -259,6 +260,7 @@ class UserResponse(BaseModel):
     language: Optional[str] = "en"
     units: Optional[str] = "metric"
     currency: Optional[str] = "EUR"
+    timezone: str = "UTC"
     notification_channels: List[Dict[str, str]] = Field(default_factory=list)
     created_at: datetime
     webhook_urls: List[str] = Field(default_factory=list)

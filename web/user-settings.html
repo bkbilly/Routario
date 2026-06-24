@@ -87,8 +87,8 @@
                     <table class="devices-table settings-table">
                         <thead>
                             <tr>
-                                <th>Name</th>
-                                <th>Apprise URL</th>
+                                <th data-sort="name" data-sort-dir="asc" onclick="sortNotificationChannels('name')">Name</th>
+                                <th data-sort="url" onclick="sortNotificationChannels('url')">Apprise URL</th>
                                 <th style="text-align: right;">Action</th>
                             </tr>
                         </thead>
@@ -116,7 +116,7 @@
                     <table class="devices-table settings-table">
                         <thead>
                             <tr>
-                                <th>URL</th>
+                                <th data-sort="url" data-sort-dir="asc" onclick="sortWebhooks('url')">URL</th>
                                 <th style="text-align: right;">Action</th>
                             </tr>
                         </thead>
@@ -144,10 +144,10 @@
                     <table class="devices-table settings-table">
                         <thead>
                             <tr>
-                                <th>Name</th>
-                                <th>Prefix</th>
-                                <th>Scopes</th>
-                                <th>Last Used</th>
+                                <th data-sort="name" data-sort-dir="asc" onclick="sortSettingsApiKeys('name')">Name</th>
+                                <th data-sort="prefix" onclick="sortSettingsApiKeys('prefix')">Prefix</th>
+                                <th data-sort="scopes" onclick="sortSettingsApiKeys('scopes')">Scopes</th>
+                                <th data-sort="last_used" onclick="sortSettingsApiKeys('last_used')">Last Used</th>
                                 <th style="text-align:right;">Action</th>
                             </tr>
                         </thead>
