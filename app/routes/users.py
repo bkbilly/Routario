@@ -22,13 +22,15 @@ from sqlalchemy.exc import IntegrityError
 from core.database import get_db
 from core.config import get_settings
 from core.auth import get_current_user, require_admin, require_company_admin, require_self_or_admin, require_permission
-from core.permissions import cap_permissions, ALL_PERMISSIONS
+from core.permissions import cap_permissions, ALL_PERMISSIONS, valid_permissions
 from notifications import get_channel
 from models import User, Driver, user_device_association
 from models.schemas import UserCreate, UserUpdate, UserResponse, DeviceResponse
 from sqlalchemy import and_
 
 router = APIRouter(prefix="/api/users", tags=["users"])
+
+DELEGATED_ADMIN_PERMISSIONS = {"manage_mfa"}
 
 
 def _check_manage_users(caller: User):
@@ -44,6 +46,17 @@ def _user_integrity_detail(exc: IntegrityError) -> str:
     if "users.username" in msg or "username" in msg:
         return "Username already exists"
     return "User already exists"
+
+
+def _strip_regular_user_admin_permissions(
+    permissions: List[str] | None,
+    *,
+    is_admin: bool,
+    is_company_admin: bool,
+) -> List[str] | None:
+    if permissions is None or is_admin or is_company_admin:
+        return permissions
+    return [p for p in permissions if p not in DELEGATED_ADMIN_PERMISSIONS]
 
 
 class NotificationTestRequest(BaseModel):
@@ -95,6 +108,11 @@ async def create_user(user_data: UserCreate, caller: User = Depends(require_comp
         user_data.permissions = list(caller.permissions or []) if not caller.is_admin else []
     else:
         user_data.permissions = cap_permissions(user_data.permissions, caller)
+    user_data.permissions = _strip_regular_user_admin_permissions(
+        user_data.permissions,
+        is_admin=user_data.is_admin,
+        is_company_admin=user_data.is_company_admin,
+    )
 
     db = get_db()
     await _ensure_unique_user_identity(username=user_data.username, email=user_data.email)
@@ -175,21 +193,33 @@ async def update_user(
     if caller.id != user_id:
         _check_manage_users(caller)
 
+    db = get_db()
+    target = await db.get_user(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
     # Cap permissions to what caller can grant; preserve permissions caller can't see
     if user_data.permissions is not None and not caller.is_admin:
-        db = get_db()
-        target = await db.get_user(user_id)
-        if target:
-            caller_perms = set(caller.permissions or [])
-            existing_perms = set(target.permissions or [])
-            # Permissions the caller can't manage are preserved unchanged
-            unmanageable = existing_perms - caller_perms
-            granted = {p for p in user_data.permissions if p in caller_perms}
-            user_data.permissions = list(unmanageable | granted)
-        else:
-            user_data.permissions = cap_permissions(user_data.permissions, caller)
+        caller_perms = set(valid_permissions(caller.permissions or []))
+        existing_perms = set(valid_permissions(target.permissions or []))
+        # Permissions the caller can't manage are preserved unchanged
+        unmanageable = existing_perms - caller_perms
+        granted = {p for p in user_data.permissions if p in caller_perms}
+        user_data.permissions = list(unmanageable | granted)
 
-    db = get_db()
+    if user_data.permissions is not None:
+        effective_is_admin = user_data.is_admin if user_data.is_admin is not None else target.is_admin
+        effective_is_company_admin = (
+            user_data.is_company_admin
+            if user_data.is_company_admin is not None
+            else target.is_company_admin
+        )
+        user_data.permissions = _strip_regular_user_admin_permissions(
+            user_data.permissions,
+            is_admin=effective_is_admin,
+            is_company_admin=effective_is_company_admin,
+        )
+
     await _ensure_unique_user_identity(email=user_data.email, exclude_user_id=user_id)
     try:
         user = await db.update_user(user_id, user_data)
@@ -253,6 +283,7 @@ async def impersonate_user(user_id: int, admin: User = Depends(require_company_a
             raw_perms = _json.loads(raw_perms)
         except Exception:
             raw_perms = []
+    raw_perms = valid_permissions(raw_perms)
     return {
         "access_token":     token,
         "token_type":       "bearer",

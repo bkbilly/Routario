@@ -6,22 +6,21 @@ if TYPE_CHECKING:
 ALL_PERMISSIONS: List[str] = [
     "view_devices",
     "edit_devices",
-    "manage_alerts",
     "send_commands",
     "manage_integrations",
+    "manage_alerts",
+    "manage_geofences",
     "view_history",
     "view_reports",
     "manage_drivers",
     "manage_fuel",
     "manage_maintenance",
     "manage_logbook",
-    "manage_geofences",
+    "manage_routes",
     "voice_ptt",
     "live_share",
     "view_management",
     "manage_users",
-    "manage_routes",
-    "manage_billing",
     "view_audit",
     "view_health",
     "manage_api_keys",
@@ -31,18 +30,19 @@ ALL_PERMISSIONS: List[str] = [
 
 PERMISSION_GROUPS = [
     {
-        "label": "Devices",
+        "label": "Devices & Integrations",
         "perms": [
             ("view_devices",        "View Devices"),
             ("edit_devices",        "Edit Devices"),
-            ("manage_alerts",       "Manage Alerts"),
             ("send_commands",       "Send Commands"),
             ("manage_integrations", "Manage Integrations"),
         ],
     },
     {
-        "label": "History & Reports",
+        "label": "Monitoring & Reports",
         "perms": [
+            ("manage_alerts",    "Manage Alerts"),
+            ("manage_geofences", "Manage Geofences"),
             ("view_history",  "View History"),
             ("view_reports",  "View Reports"),
         ],
@@ -54,12 +54,7 @@ PERMISSION_GROUPS = [
             ("manage_fuel",        "Manage Fuel"),
             ("manage_maintenance", "Manage Maintenance"),
             ("manage_logbook",     "Manage Logbook"),
-        ],
-    },
-    {
-        "label": "Zones",
-        "perms": [
-            ("manage_geofences", "Manage Geofences"),
+            ("manage_routes",      "Manage Routes"),
         ],
     },
     {
@@ -74,8 +69,6 @@ PERMISSION_GROUPS = [
         "perms": [
             ("view_management", "View Management"),
             ("manage_users",    "Manage Users"),
-            ("manage_routes",   "Manage Routes"),
-            ("manage_billing",  "Manage Billing"),
             ("view_audit",      "View Audit Log"),
             ("view_health",     "View Health Checks"),
         ],
@@ -84,7 +77,7 @@ PERMISSION_GROUPS = [
         "label": "User Settings",
         "perms": [
             ("manage_api_keys", "Manage API Keys"),
-            ("manage_mfa",      "Manage MFA"),
+            ("manage_mfa",      "Manage Users' MFA"),
             ("manage_backups",  "Backup & Restore"),
         ],
     },
@@ -97,9 +90,16 @@ def user_has_permission(user: "User", perm: str) -> bool:
     return perm in (user.permissions or [])
 
 
+def valid_permissions(perms: List[str] | None) -> List[str]:
+    """Filter a permission list to currently grantable permissions."""
+    if not perms:
+        return []
+    return [p for p in perms if p in ALL_PERMISSIONS]
+
+
 def cap_permissions(requested: List[str], caller: "User") -> List[str]:
     """Return only permissions the caller is allowed to grant."""
     if caller.is_admin:
-        return [p for p in requested if p in ALL_PERMISSIONS]
-    caller_perms = set(caller.permissions or [])
-    return [p for p in requested if p in caller_perms]
+        return valid_permissions(requested)
+    caller_perms = set(valid_permissions(caller.permissions or []))
+    return [p for p in valid_permissions(requested) if p in caller_perms]

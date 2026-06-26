@@ -9,6 +9,7 @@ let _usrCompanies = [];
 let _usrDevices   = [];
 let _usrEditing   = null;
 let _usrMfaSetupPending = false;
+let _usrPasskeys = [];
 let _usrSortCol   = 'username';
 let _usrSortDir   = 1;
 
@@ -18,13 +19,12 @@ let _usrAssignedDevices = new Set();
 
 // Permission groups definition (mirrors backend PERMISSION_GROUPS)
 const PERMISSION_GROUPS = [
-    { label: 'Devices',               perms: [['view_devices','View Devices'],['edit_devices','Edit Devices'],['manage_alerts','Manage Alerts'],['send_commands','Send Commands'],['manage_integrations','Manage Integrations']] },
-    { label: 'History & Reports',     perms: [['view_history','View History'],['view_reports','View Reports']] },
-    { label: 'Fleet Operations',      perms: [['manage_drivers','Manage Drivers'],['manage_fuel','Manage Fuel'],['manage_maintenance','Manage Maintenance'],['manage_logbook','Manage Logbook']] },
-    { label: 'Zones',                 perms: [['manage_geofences','Manage Geofences']] },
+    { label: 'Devices & Integrations', perms: [['view_devices','View Devices'],['edit_devices','Edit Devices'],['send_commands','Send Commands'],['manage_integrations','Manage Integrations']] },
+    { label: 'Monitoring & Reports', perms: [['manage_alerts','Manage Alerts'],['manage_geofences','Manage Geofences'],['view_history','View History'],['view_reports','View Reports']] },
+    { label: 'Fleet Operations', perms: [['manage_drivers','Manage Drivers'],['manage_fuel','Manage Fuel'],['manage_maintenance','Manage Maintenance'],['manage_logbook','Manage Logbook'],['manage_routes','Manage Routes']] },
     { label: 'Communication & Sharing', perms: [['voice_ptt','Voice PTT'],['live_share','Live Share']] },
-    { label: 'Administration',        perms: [['view_management','View Management'],['manage_users','Manage Users'],['manage_routes','Manage Routes'],['manage_billing','Manage Billing'],['view_audit','View Audit Log'],['view_health','View Health Checks']] },
-    { label: 'User Settings',         perms: [['manage_api_keys','Manage API Keys'],['manage_mfa','Manage MFA'],['manage_backups','Backup & Restore']] },
+    { label: 'Administration', perms: [['view_management','View Management'],['manage_users','Manage Users'],['view_audit','View Audit Log'],['view_health','View Health Checks']] },
+    { label: 'Account Tools', perms: [['manage_api_keys','Manage API Keys'],['manage_mfa',"Manage Users' MFA"],['manage_backups','Backup & Restore']] },
 ];
 const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap(g => g.perms.map(p => p[0]));
 
@@ -64,7 +64,7 @@ async function _usrLoadCompanies() {
 function _callerPermissions() {
     if (_usrIsAdmin) return new Set(ALL_PERMISSIONS);
     const me = _usrUsers.find(u => u.id === _usrMyId);
-    return new Set(me?.permissions || []);
+    return new Set((me?.permissions || []).filter(p => ALL_PERMISSIONS.includes(p)));
 }
 
 function _usrRender() {
@@ -194,6 +194,7 @@ function openUserModal(userId = null) {
     onUserRoleChange();
     _usrRenderPermissions();
     usrInitMfaPanel();
+    usrInitPasskeysPanel();
 
     document.getElementById('userDeleteBtn').style.display =
         (isNew || _usrEditing?.id === _usrMyId) ? 'none' : 'inline-flex';
@@ -228,7 +229,7 @@ function _usrRenderPermissions() {
     if (fieldsCol) fieldsCol.style.gridColumn = '';
 
     const callerPerms   = _callerPermissions();
-    const editPerms     = new Set(_usrEditing?.permissions || (_usrEditing ? [] : [...callerPerms]));
+    const editPerms     = new Set((_usrEditing?.permissions || (_usrEditing ? [] : [...callerPerms])).filter(p => ALL_PERMISSIONS.includes(p)));
     const isEditingSelf = !_usrIsAdmin && _usrEditing?.id === _usrMyId;
 
     if (_usrIsAdmin) {
@@ -240,7 +241,7 @@ function _usrRenderPermissions() {
     }
 
     // Permissions that don't apply to regular users
-    const adminOnlyPerms = new Set(['manage_users', 'edit_devices', 'manage_integrations', 'view_management', 'manage_routes', 'manage_billing', 'view_audit', 'view_health', 'manage_backups']);
+    const adminOnlyPerms = new Set(['manage_users', 'edit_devices', 'manage_integrations', 'view_management', 'manage_routes', 'view_audit', 'view_health', 'manage_mfa', 'manage_backups']);
     const isUserRole = role === 'user';
 
     container.innerHTML = PERMISSION_GROUPS.map(group => {
@@ -402,6 +403,122 @@ async function usrDisableMfa() {
         await usrInitMfaPanel();
     } catch (e) {
         showAlert(e.message || 'MFA disable failed', 'error');
+    }
+}
+
+async function usrInitPasskeysPanel() {
+    const group = document.getElementById('userModalPasskeyGroup');
+    const status = document.getElementById('userModalPasskeyStatus');
+    const addBtn = document.getElementById('userModalPasskeyAddBtn');
+    const list = document.getElementById('userModalPasskeyList');
+    if (!group || !status || !addBtn || !list) return;
+
+    _usrPasskeys = [];
+    list.innerHTML = '';
+    if (!_usrEditing) {
+        group.style.display = 'none';
+        return;
+    }
+
+    group.style.display = '';
+    status.textContent = 'Loading passkeys...';
+    addBtn.style.display = _usrEditing.id === _usrMyId ? 'inline-flex' : 'none';
+    addBtn.disabled = !window.PublicKeyCredential;
+
+    try {
+        _usrPasskeys = await _usrJson(`${API_BASE}/passkeys/users/${_usrEditing.id}`);
+        _usrRenderPasskeys();
+    } catch (e) {
+        status.textContent = e.message || 'Unable to load passkeys';
+    }
+}
+
+function _usrRenderPasskeys() {
+    const status = document.getElementById('userModalPasskeyStatus');
+    const list = document.getElementById('userModalPasskeyList');
+    if (!status || !list) return;
+    status.textContent = `${_usrPasskeys.length} passkey${_usrPasskeys.length !== 1 ? 's' : ''}`;
+    if (!_usrPasskeys.length) {
+        list.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;">No passkeys registered.</div>';
+        return;
+    }
+    list.innerHTML = _usrPasskeys.map(k => `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.55rem 0.65rem;background:var(--bg-tertiary);border-radius:8px;">
+            <div style="min-width:0;">
+                <div style="font-weight:600;font-size:0.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_usrEsc(k.name || 'Passkey')}</div>
+                <div style="font-size:0.75rem;color:var(--text-muted);">Last used: ${k.last_used_at ? formatDateToLocal(k.last_used_at) : 'Never'}</div>
+            </div>
+            <div style="display:flex;gap:0.4rem;flex-shrink:0;">
+                <button type="button" class="btn btn-secondary btn-small" onclick="usrRenamePasskey(${k.id})" title="Rename"><i class="mdi mdi-pencil"></i></button>
+                <button type="button" class="btn btn-danger btn-small" onclick="usrDeletePasskey(${k.id})" title="Remove"><i class="mdi mdi-delete"></i></button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function usrRegisterPasskey() {
+    if (!_usrEditing || _usrEditing.id !== _usrMyId) return;
+    if (!window.PublicKeyCredential) {
+        showAlert('Passkeys are not supported by this browser', 'error');
+        return;
+    }
+    if (typeof parsePasskeyOptions !== 'function' || typeof passkeyCredentialToJson !== 'function') {
+        showAlert('Passkey tools are not ready', 'error');
+        return;
+    }
+    const name = prompt('Name this passkey', navigator.userAgent.includes('Mobile') ? 'Mobile passkey' : 'Passkey');
+    if (name === null) return;
+    const btn = document.getElementById('userModalPasskeyAddBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
+    try {
+        const challenge = await _usrJson(`${API_BASE}/passkeys/register/options`, { method: 'POST' });
+        const credential = await navigator.credentials.create({
+            publicKey: parsePasskeyOptions(challenge.options, 'create'),
+        });
+        await _usrJson(`${API_BASE}/passkeys/register/verify`, {
+            method: 'POST',
+            body: JSON.stringify({
+                state: challenge.state,
+                credential: passkeyCredentialToJson(credential),
+                name: name.trim() || null,
+            }),
+        });
+        showAlert('Passkey added', 'success');
+        await usrInitPasskeysPanel();
+    } catch (e) {
+        showAlert(e.name === 'NotAllowedError' ? 'Passkey registration was cancelled' : (e.message || 'Passkey registration failed'), 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="mdi mdi-fingerprint"></i> Add';
+    }
+}
+
+async function usrRenamePasskey(id) {
+    if (!_usrEditing) return;
+    const key = _usrPasskeys.find(k => k.id === id);
+    const name = prompt('Passkey name', key?.name || 'Passkey');
+    if (name === null) return;
+    try {
+        await _usrJson(`${API_BASE}/passkeys/users/${_usrEditing.id}/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ name: name.trim() || 'Passkey' }),
+        });
+        showAlert('Passkey renamed', 'success');
+        await usrInitPasskeysPanel();
+    } catch (e) {
+        showAlert(e.message || 'Unable to rename passkey', 'error');
+    }
+}
+
+async function usrDeletePasskey(id) {
+    if (!_usrEditing || !confirm('Remove this passkey?')) return;
+    try {
+        await _usrJson(`${API_BASE}/passkeys/users/${_usrEditing.id}/${id}`, { method: 'DELETE' });
+        showAlert('Passkey removed', 'success');
+        await usrInitPasskeysPanel();
+    } catch (e) {
+        showAlert(e.message || 'Unable to remove passkey', 'error');
     }
 }
 

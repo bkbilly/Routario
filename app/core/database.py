@@ -38,6 +38,7 @@ from models.models import (
     PositionRecord,
     Trip,
     User,
+    UserPasskey,
     user_device_association,
 )
 from models.schemas import (
@@ -316,6 +317,16 @@ class DatabaseService:
                 arrived_at DATETIME,
                 completed_at DATETIME,
                 notes TEXT
+            )""",
+            """CREATE TABLE IF NOT EXISTS user_passkeys (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                credential_id VARCHAR(512) NOT NULL UNIQUE,
+                public_key TEXT NOT NULL,
+                sign_count INTEGER NOT NULL DEFAULT 0,
+                name VARCHAR(120),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_used_at DATETIME
             )""",
             "ALTER TABLE billing_plans ALTER COLUMN currency SET DEFAULT 'EUR'",
             "ALTER TABLE billing_invoices ALTER COLUMN currency SET DEFAULT 'EUR'",
@@ -729,6 +740,7 @@ class DatabaseService:
                 name=data.name,
                 app_name=(data.app_name or None),
                 login_slug=(data.login_slug or None),
+                billing_plan_id=data.billing_plan_id,
             )
             session.add(company)
             await session.flush()
@@ -760,6 +772,8 @@ class DatabaseService:
                     company.branding_version = (company.branding_version or 1) + 1
             if "login_slug" in data.model_fields_set:
                 company.login_slug = data.login_slug or None
+            if "billing_plan_id" in data.model_fields_set:
+                company.billing_plan_id = data.billing_plan_id
             await session.flush()
             await session.refresh(company)
             return company

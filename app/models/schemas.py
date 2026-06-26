@@ -304,12 +304,14 @@ class CompanyCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     app_name: Optional[str] = Field(None, max_length=100)
     login_slug: Optional[str] = Field(None, max_length=100)
+    billing_plan_id: Optional[int] = None
 
 
 class CompanyUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     app_name: Optional[str] = Field(None, max_length=100)
     login_slug: Optional[str] = Field(None, max_length=100)
+    billing_plan_id: Optional[int] = None
 
 
 class CompanyResponse(BaseModel):

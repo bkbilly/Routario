@@ -59,6 +59,7 @@ firebase-messaging==0.4.5
 
 PyJWT==2.11.0
 pywebpush==2.3.0
+webauthn==2.8.0
 
 # SIP Voice Call Notifications
 audioop-lts==0.2.2
