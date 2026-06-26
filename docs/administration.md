@@ -112,13 +112,12 @@ On top of the three-tier role hierarchy, users can be granted fine-grained permi
 
 | Group | Permissions |
 |---|---|
-| **Devices** | View Devices, Edit Devices, Manage Alerts, Send Commands, Manage Integrations |
-| **History & Reports** | View History, View Reports |
-| **Fleet Operations** | Manage Drivers, Manage Fuel, Manage Maintenance, Manage Logbook |
-| **Zones** | Manage Geofences |
+| **Devices & Integrations** | View Devices, Edit Devices, Send Commands, Manage Integrations |
+| **Monitoring & Reports** | Manage Alerts, Manage Geofences, View History, View Reports |
+| **Fleet Operations** | Manage Drivers, Manage Fuel, Manage Maintenance, Manage Logbook, Manage Routes |
 | **Communication & Sharing** | Voice PTT, Live Share |
-| **Administration** | View Management, Manage Users, Manage Routes, Manage Billing, View Audit Log, View Health Checks |
-| **User Settings** | Manage API Keys, Manage MFA, Backup & Restore |
+| **Administration** | View Management, Manage Users, View Audit Log, View Health Checks |
+| **Account Tools** | Manage API Keys, Manage Users' MFA, Backup & Restore |
 
 - **Super Admins** always have all permissions and cannot be restricted.
 - **Permission capping** — a user can only grant permissions they hold themselves; they cannot escalate another user beyond their own access level.
@@ -151,12 +150,20 @@ API keys are shown only once when created. Stored keys are hashed, can be expire
 
 ## Multi-Factor Authentication
 
-Users with **Manage MFA** can set up authenticator-app MFA and recovery codes for themselves. Users who also have **Manage Users** can manage MFA for users they are allowed to administer.
+Every user can set up authenticator-app MFA and recovery codes for their own account from **User Settings → Profile**. The **Manage Users' MFA** permission is only for administering MFA on other users.
 
 - Super admins can manage MFA across the platform.
-- Company admins can manage MFA only for users in their company.
+- Company admins with **Manage Users' MFA** and **Manage Users** can manage MFA only for users in their company.
 - Disabling MFA for your own account requires a valid authenticator code or recovery code.
 - Admin-disabling MFA for another managed user does not require that user's current code.
+
+## Passkeys
+
+Users can register passkeys from **User Settings → Profile** and then sign in using the **Sign in with passkey** button on the login page. Passkeys use WebAuthn, resident keys, and user verification.
+
+- Users can rename or remove their own passkeys.
+- Admins can view, rename, or remove passkeys from the user edit modal for users they are allowed to manage.
+- New passkeys can only be registered by the signed-in user for their own account.
 
 ---
 
@@ -209,12 +216,14 @@ Users with **Manage Routes** can create planned routes with stops, assign them t
 
 ## Billing
 
-Users with **Manage Billing** can view billing information for their company. Super admins can manage billing plans and generate invoices.
+Billing administration is super-admin only. Company admins and regular users do not receive a billing permission.
 
 - Billing plans define base price, included devices, included position records, included API calls, and overage rates.
-- Company billing settings include plan, currency, tax rate, billing email, billing address, and billing status.
+- Companies can be assigned a billing plan from **Management → Companies** or from the billing plan editor.
+- Billing plan management is available from **Management → Billing** for super admins.
 - Usage is calculated from active devices, stored position records, and API usage events.
-- Invoices store a snapshot of billing currency, exchange rate, totals, tax, and usage at generation time.
+- Billing reports and billing detail views are generated from **Fleet Reports**, not from the Billing tab.
+- Invoices store a snapshot of billing currency, exchange rate, totals, and usage at generation time.
 
 ---
 
@@ -222,7 +231,7 @@ Users with **Manage Billing** can view billing information for their company. Su
 
 Companies let you partition users and devices into isolated groups. A user or device belongs to at most one company.
 
-- **Create companies** — give each company a name.
+- **Create companies** — give each company a name and optionally assign a billing plan.
 - **Assign users** — toggle which users belong to a company. Mark specific users as Company Admin within that company.
 - **Assign devices** — toggle which devices belong to a company. Company admins and their users only see devices assigned to their company.
 - **App name** — optionally override the visible application name for users in that company.

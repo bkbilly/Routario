@@ -225,7 +225,7 @@ function _esc(str) {
 
 function formatDateToLocal(str) {
     if (!str) return 'N/A';
-    if (!str.includes('Z') && !str.includes('+')) str += 'Z';
+    if (!/[zZ]|[+-]\d{2}:\d{2}$/.test(str)) str += 'Z';
     return new Date(str).toLocaleString();
 }
 

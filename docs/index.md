@@ -45,9 +45,15 @@
 
 - :material-chart-box: **Backend-Defined Reports**
 
-    Fleet summaries, trips, daily activity, driver activity, user fleet, sensors, alerts, scheduled delivery, and CSV exports.
+    Fleet summaries, trips, daily activity, driver activity, user fleet, sensors, billing, audit, scheduled delivery, and CSV exports.
 
     [:octicons-arrow-right-24: Reports](reports.md)
+
+- :material-shield-key: **Account Security**
+
+    Passkey login, authenticator-app MFA with recovery codes, scoped API keys, audit logging, and permission-based administration.
+
+    [:octicons-arrow-right-24: Administration](administration.md)
 
 - :material-cellphone-arrow-down: **PWA Support**
 

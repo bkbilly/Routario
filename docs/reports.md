@@ -19,6 +19,8 @@ This means adding a new report does not require editing `reports.js`: create a n
 | **User Fleet** | Company-admin report for user readiness: assigned vehicles, push status, channels, webhooks, alerts, permissions, and last activity. |
 | **Vehicle Sensors** | Current vehicle sensor values, or historical sensor rows over a selected date range. |
 | **Alerts** | Alert history over a selected period, with optional user filtering for admins. |
+| **Billing** | Draft billing usage, totals, and company billing details for a selected billing period. |
+| **Audit** | Super-admin report for administrative and security events. |
 
 ---
 
@@ -31,7 +33,7 @@ Reports expose their supported filters through metadata:
 - **User filter** — available for Alerts and User Fleet reports when the current user can see users.
 - **Driver filter** — used by Daily Activity when grouping by drivers.
 - **Historical toggle** — used by Vehicle Sensors to switch between current and historical data.
-- **Custom controls** — report-defined controls such as Daily Activity's `group_by` selector.
+- **Custom controls** — report-defined controls such as Daily Activity's `group_by` selector or Billing's period selector.
 
 The frontend reads this metadata from `/api/reports/types` and renders the controls automatically.
 
@@ -81,8 +83,9 @@ Reports may define a generic row action. The built-in supported action is:
 | Action | Description |
 |---|---|
 | `trip_map` | Makes each row clickable and opens the trip route map using the row's trip fields. |
+| `billing_detail` | Makes each billing row clickable and opens the billing detail view for that company and period. |
 
-The Trip List report uses this action.
+The Trip List and Billing reports use row actions.
 
 ---
 

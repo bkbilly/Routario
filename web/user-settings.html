@@ -24,7 +24,8 @@
 <body>
     <div class="container">
         <div class="mgmt-tabs settings-tabs" id="settingsTabs">
-            <button class="mgmt-tab settings-tab active" onclick="switchSettingsTab('users')" id="settingsTabUsers" style="display:none;"><i class="mdi mdi-account-group"></i> Users</button>
+            <button class="mgmt-tab settings-tab active" onclick="switchSettingsTab('profile')" id="settingsTabProfile"><i class="mdi mdi-account-circle"></i> Profile</button>
+            <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('users')" id="settingsTabUsers" style="display:none;"><i class="mdi mdi-account-group"></i> Users</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('notifications')" id="settingsTabNotifications"><i class="mdi mdi-bell"></i> Notifications</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('webhooks')" id="settingsTabWebhooks"><i class="mdi mdi-link-variant"></i> Webhooks</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('apiKeys')" id="settingsTabApiKeys" style="display:none;"><i class="mdi mdi-key-variant"></i> API Keys</button>
@@ -32,6 +33,66 @@
         </div>
 
         <div>
+            <!-- Profile -->
+            <div class="settings-section" id="settings-section-profile">
+                <p class="settings-section-description">
+                    Update your account preferences and sign-in methods.
+                </p>
+                <div class="profile-settings-grid">
+                    <section class="profile-settings-panel">
+                        <h2 style="font-size:1rem;margin:0 0 1rem 0;">Profile</h2>
+                        <div class="form-group">
+                            <label class="form-label">Username</label>
+                            <input type="text" id="profileUsername" class="form-input profile-readonly-input" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" id="profileEmail" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">New Password</label>
+                            <input type="password" id="profilePassword" class="form-input" autocomplete="new-password" placeholder="Leave blank to keep current password">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Unit System</label>
+                            <select id="profileUnits" class="form-input">
+                                <option value="metric">Metric (km, km/h, m)</option>
+                                <option value="imperial">Imperial (mi, mph, ft)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Currency</label>
+                            <select id="profileCurrency" class="form-input"></select>
+                        </div>
+                        <button type="button" class="btn btn-primary" id="profileSaveBtn" onclick="saveProfile()"><i class="mdi mdi-content-save"></i> Save Profile</button>
+                    </section>
+
+                    <section class="profile-settings-panel">
+                        <div style="margin-bottom:1.25rem;">
+                            <h2 style="font-size:1rem;margin:0 0 1rem 0;">Multi-Factor Authentication</h2>
+                            <div id="profileMfaStatus" style="font-size:0.86rem;color:var(--text-secondary);margin-bottom:0.7rem;"></div>
+                            <div id="profileMfaSetupBox" class="secret-box" style="display:none;margin:0 0 0.75rem 0;"></div>
+                            <div id="profileMfaCodeGroup" style="display:none;margin-bottom:0.75rem;">
+                                <label class="form-label" id="profileMfaCodeLabel" style="font-size:0.78rem;">Authenticator Code</label>
+                                <input type="text" id="profileMfaCode" class="form-input" placeholder="123456" inputmode="numeric" autocomplete="one-time-code">
+                            </div>
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                                <button type="button" class="btn btn-secondary" id="profileMfaSetupBtn" onclick="profileSetupMfa()"><i class="mdi mdi-qrcode"></i> Setup</button>
+                                <button type="button" class="btn btn-primary" id="profileMfaEnableBtn" onclick="profileEnableMfa()" style="display:none;"><i class="mdi mdi-shield-check"></i> Enable</button>
+                                <button type="button" class="btn btn-danger" id="profileMfaDisableBtn" onclick="profileDisableMfa()" style="display:none;"><i class="mdi mdi-shield-off"></i> Disable</button>
+                            </div>
+                        </div>
+
+                        <div class="profile-passkey-header">
+                            <h2 style="font-size:1rem;margin:0;">Passkeys</h2>
+                            <button type="button" class="btn btn-primary btn-small" id="passkeyRegisterBtn" onclick="registerPasskey()"><i class="mdi mdi-fingerprint"></i> Add Passkey</button>
+                        </div>
+                        <div id="passkeySupportNote" style="display:none;color:var(--text-muted);font-size:0.86rem;margin-bottom:0.75rem;">Passkeys are not supported by this browser.</div>
+                        <div id="passkeyList" class="profile-passkey-list"></div>
+                    </section>
+                </div>
+            </div>
+
             <!-- Users -->
             <div class="settings-section" id="settings-section-users" style="display:none;">
                 <p class="settings-section-description">
@@ -267,6 +328,16 @@
                                     <button type="button" class="btn btn-primary" id="userModalMfaEnableBtn" onclick="usrEnableMfa()" style="display:none;"><i class="mdi mdi-shield-check"></i> Enable</button>
                                     <button type="button" class="btn btn-danger" id="userModalMfaDisableBtn" onclick="usrDisableMfa()" style="display:none;"><i class="mdi mdi-shield-off"></i> Disable</button>
                                 </div>
+                            </div>
+                        </div>
+                        <div class="form-group" id="userModalPasskeyGroup" style="display:none;">
+                            <label class="form-label">Passkeys</label>
+                            <div style="border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;background:var(--bg-secondary);">
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.75rem;">
+                                    <div id="userModalPasskeyStatus" style="font-size:0.86rem;color:var(--text-secondary);"></div>
+                                    <button type="button" class="btn btn-primary btn-small" id="userModalPasskeyAddBtn" onclick="usrRegisterPasskey()" style="display:none;"><i class="mdi mdi-fingerprint"></i> Add</button>
+                                </div>
+                                <div id="userModalPasskeyList" style="display:flex;flex-direction:column;gap:0.45rem;"></div>
                             </div>
                         </div>
                     </div>

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 
 from core.audit import write_audit_log
-from core.auth import require_company_admin
+from core.auth import require_admin
 from core.currency import cents_at_rate, currency_snapshot
 from core.database import get_db
 from models import BillingInvoice, BillingPlan, Company, UsageEvent, User
@@ -17,8 +17,8 @@ router = APIRouter(prefix="/api/billing", tags=["billing"])
 
 
 def _require_billing_permission(user: User) -> None:
-    if not user.is_admin and "manage_billing" not in (user.permissions or []):
-        raise HTTPException(status_code=403, detail="Permission required: manage_billing")
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Super admin access required")
 
 
 class BillingPlanIn(BaseModel):
@@ -65,7 +65,7 @@ def _plan_payload(plan: BillingPlan) -> dict:
     }
 
 @router.get("/plans")
-async def list_plans(_: User = Depends(require_company_admin)):
+async def list_plans(_: User = Depends(require_admin)):
     _require_billing_permission(_)
     db = get_db()
     async with db.get_session() as session:
@@ -74,10 +74,8 @@ async def list_plans(_: User = Depends(require_company_admin)):
 
 
 @router.post("/plans")
-async def create_plan(data: BillingPlanIn, request: Request, current_user: User = Depends(require_company_admin)):
+async def create_plan(data: BillingPlanIn, request: Request, current_user: User = Depends(require_admin)):
     _require_billing_permission(current_user)
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Super admin access required")
     db = get_db()
     async with db.get_session() as session:
         plan = BillingPlan(**data.model_dump())
@@ -90,10 +88,8 @@ async def create_plan(data: BillingPlanIn, request: Request, current_user: User 
 
 
 @router.put("/plans/{plan_id}")
-async def update_plan(plan_id: int, data: BillingPlanIn, request: Request, current_user: User = Depends(require_company_admin)):
+async def update_plan(plan_id: int, data: BillingPlanIn, request: Request, current_user: User = Depends(require_admin)):
     _require_billing_permission(current_user)
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Super admin access required")
     db = get_db()
     async with db.get_session() as session:
         plan = await session.get(BillingPlan, plan_id)
@@ -109,10 +105,8 @@ async def update_plan(plan_id: int, data: BillingPlanIn, request: Request, curre
 
 
 @router.delete("/plans/{plan_id}")
-async def delete_plan(plan_id: int, request: Request, current_user: User = Depends(require_company_admin)):
+async def delete_plan(plan_id: int, request: Request, current_user: User = Depends(require_admin)):
     _require_billing_permission(current_user)
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Super admin access required")
     db = get_db()
     async with db.get_session() as session:
         plan = await session.get(BillingPlan, plan_id)
@@ -129,10 +123,8 @@ async def delete_plan(plan_id: int, request: Request, current_user: User = Depen
 
 
 @router.put("/companies/{company_id}")
-async def update_company_billing(company_id: int, data: CompanyBillingIn, request: Request, current_user: User = Depends(require_company_admin)):
+async def update_company_billing(company_id: int, data: CompanyBillingIn, request: Request, current_user: User = Depends(require_admin)):
     _require_billing_permission(current_user)
-    if not current_user.is_admin and current_user.company_id != company_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
     db = get_db()
     async with db.get_session() as session:
         company = await session.get(Company, company_id)
@@ -161,20 +153,16 @@ async def company_usage(
     company_id: int,
     year: int = Query(..., ge=2000),
     month: int = Query(..., ge=1, le=12),
-    current_user: User = Depends(require_company_admin),
+    current_user: User = Depends(require_admin),
 ):
     _require_billing_permission(current_user)
-    if not current_user.is_admin and current_user.company_id != company_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
     start, end = month_window(year, month)
     return {"company_id": company_id, "period_start": start, "period_end": end, "usage": await billing_usage(company_id, start, end)}
 
 
 @router.post("/usage-events")
-async def record_usage_event(data: UsageEventIn, request: Request, current_user: User = Depends(require_company_admin)):
+async def record_usage_event(data: UsageEventIn, request: Request, current_user: User = Depends(require_admin)):
     _require_billing_permission(current_user)
-    if not current_user.is_admin and current_user.company_id != data.company_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
     db = get_db()
     async with db.get_session() as session:
         session.add(UsageEvent(company_id=data.company_id, metric=data.metric, quantity=data.quantity, source=data.source, metadata_json=data.metadata))
@@ -189,11 +177,9 @@ async def generate_invoice(
     year: int = Query(..., ge=2000),
     month: int = Query(..., ge=1, le=12),
     plan_id: Optional[int] = Query(None),
-    current_user: User = Depends(require_company_admin),
+    current_user: User = Depends(require_admin),
 ):
     _require_billing_permission(current_user)
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Super admin access required")
     db = get_db()
     start, end = month_window(year, month)
     async with db.get_session() as session:
@@ -259,10 +245,8 @@ async def generate_invoice(
 
 
 @router.get("/companies/{company_id}/invoices")
-async def list_invoices(company_id: int, current_user: User = Depends(require_company_admin)):
+async def list_invoices(company_id: int, current_user: User = Depends(require_admin)):
     _require_billing_permission(current_user)
-    if not current_user.is_admin and current_user.company_id != company_id:
-        raise HTTPException(status_code=403, detail="Forbidden")
     db = get_db()
     async with db.get_session() as session:
         result = await session.execute(select(BillingInvoice).where(BillingInvoice.company_id == company_id).order_by(BillingInvoice.period_start.desc()))

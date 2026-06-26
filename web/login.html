@@ -89,6 +89,11 @@
             cursor: pointer; transition: transform 0.2s;
         }
         .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3); }
+        .btn-secondary {
+            margin-top: 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+        }
 
         .error-msg { color: #ef4444; font-size: 0.85rem; margin-top: 1rem; display: none; }
     </style>
@@ -115,6 +120,7 @@
                 <input type="text" id="mfaCode" class="form-input" inputmode="numeric" autocomplete="one-time-code">
             </div>
             <button type="submit" class="btn" id="loginBtn">Sign In</button>
+            <button type="button" class="btn btn-secondary" id="passkeyBtn" onclick="handlePasskeyLogin()">Sign in with passkey</button>
             <div class="error-msg" id="errorMsg">Invalid credentials</div>
         </form>
     </div>
@@ -125,6 +131,67 @@
             return match ? decodeURIComponent(match[1]) : null;
         })();
         if (loginSlug) applyCompanyLoginBranding(loginSlug);
+
+        function b64urlToBuffer(value) {
+            const padding = '='.repeat((4 - value.length % 4) % 4);
+            const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const raw = atob(base64);
+            return Uint8Array.from(raw, c => c.charCodeAt(0)).buffer;
+        }
+
+        function bufferToB64url(buffer) {
+            const bytes = new Uint8Array(buffer || []);
+            let raw = '';
+            bytes.forEach(b => { raw += String.fromCharCode(b); });
+            return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+        }
+
+        function parseCredentialOptions(optionsJson, mode) {
+            const options = typeof optionsJson === 'string' ? JSON.parse(optionsJson) : optionsJson;
+            options.challenge = b64urlToBuffer(options.challenge);
+            if (mode === 'create') {
+                options.user.id = b64urlToBuffer(options.user.id);
+                options.excludeCredentials = (options.excludeCredentials || []).map(c => ({ ...c, id: b64urlToBuffer(c.id) }));
+            } else {
+                options.allowCredentials = (options.allowCredentials || []).map(c => ({ ...c, id: b64urlToBuffer(c.id) }));
+            }
+            return options;
+        }
+
+        function credentialToJson(credential) {
+            const response = credential.response;
+            const data = {
+                id: credential.id,
+                rawId: bufferToB64url(credential.rawId),
+                type: credential.type,
+                clientExtensionResults: credential.getClientExtensionResults ? credential.getClientExtensionResults() : {},
+                response: {
+                    clientDataJSON: bufferToB64url(response.clientDataJSON),
+                },
+            };
+            if (credential.authenticatorAttachment) data.authenticatorAttachment = credential.authenticatorAttachment;
+            if (response.attestationObject) data.response.attestationObject = bufferToB64url(response.attestationObject);
+            if (response.authenticatorData) data.response.authenticatorData = bufferToB64url(response.authenticatorData);
+            if (response.signature) data.response.signature = bufferToB64url(response.signature);
+            if (response.userHandle) data.response.userHandle = bufferToB64url(response.userHandle);
+            return data;
+        }
+
+        function storeLoginData(data) {
+            localStorage.setItem('auth_token', data.access_token);
+            localStorage.setItem('user_id', data.user_id);
+            localStorage.setItem('username', data.username);
+            localStorage.setItem('is_admin', data.is_admin);
+            localStorage.setItem('is_company_admin', data.is_company_admin || false);
+            localStorage.setItem('company_id', data.company_id ?? '');
+            localStorage.setItem('units', data.units || 'metric');
+            localStorage.setItem('currency', data.currency || 'EUR');
+            localStorage.setItem('permissions', JSON.stringify(data.permissions || []));
+            if (String(data.company_id ?? '') !== localStorage.getItem('company_login_slug_company_id')) {
+                localStorage.removeItem('company_login_slug');
+                localStorage.removeItem('company_login_slug_company_id');
+            }
+        }
 
         async function handleLogin(e) {
             e.preventDefault();
@@ -158,19 +225,7 @@
                         btn.textContent = 'Verify Code';
                         return;
                     }
-                    localStorage.setItem('auth_token', data.access_token);
-                    localStorage.setItem('user_id', data.user_id);
-                    localStorage.setItem('username', data.username);
-                    localStorage.setItem('is_admin', data.is_admin);
-                    localStorage.setItem('is_company_admin', data.is_company_admin || false);
-                    localStorage.setItem('company_id', data.company_id ?? '');
-                    localStorage.setItem('units', data.units || 'metric');
-                    localStorage.setItem('currency', data.currency || 'EUR');
-                    localStorage.setItem('permissions', JSON.stringify(data.permissions || []));
-                    if (String(data.company_id ?? '') !== localStorage.getItem('company_login_slug_company_id')) {
-                        localStorage.removeItem('company_login_slug');
-                        localStorage.removeItem('company_login_slug_company_id');
-                    }
+                    storeLoginData(data);
                     await syncUserTimezone();
                     window.location.href = '/gps-dashboard.html';
                 } else {
@@ -183,6 +238,51 @@
             } finally {
                 btn.disabled = false;
                 btn.textContent = 'Sign In';
+            }
+        }
+
+        async function handlePasskeyLogin() {
+            const btn = document.getElementById('passkeyBtn');
+            const err = document.getElementById('errorMsg');
+            if (!window.PublicKeyCredential) {
+                err.textContent = 'Passkeys are not supported by this browser';
+                err.style.display = 'block';
+                return;
+            }
+            btn.disabled = true;
+            btn.textContent = 'Waiting for passkey...';
+            err.style.display = 'none';
+            try {
+                const username = document.getElementById('username').value.trim();
+                const optionsRes = await fetch(`${API_BASE}/passkeys/login/options`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username || null }),
+                });
+                if (!optionsRes.ok) throw new Error('Unable to start passkey login');
+                const challenge = await optionsRes.json();
+                const credential = await navigator.credentials.get({
+                    publicKey: parseCredentialOptions(challenge.options, 'get'),
+                });
+                const verifyRes = await fetch(`${API_BASE}/passkeys/login/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ state: challenge.state, credential: credentialToJson(credential) }),
+                });
+                if (!verifyRes.ok) {
+                    const data = await verifyRes.json().catch(() => ({}));
+                    throw new Error(data.detail || 'Passkey login failed');
+                }
+                const data = await verifyRes.json();
+                storeLoginData(data);
+                await syncUserTimezone();
+                window.location.href = '/gps-dashboard.html';
+            } catch (e) {
+                err.textContent = e.name === 'NotAllowedError' ? 'Passkey login was cancelled' : (e.message || 'Passkey login failed');
+                err.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Sign in with passkey';
             }
         }
     </script>

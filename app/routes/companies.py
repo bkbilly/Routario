@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 from core.database import get_db
 from core.auth import require_admin
 from core.audit import write_audit_log
-from models import Company, User, Device, DeviceState
+from models import BillingPlan, Company, User, Device, DeviceState
 from models.schemas import CompanyCreate, CompanyUpdate, CompanyResponse, UserResponse, DeviceResponse
 
 router = APIRouter(prefix="/api/companies", tags=["companies"])
@@ -62,6 +62,15 @@ async def _ensure_login_slug_available(slug: str | None, exclude_company_id: int
             q = q.where(Company.id != exclude_company_id)
         if (await session.execute(q)).scalar_one_or_none():
             raise HTTPException(status_code=400, detail="Login URL slug already exists")
+
+
+async def _ensure_billing_plan_exists(plan_id: int | None):
+    if plan_id is None:
+        return
+    db = get_db()
+    async with db.get_session() as session:
+        if not await session.get(BillingPlan, plan_id):
+            raise HTTPException(status_code=400, detail="Billing plan not found")
 
 
 async def _store_branding_file(company: Company, upload: UploadFile, kind: str) -> str:
@@ -124,6 +133,7 @@ async def create_company(data: CompanyCreate, request: Request, admin: User = De
     data.app_name = _clean_app_name(data.app_name)
     data.login_slug = _clean_login_slug(data.login_slug)
     await _ensure_login_slug_available(data.login_slug)
+    await _ensure_billing_plan_exists(data.billing_plan_id)
     company = await db.create_company(data)
     await write_audit_log("company.created", actor=admin, company_id=company.id, target_type="company", target_id=company.id, request=request)
     return company
@@ -146,6 +156,8 @@ async def update_company(company_id: int, data: CompanyUpdate, request: Request,
     if "login_slug" in data.model_fields_set:
         data.login_slug = _clean_login_slug(data.login_slug)
         await _ensure_login_slug_available(data.login_slug, exclude_company_id=company_id)
+    if "billing_plan_id" in data.model_fields_set:
+        await _ensure_billing_plan_exists(data.billing_plan_id)
     company = await db.update_company(company_id, data)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")

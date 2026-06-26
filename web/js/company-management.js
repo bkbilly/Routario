@@ -63,7 +63,11 @@ async function loadAllDevices() {
 async function loadCompanyBillingPlans() {
     try {
         const res = await apiFetch(`${API_BASE}/billing/plans`);
-        if (res.ok) cmpBillingPlans = await res.json();
+        if (res.ok) {
+            cmpBillingPlans = await res.json();
+            renderCompanyBillingPlanOptions();
+            filterCompanies();
+        }
     } catch (e) { console.error(e); }
 }
 
@@ -95,6 +99,20 @@ function _companySortValue(c, col) {
 
 function _companyBillingPlanName(company) {
     return cmpBillingPlans.find(p => Number(p.id) === Number(company.billing_plan_id))?.name || '';
+}
+
+function renderCompanyBillingPlanOptions(selectedPlanId = '') {
+    const select = document.getElementById('companyBillingPlan');
+    if (!select) return;
+    const selected = selectedPlanId == null ? '' : String(selectedPlanId);
+    const options = ['<option value="">No billing plan</option>'];
+    cmpBillingPlans.forEach(plan => {
+        const value = String(plan.id);
+        const inactive = plan.is_active === false ? ' (inactive)' : '';
+        options.push(`<option value="${value}" ${value === selected ? 'selected' : ''}>${_esc(plan.name)}${inactive}</option>`);
+    });
+    select.innerHTML = options.join('');
+    select.value = selected;
 }
 
 function filterCompanies() {
@@ -151,6 +169,7 @@ function openAddCompanyModal() {
     document.getElementById('companyName').value          = '';
     document.getElementById('companyAppName').value       = '';
     document.getElementById('companyLoginSlug').value     = '';
+    renderCompanyBillingPlanOptions('');
     updateBrandingPreview(null);
     document.getElementById('deleteCompanyBtn').style.display = 'none';
     document.getElementById('cmpUsersTabBtn').style.display  = 'none';
@@ -169,6 +188,7 @@ async function openEditModal(companyId) {
     document.getElementById('companyName').value          = c.name;
     document.getElementById('companyAppName').value       = c.app_name || '';
     document.getElementById('companyLoginSlug').value     = c.login_slug || '';
+    renderCompanyBillingPlanOptions(c.billing_plan_id);
     updateBrandingPreview(c);
     document.getElementById('deleteCompanyBtn').style.display = 'inline-flex';
     document.getElementById('cmpUsersTabBtn').style.display  = '';
@@ -204,6 +224,8 @@ async function saveCompany() {
     const name = document.getElementById('companyName').value.trim();
     const appName = document.getElementById('companyAppName').value.trim();
     const loginSlug = document.getElementById('companyLoginSlug').value.trim().toLowerCase();
+    const billingPlanIdValue = document.getElementById('companyBillingPlan')?.value || '';
+    const billingPlanId = billingPlanIdValue ? Number(billingPlanIdValue) : null;
     if (!name) { showAlert('Company name is required', 'error'); return; }
 
     const saveBtn  = document.getElementById('saveCompanyBtn');
@@ -219,7 +241,12 @@ async function saveCompany() {
         const res = await apiFetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, app_name: appName || null, login_slug: loginSlug || null }),
+            body: JSON.stringify({
+                name,
+                app_name: appName || null,
+                login_slug: loginSlug || null,
+                billing_plan_id: billingPlanId,
+            }),
         });
         if (res.ok) {
             showAlert(editingCompanyId ? 'Company updated' : 'Company created', 'success');

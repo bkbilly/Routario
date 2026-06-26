@@ -72,7 +72,7 @@ async def login(form_data: UserLogin, request: Request):
         if fresh:
             fresh.last_login = datetime.utcnow()
 
-    from core.permissions import ALL_PERMISSIONS
+    from core.permissions import ALL_PERMISSIONS, valid_permissions
     await write_audit_log("auth.login", actor=user, request=request)
     return {
         "access_token": token,
@@ -85,5 +85,5 @@ async def login(form_data: UserLogin, request: Request):
         "company_id": getattr(user, "company_id", None),
         "units": getattr(user, "units", "metric") or "metric",
         "currency": getattr(user, "currency", "EUR") or "EUR",
-        "permissions": ALL_PERMISSIONS if user.is_admin else (user.permissions or []),
+        "permissions": ALL_PERMISSIONS if user.is_admin else valid_permissions(user.permissions or []),
     }

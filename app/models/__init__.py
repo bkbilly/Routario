@@ -3,7 +3,7 @@ from .models import (
     AlertHistory, CommandQueue, user_device_association, LocationShare,
     Driver, FuelLog, VoiceMessage, VoiceMessageRead, ScheduledReport,
     ScheduledReportRun, AuditLog, ApiKey, BillingPlan, UsageEvent,
-    BillingInvoice, CurrencyRate, PlannedRoute, RouteStop,
+    BillingInvoice, CurrencyRate, PlannedRoute, RouteStop, UserPasskey,
 )
 from .schemas import (
     NormalizedPosition, DeviceCreate, DeviceResponse, DeviceStateResponse,

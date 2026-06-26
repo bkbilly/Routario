@@ -960,6 +960,12 @@
                     <label class="form-label">Login URL Slug</label>
                     <input type="text" class="form-input" id="companyLoginSlug" maxlength="100" placeholder="acme" autocapitalize="none" autocorrect="off" spellcheck="false">
                 </div>
+                <div class="form-group">
+                    <label class="form-label">Billing Plan</label>
+                    <select class="form-input" id="companyBillingPlan">
+                        <option value="">No billing plan</option>
+                    </select>
+                </div>
                 <div class="form-group" id="companyBrandingControls" style="display:none;">
                     <label class="form-label">Branding</label>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
@@ -1248,34 +1254,6 @@
     </div>
 </div>
 
-<div class="modal" id="billingPlanDetailsModal">
-    <div class="modal-content" style="max-width:900px;height:auto;max-height:90vh;">
-        <div class="modal-header">
-            <h2 class="modal-title" id="billingPlanDetailsTitle">Billing Plan Details</h2>
-            <button type="button" class="modal-close" onclick="rtpClosePlanDetailsModal()"><i class="mdi mdi-close"></i></button>
-        </div>
-        <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
-            <div class="form-grid">
-                <label><span>Company</span><select id="billDetailCompany" class="form-input" onchange="rtpBillingCompanyChanged()"></select></label>
-                <label id="billDetailPlanWrap"><span>Billing Plan</span><select id="billDetailPlan" class="form-input"></select></label>
-                <label><span>Report Period</span><select id="billDetailPeriod" class="form-input" onchange="rtpUpdateBillingPeriodControls()"><option value="month">Month</option><option value="year">Year</option></select></label>
-                <label><span>Year</span><input id="billDetailYear" class="form-input" type="number"></label>
-                <label id="billDetailMonthWrap"><span>Month</span><input id="billDetailMonth" class="form-input" type="number" min="1" max="12"></label>
-            </div>
-            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
-                <button type="button" class="btn btn-primary" onclick="rtpDetailGenerateBillingSummary()"><i class="mdi mdi-calculator-variant"></i> Generate Billing Summary</button>
-                <button type="button" class="btn btn-secondary" onclick="rtpPrintBillingDetails()"><i class="mdi mdi-printer"></i> Printable Report</button>
-            </div>
-            <div id="billingPlanDetailsResult" class="stack-list"></div>
-        </div>
-        <div class="modal-footer">
-            <div style="display:flex;gap:0.75rem;margin-left:auto;">
-                <button type="button" class="btn btn-secondary" onclick="rtpClosePlanDetailsModal()">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <div class="toast-container" id="toastContainer"></div>
 
 <script src="js/config.js"></script>
@@ -1315,7 +1293,7 @@
         companies: null,
         drivers:   'manage_drivers',
         routes:    'manage_routes',
-        billing:   'manage_billing',
+        billing:   null,
     };
 
     const _sectionPermissions = {
@@ -1324,12 +1302,13 @@
         drivers:   'manage_drivers',
         clips:     null,
         routes:    'manage_routes',
-        billing:   'manage_billing',
+        billing:   null,
     };
 
     function _canAccessSection(name) {
         const perm = _sectionPermissions[name];
         if (name === 'companies') return localStorage.getItem('is_admin') === 'true';
+        if (name === 'billing') return localStorage.getItem('is_admin') === 'true';
         return !perm || hasPermission(perm);
     }
 
@@ -1385,11 +1364,12 @@
         }
         [
             ['Routes', 'manage_routes'],
-            ['Billing', 'manage_billing'],
         ].forEach(([name, perm]) => {
             const t = document.getElementById('mgmtTab' + name);
             if (t && hasPermission(perm)) t.style.display = '';
         });
+        const billingTab = document.getElementById('mgmtTabBilling');
+        if (billingTab && isAdmin) billingTab.style.display = '';
         if (!hasPermission('manage_drivers')) {
             const t = document.getElementById('mgmtTabDrivers');
             if (t) t.style.display = 'none';
@@ -1413,7 +1393,6 @@
         }
         const closers = [
             ['exchangeRatesModal', () => rtpCloseExchangeRatesModal()],
-            ['billingPlanDetailsModal', () => rtpClosePlanDetailsModal()],
             ['billingPlanModal', () => rtpClosePlanModal()],
             ['routeDetailsModal', () => rtpCloseRouteDetails()],
             ['routeModal',       () => rtpCloseRouteModal()],

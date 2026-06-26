@@ -92,6 +92,22 @@ class User(Base):
     company:       Mapped[Optional["Company"]]  = relationship(back_populates="users")
     devices:       Mapped[List["Device"]]       = relationship(secondary=user_device_association, back_populates="users")
     alert_history: Mapped[List["AlertHistory"]] = relationship(back_populates="user")
+    passkeys:      Mapped[List["UserPasskey"]]  = relationship(back_populates="user", cascade="all, delete-orphan")
+
+
+class UserPasskey(Base):
+    __tablename__ = 'user_passkeys'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    credential_id: Mapped[str] = mapped_column(String(512), unique=True, nullable=False, index=True)
+    public_key: Mapped[str] = mapped_column(Text, nullable=False)
+    sign_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped["User"] = relationship(back_populates="passkeys")
 
 
 class Driver(Base):

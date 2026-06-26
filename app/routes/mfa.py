@@ -30,13 +30,13 @@ def _require_mfa_permission(user: User) -> None:
 
 
 async def _get_manageable_user(target_user_id: int, current_user: User) -> User:
-    _require_mfa_permission(current_user)
     db = get_db()
     target = await db.get_user(target_user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     if target.id == current_user.id:
         return target
+    _require_mfa_permission(current_user)
     if not current_user.is_admin and "manage_users" not in (current_user.permissions or []):
         raise HTTPException(status_code=403, detail="Permission required: manage_users")
     if current_user.is_company_admin and target.company_id != current_user.company_id:
@@ -48,7 +48,6 @@ async def _get_manageable_user(target_user_id: int, current_user: User) -> User:
 
 @router.post("/setup")
 async def setup_mfa(current_user: User = Depends(get_current_user)):
-    _require_mfa_permission(current_user)
     if current_user.mfa_enabled:
         raise HTTPException(status_code=400, detail="MFA is already enabled")
     secret = generate_totp_secret()
@@ -68,7 +67,6 @@ async def setup_mfa(current_user: User = Depends(get_current_user)):
 
 @router.post("/enable")
 async def enable_mfa(data: MfaVerifyRequest, current_user: User = Depends(get_current_user)):
-    _require_mfa_permission(current_user)
     if current_user.mfa_enabled:
         return {"status": "enabled"}
     if not current_user.mfa_secret or not verify_totp(current_user.mfa_secret, data.code):
@@ -83,7 +81,6 @@ async def enable_mfa(data: MfaVerifyRequest, current_user: User = Depends(get_cu
 
 @router.post("/disable")
 async def disable_mfa(data: MfaVerifyRequest, current_user: User = Depends(get_current_user)):
-    _require_mfa_permission(current_user)
     valid = False
     if current_user.mfa_secret and verify_totp(current_user.mfa_secret, data.code):
         valid = True
@@ -103,7 +100,6 @@ async def disable_mfa(data: MfaVerifyRequest, current_user: User = Depends(get_c
 
 @router.get("/status")
 async def mfa_status(current_user: User = Depends(get_current_user)):
-    _require_mfa_permission(current_user)
     return {"enabled": bool(current_user.mfa_enabled)}
 
 
