@@ -17,6 +17,8 @@ let dashboardRouteEditorTileLayer = null;
 let dashboardRouteEditorStopLayer = null;
 let dashboardRouteEditorLine = null;
 let dashboardRouteEditorGeometry = null;
+let dashboardRouteEditorPreviewTimer = null;
+let dashboardRouteEditorPreviewSignature = '';
 
 try {
     dashboardRouteBroadcast = new BroadcastChannel('routario_route_updates');
@@ -733,6 +735,40 @@ function dashboardRouteStopSignature(stops) {
     ].join(',')).join('|');
 }
 
+function scheduleDashboardRouteEditorPreview(stops, signature) {
+    if (dashboardRouteEditorReadonlyState || stops.length < 2) return;
+    clearTimeout(dashboardRouteEditorPreviewTimer);
+    dashboardRouteEditorPreviewSignature = signature;
+    dashboardRouteEditorPreviewTimer = setTimeout(async () => {
+        try {
+            const previewStops = stops.map((stop, index) => ({
+                sequence: index,
+                name: stop.name || `Stop ${index + 1}`,
+                latitude: Number(stop.latitude),
+                longitude: Number(stop.longitude),
+                stop_kind: stop.stop_kind || 'stop',
+                arrival_radius_m: Number(stop.arrival_radius_m || 50),
+                service_minutes: 0,
+                dwell_seconds: 0,
+            }));
+            const res = await apiFetch(`${API_BASE}/planned-routes/preview`, {
+                method: 'POST',
+                body: JSON.stringify({ stops: previewStops }),
+            });
+            if (!res.ok) return;
+            const preview = await res.json();
+            if (dashboardRouteEditorPreviewSignature !== signature) return;
+            dashboardRouteEditorGeometry = {
+                geometry: preview.route_geometry,
+                signature,
+            };
+            refreshDashboardRouteEditorMap({ schedulePreview: false });
+        } catch (_) {
+            // Keep the direct polyline fallback if preview routing is unavailable.
+        }
+    }, 500);
+}
+
 function initDashboardRouteEditorMap() {
     if (dashboardRouteEditorMap || !window.L || !document.getElementById('dashboardRouteEditorMap')) return;
     dashboardRouteEditorMap = L.map('dashboardRouteEditorMap', { zoomControl: true, attributionControl: true }).setView([39.0742, 21.8243], 6);
@@ -774,7 +810,7 @@ function dashboardRouteEditorStopIcon(index, stop) {
     });
 }
 
-function refreshDashboardRouteEditorMap({ fit = false } = {}) {
+function refreshDashboardRouteEditorMap({ fit = false, schedulePreview = true } = {}) {
     if (!dashboardRouteEditorMap || !dashboardRouteEditorStopLayer) return;
     refreshDashboardRouteStopSummaries();
     dashboardRouteEditorStopLayer.clearLayers();
@@ -841,6 +877,9 @@ function refreshDashboardRouteEditorMap({ fit = false } = {}) {
 
     if (fit && latLngs.length) {
         dashboardRouteEditorMap.fitBounds(L.latLngBounds([...latLngs, ...geometryLatLngs]).pad(0.2), { maxZoom: 15 });
+    }
+    if (schedulePreview && stops.length > 1) {
+        scheduleDashboardRouteEditorPreview(stops, dashboardRouteStopSignature(geometryStops));
     }
 }
 
