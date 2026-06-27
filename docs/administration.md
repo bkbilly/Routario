@@ -141,7 +141,7 @@ Available key scopes:
 | `commands:send` | Send device commands |
 | `reports:read` | Run reports |
 | `routes:read` | Read planned routes |
-| `routes:write` | Create and update planned routes |
+| `routes:write` | Create, update, and delete planned routes |
 | `billing:read` | Read billing data |
 
 API keys are shown only once when created. Stored keys are hashed, can be expired, and can be revoked.
@@ -204,12 +204,13 @@ The readiness payload also includes:
 
 ## Route Planning
 
-Users with **Manage Routes** can create planned routes with stops, assign them to devices and drivers, preview route geometry, and track route status.
+Users with **Manage Routes** can create planned routes with stops, assign them to vehicles, preview route geometry, and track route status.
 
 - Planned routes are company-scoped.
 - Route geometry uses Valhalla when available and falls back to straight-line geometry when routing is unavailable.
-- Routes can be moved through statuses such as planned, started, paused, completed, and cancelled.
-- Once a route is started or paused, core route details such as name, assigned device, assigned driver, and stops cannot be edited.
+- Unassigned routes are saved as `draft`; assigned routes are saved as `planned`.
+- Active routes can be paused, resumed, finished as `completed`, or reset back to `planned`/`draft` based on assignment.
+- Once a route is active or paused, core route details such as name, assigned vehicle, and stops cannot be edited.
 - Starting a route requires an assigned vehicle.
 
 ---

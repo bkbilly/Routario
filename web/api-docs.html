@@ -69,6 +69,7 @@ Content-Type: application/json</pre>
         <tr><td class="method post">POST</td><td><code>/api/positions/history</code></td><td>Read historical positions for a device/date range.</td></tr>
         <tr><td class="method get">GET</td><td><code>/api/reports/types</code></td><td>List available backend-defined reports.</td></tr>
         <tr><td class="method get">GET</td><td><code>/api/planned-routes</code></td><td>List planned routes.</td></tr>
+        <tr><td class="method post">POST</td><td><code>/api/planned-routes/preview</code></td><td>Preview route geometry from ordered stops.</td></tr>
         <tr><td class="method post">POST</td><td><code>/api/planned-routes</code></td><td>Create a route with ordered stops.</td></tr>
         <tr><td class="method put">PUT</td><td><code>/api/planned-routes/{route_id}</code></td><td>Update route assignment, status, or stops.</td></tr>
         <tr><td class="method delete">DELETE</td><td><code>/api/planned-routes/{route_id}</code></td><td>Delete a planned route.</td></tr>
@@ -82,12 +83,12 @@ Content-Type: application/json</pre>
   -d '{
     "name": "Morning route",
     "device_id": 12,
-    "driver_id": 4,
     "stops": [
       {"sequence": 0, "name": "Depot", "latitude": 37.9838, "longitude": 23.7275},
       {"sequence": 1, "name": "Customer", "latitude": 38.0500, "longitude": 23.8000}
     ]
   }'</pre>
+    <p>Routes with an assigned <code>device_id</code> are saved as <code>planned</code>. Unassigned routes are saved as <code>draft</code>. Route geometry uses Valhalla when available and falls back to straight-line geometry.</p>
 
     <h2>Built-In OpenAPI</h2>
     <p>FastAPI also exposes generated schema and interactive API docs at <a href="/docs">/docs</a> and <a href="/openapi.json">/openapi.json</a>.</p>
