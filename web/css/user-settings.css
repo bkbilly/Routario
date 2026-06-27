@@ -1452,7 +1452,7 @@ input:checked + .slider:before {
 
     .modal-content {
         width: 95%;
-        padding: 1.5rem;
+        padding: 0;
     }
 
     .toast-container {

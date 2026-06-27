@@ -14,7 +14,7 @@ let notificationSort = { col: 'name', dir: 1 };
 let webhookSort = { col: 'url', dir: 1 };
 let settingsApiKeySort = { col: 'name', dir: 1 };
 let currentSettingsTab = 'profile';
-const SETTINGS_TABS = ['profile', 'users', 'notifications', 'webhooks', 'apiKeys', 'backups'].map(name => ({
+const SETTINGS_TABS = ['profile', 'users', 'webhooks', 'apiKeys', 'backups'].map(name => ({
     name,
     panelId: `settings-section-${name}`,
     tabId: 'settingsTab' + name.charAt(0).toUpperCase() + name.slice(1),
@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (ch) ch.style.display = '';
     }
     const hash = normalizeSettingsTab(RoutarioTabs.hashValue());
-    switchSettingsTab(['profile', 'users', 'notifications', 'webhooks', 'apiKeys', 'backups'].includes(hash) ? hash : currentSettingsTab, false);
+    switchSettingsTab(['profile', 'users', 'webhooks', 'apiKeys', 'backups'].includes(hash) ? hash : currentSettingsTab, false);
 });
 
 document.addEventListener('keydown', e => {
@@ -96,7 +96,7 @@ document.addEventListener('keydown', e => {
 function switchSettingsTab(name, pushState = true) {
     name = normalizeSettingsTab(name);
     const fallback = 'profile';
-    const sections = ['profile', 'users', 'notifications', 'webhooks', 'apiKeys', 'backups'];
+    const sections = ['profile', 'users', 'webhooks', 'apiKeys', 'backups'];
     if (!sections.includes(name)) name = fallback;
     if (name === 'users' && !hasPermission('manage_users')) name = fallback;
     if (name === 'backups' && !((IS_ADMIN || IS_COMPANY_ADMIN) && hasPermission('manage_backups'))) name = fallback;
@@ -137,11 +137,6 @@ function updateSettingsGearAction(name = currentSettingsTab) {
             icon: 'mdi-account-plus',
             fn: 'openUserModal()',
         } : null,
-        notifications: {
-            label: 'Add Notification Channel',
-            icon: 'mdi-bell-plus',
-            fn: 'openChannelModal()',
-        },
         webhooks: {
             label: 'Add Webhook',
             icon: 'mdi-link-plus',

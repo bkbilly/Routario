@@ -408,13 +408,48 @@ body::before {
 .selected-route-status {
     flex: 0 0 auto;
     padding: 0.15rem 0.45rem;
-    border: 1px solid rgba(56, 189, 248, 0.35);
     border-radius: 4px;
-    color: #7dd3fc;
-    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    color: #cbd5e1;
+    background: rgba(148, 163, 184, 0.12);
     font-size: 0.65rem;
     font-weight: 800;
     text-transform: uppercase;
+}
+
+.selected-route-status.status-draft,
+.dashboard-route-status.status-draft {
+    border-color: rgba(148, 163, 184, 0.38);
+    color: #cbd5e1;
+    background: rgba(148, 163, 184, 0.12);
+}
+
+.selected-route-status.status-planned,
+.dashboard-route-status.status-planned {
+    border-color: rgba(59, 130, 246, 0.38);
+    color: #93c5fd;
+    background: rgba(59, 130, 246, 0.13);
+}
+
+.selected-route-status.status-active,
+.dashboard-route-status.status-active {
+    border-color: rgba(6, 182, 212, 0.42);
+    color: #67e8f9;
+    background: rgba(6, 182, 212, 0.15);
+}
+
+.selected-route-status.status-paused,
+.dashboard-route-status.status-paused {
+    border-color: rgba(245, 158, 11, 0.42);
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.15);
+}
+
+.selected-route-status.status-completed,
+.dashboard-route-status.status-completed {
+    border-color: rgba(34, 197, 94, 0.42);
+    color: #4ade80;
+    background: rgba(34, 197, 94, 0.15);
 }
 
 .selected-route-progress-bar {
@@ -486,6 +521,423 @@ body::before {
     line-height: 1;
 }
 
+.dashboard-routes-modal {
+    max-width: 760px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    max-height: 82vh;
+    overflow: hidden;
+}
+
+.dashboard-routes-modal .modal-header {
+    padding: 1.25rem 1.5rem 0.85rem;
+    flex-shrink: 0;
+}
+
+.dashboard-routes-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.9rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.dashboard-routes-toolbar .search-input-wrap {
+    flex: 1;
+    min-width: 0;
+}
+
+.dashboard-routes-count {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.dashboard-route-editor-modal,
+.dashboard-route-details-modal {
+    max-width: 860px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+    overflow: hidden;
+}
+
+.dashboard-route-editor-modal .modal-header,
+.dashboard-route-details-modal .modal-header {
+    padding: 1.25rem 1.5rem 0.85rem;
+    flex-shrink: 0;
+}
+
+.dashboard-route-editor-body,
+.dashboard-route-details-body {
+    padding: 1rem 1.5rem 1.25rem;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.dashboard-route-editor-grid,
+.dashboard-route-details-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.dashboard-route-stops-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 0.6rem 0 0.75rem;
+}
+
+.dashboard-route-stops-head h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.dashboard-route-editor-map-wrap {
+    position: relative;
+    height: min(42vh, 360px);
+    min-height: 260px;
+    margin: 0.85rem 0;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-tertiary);
+}
+
+#dashboardRouteEditorMap {
+    width: 100%;
+    height: 100%;
+}
+
+.dashboard-route-map-hint {
+    position: absolute;
+    left: 0.75rem;
+    bottom: 0.75rem;
+    z-index: 500;
+    max-width: calc(100% - 1.5rem);
+    padding: 0.35rem 0.55rem;
+    border: 1px solid rgba(15, 23, 42, 0.3);
+    border-radius: 6px;
+    background: rgba(15, 23, 42, 0.78);
+    color: #e5e7eb;
+    font-size: 0.72rem;
+    font-weight: 600;
+    pointer-events: none;
+}
+
+.dashboard-route-stops {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+}
+
+.dashboard-route-stop-row {
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.dashboard-route-stop-summary {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    gap: 0.6rem;
+    align-items: center;
+    padding: 0.65rem 0.75rem;
+    cursor: pointer;
+}
+
+.dashboard-route-stop-summary:hover {
+    background: var(--bg-hover);
+}
+
+.dashboard-route-stop-index {
+    display: inline-flex;
+    width: 24px;
+    height: 24px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(56, 189, 248, 0.16);
+    color: #7dd3fc;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.dashboard-route-stop-summary-main {
+    min-width: 0;
+}
+
+.dashboard-route-stop-summary-title {
+    color: var(--text-primary);
+    font-weight: 700;
+    font-size: 0.84rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dashboard-route-stop-summary-meta {
+    margin-top: 0.1rem;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+}
+
+.dashboard-route-stop-toggle {
+    color: var(--text-muted);
+    transition: transform var(--transition-fast);
+}
+
+.dashboard-route-stop-row.expanded .dashboard-route-stop-toggle {
+    transform: rotate(180deg);
+}
+
+.dashboard-route-stop-fields {
+    display: none;
+    grid-template-columns: minmax(130px, 1fr) 104px 104px 42px;
+    gap: 0.5rem;
+    align-items: end;
+    padding: 0 0.75rem 0.75rem;
+}
+
+.dashboard-route-stop-row.expanded .dashboard-route-stop-fields {
+    display: grid;
+}
+
+.dashboard-route-stop-fields label {
+    min-width: 0;
+}
+
+.dashboard-route-stop-fields label span {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-bottom: 0.28rem;
+}
+
+.dashboard-route-stop-fields .form-input {
+    min-width: 0;
+}
+
+.dashboard-route-stop-fields .btn {
+    min-width: 0;
+    height: 38px;
+    padding: 0;
+    justify-content: center;
+}
+
+.dashboard-routes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    padding: 1rem 1.5rem 1.25rem;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.dashboard-route-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.85rem;
+    align-items: center;
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 0.85rem;
+    cursor: pointer;
+    transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.dashboard-route-row:hover {
+    border-color: var(--accent-primary);
+    background: var(--bg-hover);
+}
+
+.dashboard-route-main {
+    min-width: 0;
+}
+
+.dashboard-route-title {
+    color: var(--text-primary);
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dashboard-route-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
+    margin-top: 0.35rem;
+    color: var(--text-muted);
+    font-size: 0.76rem;
+}
+
+.dashboard-route-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.16rem 0.45rem;
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 4px;
+    color: #7dd3fc;
+    background: rgba(56, 189, 248, 0.1);
+    font-size: 0.66rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.dashboard-route-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.dashboard-route-actions .btn {
+    padding: 0.45rem 0.65rem;
+    font-size: 0.75rem;
+    min-height: 34px;
+}
+
+.dashboard-route-editor-footer-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.dashboard-routes-empty {
+    color: var(--text-muted);
+    text-align: center;
+    padding: 2rem 1rem;
+}
+
+.dashboard-route-detail-section {
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 0.85rem;
+}
+
+.dashboard-route-detail-label {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.dashboard-route-detail-value {
+    color: var(--text-primary);
+    font-weight: 700;
+    margin-top: 0.2rem;
+}
+
+.dashboard-route-stops-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    min-width: 760px;
+}
+
+.dashboard-route-stops-table th,
+.dashboard-route-stops-table td {
+    padding: 0.55rem;
+    border-bottom: 1px solid var(--border-color);
+    text-align: left;
+    font-size: 0.78rem;
+}
+
+.dashboard-route-stops-table th {
+    color: var(--text-muted);
+    font-weight: 800;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+}
+
+@media (max-width: 620px) {
+    .dashboard-routes-modal {
+        width: 95%;
+    }
+
+    .dashboard-routes-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .dashboard-routes-count {
+        white-space: normal;
+    }
+
+    .dashboard-route-row {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-route-actions {
+        justify-content: stretch;
+    }
+
+    .dashboard-route-actions .btn {
+        flex: 1 1 46%;
+        justify-content: center;
+        padding: 0.45rem 0.4rem;
+        white-space: nowrap;
+    }
+
+    .dashboard-route-editor-grid,
+    .dashboard-route-details-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-route-stop-fields {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .dashboard-route-stop-fields label:first-child {
+        grid-column: 1 / -1;
+    }
+
+    .dashboard-route-stop-fields .btn {
+        grid-column: 2;
+    }
+
+    .dashboard-route-editor-modal .modal-footer {
+        align-items: stretch;
+        flex-direction: column;
+        padding: 0.85rem;
+    }
+
+    .dashboard-route-editor-footer-actions {
+        width: 100%;
+        margin-left: 0;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .dashboard-route-editor-footer-actions .btn,
+    #dashboardRouteDeleteBtn {
+        width: 100%;
+        justify-content: center;
+        min-width: 0;
+        padding-left: 0.45rem;
+        padding-right: 0.45rem;
+        white-space: nowrap;
+    }
+
+    #dashboardRouteSaveBtn {
+        grid-column: 1 / -1;
+    }
+}
+
 @media (max-width: 420px) {
     .selected-route-actions {
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -533,6 +985,12 @@ body::before {
     font-size: 0.72rem;
     font-weight: 800;
 }
+
+.route-plan-stop-marker.pending span { background: #38bdf8; }
+.route-plan-stop-marker.arrived span { background: #f59e0b; }
+.route-plan-stop-marker.done span { background: #10b981; }
+.route-plan-stop-marker.waypoint.pending span { background: #f59e0b; }
+.route-plan-stop-marker.waypoint.arrived span { background: #f97316; }
 
 .device-header {
     display: flex;
@@ -1458,6 +1916,27 @@ body::before {
 .sort-select option {
     background: var(--bg-tertiary);
     color: var(--text-primary);
+}
+
+.route-panel-close-btn {
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: border-color var(--transition-base), color var(--transition-base), background var(--transition-base);
+}
+
+.route-panel-close-btn:hover {
+    border-color: var(--accent-danger);
+    color: var(--accent-danger);
+    background: rgba(239, 68, 68, 0.08);
 }
 
 

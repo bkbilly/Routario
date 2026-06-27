@@ -26,7 +26,6 @@
         <div class="mgmt-tabs settings-tabs" id="settingsTabs">
             <button class="mgmt-tab settings-tab active" onclick="switchSettingsTab('profile')" id="settingsTabProfile"><i class="mdi mdi-account-circle"></i> Profile</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('users')" id="settingsTabUsers" style="display:none;"><i class="mdi mdi-account-group"></i> Users</button>
-            <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('notifications')" id="settingsTabNotifications"><i class="mdi mdi-bell"></i> Notifications</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('webhooks')" id="settingsTabWebhooks"><i class="mdi mdi-link-variant"></i> Webhooks</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('apiKeys')" id="settingsTabApiKeys" style="display:none;"><i class="mdi mdi-key-variant"></i> API Keys</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('backups')" id="settingsTabBackups" style="display:none;"><i class="mdi mdi-database-arrow-down"></i> Backups</button>
@@ -132,7 +131,7 @@
             </div>
 
             <!-- Notifications -->
-            <div class="settings-section" id="settings-section-notifications">
+            <div class="settings-section" id="settings-section-notifications" style="display:none;">
                 <p class="settings-section-description">
                     Configure services to receive alerts, such as Telegram, Discord, or Email.
                     <a href="https://appriseit.com/services/" target="_blank">Read Apprise Documentation</a>
