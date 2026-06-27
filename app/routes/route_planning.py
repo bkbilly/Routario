@@ -191,6 +191,10 @@ async def _assert_company_objects(company_id: Optional[int], device_id: Optional
                 raise HTTPException(status_code=400, detail="Device does not belong to route company")
 
 
+def _assignment_status(device_id: Optional[int]) -> str:
+    return "planned" if device_id is not None else "draft"
+
+
 @router.get("")
 async def list_routes(
     status: Optional[str] = Query(None),
@@ -236,12 +240,15 @@ async def create_route(data: PlannedRouteIn, request: Request, current_user: Use
     geometry, distance, duration = await _calculate_route(data.stops)
     db = get_db()
     async with db.get_session() as session:
+        status = data.status
+        if status in {"draft", "planned"}:
+            status = _assignment_status(data.device_id)
         route = PlannedRoute(
             company_id=company_id,
             name=data.name,
             device_id=data.device_id,
             driver_id=None,
-            status=data.status,
+            status=status,
             route_geometry=geometry,
             distance_km=distance,
             duration_minutes=duration,
@@ -307,15 +314,21 @@ async def update_route(route_id: int, data: PlannedRouteUpdate, request: Request
             route.driver_id = None
         previous_status = route.status
         if data.status is not None:
-            route.status = data.status
-            if (
-                previous_status in {"completed", "cancelled"}
-                and data.status not in {"completed", "cancelled"}
-            ):
-                for stop in route.stops or []:
-                    stop.status = "pending"
-                    stop.arrived_at = None
-                    stop.completed_at = None
+            route.status = (
+                _assignment_status(route.device_id)
+                if data.status in {"draft", "planned"}
+                else data.status
+            )
+        elif "device_id" in data.model_fields_set and route.status in {"draft", "planned"}:
+            route.status = _assignment_status(data.device_id)
+        if (
+            previous_status in {"completed", "cancelled"}
+            and route.status not in {"completed", "cancelled"}
+        ):
+            for stop in route.stops or []:
+                stop.status = "pending"
+                stop.arrived_at = None
+                stop.completed_at = None
         if data.stops is not None:
             await session.execute(delete(RouteStop).where(RouteStop.route_id == route.id))
             geometry, distance, duration = await _calculate_route(data.stops)

@@ -480,7 +480,7 @@ function rtpClearRouteForm() {
 }
 
 function rtpIsRouteLocked(status) {
-    return ['active', 'started', 'in_progress', 'paused', 'stopped'].includes(String(status || '').toLowerCase());
+    return ['active', 'paused'].includes(String(status || '').toLowerCase());
 }
 
 function rtpSetRouteReadonly(readonly) {
@@ -551,6 +551,10 @@ function rtpCompanyForSelectedRouteDevice() {
     return device?.company_id || rtpCurrentCompanyId();
 }
 
+function rtpRouteAssignmentStatus(deviceId) {
+    return deviceId ? 'planned' : 'draft';
+}
+
 function rtpRouteActions(route) {
     const status = String(route.status || 'draft').toLowerCase();
     const isEditable = !rtpIsRouteLocked(status);
@@ -560,10 +564,10 @@ function rtpRouteActions(route) {
     if ((status === 'planned' || status === 'draft') && route.device_id) {
         actions.push(`<button class="btn btn-secondary" onclick="rtpStartRoute(${route.id})"><i class="mdi mdi-play"></i> Start</button>`);
     }
-    if (status === 'active' || status === 'started' || status === 'in_progress') {
+    if (status === 'active') {
         actions.push(`<button class="btn btn-secondary" onclick="rtpSetRouteStatus(${route.id}, 'completed')"><i class="mdi mdi-flag-checkered"></i> Finish</button>`);
     }
-    if ((status === 'paused' || status === 'stopped') && route.device_id) {
+    if (status === 'paused' && route.device_id) {
         actions.push(`<button class="btn btn-secondary" onclick="rtpStartRoute(${route.id})"><i class="mdi mdi-play"></i> Resume</button>`);
     }
     if (status === 'completed') {
@@ -579,11 +583,10 @@ function rtpRouteById(id) {
 
 function rtpRouteStatusClass(status) {
     const value = String(status || 'draft').toLowerCase();
-    if (value === 'active' || value === 'started' || value === 'in_progress') return 'route-status-active';
+    if (value === 'active') return 'route-status-active';
     if (value === 'planned' || value === 'draft') return 'route-status-planned';
-    if (value === 'paused' || value === 'stopped') return 'route-status-paused';
+    if (value === 'paused') return 'route-status-paused';
     if (value === 'completed') return 'route-status-completed';
-    if (value === 'cancelled') return 'route-status-cancelled';
     return 'route-status-default';
 }
 
@@ -704,7 +707,13 @@ async function rtpSaveRoute() {
             device_id: parseInt(document.getElementById('rpDevice').value || '0', 10) || null,
             stops,
         };
-        if (!_rtpEditingRouteId) payload.status = 'planned';
+        const currentRoute = _rtpEditingRouteId ? rtpRouteById(_rtpEditingRouteId) : null;
+        const currentStatus = String(currentRoute?.status || '').toLowerCase();
+        if (!_rtpEditingRouteId) {
+            payload.status = rtpRouteAssignmentStatus(payload.device_id);
+        } else if (currentStatus === 'draft' || currentStatus === 'planned') {
+            payload.status = rtpRouteAssignmentStatus(payload.device_id);
+        }
         const url = _rtpEditingRouteId ? `${API_BASE}/planned-routes/${_rtpEditingRouteId}` : `${API_BASE}/planned-routes`;
         await rtpJson(url, { method: _rtpEditingRouteId ? 'PUT' : 'POST', body: JSON.stringify(payload) });
         showAlert(_rtpEditingRouteId ? 'Route updated' : 'Route saved', 'success');

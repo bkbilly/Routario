@@ -178,6 +178,9 @@
                         <option value="lastseen">Recent</option>
                         <option value="status">Status</option>
                     </select>
+                    <button class="route-panel-close-btn" id="selectedRouteCloseBtn" onclick="closeSelectedDashboardRoutePanel()" title="Close route panel" style="display:none;">
+                        <i class="mdi mdi-close"></i>
+                    </button>
                 </div>
                 <div id="selectedRoutePanel" class="selected-route-panel" style="display:none;"></div>
                 <div class="device-list" id="deviceList"></div>
@@ -321,6 +324,13 @@
                         <span class="map-ctrl-badge" id="alertCount"></span>
                     </button>
                 </div>
+
+                <!-- Routes button; Voice PTT is injected immediately above this. -->
+                <div class="map-ctrl-bar">
+                    <button class="map-ctrl-btn" id="dashboardRoutesBtn" onclick="openDashboardRoutesModal()" title="Routes" style="display:none;">
+                        <i class="mdi mdi-map-marker-path" style="font-size:16px;"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- Geofence Edit Toolbar (shown when a geofence is selected) -->
@@ -391,6 +401,84 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Routes Modal -->
+    <div class="modal" id="dashboardRoutesModal">
+        <div class="modal-content dashboard-routes-modal">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <i class="mdi mdi-map-marker-path" style="color:var(--accent-primary);margin-right:0.4rem;"></i>
+                    Routes
+                </h2>
+                <button class="modal-close" onclick="closeDashboardRoutesModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="dashboard-routes-toolbar">
+                <div class="search-input-wrap">
+                    <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                    <input type="text" id="dashboardRoutesSearch" class="search-input" placeholder="Search by route, status, vehicle, or stops..." oninput="renderDashboardRoutesModal()">
+                </div>
+                <button type="button" class="btn btn-primary" id="dashboardRouteNewBtn" onclick="openDashboardRouteEditor()">
+                    <i class="mdi mdi-plus"></i> New Route
+                </button>
+                <span class="dashboard-routes-count" id="dashboardRoutesCount"></span>
+            </div>
+            <div class="dashboard-routes-list" id="dashboardRoutesList">
+                <div class="dashboard-routes-empty">Loading routes...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="dashboardRouteEditorModal">
+        <div class="modal-content dashboard-route-editor-modal">
+            <div class="modal-header">
+                <h2 class="modal-title" id="dashboardRouteEditorTitle">New Route</h2>
+                <button class="modal-close" onclick="closeDashboardRouteEditor()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="dashboard-route-editor-body">
+                <div class="dashboard-route-editor-grid">
+                    <div class="form-group">
+                        <label class="form-label">Route Name</label>
+                        <input type="text" id="dashboardRouteName" class="form-input" placeholder="Morning deliveries">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Vehicle</label>
+                        <select id="dashboardRouteDevice" class="form-input"></select>
+                    </div>
+                </div>
+                <div class="dashboard-route-editor-map-wrap">
+                    <div id="dashboardRouteEditorMap"></div>
+                    <div class="dashboard-route-map-hint" id="dashboardRouteMapHint">Click the map to add a stop. Drag markers to adjust points.</div>
+                </div>
+                <div class="dashboard-route-stops-head">
+                    <h3>Stops</h3>
+                </div>
+                <div class="dashboard-route-stops" id="dashboardRouteStops"></div>
+                <div class="dashboard-routes-empty" id="dashboardRouteEditorHint">Add at least two stops with valid coordinates.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" id="dashboardRouteDeleteBtn" onclick="deleteDashboardRouteFromEditor()" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+                <div class="dashboard-route-editor-footer-actions">
+                    <button type="button" class="btn btn-secondary" id="dashboardRouteDetailsBtn" onclick="openDashboardRouteEditorDetails()" style="display:none;"><i class="mdi mdi-clipboard-text-clock-outline"></i> Details</button>
+                    <button type="button" class="btn btn-secondary" id="dashboardRouteShowMapBtn" onclick="showDashboardRouteEditorRouteOnMap()" style="display:none;"><i class="mdi mdi-map-search-outline"></i> Show on Map</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeDashboardRouteEditor()">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="dashboardRouteSaveBtn" onclick="saveDashboardRouteEditor()"><i class="mdi mdi-content-save"></i> Save Route</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="dashboardRouteDetailsModal">
+        <div class="modal-content dashboard-route-details-modal">
+            <div class="modal-header">
+                <h2 class="modal-title" id="dashboardRouteDetailsTitle">Route Details</h2>
+                <button class="modal-close" onclick="closeDashboardRouteDetails()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="dashboard-route-details-body" id="dashboardRouteDetailsBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeDashboardRouteDetails()" style="margin-left:auto;">Close</button>
+            </div>
+        </div>
     </div>
 
     <!-- Alerts Modal -->

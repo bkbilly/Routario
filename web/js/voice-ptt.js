@@ -64,7 +64,12 @@
         const bar = document.createElement('div');
         bar.className = 'map-ctrl-bar';
         bar.innerHTML = btnHtml;
-        ctrlGroup.appendChild(bar);
+        const routesBar = document.getElementById('dashboardRoutesBtn')?.closest('.map-ctrl-bar');
+        if (routesBar && routesBar.parentElement === ctrlGroup) {
+            ctrlGroup.insertBefore(bar, routesBar);
+        } else {
+            ctrlGroup.appendChild(bar);
+        }
     }
 
     // ── Modal ─────────────────────────────────────────────────────

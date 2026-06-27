@@ -27,6 +27,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!hasPermission('view_management')) {
         document.getElementById('dashManagementLink')?.remove();
     }
+    if (hasPermission('view_management') && hasPermission('manage_routes')) {
+        document.getElementById('dashboardRoutesBtn')?.style.removeProperty('display');
+    }
 
     // Restore saved sort (fixes the bug where sort was highlighted but not active)
     const savedSort = localStorage.getItem('vehicleSortMode') || 'name';
@@ -77,6 +80,9 @@ document.addEventListener('keydown', (e) => {
     }
     
     const modalIds = [
+        'dashboardRouteDetailsModal',
+        'dashboardRouteEditorModal',
+        'dashboardRoutesModal',
         'lbFuelModal',
         'lbEntryModal',
         'alertsModal',
