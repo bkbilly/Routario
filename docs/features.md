@@ -129,11 +129,11 @@ Generate reports across your fleet for any time window:
 
 ## Route Planning
 
-- **Planned routes** — create multi-stop routes and assign them to vehicles and drivers.
+- **Planned routes** — create multi-stop routes from the dashboard route modal and assign them to vehicles.
 - **Route preview** — preview route geometry before dispatch. Valhalla is used when available, with a straight-line fallback when routing is unavailable.
-- **Route lifecycle** — track planned, started, paused, completed, and cancelled routes.
+- **Route lifecycle** — track draft, planned, active, paused, and completed routes.
 - **Scoped management** — routes are company-scoped and controlled by the Manage Routes permission or route API scopes.
-- **Clickable tables** — route rows open directly into edit details for faster dispatch workflows.
+- **Dashboard route tools** — open route edit/view modals, show routes on the map, and manage route actions without leaving the dashboard.
 - **Route alerts** — trigger alerts when a vehicle leaves its planned path or skips an earlier waypoint.
 
 ---

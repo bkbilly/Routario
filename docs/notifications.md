@@ -11,13 +11,13 @@ Each user configures their own set of **notification channels** — named URL en
 If no channels are configured or selected for an alert, Routario falls back to **browser push notifications** (if the user has granted permission and VAPID keys are configured on the server).
 
 !!! info "Per-user channels"
-    Channels are per-user. Each user manages their own notification URLs in **User Settings → Notification Channels**. Different users can receive the same alert via different services.
+    Channels are per-user. Each user manages their own notification URLs in **Management → Notifications**. Different users can receive the same alert via different services.
 
 ---
 
 ## Configuring Channels
 
-1. Go to **User Settings → Notification Channels**.
+1. Go to **Management → Notifications**.
 2. Enter a **name** (used to identify the channel in alert configuration) and an **Apprise URL**.
 3. Click **Add** — the channel is saved immediately.
 4. When configuring an alert rule on a device, select this channel name in the *Notify Via* dropdown.

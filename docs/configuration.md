@@ -95,11 +95,11 @@ Protocol ports are opened only for protocols used by active devices. Creating, u
 
 ---
 
-## Valhalla (Speed Limit Alerts)
+## Valhalla (Routing and Speed Limit Alerts)
 
 | Variable | Default | Description |
 |---|---|---|
-| `VALHALLA_URL` | `http://localhost:8002` | URL of the Valhalla routing engine |
+| `VALHALLA_URL` | `http://localhost:8002` | URL of the Valhalla routing engine used for route previews, planned route geometry, and speed limit lookups |
 | `VALHALLA_ENABLED` | `true` | Set to `false` to disable without removing config |
 
 ---

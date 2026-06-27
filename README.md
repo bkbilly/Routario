@@ -32,7 +32,7 @@ Routario connects directly to your GPS hardware over TCP/UDP and gives you a liv
 | 📣 | **Notifications** — Telegram, Discord, Email, Slack, browser push, and SIP voice calls. Route each alert to specific channels, schedule alerts by day and hour | |
 | 🚗 | **Driver management** — create driver profiles, assign to vehicles, track who drove which trip | |
 | 📋 | **Logbook** — service records, fuel fill-ups with consumption stats, and maintenance intervals per vehicle; with odometer, cost, date, and file attachments | |
-| 🧭 | **Route planning** — create multi-stop planned routes, assign vehicles and drivers, preview route geometry, track status, and trigger off-route or skipped-waypoint alerts | |
+| 🧭 | **Route planning** — create multi-stop planned routes, assign vehicles, preview route geometry, track status, and trigger off-route or skipped-waypoint alerts | |
 | 💳 | **Billing operations** — super-admin billing plan management, company plan assignment, usage tracking, invoices, billing status, and configurable exchange rates | |
 | ⚙️ | **Remote commands** — reboot, request position, set interval, and more from the dashboard | |
 | 🔗 | **Live sharing** — send a time-limited link; recipients see the live map with no login required | |
