@@ -19,6 +19,7 @@ let dashboardRouteEditorLine = null;
 let dashboardRouteEditorGeometry = null;
 let dashboardRouteEditorPreviewTimer = null;
 let dashboardRouteEditorPreviewSignature = '';
+let dashboardRouteDraggedStopRow = null;
 
 try {
     dashboardRouteBroadcast = new BroadcastChannel('routario_route_updates');
@@ -507,10 +508,15 @@ async function setDashboardRouteStatus(routeId, status) {
     }
 }
 
+function dashboardRouteIsViewOnly(route) {
+    const status = String(route?.status || '').toLowerCase();
+    return ['active', 'paused', 'completed'].includes(status);
+}
+
 function dashboardRouteModalActions(route) {
     const status = String(route.status || 'draft').toLowerCase();
     const canManage = routeCanManage();
-    const isEditable = !['active', 'paused'].includes(status);
+    const isEditable = !dashboardRouteIsViewOnly(route);
     const canStart = canManage && (status === 'planned' || status === 'draft') && route.device_id;
     const canPause = canManage && DASHBOARD_ACTIVE_ROUTE_STATUSES.has(status);
     const canResume = canManage && status === 'paused' && route.device_id;
@@ -636,6 +642,7 @@ function populateDashboardRouteDeviceSelect(selectedId = '') {
 
 function dashboardRouteEditorReadonly(readonly) {
     dashboardRouteEditorReadonlyState = Boolean(readonly);
+    document.getElementById('dashboardRouteEditorModal')?.classList.toggle('route-readonly', Boolean(readonly));
     document.querySelectorAll('#dashboardRouteEditorModal input, #dashboardRouteEditorModal select').forEach(el => {
         el.disabled = readonly;
         el.style.opacity = readonly ? '0.65' : '';
@@ -648,17 +655,62 @@ function dashboardRouteEditorReadonly(readonly) {
     const deleteBtn = document.getElementById('dashboardRouteDeleteBtn');
     if (deleteBtn && readonly) deleteBtn.style.display = 'none';
     const hint = document.getElementById('dashboardRouteMapHint');
-    if (hint) hint.textContent = readonly ? 'Route points are locked while this route is active or paused.' : 'Click the map to add a stop. Drag markers to adjust points.';
+    if (hint) hint.textContent = readonly ? 'Route points are locked in view mode.' : 'Click the map to add a stop. Drag markers to adjust points.';
+    document.querySelectorAll('#dashboardRouteEditorModal .dashboard-route-stop-drag').forEach(el => {
+        el.draggable = !readonly;
+        el.disabled = readonly;
+        el.style.display = readonly ? 'none' : '';
+    });
+}
+
+function initDashboardRouteStopDrag(wrap) {
+    if (!wrap || wrap.dataset.dragInitialized === '1') return;
+    wrap.dataset.dragInitialized = '1';
+    wrap.addEventListener('dragover', e => {
+        if (dashboardRouteEditorReadonlyState || !dashboardRouteDraggedStopRow) return;
+        e.preventDefault();
+        const afterRow = dashboardRouteStopRowAfterPointer(wrap, e.clientY);
+        if (afterRow) {
+            wrap.insertBefore(dashboardRouteDraggedStopRow, afterRow);
+        } else {
+            wrap.appendChild(dashboardRouteDraggedStopRow);
+        }
+    });
+    wrap.addEventListener('drop', e => {
+        if (!dashboardRouteDraggedStopRow) return;
+        e.preventDefault();
+        finishDashboardRouteStopDrag();
+    });
+}
+
+function dashboardRouteStopRowAfterPointer(wrap, y) {
+    return [...wrap.querySelectorAll('.dashboard-route-stop-row:not(.dragging)')]
+        .reduce((closest, row) => {
+            const box = row.getBoundingClientRect();
+            const offset = y - box.top - (box.height / 2);
+            if (offset < 0 && offset > closest.offset) return { offset, row };
+            return closest;
+        }, { offset: Number.NEGATIVE_INFINITY, row: null }).row;
+}
+
+function finishDashboardRouteStopDrag() {
+    if (!dashboardRouteDraggedStopRow) return;
+    dashboardRouteDraggedStopRow.classList.remove('dragging');
+    dashboardRouteDraggedStopRow = null;
+    refreshDashboardRouteStopSummaries();
+    refreshDashboardRouteEditorMap();
 }
 
 function addDashboardRouteStop(stop = {}) {
     const wrap = document.getElementById('dashboardRouteStops');
     if (!wrap) return;
+    initDashboardRouteStopDrag(wrap);
     const row = document.createElement('div');
     row.className = 'dashboard-route-stop-row';
     row.dataset.status = String(stop.status || 'pending').toLowerCase();
     row.innerHTML = `
         <div class="dashboard-route-stop-summary" onclick="toggleDashboardRouteStopRow(this.closest('.dashboard-route-stop-row'))">
+            <button type="button" class="dashboard-route-stop-drag" draggable="true" title="Reorder stop"><i class="mdi mdi-drag"></i></button>
             <span class="dashboard-route-stop-index"></span>
             <div class="dashboard-route-stop-summary-main">
                 <div class="dashboard-route-stop-summary-title"></div>
@@ -675,6 +727,19 @@ function addDashboardRouteStop(stop = {}) {
             <button type="button" class="btn btn-danger" onclick="this.closest('.dashboard-route-stop-row').remove(); refreshDashboardRouteEditorMap();" title="Remove stop"><i class="mdi mdi-delete"></i></button>
         </div>
     `;
+    const dragHandle = row.querySelector('.dashboard-route-stop-drag');
+    dragHandle.addEventListener('click', e => e.stopPropagation());
+    dragHandle.addEventListener('dragstart', e => {
+        if (dashboardRouteEditorReadonlyState) {
+            e.preventDefault();
+            return;
+        }
+        dashboardRouteDraggedStopRow = row;
+        row.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', '');
+    });
+    dragHandle.addEventListener('dragend', finishDashboardRouteStopDrag);
     row.querySelector('.rp-stop-kind').value = String(stop.stop_kind || 'stop').toLowerCase() === 'waypoint' ? 'waypoint' : 'stop';
     row.querySelectorAll('input, select').forEach(input => input.addEventListener('input', () => {
         refreshDashboardRouteStopSummaries();
@@ -889,8 +954,7 @@ async function openDashboardRouteEditor(routeId = null) {
     await loadDashboardRoutes({ force: !dashboardRoutesLoaded });
     dashboardRouteEditorId = routeId;
     const route = routeId ? dashboardRoutes.find(r => Number(r.id) === Number(routeId)) : null;
-    const status = String(route?.status || '').toLowerCase();
-    const readonly = route && ['active', 'paused'].includes(status);
+    const readonly = route && dashboardRouteIsViewOnly(route);
     document.getElementById('dashboardRouteEditorTitle').textContent = route ? (readonly ? 'View Route' : 'Edit Route') : 'New Route';
     document.getElementById('dashboardRouteName').value = route?.name || '';
     populateDashboardRouteDeviceSelect(route?.device_id || '');

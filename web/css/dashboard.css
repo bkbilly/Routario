@@ -644,17 +644,49 @@ body::before {
     overflow: hidden;
 }
 
+.dashboard-route-stop-row.dragging {
+    opacity: 0.55;
+}
+
 .dashboard-route-stop-summary {
     display: grid;
-    grid-template-columns: 32px minmax(0, 1fr) auto;
+    grid-template-columns: 30px 32px minmax(0, 1fr) auto;
     gap: 0.6rem;
     align-items: center;
     padding: 0.65rem 0.75rem;
     cursor: pointer;
 }
 
+.route-readonly .dashboard-route-stop-summary {
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+}
+
 .dashboard-route-stop-summary:hover {
     background: var(--bg-hover);
+}
+
+.dashboard-route-stop-drag {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: grab;
+    font-size: 1rem;
+    padding: 0;
+}
+
+.dashboard-route-stop-drag:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.dashboard-route-stop-drag:active {
+    cursor: grabbing;
 }
 
 .dashboard-route-stop-index {
