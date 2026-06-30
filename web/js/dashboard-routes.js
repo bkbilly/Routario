@@ -542,7 +542,6 @@ async function openDashboardRoutesModal() {
     const newBtn = document.getElementById('dashboardRouteNewBtn');
     if (newBtn) newBtn.style.display = routeCanManage() ? '' : 'none';
     renderDashboardRoutesModal();
-    setTimeout(() => document.getElementById('dashboardRoutesSearch')?.focus(), 50);
 }
 
 function closeDashboardRoutesModal() {
@@ -977,7 +976,6 @@ async function openDashboardRouteEditor(routeId = null) {
         dashboardRouteEditorMap?.invalidateSize();
         refreshDashboardRouteEditorMap({ fit: true });
     }, 100);
-    setTimeout(() => document.getElementById('dashboardRouteName')?.focus(), 50);
 }
 
 function closeDashboardRouteEditor() {
