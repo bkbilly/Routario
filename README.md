@@ -17,7 +17,7 @@
 
 Routario connects directly to your GPS hardware over TCP/UDP and gives you a live map, alerts, and history — all running on your own server.
 
-**Your fleet data never leaves your infrastructure.**
+**A live demo is available at https://bkbilly.github.io/Routario/demo/.**
 
 ---
 
