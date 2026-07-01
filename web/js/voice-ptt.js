@@ -60,7 +60,13 @@
             </button>`;
 
         const ctrlGroup = document.querySelector('.map-ctrl-group');
-        if (!ctrlGroup) return;
+        if (!ctrlGroup) {
+            const fixed = document.createElement('div');
+            fixed.className = 'ptt-fixed-bar';
+            fixed.innerHTML = btnHtml;
+            document.body.appendChild(fixed);
+            return;
+        }
         const bar = document.createElement('div');
         bar.className = 'map-ctrl-bar';
         bar.innerHTML = btnHtml;
