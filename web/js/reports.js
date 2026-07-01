@@ -1539,6 +1539,13 @@ function _updateSortHeaders(panelId, sortState) {
     RoutarioTables.updateSortHeaders(panelId, sortState);
 }
 
+function _defaultScheduleReportType() {
+    const currentType = document.getElementById('reportType')?.value || '';
+    const currentDef = _reportDefMap[currentType];
+    if (currentDef && currentDef.schedule_supported !== false) return currentType;
+    return _reportDefs.find(d => d.schedule_supported !== false)?.key || '';
+}
+
 async function openScheduleModal(scheduleIdOrObj) {
     let schedule = null;
     if (scheduleIdOrObj !== null && scheduleIdOrObj !== undefined) {
@@ -1573,7 +1580,7 @@ async function openScheduleModal(scheduleIdOrObj) {
         (schedule.filter_user_ids   || []).forEach(id => _sfSelectedUserIds.add(id));
     } else {
         document.getElementById('sfName').value        = '';
-        document.getElementById('sfType').value        = _reportDefs.find(d => d.schedule_supported !== false)?.key || '';
+        document.getElementById('sfType').value        = _defaultScheduleReportType();
         document.getElementById('sfHistorical').checked = false;
         document.getElementById('sfDateRange').value   = 'last_30_days';
         document.getElementById('sfFreq').value        = 'daily';

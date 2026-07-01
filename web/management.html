@@ -778,9 +778,22 @@
                 <div class="modal-tab-content" id="tab-alerts">
                     <div style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.25rem;">
                         <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);font-weight:600;margin-bottom:0.6rem;"><i class="mdi mdi-bell-plus"></i> Add Alert</div>
-                        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                            <select class="form-input" id="addAlertSelect" style="flex:1;min-width:180px;" onchange="onAddAlertSelectChange()"></select>
-                            <button type="button" class="btn btn-primary" onclick="addSelectedAlert()">Add</button>
+                        <div class="alert-add-row">
+                            <select class="form-input alert-add-select" id="addAlertSelect" onchange="onAddAlertSelectChange()"></select>
+                            <div class="alert-add-actions">
+                                <button type="button" class="btn btn-primary alert-add-btn" onclick="addSelectedAlert()">Add</button>
+                                <div class="alert-profile-menu-wrap">
+                                    <button type="button" class="btn btn-secondary alert-profile-trigger" onclick="toggleAlertProfileMenu(event)" aria-label="Alert profile actions" aria-expanded="false">
+                                        <i class="mdi mdi-dots-vertical"></i>
+                                    </button>
+                                    <div class="alert-profile-menu" id="alertProfileMenu">
+                                        <button type="button" class="alert-profile-menu-item" onclick="openAlertProfileDevicePicker()"><i class="mdi mdi-content-copy"></i> Copy from device</button>
+                                        <button type="button" class="alert-profile-menu-item" onclick="exportAlertProfile()"><i class="mdi mdi-download"></i> Export profile</button>
+                                        <button type="button" class="alert-profile-menu-item" onclick="document.getElementById('alertProfileImportInput').click()"><i class="mdi mdi-upload"></i> Import profile</button>
+                                        <input type="file" id="alertProfileImportInput" accept="application/json,.json" style="display:none;" onchange="importAlertProfileFile(event)">
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div id="customRuleFields" style="display:none;flex-direction:column;gap:0.6rem;margin-top:0.85rem;">
                             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
@@ -1465,6 +1478,8 @@
             return;
         }
         const closers = [
+            ['alertProfileMergeModal', () => closeAlertProfileMergeChoice()],
+            ['alertProfileDevicePickerModal', () => closeAlertProfileDevicePicker()],
             ['exchangeRatesModal', () => rtpCloseExchangeRatesModal()],
             ['billingPlanModal', () => rtpClosePlanModal()],
             ['routeDetailsModal', () => rtpCloseRouteDetails()],

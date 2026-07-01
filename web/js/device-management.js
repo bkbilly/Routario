@@ -435,6 +435,7 @@ function openAddDeviceModal() {
     alertRows = [];
     renderAlertsTable();
     populateAddAlertDropdown();
+    populateAlertProfileDeviceSelect();
     switchModalTab('general');
     document.getElementById('deviceModal').classList.add('active');
 }
@@ -507,6 +508,7 @@ function openDeviceModal(deviceId, startTab = 'general') {
     }
     if (isCompanyAdmin && !allUsersLoaded) loadDeviceAlertUsers(d.id);
     loadAlertsFromConfig(d.config || {});
+    populateAlertProfileDeviceSelect();
     switchModalTab(startTab);
     refreshNativeEventAlerts();
     document.getElementById('deviceModal').classList.add('active');
@@ -758,7 +760,7 @@ async function deleteCurrentDevice() {
 function loadAlertsFromConfig(config) {
     alertRows = [];
     if (Array.isArray(config.alert_rows)) {
-        config.alert_rows.forEach(r => alertRows.push({ ...r, uid: nextUid() }));
+        config.alert_rows.forEach(r => alertRows.push(_alertRowWithFreshUid(r)));
     } else {
         const ch = config.alert_channels || {};
         for (const [key] of Object.entries(ALERT_TYPES)) {
@@ -772,6 +774,396 @@ function loadAlertsFromConfig(config) {
     }
     renderAlertsTable();
     populateAddAlertDropdown();
+}
+
+function _cloneAlertRow(row) {
+    return JSON.parse(JSON.stringify(row || {}));
+}
+
+function _alertRowWithFreshUid(row) {
+    const clone = _cloneAlertRow(row);
+    clone.uid = nextUid();
+    return clone;
+}
+
+function _alertRowsForProfile(rows = alertRows) {
+    return rows.map(row => {
+        const clone = _cloneAlertRow(row);
+        delete clone.uid;
+        return clone;
+    });
+}
+
+function _userLabelForExport(id) {
+    const user = _findUserById(id);
+    return user?.username || user?.email || null;
+}
+
+async function _ensureUsersForAlertProfileRows(rows = alertRows) {
+    const myId = parseInt(localStorage.getItem('user_id'), 10);
+    const myName = localStorage.getItem('username');
+    if (myId && myName && !_findUserById(myId)) {
+        _mergeUsersIntoCache([{ id: myId, username: myName }]);
+    }
+
+    if (hasAdminAccess) {
+        if (isAdmin) await loadAllUsers();
+        else if (editingDeviceId) await loadDeviceAlertUsers(editingDeviceId);
+    }
+
+    const ids = new Set();
+    rows.forEach(row => (row.notify_user_ids || []).forEach(id => {
+        const numericId = _toId(id);
+        if (numericId !== null && !_userLabelForExport(numericId)) ids.add(numericId);
+    }));
+    if (ids.size) await Promise.all([...ids].map(loadNotifyUserById));
+}
+
+async function _alertRowsForExport(rows = alertRows) {
+    await _ensureUsersForAlertProfileRows(rows);
+    return rows.map(row => {
+        const clone = _cloneAlertRow(row);
+        delete clone.uid;
+        if (Array.isArray(clone.notify_user_ids)) {
+            clone.notify_users = clone.notify_user_ids
+                .map(_toId)
+                .filter(id => id !== null)
+                .map(_userLabelForExport)
+                .filter(Boolean);
+        }
+        delete clone.notify_user_ids;
+        return clone;
+    });
+}
+
+function _findUserByNameOrEmail(value) {
+    const needle = String(value || '').trim().toLowerCase();
+    if (!needle) return null;
+    return [...allUsers, ...deviceAlertUsers].find(u =>
+        String(u.username || '').trim().toLowerCase() === needle ||
+        String(u.email || '').trim().toLowerCase() === needle
+    ) || null;
+}
+
+async function _resolveImportedAlertProfileUsers(rows) {
+    const clonedRows = _alertRowsForProfile(rows);
+    clonedRows.forEach(row => { delete row.notify_user_ids; });
+    const needsNames = clonedRows.some(row => Array.isArray(row.notify_users) || Array.isArray(row.notify_usernames));
+    if (!needsNames) return clonedRows;
+
+    const myId = parseInt(localStorage.getItem('user_id'), 10);
+    const myName = localStorage.getItem('username');
+    if (myId && myName && !_findUserById(myId)) {
+        _mergeUsersIntoCache([{ id: myId, username: myName }]);
+    }
+    if (hasAdminAccess) {
+        if (isAdmin) await loadAllUsers();
+        else if (editingDeviceId) await loadDeviceAlertUsers(editingDeviceId);
+    }
+
+    clonedRows.forEach(row => {
+        const names = row.notify_users || row.notify_usernames;
+        if (!Array.isArray(names)) return;
+        const ids = names
+            .map(_findUserByNameOrEmail)
+            .filter(Boolean)
+            .map(u => _toId(u.id))
+            .filter(id => id !== null);
+        row.notify_user_ids = [...new Set(ids)];
+        delete row.notify_users;
+        delete row.notify_usernames;
+    });
+    return clonedRows;
+}
+
+function _alertProfileFromConfig(config = {}) {
+    if (Array.isArray(config.alert_rows)) {
+        return _alertRowsForProfile(config.alert_rows);
+    }
+
+    const rows = [];
+    const ch = config.alert_channels || {};
+    for (const [key] of Object.entries(ALERT_TYPES)) {
+        if (config[key] != null) {
+            rows.push({ alertKey: key, value: config[key], channels: ch[key] || [], schedule: null });
+        }
+    }
+    (config.custom_rules || []).forEach(r => {
+        const obj = typeof r === 'string' ? { name: 'Custom Alert', rule: r, channels: [] } : r;
+        rows.push({ alertKey: '__custom__', name: obj.name, rule: obj.rule, channels: obj.channels || [], schedule: null });
+    });
+    return rows;
+}
+
+function _devicesWithAlertProfiles() {
+    return devices
+        .map(d => ({ device: d, rows: _alertProfileFromConfig(d.config || {}) }))
+        .filter(item => item.device.id !== editingDeviceId && item.rows.length > 0)
+        .sort((a, b) => String(a.device.name || '').localeCompare(String(b.device.name || '')));
+}
+
+function populateAlertProfileDeviceSelect() {
+    renderAlertProfileDevicePicker();
+}
+
+function closeAlertProfileMenu() {
+    const menu = document.getElementById('alertProfileMenu');
+    const trigger = document.querySelector('.alert-profile-trigger');
+    menu?.classList.remove('open');
+    if (menu) {
+        menu.style.left = '';
+        menu.style.top = '';
+    }
+    trigger?.setAttribute('aria-expanded', 'false');
+}
+
+function positionAlertProfileMenu(trigger, menu) {
+    const margin = 12;
+    const triggerRect = trigger.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const width = menuRect.width || Math.min(320, window.innerWidth - margin * 2);
+    const left = Math.min(
+        Math.max(margin, triggerRect.right - width),
+        window.innerWidth - width - margin
+    );
+    const top = Math.min(
+        triggerRect.bottom + 6,
+        window.innerHeight - menuRect.height - margin
+    );
+    menu.style.left = `${left}px`;
+    menu.style.top = `${Math.max(margin, top)}px`;
+}
+
+function repositionAlertProfileMenu() {
+    const menu = document.getElementById('alertProfileMenu');
+    const trigger = document.querySelector('.alert-profile-trigger');
+    if (!menu?.classList.contains('open') || !trigger) return;
+    positionAlertProfileMenu(trigger, menu);
+}
+
+function toggleAlertProfileMenu(event) {
+    event?.stopPropagation();
+    const menu = document.getElementById('alertProfileMenu');
+    const trigger = event?.currentTarget || document.querySelector('.alert-profile-trigger');
+    if (!menu) return;
+    const isOpen = menu.classList.toggle('open');
+    trigger?.setAttribute('aria-expanded', String(isOpen));
+    if (isOpen && trigger) positionAlertProfileMenu(trigger, menu);
+}
+
+document.addEventListener('click', (event) => {
+    if (!event.target.closest?.('.alert-profile-menu-wrap')) closeAlertProfileMenu();
+});
+window.addEventListener('resize', repositionAlertProfileMenu);
+window.addEventListener('scroll', repositionAlertProfileMenu, true);
+
+function _validAlertProfileRows(rows) {
+    if (!Array.isArray(rows)) {
+        showAlert({ title: 'Invalid alert profile', message: 'The selected file does not contain alert rows.', type: 'error' });
+        return null;
+    }
+    return rows.filter(row => row && typeof row === 'object' && row.alertKey);
+}
+
+function _applyAlertRowsFromProfile(rows, sourceLabel, mode = 'replace') {
+    const validRows = _validAlertProfileRows(rows);
+    if (!validRows) return false;
+
+    const newRows = validRows.map(_alertRowWithFreshUid);
+    alertRows = mode === 'append' ? [...alertRows, ...newRows] : newRows;
+    renderAlertsTable();
+    populateAddAlertDropdown();
+    refreshNativeEventAlerts();
+    const verb = mode === 'append' ? 'appended' : 'loaded';
+    showAlert({ title: 'Alert profile loaded', message: `${newRows.length} alert${newRows.length === 1 ? '' : 's'} ${verb}${sourceLabel ? ` from ${sourceLabel}` : ''}. Save the device to apply them.`, type: 'success' });
+    return true;
+}
+
+function openAlertProfileMergeChoice(rows, sourceLabel, onDone) {
+    const validRows = _validAlertProfileRows(rows);
+    if (!validRows) return;
+
+    if (!alertRows.length) {
+        if (_applyAlertRowsFromProfile(validRows, sourceLabel, 'replace') && typeof onDone === 'function') onDone();
+        return;
+    }
+
+    let modal = document.getElementById('alertProfileMergeModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'alertProfileMergeModal';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width:460px;height:auto;">
+                <div class="modal-header">
+                    <h2 class="modal-title">Apply Alert Profile</h2>
+                    <button type="button" class="modal-close" onclick="closeAlertProfileMergeChoice()"><i class="mdi mdi-close"></i></button>
+                </div>
+                <div class="modal-scrollable" style="padding:1rem 1.25rem;">
+                    <div id="alertProfileMergeMessage" style="color:var(--text-secondary);line-height:1.5;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeAlertProfileMergeChoice()">Cancel</button>
+                    <button type="button" class="btn btn-secondary" onclick="applyPendingAlertProfile('append')"><i class="mdi mdi-plus"></i> Append</button>
+                    <button type="button" class="btn btn-primary" onclick="applyPendingAlertProfile('replace')"><i class="mdi mdi-swap-horizontal"></i> Replace</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+    }
+
+    window.pendingAlertProfile = { rows: validRows, sourceLabel, onDone };
+    const message = document.getElementById('alertProfileMergeMessage');
+    if (message) {
+        message.textContent = `This device already has ${alertRows.length} alert${alertRows.length === 1 ? '' : 's'}. ${validRows.length} alert${validRows.length === 1 ? '' : 's'} will be applied${sourceLabel ? ` from ${sourceLabel}` : ''}.`;
+    }
+    modal.classList.add('active');
+}
+
+function closeAlertProfileMergeChoice() {
+    window.pendingAlertProfile = null;
+    document.getElementById('alertProfileMergeModal')?.classList.remove('active');
+}
+
+function applyPendingAlertProfile(mode) {
+    const pending = window.pendingAlertProfile;
+    if (!pending) return;
+    if (_applyAlertRowsFromProfile(pending.rows, pending.sourceLabel, mode) && typeof pending.onDone === 'function') {
+        pending.onDone();
+    }
+    closeAlertProfileMergeChoice();
+}
+
+function openAlertProfileDevicePicker() {
+    closeAlertProfileMenu();
+    const candidates = _devicesWithAlertProfiles();
+    if (!candidates.length) {
+        showAlert({ title: 'No source devices', message: 'No other devices have configured alerts to copy.', type: 'warning' });
+        return;
+    }
+
+    let modal = document.getElementById('alertProfileDevicePickerModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'alertProfileDevicePickerModal';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width:560px;height:auto;max-height:85vh;">
+                <div class="modal-header">
+                    <h2 class="modal-title">Copy Alerts From Device</h2>
+                    <button type="button" class="modal-close" onclick="closeAlertProfileDevicePicker()"><i class="mdi mdi-close"></i></button>
+                </div>
+                <div class="modal-scrollable" style="padding:1rem 1.25rem;">
+                    <input type="text" class="form-input" id="alertProfileDeviceSearch" placeholder="Search devices..." oninput="renderAlertProfileDevicePicker()" style="margin-bottom:0.75rem;">
+                    <div class="alert-profile-device-list" id="alertProfileDeviceList"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeAlertProfileDevicePicker()">Cancel</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+    }
+
+    modal.classList.add('active');
+    renderAlertProfileDevicePicker();
+    setTimeout(() => document.getElementById('alertProfileDeviceSearch')?.focus(), 0);
+}
+
+function closeAlertProfileDevicePicker() {
+    document.getElementById('alertProfileDevicePickerModal')?.classList.remove('active');
+}
+
+function renderAlertProfileDevicePicker() {
+    const list = document.getElementById('alertProfileDeviceList');
+    if (!list) return;
+
+    const q = (document.getElementById('alertProfileDeviceSearch')?.value || '').trim().toLowerCase();
+    const rows = _devicesWithAlertProfiles().filter(({ device }) => {
+        const haystack = [device.name, device.imei, device.license_plate, device.protocol]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+        return !q || haystack.includes(q);
+    });
+
+    if (!rows.length) {
+        list.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--text-muted);">No matching devices.</div>';
+        return;
+    }
+
+    list.innerHTML = rows.map(({ device, rows }) => `
+        <button type="button" class="alert-profile-device-option" onclick="copyAlertsFromDeviceId(${device.id})">
+            <span style="min-width:0;">
+                <span class="alert-profile-device-name">${_esc(device.name || `Device ${device.id}`)}</span>
+                <span class="alert-profile-device-meta">${_esc([device.license_plate, device.protocol].filter(Boolean).join(' · ') || device.imei || '')}</span>
+            </span>
+            <span class="alert-profile-device-meta">${rows.length} alert${rows.length === 1 ? '' : 's'}</span>
+        </button>
+    `).join('');
+}
+
+function copyAlertsFromDeviceId(sourceId) {
+    const source = devices.find(d => d.id === sourceId);
+    if (!source) return;
+
+    const rows = _alertProfileFromConfig(source.config || {});
+    if (!rows.length) {
+        showAlert({ title: 'No alerts to copy', message: `${source.name || 'The selected device'} has no configured alerts.`, type: 'warning' });
+        return;
+    }
+
+    openAlertProfileMergeChoice(rows, source.name || `Device ${source.id}`, closeAlertProfileDevicePicker);
+}
+
+async function exportAlertProfile() {
+    closeAlertProfileMenu();
+    const deviceName = document.getElementById('deviceName')?.value?.trim() || 'device';
+    const profile = {
+        type: 'routario-alert-profile',
+        version: 1,
+        exported_at: new Date().toISOString(),
+        source_device: deviceName,
+        alert_rows: await _alertRowsForExport(),
+    };
+    const blob = new Blob([JSON.stringify(profile, null, 2)], { type: 'application/json' });
+    const link = document.createElement('a');
+    const safeName = deviceName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'device';
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = `${safeName}-alerts.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+}
+
+function importAlertProfileFile(event) {
+    closeAlertProfileMenu();
+    const input = event.target;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+        try {
+            const parsed = JSON.parse(reader.result);
+            const rows = Array.isArray(parsed)
+                ? parsed
+                : Array.isArray(parsed.alert_rows)
+                ? parsed.alert_rows
+                : _alertProfileFromConfig(parsed.config || parsed);
+            const resolvedRows = await _resolveImportedAlertProfileUsers(rows);
+            openAlertProfileMergeChoice(resolvedRows, file.name);
+        } catch (e) {
+            showAlert({ title: 'Import failed', message: 'Choose a valid Routario alert profile JSON file.', type: 'error' });
+        } finally {
+            input.value = '';
+        }
+    };
+    reader.onerror = () => {
+        showAlert({ title: 'Import failed', message: 'The selected file could not be read.', type: 'error' });
+        input.value = '';
+    };
+    reader.readAsText(file);
 }
 
 function populateAddAlertDropdown() {
