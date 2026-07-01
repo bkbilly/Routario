@@ -50,7 +50,6 @@
 
     // ── Trigger button ────────────────────────────────────────────
     // On dashboard: append to .map-ctrl-group as another map-ctrl-bar.
-    // On other pages: fixed .ptt-fixed-bar at top-right below header.
 
     function _injectButton() {
         const btnHtml = `
@@ -60,13 +59,7 @@
             </button>`;
 
         const ctrlGroup = document.querySelector('.map-ctrl-group');
-        if (!ctrlGroup) {
-            const fixed = document.createElement('div');
-            fixed.className = 'ptt-fixed-bar';
-            fixed.innerHTML = btnHtml;
-            document.body.appendChild(fixed);
-            return;
-        }
+        if (!ctrlGroup) return;
         const bar = document.createElement('div');
         bar.className = 'map-ctrl-bar';
         bar.innerHTML = btnHtml;
