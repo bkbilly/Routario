@@ -2,6 +2,8 @@
 
 **Routario** is a high-performance, self-hosted GPS tracking and fleet management platform. It provides real-time live maps, smart alerts, cloud integrations, and a full PWA you can install on any device — all running on infrastructure you control.
 
+[Open the static demo](demo/){ .md-button .md-button--primary }
+
 ---
 
 ## See It in Action

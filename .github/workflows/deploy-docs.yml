@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - "docs/**"
+      - "web/**"
+      - "scripts/build_demo.py"
       - "mkdocs.yml"
       - "requirements-docs.txt"
 
@@ -38,6 +40,9 @@ jobs:
 
       - name: Build docs
         run: mkdocs build --strict --clean
+
+      - name: Build static demo
+        run: python scripts/build_demo.py
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v4
