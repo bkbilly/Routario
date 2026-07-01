@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Management - Routario</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="icon" href="icons/favicon.ico">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="css/tables.css">
+    <link rel="stylesheet" href="css/device-management.css">
+    <script src="js/settings-nav.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <style>
+        .mgmt-tabs {
+            display: flex;
+            gap: 0.25rem;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 1.25rem;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .mgmt-tabs::-webkit-scrollbar { display: none; }
+        .mgmt-tab {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.65rem 1.1rem;
+            font-family: var(--font-display);
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: color var(--transition-base), border-color var(--transition-base);
+            margin-bottom: -1px;
+        }
+        .mgmt-tab:hover { color: var(--text-primary); }
+        .mgmt-tab.active {
+            color: var(--accent-primary);
+            border-bottom-color: var(--accent-primary);
+        }
+        .settings-section-description {
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+            margin: 0 0 1rem 0;
+            line-height: 1.5;
+        }
+        .settings-section-description a {
+            color: var(--accent-primary);
+            text-decoration: none;
+        }
+        .settings-section-description a:hover {
+            text-decoration: underline;
+        }
+        .btn-small {
+            padding: 0.42rem 0.7rem;
+            font-size: 0.78rem;
+            gap: 0.3rem;
+        }
+        .channel-url-cell {
+            max-width: 460px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .audit-table,
+        .health-table {
+            min-width: 720px;
+        }
+        .health-status {
+            border: 1px solid transparent;
+            font-weight: 700;
+        }
+        .health-status-ok {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: rgba(16, 185, 129, 0.28);
+            color: var(--accent-success, #10b981);
+        }
+        .health-status-degraded {
+            background: rgba(245, 158, 11, 0.15);
+            border-color: rgba(245, 158, 11, 0.3);
+            color: var(--accent-warning, #f59e0b);
+        }
+        .health-status-optional {
+            background: rgba(59, 130, 246, 0.14);
+            border-color: rgba(59, 130, 246, 0.28);
+            color: var(--accent-primary, #3b82f6);
+        }
+        .health-status-fail {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: var(--accent-danger, #ef4444);
+        }
+        .route-status-badge {
+            border: 1px solid transparent;
+        }
+        .route-status-planned {
+            background: rgba(59, 130, 246, 0.14);
+            border-color: rgba(59, 130, 246, 0.28);
+            color: var(--accent-primary, #3b82f6);
+        }
+        .route-status-active {
+            background: rgba(6, 182, 212, 0.16);
+            border-color: rgba(6, 182, 212, 0.32);
+            color: #06b6d4;
+        }
+        .route-status-paused {
+            background: rgba(245, 158, 11, 0.15);
+            border-color: rgba(245, 158, 11, 0.3);
+            color: var(--accent-warning, #f59e0b);
+        }
+        .route-status-completed {
+            background: rgba(34, 197, 94, 0.13);
+            border-color: rgba(34, 197, 94, 0.28);
+            color: #22c55e;
+        }
+        .route-status-default {
+            background: rgba(148, 163, 184, 0.14);
+            border-color: rgba(148, 163, 184, 0.25);
+            color: var(--text-secondary, #94a3b8);
+        }
+        .health-details {
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
+            line-height: 1.35;
+        }
+        .health-metrics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+        }
+        .health-metric,
+        .health-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.2rem 0.45rem;
+            border-radius: 999px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+        .health-metric strong {
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+        .health-chip-ok {
+            background: rgba(16, 185, 129, 0.12);
+            border-color: rgba(16, 185, 129, 0.24);
+            color: var(--accent-success, #10b981);
+        }
+        .health-chip-warn {
+            background: rgba(245, 158, 11, 0.12);
+            border-color: rgba(245, 158, 11, 0.24);
+            color: var(--accent-warning, #f59e0b);
+        }
+        .health-chip-danger {
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.24);
+            color: var(--accent-danger, #ef4444);
+        }
+        .health-chip-info {
+            background: rgba(59, 130, 246, 0.12);
+            border-color: rgba(59, 130, 246, 0.24);
+            color: var(--accent-primary, #3b82f6);
+        }
+        .health-lines {
+            display: grid;
+            gap: 0.25rem;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+        .health-line {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.45rem;
+            min-width: 0;
+        }
+        .health-line-label {
+            color: var(--text-muted);
+            flex: 0 0 auto;
+            font-weight: 600;
+        }
+        .health-line-value {
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+        @media (max-width: 768px) {
+            .audit-table th,
+            .audit-table td,
+            .health-table th,
+            .health-table td {
+                display: table-cell !important;
+            }
+            .routes-table th,
+            .routes-table td {
+                display: table-cell !important;
+            }
+            .routes-table .route-distance-col,
+            .routes-table .route-duration-col {
+                display: none !important;
+            }
+            .health-table {
+                min-width: 560px;
+            }
+        }
+        @media (max-width: 640px) {
+            .drv-btn-label { display: none; }
+        }
+        .admin-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 1rem;
+        }
+        .admin-panel {
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .admin-panel h3 {
+            font-size: 1rem;
+            margin-bottom: 0.85rem;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.8rem;
+            margin-bottom: 0.9rem;
+        }
+        .form-grid label span {
+            display: block;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            margin-bottom: 0.3rem;
+            font-weight: 600;
+        }
+        .stack-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+        }
+        .stack-item {
+            border: 1px solid var(--border-color);
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 0.75rem;
+        }
+        .stack-item-title {
+            font-weight: 700;
+            margin-bottom: 0.2rem;
+        }
+        .stack-item-meta {
+            color: var(--text-secondary);
+            font-size: 0.82rem;
+        }
+        .secret-box {
+            margin-top: 0.8rem;
+            border: 1px solid rgba(245,158,11,0.35);
+            background: rgba(245,158,11,0.08);
+            color: var(--text-primary);
+            border-radius: 8px;
+            padding: 0.75rem;
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            word-break: break-all;
+        }
+        .route-stop-row {
+            display: grid;
+            grid-template-columns: 36px minmax(120px, 1fr) 118px 110px 110px 96px 96px 42px;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .route-stop-row label {
+            min-width: 0;
+        }
+        .route-order-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            align-self: stretch;
+            justify-content: center;
+        }
+        .route-order-controls .btn {
+            width: 32px;
+            height: 25px;
+            min-height: 0;
+            padding: 0 !important;
+            justify-content: center;
+            border-radius: 6px;
+        }
+        .route-order-controls i {
+            margin: 0;
+            line-height: 1;
+        }
+        #routePlanMap {
+            height: 360px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-bottom: 0.85rem;
+            background: var(--bg-tertiary);
+            overflow: hidden;
+        }
+        .route-plan-stop-marker {
+            border-radius: 50%;
+            border: 2px solid #0f172a;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+        }
+        .route-plan-stop-marker span {
+            display: flex;
+            width: 26px;
+            height: 26px;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            color: white;
+            font-size: 0.72rem;
+            font-weight: 800;
+        }
+        .icon-btn-danger {
+            width: 36px;
+            height: 36px;
+            padding: 0 !important;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent-danger) !important;
+            color: #fff !important;
+            border: 1px solid rgba(255,255,255,0.12) !important;
+            border-radius: 8px;
+        }
+        .icon-btn-danger i {
+            margin: 0;
+            line-height: 1;
+            font-size: 1rem;
+        }
+        .icon-btn-danger:hover {
+            background: #dc2626 !important;
+            transform: translateY(-1px);
+        }
+        .table-actions {
+            display: inline-flex;
+            gap: 0.35rem;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .table-actions .btn {
+            padding: 0.38rem 0.55rem;
+            min-height: 34px;
+        }
+        .company-checklist {
+            display: grid;
+            gap: 0.35rem;
+            max-height: 190px;
+            overflow: auto;
+            border: 1px solid var(--border-color);
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 0.5rem;
+        }
+        .company-check-item {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            padding: 0.45rem 0.55rem;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+        .company-check-item:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .company-check-item input {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--accent-primary);
+        }
+        .admin-filter-row {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            margin-bottom: 0.85rem;
+            flex-wrap: wrap;
+        }
+        .admin-filter-row .search-input-wrap {
+            flex: 1;
+            min-width: 220px;
+        }
+        @media (max-width: 800px) {
+            .admin-grid, .form-grid { grid-template-columns: 1fr; }
+            .route-stop-row {
+                grid-template-columns: 36px minmax(0, 1fr) 42px;
+                align-items: start;
+            }
+            .route-stop-row .route-order-controls {
+                grid-column: 1;
+                grid-row: 1 / span 3;
+            }
+            .route-stop-row label:nth-of-type(1) {
+                grid-column: 2;
+                grid-row: 1;
+            }
+            .route-stop-row label:nth-of-type(2),
+            .route-stop-row label:nth-of-type(3),
+            .route-stop-row label:nth-of-type(4),
+            .route-stop-row label:nth-of-type(5),
+            .route-stop-row label:nth-of-type(6) {
+                grid-column: 2 / -1;
+            }
+            .route-stop-row .icon-btn-danger {
+                grid-column: 3;
+                grid-row: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- Page-level tabs -->
+    <div class="mgmt-tabs" id="mgmtTabs">
+        <button class="mgmt-tab active" id="mgmtTabDevices" onclick="switchMgmtSection('devices')">
+            <i class="mdi mdi-antenna"></i> Devices
+        </button>
+        <button class="mgmt-tab" id="mgmtTabCompanies" onclick="switchMgmtSection('companies')" style="display:none;">
+            <i class="mdi mdi-office-building"></i> Companies
+        </button>
+        <button class="mgmt-tab" id="mgmtTabDrivers" onclick="switchMgmtSection('drivers')">
+            <i class="mdi mdi-account-tie"></i> Drivers
+        </button>
+        <button class="mgmt-tab" id="mgmtTabNotifications" onclick="switchMgmtSection('notifications')">
+            <i class="mdi mdi-bell"></i> Notifications
+        </button>
+        <button class="mgmt-tab" id="mgmtTabClips" onclick="switchMgmtSection('clips')" style="display:none;">
+            <i class="mdi mdi-video"></i> Clips
+        </button>
+        <button class="mgmt-tab" id="mgmtTabRoutes" onclick="switchMgmtSection('routes')" style="display:none;">
+            <i class="mdi mdi-map-marker-path"></i> Routes
+        </button>
+        <button class="mgmt-tab" id="mgmtTabBilling" onclick="switchMgmtSection('billing')" style="display:none;">
+            <i class="mdi mdi-credit-card-outline"></i> Billing
+        </button>
+    </div>
+
+    <!-- ── DEVICES SECTION ──────────────────────────────────────────── -->
+    <div id="section-devices">
+        <div class="devices-search-bar">
+            <div class="search-input-wrap">
+                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                <input type="text" id="deviceSearch" class="search-input"
+                    placeholder="Search by name, IMEI, plate, protocol&#8230;"
+                    oninput="filterDevices()">
+            </div>
+            <span class="devices-count" id="devicesCount"></span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="devices-table">
+                <thead>
+                    <tr>
+                        <th style="width:44px;"></th>
+                        <th data-sort="name" data-sort-dir="asc" onclick="sortDevices('name')">Name</th>
+                        <th data-sort="protocol" onclick="sortDevices('protocol')">Protocol</th>
+                        <th data-sort="plate" onclick="sortDevices('plate')">Plate</th>
+                        <th class="company-col" data-sort="company" onclick="sortDevices('company')">Company</th>
+                        <th data-sort="last_seen" onclick="sortDevices('last_seen')">Last Seen</th>
+                        <th data-sort="odometer" onclick="sortDevices('odometer')">Odometer</th>
+                        <th style="width:180px;text-align:center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="devicesTableBody">
+                    <tr id="devicesLoadingRow">
+                        <td colspan="10" style="text-align:center;padding:3rem;color:var(--text-muted);">
+                            <div class="loading" style="margin:0 auto 1rem;"></div>
+                            Loading devices&#8230;
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ── COMPANIES SECTION ────────────────────────────────────────── -->
+    <div id="section-companies" style="display:none;">
+        <div class="devices-search-bar">
+            <div class="search-input-wrap">
+                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                <input type="text" id="companySearch" class="search-input"
+                    placeholder="Search by name&#8230;"
+                    oninput="filterCompanies()">
+            </div>
+            <span class="devices-count" id="companiesCount"></span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="devices-table company-table">
+                <thead>
+                    <tr>
+                        <th data-sort="name" data-sort-dir="asc" onclick="sortCompanies('name')">Name</th>
+                        <th data-sort="users" style="text-align:center;" onclick="sortCompanies('users')">Users</th>
+                        <th data-sort="devices" style="text-align:center;" onclick="sortCompanies('devices')">Devices</th>
+                        <th data-sort="billing" onclick="sortCompanies('billing')">Billing Plan</th>
+                        <th data-sort="created" onclick="sortCompanies('created')">Created</th>
+                        <th style="width:180px;text-align:center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="companiesTableBody">
+                    <tr>
+                        <td colspan="6" style="text-align:center;padding:3rem;color:var(--text-muted);">
+                            <div class="loading" style="margin:0 auto 1rem;"></div>
+                            Loading companies&#8230;
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ── DRIVERS SECTION ──────────────────────────────────────────── -->
+    <div id="section-drivers" style="display:none;">
+        <div class="devices-search-bar">
+            <div class="search-input-wrap">
+                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                <input type="text" id="driverSearch" class="search-input"
+                    placeholder="Search by name, phone or licence&#8230;"
+                    oninput="filterDrivers()">
+            </div>
+            <span class="devices-count" id="driverCount"></span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="devices-table">
+                <thead>
+                    <tr>
+                        <th data-sort="name" data-sort-dir="asc" onclick="sortDrivers('name')">Name</th>
+                        <th data-sort="phone" onclick="sortDrivers('phone')">Phone</th>
+                        <th data-sort="licence" onclick="sortDrivers('licence')">Licence</th>
+                        <th id="driverCompanyHeader" data-sort="company" onclick="sortDrivers('company')" style="display:none;">Company</th>
+                        <th data-sort="vehicle" onclick="sortDrivers('vehicle')">Vehicle</th>
+                        <th style="width:100px;text-align:center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="driversTableBody">
+                    <tr>
+                        <td colspan="5" style="text-align:center;padding:3rem;color:var(--text-muted);">
+                            <div class="loading" style="margin:0 auto 1rem;"></div>
+                            Loading drivers&#8230;
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ── NOTIFICATIONS SECTION ──────────────────────────────────── -->
+    <div id="section-notifications" style="display:none;">
+        <p class="settings-section-description">
+            Configure services to receive alerts, such as Telegram, Discord, or Email.
+            <a href="https://appriseit.com/services/" target="_blank">Read Apprise Documentation</a>
+        </p>
+        <div class="devices-search-bar">
+            <div class="search-input-wrap">
+                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                <input type="text" id="notificationSearch" class="search-input" placeholder="Search notification channels..." oninput="renderChannels()">
+            </div>
+            <span class="devices-count" id="channelCount"></span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="devices-table settings-table">
+                <thead>
+                    <tr>
+                        <th data-sort="name" data-sort-dir="asc" onclick="sortNotificationChannels('name')">Name</th>
+                        <th data-sort="url" onclick="sortNotificationChannels('url')">Apprise URL</th>
+                        <th style="text-align:right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="channelListBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ── USERS SECTION ──────────────────────────────────────────── -->
+    <!-- ── CLIPS SECTION ───────────────────────────────────────────── -->
+    <div id="section-clips" style="display:none;">
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;flex-wrap:wrap;">
+            <select class="form-input" id="clipsDeviceSelect" onchange="loadClipsForSection()" style="width:auto;min-width:180px;"></select>
+            <select class="form-input" id="clipsEventFilter" onchange="applyClipsFilter()" style="width:auto;flex:1;min-width:130px;">
+                <option value="">All Events</option>
+                <option value="manual">Manual</option>
+                <option value="harsh_brake">Harsh Brake</option>
+                <option value="harsh_accel">Harsh Accel</option>
+                <option value="harsh_corner">Harsh Corner</option>
+                <option value="collision">Collision</option>
+                <option value="overspeeding">Overspeeding</option>
+            </select>
+            <select class="form-input" id="clipsCameraFilter" onchange="applyClipsFilter()" style="width:auto;flex:1;min-width:110px;">
+                <option value="">All Cameras</option>
+                <option value="front">Front</option>
+                <option value="rear">Rear</option>
+                <option value="interior">Interior</option>
+            </select>
+        </div>
+        <div id="clipsGrid" class="clips-grid"></div>
+    </div>
+
+    <!-- ── ROUTES SECTION ─────────────────────────────────────────── -->
+    <div id="section-routes" style="display:none;">
+        <div class="devices-search-bar">
+            <div class="search-input-wrap">
+                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                <input type="text" id="routesSearch" class="search-input" placeholder="Search routes..." oninput="rtpRenderRoutesTable()">
+            </div>
+            <span class="devices-count" id="routesCount"></span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="devices-table routes-table">
+                <thead>
+                    <tr>
+                        <th data-sort="name" data-sort-dir="asc" onclick="rtpSortRoutes('name')">Name</th>
+                        <th data-sort="status" onclick="rtpSortRoutes('status')">Status</th>
+                        <th data-sort="vehicle" onclick="rtpSortRoutes('vehicle')">Vehicle</th>
+                        <th data-sort="stops" onclick="rtpSortRoutes('stops')">Stops</th>
+                        <th class="route-distance-col" data-sort="distance" onclick="rtpSortRoutes('distance')">Distance</th>
+                        <th class="route-duration-col" data-sort="duration" onclick="rtpSortRoutes('duration')">Duration</th>
+                        <th style="width:300px;text-align:center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="routesTableBody">
+                    <tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading routes...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ── API KEYS SECTION ──────────────────────────────────────── -->
+    <!-- ── BILLING SECTION ───────────────────────────────────────── -->
+    <div id="section-billing" style="display:none;">
+        <div class="devices-search-bar">
+            <div class="search-input-wrap">
+                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                <input type="text" id="billingSearch" class="search-input" placeholder="Search billing plans..." oninput="rtpRenderBillingTable()">
+            </div>
+            <span class="devices-count" id="billingCount"></span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="devices-table">
+                <thead>
+                    <tr>
+                        <th data-sort="name" data-sort-dir="asc" onclick="rtpSortBilling('name')">Plan</th>
+                        <th data-sort="base" onclick="rtpSortBilling('base')">Base</th>
+                        <th data-sort="included" onclick="rtpSortBilling('included')">Included</th>
+                        <th data-sort="overage" onclick="rtpSortBilling('overage')">Overage</th>
+                        <th data-sort="companies" onclick="rtpSortBilling('companies')">Companies</th>
+                        <th style="width:360px;text-align:center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="billingPlansTableBody">
+                    <tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading plans...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div><!-- /.container -->
+
+<!-- =============================================================
+     DEVICE MODAL  (General | Alerts | Raw Data | Users | Commands)
+============================================================= -->
+<div class="modal" id="deviceModal">
+    <div class="modal-content wide">
+        <form id="deviceForm" onsubmit="handleSubmit(event)" novalidate style="display:flex;flex-direction:column;height:100%;">
+
+            <div class="modal-header">
+                <h2 class="modal-title" id="modalTitle">Device</h2>
+                <button type="button" class="modal-close" onclick="closeDeviceModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+
+            <div class="modal-tabs">
+                <button type="button" class="modal-tab active" data-tab="general" onclick="switchModalTab('general',this)"><i class="mdi mdi-clipboard-outline"></i> General</button>
+                <button type="button" class="modal-tab" data-tab="alerts"  onclick="switchModalTab('alerts',this)"><i class="mdi mdi-bell"></i> Alerts</button>
+                <button type="button" class="modal-tab" data-tab="rawdata" onclick="switchModalTab('rawdata',this)"><i class="mdi mdi-chart-bar"></i> Raw Data</button>
+                <button type="button" class="modal-tab" data-tab="users"     id="usersTabBtn"    onclick="switchModalTab('users',this)"    style="display:none;"><i class="mdi mdi-account-group"></i> Users</button>
+                <button type="button" class="modal-tab" data-tab="commands" id="commandsTabBtn" onclick="switchModalTab('commands',this)" style="display:none;"><i class="mdi mdi-antenna"></i> Commands</button>
+            </div>
+
+            <div class="modal-scrollable">
+
+                <!-- TAB: GENERAL -->
+                <div class="modal-tab-content active" id="tab-general">
+                    <div class="form-main-layout">
+                        <div class="form-column">
+                            <div class="form-group">
+                                <label class="form-label">Device Name *</label>
+                                <input type="text" class="form-input" id="deviceName" required placeholder="e.g. Truck #1">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Protocol *</label>
+                                <select class="form-input" id="deviceProtocol" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">IMEI *</label>
+                                <input type="text" class="form-input" id="deviceImei" required placeholder="Device identifier">
+                            </div>
+                            <div id="integrationFieldsPanel" style="display:none;"></div>
+                            <div class="form-group" id="deviceHasCameraGroup" style="display:none;">
+                                <label class="form-label">Dashcam</label>
+                                <label style="display:flex;align-items:center;gap:0.75rem;cursor:pointer;margin-top:0.25rem;">
+                                    <span class="toggle-switch">
+                                        <input type="checkbox" id="deviceHasCamera">
+                                        <span class="toggle-slider"></span>
+                                    </span>
+                                    <span style="font-size:0.875rem;color:var(--text-secondary);">This device has a dashcam</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-column">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Vehicle Type</label>
+                                    <select class="form-input" id="vehicleType"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Plate</label>
+                                    <input type="text" class="form-input" id="licensePlate" placeholder="ABC-123">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Custom Attributes</label>
+                                <div id="customAttributesList" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+                                <button type="button" class="btn btn-secondary" style="margin-top:0.5rem;font-size:0.8rem;" onclick="addCustomAttribute()">
+                                    <i class="mdi mdi-plus"></i> Add attribute
+                                </button>
+                            </div>
+                            <div class="form-group" id="deviceCompanyGroup" style="display:none;">
+                                <label class="form-label">Company</label>
+                                <select class="form-input" id="deviceCompany" onchange="onDeviceCompanyChange()">
+                                    <option value="">— None —</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">
+                                    Current Odometer (km)
+                                    <span style="font-size:0.8rem;color:var(--text-muted);font-weight:normal;display:block;margin-top:0.25rem;">Adjust only if resetting or correcting</span>
+                                </label>
+                                <input type="number" id="currentOdometer" class="form-input" placeholder="0" step="0.1" min="0">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">
+                                    Offline Threshold (hours)
+                                    <span style="font-size:0.8rem;color:var(--text-muted);font-weight:normal;display:block;margin-top:0.25rem;">Hours without data before vehicle is considered offline</span>
+                                </label>
+                                <input type="number" id="offlineTimeoutHours" class="form-input" placeholder="24" step="1" min="1" value="24">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">
+                                    Trip Merge Gap (minutes)
+                                    <span style="font-size:0.8rem;color:var(--text-muted);font-weight:normal;display:block;margin-top:0.25rem;">Merge consecutive trips separated by an ignition-off gap shorter than this. 0 = disabled.</span>
+                                </label>
+                                <input type="number" id="tripMergeGapMinutes" class="form-input" placeholder="0" step="1" min="0" value="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: ALERTS -->
+                <div class="modal-tab-content" id="tab-alerts">
+                    <div style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.25rem;">
+                        <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);font-weight:600;margin-bottom:0.6rem;"><i class="mdi mdi-bell-plus"></i> Add Alert</div>
+                        <div class="alert-add-row">
+                            <select class="form-input alert-add-select" id="addAlertSelect" onchange="onAddAlertSelectChange()"></select>
+                            <div class="alert-add-actions">
+                                <button type="button" class="btn btn-primary alert-add-btn" onclick="addSelectedAlert()">Add</button>
+                                <div class="alert-profile-menu-wrap">
+                                    <button type="button" class="btn btn-secondary alert-profile-trigger" onclick="toggleAlertProfileMenu(event)" aria-label="Alert profile actions" aria-expanded="false">
+                                        <i class="mdi mdi-dots-vertical"></i>
+                                    </button>
+                                    <div class="alert-profile-menu" id="alertProfileMenu">
+                                        <button type="button" class="alert-profile-menu-item" onclick="openAlertProfileDevicePicker()"><i class="mdi mdi-content-copy"></i> Copy from device</button>
+                                        <button type="button" class="alert-profile-menu-item" onclick="exportAlertProfile()"><i class="mdi mdi-download"></i> Export profile</button>
+                                        <button type="button" class="alert-profile-menu-item" onclick="document.getElementById('alertProfileImportInput').click()"><i class="mdi mdi-upload"></i> Import profile</button>
+                                        <input type="file" id="alertProfileImportInput" accept="application/json,.json" style="display:none;" onchange="importAlertProfileFile(event)">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="customRuleFields" style="display:none;flex-direction:column;gap:0.6rem;margin-top:0.85rem;">
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                                <input type="text" id="newRuleName" class="form-input"
+                                    placeholder="Rule name, e.g. High speed alert"
+                                    style="flex:1;min-width:140px;"
+                                    onkeydown="if(event.key==='Enter'){event.preventDefault();addSelectedAlert();}">
+                                <input type="text" id="newRuleCond" class="form-input"
+                                    placeholder="speed &gt; 80 and ignition"
+                                    style="flex:2;min-width:140px;"
+                                    onkeydown="if(event.key==='Enter'){event.preventDefault();addSelectedAlert();}">
+                            </div>
+                            <details>
+                                <summary style="cursor:pointer;color:var(--text-muted);font-size:0.78rem;"><i class="mdi mdi-information-outline"></i> Syntax reference</summary>
+                                <div style="margin-top:0.4rem;padding:0.65rem 0.85rem;background:var(--bg-secondary);border-radius:8px;font-size:0.76rem;line-height:1.8;color:var(--text-muted);">
+                                    <strong style="color:var(--text-secondary);">Attributes:</strong> speed, ignition, satellites, altitude, battery_voltage, fuel_level, temperature, door_open<br>
+                                    <strong style="color:var(--text-secondary);">Operators:</strong> &gt; &lt; == != &gt;= &lt;= and or not
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                    <div class="alerts-table-wrap">
+                        <table class="alerts-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:34px;">#</th>
+                                    <th style="width:190px;">Alert Type</th>
+                                    <th>Threshold</th>
+                                    <th>Notify Via</th>
+                                    <th id="alertsNotifyUsersHeader" style="display:none;">Notify Users</th>
+                                    <th style="width:160px;">Schedule</th>
+                                    <th style="width:84px;text-align:center;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alertsTableBody">
+                                <tr id="alertsEmptyRow">
+                                    <td colspan="6" class="alerts-empty">No alerts configured. Use the dropdown above to add one.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- TAB: RAW DATA -->
+                <div class="modal-tab-content" id="tab-rawdata">
+                    <div style="overflow-x:auto;">
+                        <table class="raw-data-table">
+                            <thead>
+                                <tr>
+                                    <th>GPS Time</th><th>Server Time</th><th>Lat</th><th>Lon</th><th>Speed</th>
+                                    <th>Heading</th><th>Sat</th><th>Alt</th><th>Ign</th><th>Driver</th><th>Attributes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rawDataBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="pagination">
+                        <button type="button" class="btn btn-secondary" id="prevPageBtn" onclick="changeRawDataPage(-1)">Previous</button>
+                        <span class="page-info" id="pageInfo"></span>
+                        <button type="button" class="btn btn-secondary" id="nextPageBtn" onclick="changeRawDataPage(1)">Next</button>
+                    </div>
+                </div>
+
+                <!-- TAB: USERS -->
+                <div class="modal-tab-content" id="tab-users">
+                    <div class="form-group">
+                        <input type="text" class="form-input" id="usersTabSearch" placeholder="Search users&#8230;" oninput="filterUsersTab()">
+                    </div>
+                    <div id="usersAssignList" style="display:flex;flex-direction:column;gap:0.5rem;"></div>
+                </div>
+
+                <!-- TAB: COMMANDS -->
+                <div class="modal-tab-content" id="tab-commands">
+                    <div class="command-tabs">
+                        <button type="button" class="command-tab active" onclick="switchCommandTab('send')"><i class="mdi mdi-send"></i> Send Command</button>
+                        <button type="button" class="command-tab" onclick="switchCommandTab('history')"><i class="mdi mdi-history"></i> History</button>
+                    </div>
+                    <div class="command-tab-content active" id="sendCommandTab">
+                        <div class="command-subtabs">
+                            <button type="button" class="command-subtab active" onclick="switchCommandSubtab('predefined')">Predefined Commands</button>
+                            <button type="button" class="command-subtab" onclick="switchCommandSubtab('custom')">Custom Command</button>
+                        </div>
+                        <div class="command-subtab-content active" id="predefinedCommandContent">
+                            <div class="form-group">
+                                <label class="form-label">Select Command</label>
+                                <select class="form-select" id="commandTypeSelect" onchange="onCommandSelect()">
+                                    <option value="">-- Select a command --</option>
+                                </select>
+                            </div>
+                            <div id="commandInfoBox" class="command-info-box" style="display:none;">
+                                <div class="command-info-label">Description:</div>
+                                <div id="commandDescription"></div>
+                                <div class="command-info-label" style="margin-top:0.75rem;">Example:</div>
+                                <div id="commandExample" style="font-family:var(--font-mono);background:var(--bg-tertiary);padding:0.5rem;border-radius:6px;margin-top:0.25rem;"></div>
+                            </div>
+                            <div id="commandParamsBox" class="form-group" style="display:none;">
+                                <label class="form-label">Parameters</label>
+                                <input type="text" class="form-input" id="commandParams" placeholder="Enter parameters here">
+                                <div style="font-size:0.8125rem;color:var(--text-muted);margin-top:0.5rem;">Parameters will be appended after the command with a space</div>
+                            </div>
+                            <div id="commandPreviewBox" class="command-preview-box" style="display:none;">
+                                <div class="command-preview-label">Data to be sent:</div>
+                                <div id="commandPreviewHex" class="command-preview-hex"></div>
+                                <div id="commandPreviewAscii" class="command-preview-ascii"></div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" onclick="previewCommand()"><i class="mdi mdi-magnify"></i> Preview</button>
+                                <button type="button" class="btn btn-primary" id="sendCommandBtn" onclick="sendCommand()"><i class="mdi mdi-antenna"></i> Send Command</button>
+                            </div>
+                        </div>
+                        <div class="command-subtab-content" id="customCommandContent">
+                            <div class="form-group">
+                                <label class="form-label">Custom Command</label>
+                                <textarea class="form-textarea" id="customCommandInput" placeholder="Enter raw command text or hex string" rows="3"></textarea>
+                                <div style="font-size:0.875rem;color:var(--text-muted);margin-top:0.5rem;">Enter plain text or hex string (will be automatically converted to bytes)</div>
+                            </div>
+                            <div id="customCommandPreviewBox" class="command-preview-box" style="display:none;">
+                                <div class="command-preview-label">Data to be sent:</div>
+                                <div id="customCommandPreviewHex" class="command-preview-hex"></div>
+                                <div id="customCommandPreviewAscii" class="command-preview-ascii"></div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" onclick="previewCustomCommand()"><i class="mdi mdi-magnify"></i> Preview</button>
+                                <button type="button" class="btn btn-primary" id="sendCustomCommandBtn" onclick="sendCustomCommand()"><i class="mdi mdi-antenna"></i> Send Custom Command</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="command-tab-content" id="historyCommandTab">
+                        <div style="overflow-x:auto;">
+                            <table class="command-history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th><th>Command</th><th>Payload</th><th>Status</th><th>Response</th><th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="commandHistoryBody"></tbody>
+                            </table>
+                        </div>
+                        <div id="commandHistoryEmpty" style="display:none;text-align:center;padding:3rem;color:var(--text-muted);">
+                            <div style="font-size:3rem;margin-bottom:1rem;"><i class="mdi mdi-inbox-remove"></i></div>
+                            <div>No command history available</div>
+                        </div>
+                    </div>
+                </div>
+
+
+            </div><!-- /.modal-scrollable -->
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" id="deleteDeviceBtn" onclick="deleteCurrentDevice()" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+                <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                    <button type="button" class="btn btn-secondary" onclick="closeDeviceModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                        <i id="submitIcon" class="mdi mdi-content-save"></i>
+                        <span id="submitText">Save</span>
+                        <span id="submitLoading" class="loading" style="display:none;"></span>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- =============================================================
+     ALERT EDITOR MODAL
+============================================================= -->
+<div class="modal" id="alertEditorModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title" id="alertEditorTitle">Edit Alert</h2>
+            <button type="button" class="modal-close" onclick="closeAlertEditor()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div id="alertEditorBody"></div>
+        <div class="modal-footer">
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                <button type="button" class="btn btn-secondary" onclick="closeAlertEditor()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveAlertFromEditor()">Save Alert</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- =============================================================
+     VIDEO CLIP PLAYER MODAL
+============================================================= -->
+<div class="modal" id="clipPlayerModal">
+    <div class="modal-content" style="max-width:720px;">
+        <div class="modal-header">
+            <h2 class="modal-title" id="clipPlayerTitle">Video Clip</h2>
+            <button type="button" class="modal-close" onclick="closeClipPlayer()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div style="padding:1rem;">
+            <video id="clipPlayerVideo" controls style="width:100%;border-radius:8px;background:#000;"></video>
+            <div id="clipPlayerMeta" style="margin-top:0.75rem;font-size:0.8rem;color:var(--text-muted);display:flex;gap:1rem;flex-wrap:wrap;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- =============================================================
+     COMPANY MODAL
+============================================================= -->
+<div class="modal" id="companyModal">
+    <div class="modal-content wide">
+        <div class="modal-header">
+            <h2 class="modal-title" id="cmpModalTitle">Company</h2>
+            <button type="button" class="modal-close" onclick="closeCompanyModal()"><i class="mdi mdi-close"></i></button>
+        </div>
+
+        <div class="modal-tabs">
+            <button type="button" class="modal-tab active" data-tab="cmp-general" onclick="switchTab('general',this)"><i class="mdi mdi-office-building"></i> General</button>
+            <button type="button" class="modal-tab" id="cmpUsersTabBtn" data-tab="cmp-users" onclick="switchTab('users',this)" style="display:none;"><i class="mdi mdi-account-group"></i> Users</button>
+            <button type="button" class="modal-tab" id="cmpDevicesTabBtn" data-tab="cmp-devices" onclick="switchTab('devices',this)" style="display:none;"><i class="mdi mdi-antenna"></i> Devices</button>
+        </div>
+
+        <div class="modal-scrollable">
+            <div class="modal-tab-content active" id="tab-cmp-general">
+                <div class="form-group">
+                    <label class="form-label">Company Name *</label>
+                    <input type="text" class="form-input" id="companyName" required placeholder="e.g. Acme Corp">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Application Name</label>
+                    <input type="text" class="form-input" id="companyAppName" maxlength="100" placeholder="Routario">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Login URL Slug</label>
+                    <input type="text" class="form-input" id="companyLoginSlug" maxlength="100" placeholder="acme" autocapitalize="none" autocorrect="off" spellcheck="false">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Billing Plan</label>
+                    <select class="form-input" id="companyBillingPlan">
+                        <option value="">No billing plan</option>
+                    </select>
+                </div>
+                <div class="form-group" id="companyBrandingControls" style="display:none;">
+                    <label class="form-label">Branding</label>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.75rem;">
+                        <div style="border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;">
+                            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+                                <img id="companyIconPreview" src="icons/icon-192.png" alt="" style="width:48px;height:48px;border-radius:8px;object-fit:contain;background:var(--surface-secondary);border:1px solid var(--border-color);">
+                                <div>
+                                    <div style="font-weight:600;font-size:0.9rem;color:var(--text-primary);">App Icon</div>
+                                    <div style="font-size:0.78rem;color:var(--text-muted);">Used for app icons and favicon</div>
+                                </div>
+                            </div>
+                            <input type="file" id="companyIconFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="uploadCompanyBranding('icon')">
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                                <button type="button" class="btn btn-secondary tbl-btn" onclick="document.getElementById('companyIconFile').click()"><i class="mdi mdi-upload"></i> Upload</button>
+                                <button type="button" class="btn btn-secondary tbl-btn" onclick="resetCompanyBranding('icon')"><i class="mdi mdi-restore"></i> Default</button>
+                            </div>
+                        </div>
+                        <div style="border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;">
+                            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+                                <img id="companyBadgePreview" src="icons/badge-96.png" alt="" style="width:48px;height:48px;border-radius:8px;object-fit:contain;background:var(--surface-secondary);border:1px solid var(--border-color);">
+                                <div>
+                                    <div style="font-weight:600;font-size:0.9rem;color:var(--text-primary);">Notification Badge</div>
+                                    <div style="font-size:0.78rem;color:var(--text-muted);">Upload a 96x96 badge</div>
+                                </div>
+                            </div>
+                            <input type="file" id="companyBadgeFile" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="uploadCompanyBranding('badge')">
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                                <button type="button" class="btn btn-secondary tbl-btn" onclick="document.getElementById('companyBadgeFile').click()"><i class="mdi mdi-upload"></i> Upload</button>
+                                <button type="button" class="btn btn-secondary tbl-btn" onclick="resetCompanyBranding('badge')"><i class="mdi mdi-restore"></i> Default</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-tab-content" id="tab-cmp-users">
+                <div class="form-group">
+                    <input type="text" class="form-input" id="userTabSearch"
+                        placeholder="Search users&#8230;" oninput="filterUserTab()">
+                </div>
+                <div id="userTabList" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+            </div>
+
+            <div class="modal-tab-content" id="tab-cmp-devices">
+                <div class="form-group">
+                    <input type="text" class="form-input" id="deviceTabSearch"
+                        placeholder="Search devices&#8230;" oninput="filterDeviceTab()">
+                </div>
+                <div id="deviceTabList" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button type="button" class="btn btn-danger" id="deleteCompanyBtn" onclick="deleteCurrentCompany()" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                <button type="button" class="btn btn-secondary" onclick="closeCompanyModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveCompanyBtn" onclick="saveCompany()">
+                    <i class="mdi mdi-content-save"></i>
+                    <span id="saveText">Save</span>
+                    <span id="saveLoading" class="loading" style="display:none;"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- =============================================================
+     DRIVER MODAL
+============================================================= -->
+<div class="modal" id="driverModal">
+    <div class="modal-content" style="max-width:820px;height:auto;">
+        <div class="modal-header">
+            <h2 class="modal-title" id="driverModalTitle">Add Driver</h2>
+            <button type="button" class="modal-close" onclick="closeDriverModal()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div class="modal-scrollable" style="padding:1.25rem;">
+            <div class="driver-modal-columns">
+                <!-- LEFT: driver info -->
+                <div>
+                    <div class="form-group">
+                        <label class="form-label">Full Name *</label>
+                        <input type="text" id="driverName" class="form-input" placeholder="John Smith">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Phone</label>
+                        <input type="text" id="driverPhone" class="form-input" placeholder="+1 555 000 0000">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Licence Number</label>
+                        <input type="text" id="driverLicence" class="form-input" placeholder="DL-12345678">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Notes</label>
+                        <textarea id="driverNotes" class="form-input" rows="3" placeholder="Optional notes&#8230;" style="resize:vertical;"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Current Vehicle</label>
+                        <select id="driverCurrentVehicle" class="form-input">
+                            <option value="">&#8212; Unassigned &#8212;</option>
+                        </select>
+                    </div>
+                    <div id="driverUserNote" style="display:none;padding:0.6rem 0.75rem;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px;font-size:0.82rem;color:#818cf8;margin-bottom:0.75rem;">
+                        <i class="mdi mdi-account"></i> This driver is linked to a user account. Name is managed via the Users section.
+                    </div>
+                    <div class="form-group" id="driverCompanyGroup" style="display:none;">
+                        <label class="form-label">Company</label>
+                        <select id="driverCompanySelect" class="form-input"></select>
+                    </div>
+                </div>
+                <!-- RIGHT: auto-assignment -->
+                <div>
+                    <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1px solid var(--border-color);">Auto-Assignment</div>
+                    <div class="form-group">
+                        <label class="form-label">Vehicles</label>
+                        <div style="border:1px solid var(--border-color);border-radius:6px;padding:0.5rem;max-height:150px;overflow-y:auto;background:var(--bg-card);">
+                            <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;cursor:pointer;padding:0.2rem 0;">
+                                <input type="checkbox" id="driverVehiclesAll" onchange="onDriverVehiclesAllChange()" style="cursor:pointer;">
+                                <span style="color:var(--text-secondary);">All company vehicles</span>
+                            </label>
+                            <div id="driverVehiclesList" style="margin-top:0.35rem;display:flex;flex-direction:column;gap:0.15rem;"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Rule</label>
+                        <input type="text" id="driverAssignRule" class="form-input" placeholder="e.g. authorized or speed > 0">
+                        <details style="margin-top:0.4rem;">
+                            <summary style="cursor:pointer;color:var(--text-muted);font-size:0.78rem;"><i class="mdi mdi-information-outline"></i> Syntax reference</summary>
+                            <div style="margin-top:0.4rem;padding:0.65rem 0.85rem;background:var(--bg-secondary);border-radius:8px;font-size:0.76rem;line-height:1.9;color:var(--text-muted);">
+                                <strong style="color:var(--text-secondary);">Attributes:</strong>
+                                speed, ignition, satellites, altitude, battery_voltage, fuel_level, temperature, door_open<br>
+                                <strong style="color:var(--text-secondary);">Operators:</strong>
+                                &gt; &lt; == != &gt;= &lt;= and or not in<br>
+                                <strong style="color:var(--text-secondary);">List of dicts</strong> &#8212;
+                                use a list comprehension to query any field across all items:<br>
+                                &nbsp;&bull;&nbsp;<code style="font-family:var(--font-mono);color:var(--accent-primary);">my_list != null</code> — list is present and non-empty<br>
+                                &nbsp;&bull;&nbsp;<code style="font-family:var(--font-mono);color:var(--accent-primary);">42 in [r["field"] for r in my_list]</code> — any item has <em>field</em> equal to 42<br>
+                                <strong style="color:var(--text-secondary);">Bluetooth beacons</strong> &#8212;
+                                <code style="font-family:var(--font-mono);">beacon_ids</code> is a list of objects with fields
+                                <code style="font-family:var(--font-mono);">id</code>, <code style="font-family:var(--font-mono);">type</code>, <code style="font-family:var(--font-mono);">rssi</code>, <code style="font-family:var(--font-mono);">battery</code>, <code style="font-family:var(--font-mono);">temp</code>.
+                                IDs are formatted as <code style="font-family:var(--font-mono);">"uuid:major:minor"</code> (iBeacon) or <code style="font-family:var(--font-mono);">"namespace:instance"</code> (Eddystone):<br>
+                                &nbsp;&bull;&nbsp;<code style="font-family:var(--font-mono);color:var(--accent-primary);">"abc123:0:1" in [b["id"] for b in beacon_ids]</code> — beacon in range
+                            </div>
+                        </details>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Mode</label>
+                        <select id="driverAssignMode" class="form-input" onchange="onDriverModeChange()">
+                            <option value="">— Disabled —</option>
+                            <option value="one_time">One-time</option>
+                            <option value="continuous">Continuous</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Clear When</label>
+                        <select id="driverAssignClear" class="form-input" onchange="onDriverClearChange()">
+                            <option value="never">Never</option>
+                            <option value="ignition_off">On ignition off</option>
+                            <option value="trip_end">On trip end</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="driverGraceGroup" style="display:none;">
+                        <label class="form-label">Grace Period (seconds)</label>
+                        <input type="number" id="driverAssignGrace" class="form-input" placeholder="0" min="0" step="1">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-danger" id="deleteDriverBtn" onclick="deleteDriver()" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                <button type="button" class="btn btn-secondary" onclick="closeDriverModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveDriver()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal" id="routeModal">
+    <div class="modal-content wide">
+        <div class="modal-header">
+            <h2 class="modal-title" id="routeModalTitle">Route Planner</h2>
+            <button type="button" class="modal-close" onclick="rtpCloseRouteModal()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
+            <div id="routePlanMap"></div>
+            <div class="form-grid">
+                <label><span>Route Name <span style="color:var(--accent-danger)">*</span></span><input id="rpName" class="form-input" placeholder="Morning deliveries"></label>
+                <label><span>Vehicle</span><select id="rpDevice" class="form-input"></select></label>
+            </div>
+            <div id="rpStops" class="stack-list"></div>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.85rem;">
+                <button type="button" class="btn btn-secondary" id="rpAddStopBtn" onclick="rtpAddStop()"><i class="mdi mdi-plus"></i> Blank Stop</button>
+                <button type="button" class="btn btn-secondary" id="rpNewBtn" onclick="rtpClearRouteForm()"><i class="mdi mdi-file-outline"></i> New</button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-danger" id="rpDeleteBtn" onclick="rtpDeleteCurrentRoute()" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                <button type="button" class="btn btn-secondary" onclick="rtpCloseRouteModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="rpSaveBtn" onclick="rtpSaveRoute()"><i class="mdi mdi-content-save"></i> <span id="rpSaveLabel">Save Route</span></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="routeDetailsModal">
+    <div class="modal-content wide" style="max-width:980px;">
+        <div class="modal-header">
+            <h2 class="modal-title" id="routeDetailsTitle">Route Details</h2>
+            <button type="button" class="modal-close" onclick="rtpCloseRouteDetails()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
+            <div id="routeDetailsBody"></div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="rtpCloseRouteDetails()">Close</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="billingPlanModal">
+    <div class="modal-content" style="max-width:820px;height:auto;max-height:90vh;">
+        <div class="modal-header">
+            <h2 class="modal-title" id="billingPlanModalTitle">Billing Plan</h2>
+            <button type="button" class="modal-close" onclick="rtpClosePlanModal()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
+            <div class="form-grid">
+                <label><span>Name</span><input id="billPlanName" class="form-input" placeholder="Growth"><div class="form-help">Internal plan name shown in billing tables and company assignments.</div></label>
+                <label><span id="billBaseLabel">Base Price</span><input id="billBase" class="form-input" type="number" min="0" placeholder="0"><div class="form-help">Fixed monthly amount charged before any usage overages.</div></label>
+                <label><span>Included Devices</span><input id="billIncDevices" class="form-input" type="number" min="0" value="0"><div class="form-help">Active devices included in the base monthly price.</div></label>
+                <label><span id="billDevicePriceLabel">Per Device</span><input id="billDevicePrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Monthly charge for each active device above the included amount.</div></label>
+                <label><span>Included Positions</span><input id="billIncPositions" class="form-input" type="number" min="0" value="0"><div class="form-help">Position messages included per month before overage billing starts.</div></label>
+                <label><span id="billPositionPriceLabel">Per 1000 Positions</span><input id="billPositionPrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Charge per started block of 1000 extra position messages.</div></label>
+                <label><span>Included API Calls</span><input id="billIncApi" class="form-input" type="number" min="0" value="0"><div class="form-help">REST API calls included per month for companies on this plan.</div></label>
+                <label><span id="billApiPriceLabel">Per 1000 API Calls</span><input id="billApiPrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Charge per started block of 1000 API calls above the included amount.</div></label>
+                <label style="grid-column:1 / -1;">
+                    <span>Companies</span>
+                    <input id="billPlanCompanySearch" class="form-input" placeholder="Search companies..." oninput="rtpFilterPlanCompanies()" style="margin-bottom:0.5rem;">
+                    <div id="billPlanCompanies" class="company-checklist"></div>
+                    <div class="form-help">A plan can be assigned to multiple companies. Saving updates all selected assignments.</div>
+                </label>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-danger" id="billPlanDeleteBtn" onclick="rtpDeletePlan(_rtpEditingPlanId)" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                <button type="button" class="btn btn-secondary" onclick="rtpClosePlanModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="rtpCreatePlan()"><i class="mdi mdi-content-save"></i> <span id="billPlanSaveLabel">Create Plan</span></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="notificationChannelModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">Add Notification Channel</h2>
+            <button type="button" class="modal-close" onclick="closeChannelModal()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div class="modal-scrollable">
+            <div class="form-group">
+                <label class="form-label">Channel Name</label>
+                <input type="text" id="newChannelName" class="form-input" placeholder="e.g. My Phone">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Apprise URL</label>
+                <input type="text" id="newChannelUrl" class="form-input" placeholder="tgram://bot_token/chat_id">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                <button type="button" class="btn btn-secondary" onclick="closeChannelModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addChannel()"><i class="mdi mdi-plus"></i> Add Channel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="exchangeRatesModal">
+    <div class="modal-content" style="max-width:720px;height:auto;max-height:90vh;">
+        <div class="modal-header">
+            <h2 class="modal-title">Exchange Rates</h2>
+            <button type="button" class="modal-close" onclick="rtpCloseExchangeRatesModal()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
+            <div style="overflow-x:auto;">
+                <table class="devices-table">
+                    <thead>
+                        <tr>
+                            <th>Currency</th>
+                            <th>EUR Rate</th>
+                            <th>Source</th>
+                            <th>Updated</th>
+                            <th style="width:80px;text-align:center;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="exchangeRatesTableBody"></tbody>
+                </table>
+            </div>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.85rem;">
+                <button type="button" class="btn btn-secondary" onclick="rtpAddExchangeRateRow()"><i class="mdi mdi-plus"></i> Add Rate</button>
+                <button type="button" class="btn btn-secondary" onclick="rtpRefreshExchangeRates()"><i class="mdi mdi-refresh"></i> Update Current Rates</button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="rtpCloseExchangeRatesModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="rtpSaveExchangeRates()"><i class="mdi mdi-content-save"></i> Save Rates</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="js/demo-mock-api.js"></script>
+<script src="js/config.js"></script>
+<script src="js/units.js"></script>
+<script src="js/impersonation.js"></script>
+<script src="js/ui-utils.js"></script>
+<script src="js/vehicle-icons.js"></script>
+<script src="js/device-management.js"></script>
+<script src="js/device-management-integrations.js"></script>
+<script src="js/device-commands.js"></script>
+<script src="js/company-management.js"></script>
+<script src="js/drivers.js"></script>
+<script src="js/notification-management.js"></script>
+<script src="js/management-advanced.js"></script>
+<script>
+(function () {
+    const SECTIONS = ['devices', 'companies', 'drivers', 'notifications', 'clips', 'routes', 'billing'];
+    const _sectionTabs = SECTIONS.map(s => ({
+        name: s,
+        panelId: 'section-' + s,
+        tabId: 'mgmtTab' + s.charAt(0).toUpperCase() + s.slice(1),
+    }));
+
+    const _plusIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
+    const _addActions = {
+        devices:   { label: 'Add Device',  fn: 'openAddDeviceModal()' },
+        companies: { label: 'Add Company', fn: 'openAddCompanyModal()' },
+        drivers:   { label: 'Add Driver',  fn: 'openDriverModal()' },
+        notifications: { label: 'Add Notification Channel', fn: 'openChannelModal()' },
+        routes:    { label: 'Add Route',   fn: 'rtpOpenRouteModal()' },
+        billing:   { label: 'Create Plan', fn: 'rtpOpenPlanModal()' },
+    };
+
+    const _refreshIcon = `<i class="mdi mdi-refresh" style="font-size:15px;"></i>`;
+    const _closeMenu = `document.getElementById('snDropdown').classList.remove('open'); document.getElementById('snGearBtn').classList.remove('active');`;
+
+    const _addPermissions = {
+        devices:   'edit_devices',
+        companies: null,
+        drivers:   'manage_drivers',
+        notifications: null,
+        routes:    'manage_routes',
+        billing:   null,
+    };
+
+    const _sectionPermissions = {
+        devices:   null,
+        companies: null,
+        drivers:   'manage_drivers',
+        notifications: null,
+        clips:     null,
+        routes:    'manage_routes',
+        billing:   null,
+    };
+
+    function _canAccessSection(name) {
+        const perm = _sectionPermissions[name];
+        if (name === 'companies') return localStorage.getItem('is_admin') === 'true';
+        if (name === 'billing') return localStorage.getItem('is_admin') === 'true';
+        return !perm || hasPermission(perm);
+    }
+
+    function _updateAddAction(name) {
+        const el = document.getElementById('snAddAction');
+        if (!el) return;
+        const a    = _addActions[name];
+        const perm = _addPermissions[name];
+        const allowed = !perm || hasPermission(perm);
+        el.innerHTML = (a && allowed) ? `<button class="header-menu-item" onclick="${a.fn}; ${_closeMenu}"><span class="header-menu-item-icon">${_plusIcon}</span><span>${a.label}</span></button>` : '';
+
+        const notifyEl = document.getElementById('snNotifyAction');
+        if (!notifyEl) return;
+        notifyEl.innerHTML = '';
+        if (name === 'billing' && localStorage.getItem('is_admin') === 'true') {
+            notifyEl.innerHTML = `<button class="header-menu-item" onclick="rtpOpenExchangeRatesModal(); ${_closeMenu}"><span class="header-menu-item-icon"><i class="mdi mdi-swap-horizontal" style="font-size:15px;"></i></span><span>Exchange Rates</span></button>`;
+        }
+
+        const refreshEl = document.getElementById('snRefreshAction');
+        if (!refreshEl) return;
+        refreshEl.innerHTML = '';
+    }
+
+    const _sectionInits = {
+        devices:   () => initDeviceSection(),
+        companies: () => initCompanySection(),
+        drivers:   () => initDriversSection(),
+        notifications: () => initNotificationsSection(),
+        clips:     () => initClipsSection(),
+        routes:    () => rtpInitRoutes(),
+        billing:   () => rtpInitBilling(),
+    };
+
+    function switchMgmtSection(name, pushState) {
+        if (!SECTIONS.includes(name)) name = 'devices';
+        if (!_canAccessSection(name)) name = 'devices';
+        RoutarioTabs.activate(_sectionTabs, name);
+        _updateAddAction(name);
+        if (pushState !== false) RoutarioTabs.replaceHash(name);
+        _sectionInits[name]?.();
+    }
+
+    window.switchMgmtSection = switchMgmtSection;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        checkLogin();
+        await permissionsReady;
+        if (!hasPermission('view_management')) { window.location.href = 'gps-dashboard.html'; return; }
+        const isAdmin        = localStorage.getItem('is_admin') === 'true';
+        const isCompanyAdmin = localStorage.getItem('is_company_admin') === 'true';
+        if (isAdmin) {
+            const t = document.getElementById('mgmtTabCompanies');
+            if (t) t.style.display = '';
+        }
+        const billingTab = document.getElementById('mgmtTabBilling');
+        if (billingTab && isAdmin) billingTab.style.display = '';
+        if (!hasPermission('manage_drivers')) {
+            const t = document.getElementById('mgmtTabDrivers');
+            if (t) t.style.display = 'none';
+        }
+
+        const hash = RoutarioTabs.hashValue();
+        switchMgmtSection(SECTIONS.includes(hash) ? hash : 'devices', false);
+    });
+
+    window.addEventListener('hashchange', () => {
+        const hash = RoutarioTabs.hashValue();
+        switchMgmtSection(SECTIONS.includes(hash) ? hash : 'devices', false);
+    });
+
+    document.addEventListener('keydown', e => {
+        if (e.key !== 'Escape') return;
+        const clipModal = document.getElementById('clipPlayerModal');
+        if (clipModal && clipModal.style.display !== 'none' && clipModal.style.display !== '') {
+            closeClipPlayer();
+            return;
+        }
+        const closers = [
+            ['alertProfileMergeModal', () => closeAlertProfileMergeChoice()],
+            ['alertProfileDevicePickerModal', () => closeAlertProfileDevicePicker()],
+            ['exchangeRatesModal', () => rtpCloseExchangeRatesModal()],
+            ['billingPlanModal', () => rtpClosePlanModal()],
+            ['routeDetailsModal', () => rtpCloseRouteDetails()],
+            ['routeModal',       () => rtpCloseRouteModal()],
+            ['notificationChannelModal', () => closeChannelModal()],
+            ['driverModal',      () => closeDriverModal()],
+            ['alertEditorModal', () => closeAlertEditor()],
+            ['companyModal',     () => closeCompanyModal()],
+            ['deviceModal',      () => closeDeviceModal()],
+        ];
+        for (const [id, fn] of closers) {
+            if (document.getElementById(id)?.classList.contains('active')) { fn(); break; }
+        }
+    });
+})();
+</script>
+<script src="js/voice-ptt.js"></script>
+</body>
+</html>

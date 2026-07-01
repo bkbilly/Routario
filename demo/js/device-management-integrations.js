@@ -1,0 +1,515 @@
+// ================================================================
+//  device-management-integrations.js
+//  Integration provider UI: dynamic credential form, account
+//  management, browse remote devices, test connection.
+//
+//  Depends on: device-management.js (loaded before this file)
+//  Shared state used: integrationProviders, integrationAccounts,
+//                     _esc(), apiFetch(), API_BASE, showAlert()
+// ================================================================
+
+// ── Protocol change handler ───────────────────────────────────────
+
+function onProtocolChange(existingIntg = null) {
+    const sel      = document.getElementById('deviceProtocol');
+    const selected = sel.value;
+    const isIntg   = integrationProviders.some(p => p.provider_id === selected);
+
+    // Show/hide IMEI field
+    const imeiGroup = document.getElementById('deviceImei')?.closest('.form-group');
+    if (imeiGroup) {
+        imeiGroup.style.display = isIntg ? 'none' : '';
+        const imeiInput = document.getElementById('deviceImei');
+        if (imeiInput) imeiInput.required = !isIntg;
+    }
+
+    // Show/hide dashcam toggle: only for native protocols that support camera
+    const cameraGroup = document.getElementById('deviceHasCameraGroup');
+    if (cameraGroup) {
+        const supportsCamera = !isIntg && (protocolInfo[selected]?.supports_camera || false);
+        cameraGroup.style.display = supportsCamera ? '' : 'none';
+        if (!supportsCamera) document.getElementById('deviceHasCamera').checked = false;
+    }
+
+    // Show/hide Commands tab based on protocol command support and permission
+    const commandsBtn = document.getElementById('commandsTabBtn');
+    if (commandsBtn) {
+        const supportsCommands = (protocolInfo[selected]?.supports_commands || false) && hasPermission('send_commands');
+        commandsBtn.style.display = supportsCommands ? '' : 'none';
+        const activeTab = document.querySelector('.modal-tab.active');
+        if (!supportsCommands && activeTab?.dataset?.tab === 'commands') {
+            switchModalTab('general');
+        } else if (supportsCommands && activeTab?.dataset?.tab === 'commands') {
+            loadAvailableCommands();
+        }
+    }
+
+    const panel = document.getElementById('integrationFieldsPanel');
+    if (!panel) return;
+
+    if (!isIntg) {
+        panel.style.display = 'none';
+        panel.querySelectorAll('input, textarea, select').forEach(el => el.removeAttribute('required'));
+        panel.innerHTML     = '';
+        return;
+    }
+
+    const provider = integrationProviders.find(p => p.provider_id === selected);
+    if (!provider) return;
+
+    panel.style.display = 'block';
+    panel.innerHTML     = _renderIntegrationFields(provider, existingIntg);
+    _syncIntegrationRequiredFields();
+}
+
+// ── Returns true if the selected protocol is an integration ───────
+
+function _isIntegrationSelected() {
+    const val = document.getElementById('deviceProtocol')?.value;
+    return integrationProviders.some(p => p.provider_id === val);
+}
+
+function _setRequiredWhenVisible(input, required) {
+    if (!input) return;
+    if (required) input.setAttribute('required', '');
+    else input.removeAttribute('required');
+}
+
+function _syncIntegrationRequiredFields() {
+    const panel = document.getElementById('integrationFieldsPanel');
+    if (!panel || panel.style.display === 'none') return;
+
+    const fields = document.getElementById('intgCredentialFields');
+    const usingExisting = !!document.getElementById('intgAccountSelect')?.value;
+    const credentialsVisible = !!fields && fields.style.display !== 'none' && !usingExisting;
+
+    _setRequiredWhenVisible(document.getElementById('intgAccountLabel'), credentialsVisible);
+    fields?.querySelectorAll('input[id^="intgField_"], textarea[id^="intgField_"]').forEach(input => {
+        _setRequiredWhenVisible(input, credentialsVisible && input.dataset.required === 'true');
+    });
+}
+
+// ── Render credential form for a provider ────────────────────────
+
+function _renderIntegrationFields(provider, existingIntg = null) {
+    // Regular users (or users without manage_integrations) see a read-only badge
+    if (!hasAdminAccess || !hasPermission('manage_integrations')) {
+        const label = existingIntg?.account_label || provider.display_name;
+        return `
+            <div style="background:var(--bg-tertiary); border:1px solid var(--accent-primary);
+                        border-radius:10px; padding:1rem 1.25rem; margin-top:0.5rem;
+                        display:flex; align-items:center; gap:0.75rem;">
+                <span style="font-size:1.25rem;"><i class="mdi mdi-connection"></i></span>
+                <div>
+                    <div style="font-weight:600;">${_esc(provider.display_name)}</div>
+                    <div style="font-size:0.8rem; color:var(--text-muted);">Connected via <em>${_esc(label)}</em></div>
+                </div>
+            </div>`;
+    }
+
+    const existing = integrationAccounts.filter(a => a.provider_id === provider.provider_id);
+
+    const existingOptions = existing.map(a =>
+        `<option value="${a.id}" data-label="${_esc(a.account_label)}"
+             ${existingIntg?.account_label === a.account_label ? 'selected' : ''}>
+             ${_esc(a.account_label)}
+         </option>`
+    ).join('');
+
+    // Determine if an existing account is pre-selected (e.g. when editing a device)
+    const preSelectedAccount = existingIntg && existingIntg.account_label != null
+        ? existing.find(a => a.account_label === existingIntg.account_label)
+        : null;
+    const usingExisting = !!preSelectedAccount;
+
+    return `
+        <div style="background:var(--bg-tertiary); border:1px solid var(--accent-primary);
+                    border-radius:10px; padding:1.25rem; margin-top:0.5rem;">
+
+            <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em;
+                        color:var(--accent-primary); margin-bottom:1rem; font-weight:600;">
+                <i class="mdi mdi-connection"></i> ${_esc(provider.display_name)} Connection
+            </div>
+
+            ${existing.length ? `
+            <div class="form-group" style="margin-bottom:0.75rem;">
+                <label class="form-label">Use existing account</label>
+                <select class="form-input" id="intgAccountSelect" onchange="onIntgAccountSelect()">
+                    <option value="">— Enter new credentials —</option>
+                    ${existingOptions}
+                </select>
+            </div>` : ''}
+
+            <div id="intgCredentialFields" style="${usingExisting ? 'display:none;' : ''}">
+
+                <div class="form-group" style="margin-bottom:0.75rem;">
+                    <label class="form-label">Account Label *</label>
+                    <input type="text" class="form-input" id="intgAccountLabel"
+                           placeholder="e.g. Main Fleet, Branch Office…"
+                           value="${_esc(existingIntg?.account_label || '')}"
+                           ${usingExisting ? '' : 'required'}>
+                    <div class="form-help">Devices sharing the same label reuse one login.</div>
+                </div>
+
+                ${provider.fields.map(f => `
+                <div class="form-group" style="margin-bottom:0.75rem;">
+                    <label class="form-label">${_esc(f.label)}${f.required ? ' *' : ''}</label>
+                    ${f.field_type === 'textarea'
+                      ? `<textarea class="form-input" id="intgField_${f.key}"
+                                   placeholder="${_esc(f.placeholder || '')}"
+                                   rows="6" style="font-family:monospace;font-size:0.8rem;resize:vertical;"
+                                   data-required="${f.required ? 'true' : 'false'}"
+                                   ${f.required && !usingExisting ? 'required' : ''}>${_esc(existingIntg?.credentials?.[f.key] ?? f.default ?? '')}</textarea>`
+                      : `<input type="${f.field_type === 'password' ? 'password'
+                                       : f.field_type === 'number'   ? 'number' : 'text'}"
+                                 class="form-input"
+                                 id="intgField_${f.key}"
+                                 placeholder="${_esc(f.placeholder || '')}"
+                                 value="${_esc(existingIntg?.credentials?.[f.key] ?? f.default ?? '')}"
+                                 data-required="${f.required ? 'true' : 'false'}"
+                                 ${f.required && !usingExisting ? 'required' : ''}>`}
+                    ${f.help_text ? `<div class="form-help">${_esc(f.help_text)}</div>` : ''}
+                </div>`).join('')}
+            </div>
+
+            ${usingExisting ? `
+            <div id="intgExistingActions" style="margin-bottom:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                <button type="button" class="btn btn-secondary" style="flex:1;"
+                        onclick="testIntegrationConnection()">
+                    <i class="mdi mdi-connection"></i> Test Connection
+                </button>
+                <button type="button" class="btn btn-danger" style="flex:1;"
+                        onclick="deleteIntegrationAccount()">
+                    <i class="mdi mdi-delete"></i> Delete Credentials
+                </button>
+            </div>` : `
+            <div id="intgExistingActions" style="display:none; margin-bottom:0.75rem; gap:0.5rem; flex-wrap:wrap;">
+                <button type="button" class="btn btn-secondary" style="flex:1;"
+                        onclick="testIntegrationConnection()">
+                    <i class="mdi mdi-connection"></i> Test Connection
+                </button>
+                <button type="button" class="btn btn-danger" style="flex:1;"
+                        onclick="deleteIntegrationAccount()">
+                    <i class="mdi mdi-delete"></i> Delete Credentials
+                </button>
+            </div>`}
+
+            <div id="intgNewActions" style="${usingExisting ? 'display:none;' : ''}">
+                <button type="button" class="btn btn-secondary" style="width:100%;"
+                        onclick="testIntegrationConnection()">
+                    <i class="mdi mdi-connection"></i> Test Connection
+                </button>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0.75rem; margin-top:0.75rem;">
+                <label class="form-label">Remote Device ID *</label>
+                <div style="display:flex; gap:0.5rem;">
+                    <input type="text" class="form-input" id="intgRemoteId"
+                           placeholder="ID on ${_esc(provider.display_name)}"
+                           value="${_esc(existingIntg?.remote_id || '')}"
+                           style="flex:1;">
+                    ${provider.supports_browse !== false ? `
+                    <button type="button" class="btn btn-secondary"
+                            style="white-space:nowrap;" onclick="browseRemoteDevices()">
+                        <i class="mdi mdi-folder-open"></i> Browse
+                    </button>` : ''}
+                </div>
+                <div class="form-help">The identifier used by ${_esc(provider.display_name)} for this vehicle.</div>
+            </div>
+
+            <div id="intgTestResult" style="font-size:0.8rem; margin-top:0.5rem; min-height:1.2em;"></div>
+        </div>
+    `;
+}
+
+// ── Restore integration fields when editing an existing device ────
+
+function restoreIntegrationFields(device) {
+    const intg = device.config?.integration;
+    if (!intg?.provider) return;
+
+    const provider = integrationProviders.find(p => p.provider_id === intg.provider);
+    if (!provider) return;
+
+    onProtocolChange(intg);
+    onIntgAccountSelect();
+}
+
+// ── Existing account selected — show/hide credential fields ───────
+
+function onIntgAccountSelect() {
+    const sel       = document.getElementById('intgAccountSelect');
+    const fields    = document.getElementById('intgCredentialFields');
+    const existingActions = document.getElementById('intgExistingActions');
+    const newActions = document.getElementById('intgNewActions');
+    const accountId = sel?.value;
+    if (!fields) return;
+
+    const usingExisting = !!accountId;
+
+    // Hide credential fields entirely when using an existing account
+    fields.style.display = usingExisting ? 'none' : '';
+
+    // Toggle action buttons
+    if (existingActions) {
+        existingActions.style.display = usingExisting ? 'flex' : 'none';
+    }
+    if (newActions) {
+        newActions.style.display = usingExisting ? 'none' : '';
+    }
+
+    _syncIntegrationRequiredFields();
+}
+
+// ── Test connection ───────────────────────────────────────────────
+
+async function testIntegrationConnection() {
+    const sel        = document.getElementById('deviceProtocol');
+    const providerId = sel?.value;
+    const provider   = integrationProviders.find(p => p.provider_id === providerId);
+    if (!provider) return;
+
+    const resultEl       = document.getElementById('intgTestResult');
+    resultEl.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Testing…';
+    resultEl.style.color = 'var(--text-muted)';
+
+    // Fix #1: If an existing account is selected, test via the accounts/{id}/devices
+    // endpoint (which uses stored credentials) instead of sending empty form fields.
+    const existingSel = document.getElementById('intgAccountSelect');
+    const accountId   = existingSel?.value ? parseInt(existingSel.value) : null;
+
+    if (accountId) {
+        try {
+            const res = await apiFetch(`${API_BASE}/integrations/accounts/${accountId}/devices`);
+            if (res.ok) {
+                const devices = await res.json();
+                resultEl.innerHTML = `<i class="mdi mdi-check-circle"></i> Connected — ${devices.length} device(s) visible`;
+                resultEl.style.color = 'var(--accent-success)';
+            } else {
+                const data = await res.json().catch(() => ({}));
+                resultEl.innerHTML = `<i class="mdi mdi-close-circle"></i> ${data.detail || 'Connection failed'}`;
+                resultEl.style.color = 'var(--accent-danger)';
+            }
+        } catch (e) {
+            resultEl.innerHTML = '<i class="mdi mdi-close-circle"></i> Request failed';
+            resultEl.style.color = 'var(--accent-danger)';
+        }
+        return;
+    }
+
+    // New credentials — use the test endpoint with form values
+    const credentials = _collectCredentials(provider);
+
+    try {
+        const res  = await apiFetch(`${API_BASE}/integrations/accounts/test`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ provider_id: providerId, credentials }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+            resultEl.innerHTML = `<i class="mdi mdi-check-circle"></i> ${data.message}`;
+            resultEl.style.color = 'var(--accent-success)';
+        } else {
+            resultEl.innerHTML = `<i class="mdi mdi-close-circle"></i> ${data.message}`;
+            resultEl.style.color = 'var(--accent-danger)';
+        }
+    } catch (e) {
+        resultEl.innerHTML = '<i class="mdi mdi-close-circle"></i> Request failed';
+        resultEl.style.color = 'var(--accent-danger)';
+    }
+}
+
+// ── Delete integration account credentials ────────────────────────
+
+async function deleteIntegrationAccount() {
+    const existingSel = document.getElementById('intgAccountSelect');
+    const accountId   = existingSel?.value ? parseInt(existingSel.value) : null;
+    if (!accountId) return;
+
+    const account = integrationAccounts.find(a => a.id === accountId);
+    const label   = account?.account_label || 'this account';
+
+    if (!confirm(`Delete credentials for "${label}"?\n\nDevices using these credentials will stop receiving data.`)) return;
+
+    try {
+        const res = await apiFetch(`${API_BASE}/integrations/accounts/${accountId}`, { method: 'DELETE' });
+        if (res.ok || res.status === 204) {
+            // Remove from local cache
+            integrationAccounts = integrationAccounts.filter(a => a.id !== accountId);
+
+            showAlert({ title: 'Deleted', message: `Credentials for "${label}" removed.`, type: 'success' });
+
+            // Re-render the integration panel without the deleted account
+            const sel      = document.getElementById('deviceProtocol');
+            const provider = integrationProviders.find(p => p.provider_id === sel?.value);
+            if (provider) {
+                const panel = document.getElementById('integrationFieldsPanel');
+                panel.innerHTML = _renderIntegrationFields(provider, null);
+            }
+        } else {
+            const data = await res.json().catch(() => ({}));
+            showAlert({ title: 'Error', message: data.detail || 'Failed to delete credentials', type: 'error' });
+        }
+    } catch (e) {
+        showAlert({ title: 'Error', message: e.message || 'Request failed', type: 'error' });
+    }
+}
+
+// ── Browse remote devices ─────────────────────────────────────────
+
+async function browseRemoteDevices() {
+    const sel        = document.getElementById('deviceProtocol');
+    const providerId = sel?.value;
+    const provider   = integrationProviders.find(p => p.provider_id === providerId);
+    if (!provider) return;
+
+    // If an existing account is already selected, use it directly
+    const existingSel = document.getElementById('intgAccountSelect');
+    let accountId     = existingSel?.value ? parseInt(existingSel.value) : null;
+
+    if (!accountId) {
+        // Check all required credential fields are filled
+        const credentials = _collectCredentials(provider);
+        const hasAllRequired = provider.fields
+            .filter(f => f.required)
+            .every(f => credentials[f.key]?.trim());
+
+        if (!hasAllRequired) {
+            showAlert({ title: 'Missing credentials', message: 'Fill in all required credential fields before browsing.', type: 'warning' });
+            return;
+        }
+
+        // Auto-fill label from username/email if blank
+        const labelEl = document.getElementById('intgAccountLabel');
+        if (labelEl && !labelEl.value.trim()) {
+            labelEl.value = credentials.username || credentials.email || provider.display_name;
+        }
+
+        accountId = await _ensureAccount(provider);
+        if (!accountId) return;
+    }
+
+    try {
+        const res = await apiFetch(`${API_BASE}/integrations/accounts/${accountId}/devices`);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            showAlert({ title: 'Error', message: err.detail || 'Could not list remote devices.', type: 'error' });
+            return;
+        }
+        const remoteDevices = await res.json();
+        if (!remoteDevices.length) {
+            showAlert({ title: 'No devices', message: 'No devices found on this account.', type: 'warning' });
+            return;
+        }
+
+        const chosen = await _showDevicePicker(remoteDevices);
+        if (!chosen) return;
+
+        document.getElementById('intgRemoteId').value = chosen.remote_id;
+        if (!document.getElementById('deviceName').value)
+            document.getElementById('deviceName').value = chosen.name;
+        if (chosen.license_plate)
+            document.getElementById('licensePlate').value = chosen.license_plate;
+
+    } catch (e) {
+        showAlert({ title: 'Error', message: e.message, type: 'error' });
+    }
+}
+
+// ── Remote device picker modal ────────────────────────────────────
+
+function _showDevicePicker(remoteDevices) {
+    return new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position:fixed; inset:0; background:rgba(0,0,0,0.75);
+            z-index:9999; display:flex; align-items:center; justify-content:center;`;
+
+        const box = document.createElement('div');
+        box.style.cssText = `
+            background:var(--bg-secondary); border:1px solid var(--border-color);
+            border-radius:14px; padding:1.5rem; max-width:500px; width:92%;
+            max-height:65vh; overflow-y:auto;`;
+
+        box.innerHTML = `
+            <div style="font-weight:700; font-size:1rem; margin-bottom:1rem;">
+                Select remote device
+            </div>
+            ${remoteDevices.map(d => `
+            <div style="padding:0.65rem 0.85rem; border:1px solid var(--border-color);
+                 border-radius:8px; margin-bottom:0.5rem; cursor:pointer;"
+                 onmouseover="this.style.background='var(--bg-hover)'"
+                 onmouseout="this.style.background=''"
+                 data-remote='${JSON.stringify(d).replace(/'/g, "&#39;")}'>
+                <div style="font-weight:600;">${_esc(d.name)}</div>
+                <div style="font-size:0.75rem; color:var(--text-muted);">
+                    ID: ${_esc(d.remote_id)}
+                    ${d.imei          ? ' · IMEI: '  + _esc(d.imei)          : ''}
+                    ${d.license_plate ? ' · Plate: ' + _esc(d.license_plate) : ''}
+                </div>
+            </div>`).join('')}
+            <button class="btn btn-secondary" style="width:100%; margin-top:0.5rem;"
+                    id="_intgCancelBtn">Cancel</button>
+        `;
+
+        box.querySelectorAll('[data-remote]').forEach(el => {
+            el.addEventListener('click', () => {
+                document.body.removeChild(overlay);
+                resolve(JSON.parse(el.dataset.remote));
+            });
+        });
+        box.querySelector('#_intgCancelBtn').addEventListener('click', () => {
+            document.body.removeChild(overlay);
+            resolve(null);
+        });
+
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+    });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────
+
+function _collectCredentials(provider) {
+    const creds = {};
+    provider.fields.forEach(f => {
+        const el = document.getElementById(`intgField_${f.key}`);
+        if (el) creds[f.key] = el.value.trim();
+    });
+    return creds;
+}
+
+async function _ensureAccount(provider) {
+    const existingSel = document.getElementById('intgAccountSelect');
+    if (existingSel?.value) return parseInt(existingSel.value);
+
+    const label = document.getElementById('intgAccountLabel')?.value?.trim();
+    if (!label) {
+        showAlert({ title: 'Required', message: 'Enter an Account Label first.', type: 'warning' });
+        return null;
+    }
+
+    const credentials = _collectCredentials(provider);
+    try {
+        const res = await apiFetch(`${API_BASE}/integrations/accounts`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+                provider_id:   provider.provider_id,
+                account_label: label,
+                credentials,
+            }),
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Failed');
+        const acct = await res.json();
+        integrationAccounts = [
+            ...integrationAccounts.filter(a => a.id !== acct.id),
+            acct,
+        ];
+        return acct.id;
+    } catch (e) {
+        showAlert({ title: 'Error', message: e.message || 'Could not save account.', type: 'error' });
+        return null;
+    }
+}

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>REST API - Routario</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+    <link rel="icon" href="icons/favicon.ico">
+    <style>
+        :root {
+            --bg-primary:#0a0e1a; --bg-secondary:#131825; --bg-tertiary:#1a2035;
+            --text-primary:#e5e7eb; --text-secondary:#9ca3af; --text-muted:#6b7280;
+            --accent-primary:#3b82f6; --accent-danger:#ef4444; --border-color:#374151;
+            --font-display:'Outfit',sans-serif; --font-mono:'JetBrains Mono',monospace;
+        }
+        * { box-sizing:border-box; }
+        body { margin:0; background:var(--bg-primary); color:var(--text-primary); font-family:var(--font-display); line-height:1.55; }
+        .container { max-width:1100px; margin:0 auto; padding:2rem; }
+        .topbar { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1.5rem; }
+        h1 { font-size:2.2rem; margin:0; font-weight:800; color:var(--accent-primary); }
+        h2 { margin:2rem 0 0.75rem; font-size:1.25rem; }
+        h3 { margin:1.2rem 0 0.5rem; font-size:1rem; color:var(--text-secondary); }
+        p { color:var(--text-secondary); }
+        a { color:var(--accent-primary); }
+        .btn { display:inline-flex; align-items:center; gap:0.45rem; padding:0.65rem 0.9rem; border:1px solid var(--border-color); border-radius:8px; color:var(--text-primary); text-decoration:none; background:var(--bg-tertiary); font-weight:600; }
+        .card { border:1px solid var(--border-color); background:var(--bg-secondary); border-radius:8px; padding:1rem; margin-bottom:1rem; }
+        code, pre { font-family:var(--font-mono); }
+        code { background:var(--bg-tertiary); border:1px solid var(--border-color); padding:0.1rem 0.3rem; border-radius:5px; }
+        pre { background:var(--bg-tertiary); border:1px solid var(--border-color); border-radius:8px; padding:1rem; overflow:auto; color:#dbeafe; }
+        table { width:100%; border-collapse:collapse; margin-top:0.75rem; }
+        th, td { border-bottom:1px solid var(--border-color); padding:0.65rem; text-align:left; vertical-align:top; }
+        th { color:var(--text-muted); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.04em; }
+        .method { font-family:var(--font-mono); font-weight:700; white-space:nowrap; }
+        .get { color:#22c55e; } .post { color:#3b82f6; } .put { color:#f59e0b; } .delete { color:var(--accent-danger); }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="topbar">
+        <h1>Routario REST API</h1>
+        <a class="btn" href="/user-settings.html#apiKeys"><i class="mdi mdi-key-variant"></i> API Keys</a>
+    </div>
+
+    <div class="card">
+        <p>Use API keys as Bearer tokens. Create keys from <strong>User Settings → API Keys</strong>. Keys are scoped, can expire, and are shown only once.</p>
+        <pre>Authorization: Bearer rt_your_api_key_here
+Content-Type: application/json</pre>
+    </div>
+
+    <h2>Scopes</h2>
+    <table>
+        <tr><th>Scope</th><th>Purpose</th></tr>
+        <tr><td><code>devices:read</code></td><td>Read devices and state.</td></tr>
+        <tr><td><code>devices:write</code></td><td>Create or update devices.</td></tr>
+        <tr><td><code>positions:read</code></td><td>Read position history.</td></tr>
+        <tr><td><code>commands:send</code></td><td>Send commands to supported devices.</td></tr>
+        <tr><td><code>reports:read</code></td><td>Run and read reports.</td></tr>
+        <tr><td><code>routes:read</code></td><td>Read planned routes.</td></tr>
+        <tr><td><code>routes:write</code></td><td>Create, update, and delete planned routes.</td></tr>
+        <tr><td><code>billing:read</code></td><td>Read billing usage and invoices.</td></tr>
+    </table>
+
+    <h2>Common Endpoints</h2>
+    <table>
+        <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+        <tr><td class="method get">GET</td><td><code>/api/devices</code></td><td>List devices visible to the key owner.</td></tr>
+        <tr><td class="method get">GET</td><td><code>/api/devices/{device_id}/state</code></td><td>Get current device state.</td></tr>
+        <tr><td class="method post">POST</td><td><code>/api/positions/history</code></td><td>Read historical positions for a device/date range.</td></tr>
+        <tr><td class="method get">GET</td><td><code>/api/reports/types</code></td><td>List available backend-defined reports.</td></tr>
+        <tr><td class="method get">GET</td><td><code>/api/planned-routes</code></td><td>List planned routes.</td></tr>
+        <tr><td class="method post">POST</td><td><code>/api/planned-routes/preview</code></td><td>Preview route geometry from ordered stops.</td></tr>
+        <tr><td class="method post">POST</td><td><code>/api/planned-routes</code></td><td>Create a route with ordered stops.</td></tr>
+        <tr><td class="method put">PUT</td><td><code>/api/planned-routes/{route_id}</code></td><td>Update route assignment, status, or stops.</td></tr>
+        <tr><td class="method delete">DELETE</td><td><code>/api/planned-routes/{route_id}</code></td><td>Delete a planned route.</td></tr>
+        <tr><td class="method get">GET</td><td><code>/health/ready</code></td><td>Readiness check for monitoring.</td></tr>
+    </table>
+
+    <h2>Route Example</h2>
+    <pre>curl -X POST https://your-host/api/planned-routes \
+  -H "Authorization: Bearer rt_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Morning route",
+    "device_id": 12,
+    "stops": [
+      {"sequence": 0, "name": "Depot", "latitude": 37.9838, "longitude": 23.7275},
+      {"sequence": 1, "name": "Customer", "latitude": 38.0500, "longitude": 23.8000}
+    ]
+  }'</pre>
+    <p>Routes with an assigned <code>device_id</code> are saved as <code>planned</code>. Unassigned routes are saved as <code>draft</code>. Route geometry uses Valhalla when available and falls back to straight-line geometry.</p>
+
+    <h2>Built-In OpenAPI</h2>
+    <p>FastAPI also exposes generated schema and interactive API docs at <a href="/docs">/docs</a> and <a href="/openapi.json">/openapi.json</a>.</p>
+</div>
+</body>
+</html>

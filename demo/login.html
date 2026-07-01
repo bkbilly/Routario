@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Routario</title>
+
+    <link rel="icon" href="icons/favicon.ico">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="manifest" href="manifest.json">
+    <style>
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #131825;
+            --bg-tertiary: #1a2035;
+            --text-primary: #e5e7eb;
+            --accent-primary: #3b82f6;
+            --accent-secondary: #8b5cf6;
+            --border-color: #374151;
+        }
+        
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+
+        body::before {
+            content: ''; position: fixed; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.1) 0%, transparent 50%);
+            animation: pulse 10s ease infinite; z-index: -1;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+        .login-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 3rem;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+
+        @media (max-height: 620px), (max-width: 480px) {
+            body { align-items: flex-start; }
+            .login-card { padding: 2rem 1.25rem; margin: 1rem 0; }
+            .logo { margin-bottom: 0.5rem; }
+            p { margin-bottom: 1.25rem; }
+            .form-group { margin-bottom: 1rem; }
+        }
+
+        .logo { font-size: 3rem; margin-bottom: 1rem; }
+        .logo img { width: 96px; height: 96px; object-fit: contain; }
+        h1 { margin-bottom: 0.5rem; font-weight: 700; }
+        p { color: #9ca3af; margin-bottom: 2rem; font-size: 0.9rem; }
+
+        .form-group { margin-bottom: 1.5rem; text-align: left; }
+        .form-label { display: block; font-size: 0.85rem; margin-bottom: 0.5rem; color: #9ca3af; }
+        .form-input {
+            width: 100%; padding: 0.75rem 1rem;
+            box-sizing: border-box;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+        .form-input:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+
+        .btn {
+            width: 100%; padding: 0.75rem;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border: none; border-radius: 8px;
+            color: white; font-weight: 600; font-size: 1rem;
+            cursor: pointer; transition: transform 0.2s;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3); }
+        .btn-secondary {
+            margin-top: 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+        }
+
+        .error-msg { color: #ef4444; font-size: 0.85rem; margin-top: 1rem; display: none; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="logo">
+            <img src="icons/icon-192-full.png" class="logo-icon">
+        </div>
+        <h1>Welcome Back</h1>
+        <p>Sign in to your GPS Fleet Tracker</p>
+        
+        <form onsubmit="handleLogin(event)" autocapitalize="off" autocorrect="off" spellcheck="false">
+            <div class="form-group">
+                <label class="form-label">Username or Email</label>
+                <input type="text" id="username" class="form-input" required autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="email" enterkeyhint="next">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" id="password" class="form-input" required>
+            </div>
+            <div class="form-group" id="mfaGroup" style="display:none;">
+                <label class="form-label">Authenticator or Recovery Code</label>
+                <input type="text" id="mfaCode" class="form-input" inputmode="numeric" autocomplete="one-time-code">
+            </div>
+            <button type="submit" class="btn" id="loginBtn">Sign In</button>
+            <button type="button" class="btn btn-secondary" id="passkeyBtn" onclick="handlePasskeyLogin()">Sign in with passkey</button>
+            <div class="error-msg" id="errorMsg">Invalid credentials</div>
+        </form>
+    </div>
+    <script src="js/demo-mock-api.js"></script>
+<script src="js/config.js"></script>
+    <script>
+        const loginSlug = (() => {
+            const match = window.location.pathname.match(/^\/login\/([^/]+)\/?$/);
+            return match ? decodeURIComponent(match[1]) : null;
+        })();
+        if (loginSlug) applyCompanyLoginBranding(loginSlug);
+
+        function b64urlToBuffer(value) {
+            const padding = '='.repeat((4 - value.length % 4) % 4);
+            const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const raw = atob(base64);
+            return Uint8Array.from(raw, c => c.charCodeAt(0)).buffer;
+        }
+
+        function bufferToB64url(buffer) {
+            const bytes = new Uint8Array(buffer || []);
+            let raw = '';
+            bytes.forEach(b => { raw += String.fromCharCode(b); });
+            return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+        }
+
+        function parseCredentialOptions(optionsJson, mode) {
+            const options = typeof optionsJson === 'string' ? JSON.parse(optionsJson) : optionsJson;
+            options.challenge = b64urlToBuffer(options.challenge);
+            if (mode === 'create') {
+                options.user.id = b64urlToBuffer(options.user.id);
+                options.excludeCredentials = (options.excludeCredentials || []).map(c => ({ ...c, id: b64urlToBuffer(c.id) }));
+            } else {
+                options.allowCredentials = (options.allowCredentials || []).map(c => ({ ...c, id: b64urlToBuffer(c.id) }));
+            }
+            return options;
+        }
+
+        function credentialToJson(credential) {
+            const response = credential.response;
+            const data = {
+                id: credential.id,
+                rawId: bufferToB64url(credential.rawId),
+                type: credential.type,
+                clientExtensionResults: credential.getClientExtensionResults ? credential.getClientExtensionResults() : {},
+                response: {
+                    clientDataJSON: bufferToB64url(response.clientDataJSON),
+                },
+            };
+            if (credential.authenticatorAttachment) data.authenticatorAttachment = credential.authenticatorAttachment;
+            if (response.attestationObject) data.response.attestationObject = bufferToB64url(response.attestationObject);
+            if (response.authenticatorData) data.response.authenticatorData = bufferToB64url(response.authenticatorData);
+            if (response.signature) data.response.signature = bufferToB64url(response.signature);
+            if (response.userHandle) data.response.userHandle = bufferToB64url(response.userHandle);
+            return data;
+        }
+
+        function storeLoginData(data) {
+            localStorage.setItem('auth_token', data.access_token);
+            localStorage.setItem('user_id', data.user_id);
+            localStorage.setItem('username', data.username);
+            localStorage.setItem('is_admin', data.is_admin);
+            localStorage.setItem('is_company_admin', data.is_company_admin || false);
+            localStorage.setItem('company_id', data.company_id ?? '');
+            localStorage.setItem('units', data.units || 'metric');
+            localStorage.setItem('currency', data.currency || 'EUR');
+            localStorage.setItem('permissions', JSON.stringify(data.permissions || []));
+            if (String(data.company_id ?? '') !== localStorage.getItem('company_login_slug_company_id')) {
+                localStorage.removeItem('company_login_slug');
+                localStorage.removeItem('company_login_slug_company_id');
+            }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const btn = document.getElementById('loginBtn');
+            const err = document.getElementById('errorMsg');
+            
+            btn.disabled = true;
+            btn.textContent = 'Signing in...';
+            err.style.display = 'none';
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const mfaCode = document.getElementById('mfaCode').value.trim();
+
+            try {
+                const res = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, mfa_code: mfaCode || null })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.mfa_required) {
+                        document.getElementById('mfaGroup').style.display = 'block';
+                        document.getElementById('mfaCode').required = true;
+                        document.getElementById('mfaCode').focus();
+                        err.textContent = 'Enter your authenticator or recovery code';
+                        err.style.display = 'block';
+                        btn.disabled = false;
+                        btn.textContent = 'Verify Code';
+                        return;
+                    }
+                    storeLoginData(data);
+                    await syncUserTimezone();
+                    window.location.href = 'gps-dashboard.html';
+                } else {
+                    err.textContent = 'Invalid username or password';
+                    err.style.display = 'block';
+                }
+            } catch (e) {
+                err.textContent = 'Connection error. Please try again.';
+                err.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Sign In';
+            }
+        }
+
+        async function handlePasskeyLogin() {
+            const btn = document.getElementById('passkeyBtn');
+            const err = document.getElementById('errorMsg');
+            if (!window.PublicKeyCredential) {
+                err.textContent = 'Passkeys are not supported by this browser';
+                err.style.display = 'block';
+                return;
+            }
+            btn.disabled = true;
+            btn.textContent = 'Waiting for passkey...';
+            err.style.display = 'none';
+            try {
+                const username = document.getElementById('username').value.trim();
+                const optionsRes = await fetch(`${API_BASE}/passkeys/login/options`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username || null }),
+                });
+                if (!optionsRes.ok) throw new Error('Unable to start passkey login');
+                const challenge = await optionsRes.json();
+                const credential = await navigator.credentials.get({
+                    publicKey: parseCredentialOptions(challenge.options, 'get'),
+                });
+                const verifyRes = await fetch(`${API_BASE}/passkeys/login/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ state: challenge.state, credential: credentialToJson(credential) }),
+                });
+                if (!verifyRes.ok) {
+                    const data = await verifyRes.json().catch(() => ({}));
+                    throw new Error(data.detail || 'Passkey login failed');
+                }
+                const data = await verifyRes.json();
+                storeLoginData(data);
+                await syncUserTimezone();
+                window.location.href = 'gps-dashboard.html';
+            } catch (e) {
+                err.textContent = e.name === 'NotAllowedError' ? 'Passkey login was cancelled' : (e.message || 'Passkey login failed');
+                err.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Sign in with passkey';
+            }
+        }
+    </script>
+</body>
+</html>

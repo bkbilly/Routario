@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Management - Routario</title>
+    <script>window.location.replace('management.html');</script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="icon" href="icons/favicon.ico">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="manifest" href="manifest.json">
+    <!-- Material Design Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+    <link rel="stylesheet" href="css/tables.css">
+    <link rel="stylesheet" href="css/device-management.css">
+    <script src="js/settings-nav.js"></script>
+</head>
+<body>
+
+<div class="container">
+
+
+    <!-- Searchable device table -->
+    <div class="devices-table-wrap">
+        <div class="devices-search-bar">
+            <div class="search-input-wrap">
+                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                <input type="text" id="deviceSearch" class="search-input"
+                    placeholder="Search by name, IMEI, plate, protocol&#8230;"
+                    oninput="filterDevices()">
+            </div>
+            <span class="devices-count" id="devicesCount"></span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="devices-table">
+                <thead>
+                    <tr>
+                        <th style="width:44px;"></th>
+                        <th data-sort="name" data-sort-dir="asc" onclick="sortDevices('name')">Name</th>
+                        <th data-sort="protocol" onclick="sortDevices('protocol')">Protocol</th>
+                        <th data-sort="plate" onclick="sortDevices('plate')">Plate</th>
+                        <th class="company-col" data-sort="company" onclick="sortDevices('company')">Company</th>
+                        <th data-sort="last_seen" onclick="sortDevices('last_seen')">Last Seen</th>
+                        <th data-sort="odometer" onclick="sortDevices('odometer')">Odometer</th>
+                        <th style="width:180px;text-align:center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="devicesTableBody">
+                    <tr id="devicesLoadingRow">
+                        <td colspan="10" style="text-align:center;padding:3rem;color:var(--text-muted);">
+                            <div class="loading" style="margin:0 auto 1rem;"></div>
+                            Loading devices&#8230;
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- =============================================================
+     DEVICE MODAL  (General | Alerts | Raw Data)
+============================================================= -->
+<div class="modal" id="deviceModal">
+    <div class="modal-content wide">
+        <form id="deviceForm" onsubmit="handleSubmit(event)" novalidate style="display:flex;flex-direction:column;height:100%;">
+
+            <div class="modal-header">
+                <h2 class="modal-title" id="modalTitle">Device</h2>
+                <button type="button" class="modal-close" onclick="closeDeviceModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+
+            <div class="modal-tabs">
+                <button type="button" class="modal-tab active" data-tab="general" onclick="switchModalTab('general',this)"><i class="mdi mdi-clipboard-outline"></i> General</button>
+                <button type="button" class="modal-tab" data-tab="alerts"  onclick="switchModalTab('alerts',this)"><i class="mdi mdi-bell"></i> Alerts</button>
+                <button type="button" class="modal-tab" data-tab="rawdata" onclick="switchModalTab('rawdata',this)"><i class="mdi mdi-chart-bar"></i> Raw Data</button>
+                <button type="button" class="modal-tab" data-tab="users"     id="usersTabBtn"    onclick="switchModalTab('users',this)"    style="display:none;"><i class="mdi mdi-account-group"></i> Users</button>
+                <button type="button" class="modal-tab" data-tab="commands" id="commandsTabBtn" onclick="switchModalTab('commands',this)" style="display:none;"><i class="mdi mdi-antenna"></i> Commands</button>
+            </div>
+
+            <div class="modal-scrollable">
+
+                <!-- TAB: GENERAL -->
+                <div class="modal-tab-content active" id="tab-general">
+                    <div class="form-main-layout">
+                        <div class="form-column">
+                            <div class="form-group">
+                                <label class="form-label">Device Name *</label>
+                                <input type="text" class="form-input" id="deviceName" required placeholder="e.g. Truck #1">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Protocol *</label>
+                                <select class="form-input" id="deviceProtocol" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">IMEI *</label>
+                                <input type="text" class="form-input" id="deviceImei" required placeholder="Device identifier">
+                            </div>
+                            <div id="integrationFieldsPanel" style="display:none;"></div>
+                        </div>
+                        <div class="form-column">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Vehicle Type</label>
+                                    <select class="form-input" id="vehicleType"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Plate</label>
+                                    <input type="text" class="form-input" id="licensePlate" placeholder="ABC-123">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Custom Attributes</label>
+                                <div id="customAttributesList" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
+                                <button type="button" class="btn btn-secondary" style="margin-top:0.5rem;font-size:0.8rem;" onclick="addCustomAttribute()">
+                                    <i class="mdi mdi-plus"></i> Add attribute
+                                </button>
+                            </div>
+                            <div class="form-group" id="deviceCompanyGroup" style="display:none;">
+                                <label class="form-label">Company</label>
+                                <select class="form-input" id="deviceCompany" onchange="onDeviceCompanyChange()">
+                                    <option value="">— None —</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">
+                                    Current Odometer (km)
+                                    <span style="font-size:0.8rem;color:var(--text-muted);font-weight:normal;display:block;margin-top:0.25rem;">Adjust only if resetting or correcting</span>
+                                </label>
+                                <input type="number" id="currentOdometer" class="form-input" placeholder="0" step="0.1" min="0">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">
+                                    Offline Threshold (hours)
+                                    <span style="font-size:0.8rem;color:var(--text-muted);font-weight:normal;display:block;margin-top:0.25rem;">Hours without data before vehicle is considered offline</span>
+                                </label>
+                                <input type="number" id="offlineTimeoutHours" class="form-input" placeholder="24" step="1" min="1" value="24">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">
+                                    Trip Merge Gap (minutes)
+                                    <span style="font-size:0.8rem;color:var(--text-muted);font-weight:normal;display:block;margin-top:0.25rem;">Merge consecutive trips separated by an ignition-off gap shorter than this. 0 = disabled.</span>
+                                </label>
+                                <input type="number" id="tripMergeGapMinutes" class="form-input" placeholder="0" step="1" min="0" value="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: ALERTS -->
+                <div class="modal-tab-content" id="tab-alerts">
+                 
+                    <!-- Unified Add Alert Panel -->
+                    <div style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.25rem;">
+                        <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);font-weight:600;margin-bottom:0.6rem;"><i class="mdi mdi-bell-plus"></i> Add Alert</div>
+                        <div class="alert-add-row">
+                            <select class="form-input alert-add-select" id="addAlertSelect" onchange="onAddAlertSelectChange()"></select>
+                            <div class="alert-add-actions">
+                                <button type="button" class="btn btn-primary alert-add-btn" onclick="addSelectedAlert()">Add</button>
+                                <div class="alert-profile-menu-wrap">
+                                    <button type="button" class="btn btn-secondary alert-profile-trigger" onclick="toggleAlertProfileMenu(event)" aria-label="Alert profile actions" aria-expanded="false">
+                                        <i class="mdi mdi-dots-vertical"></i>
+                                    </button>
+                                    <div class="alert-profile-menu" id="alertProfileMenu">
+                                        <button type="button" class="alert-profile-menu-item" onclick="openAlertProfileDevicePicker()"><i class="mdi mdi-content-copy"></i> Copy from device</button>
+                                        <button type="button" class="alert-profile-menu-item" onclick="exportAlertProfile()"><i class="mdi mdi-download"></i> Export profile</button>
+                                        <button type="button" class="alert-profile-menu-item" onclick="document.getElementById('alertProfileImportInput').click()"><i class="mdi mdi-upload"></i> Import profile</button>
+                                        <input type="file" id="alertProfileImportInput" accept="application/json,.json" style="display:none;" onchange="importAlertProfileFile(event)">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                 
+                        <!-- Custom rule inline fields — shown only when "Custom Rule" is selected -->
+                        <div id="customRuleFields" style="display:none;flex-direction:column;gap:0.6rem;margin-top:0.85rem;">
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                                <input type="text" id="newRuleName" class="form-input"
+                                    placeholder="Rule name, e.g. High speed alert"
+                                    style="flex:1;min-width:140px;"
+                                    onkeydown="if(event.key==='Enter'){event.preventDefault();addSelectedAlert();}">
+                                <input type="text" id="newRuleCond" class="form-input"
+                                    placeholder="speed &gt; 80 and ignition"
+                                    style="flex:2;min-width:140px;"
+                                    onkeydown="if(event.key==='Enter'){event.preventDefault();addSelectedAlert();}">
+                            </div>
+                            <details>
+                                <summary style="cursor:pointer;color:var(--text-muted);font-size:0.78rem;"><i class="mdi mdi-information-outline"></i> Syntax reference</summary>
+                                <div style="margin-top:0.4rem;padding:0.65rem 0.85rem;background:var(--bg-secondary);border-radius:8px;font-size:0.76rem;line-height:1.8;color:var(--text-muted);">
+                                    <strong style="color:var(--text-secondary);">Attributes:</strong> speed, ignition, satellites, altitude, battery_voltage, fuel_level, temperature, door_open<br>
+                                    <strong style="color:var(--text-secondary);">Operators:</strong> &gt; &lt; == != &gt;= &lt;= and or not
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+
+                    <!-- Alert rows table (unchanged) -->
+                    <div class="alerts-table-wrap">
+                        <table class="alerts-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:34px;">#</th>
+                                    <th style="width:190px;">Alert Type</th>
+                                    <th>Threshold</th>
+                                    <th>Notify Via</th>
+                                    <th id="alertsNotifyUsersHeader" style="display:none;">Notify Users</th>
+                                    <th style="width:160px;">Schedule</th>
+                                    <th style="width:84px;text-align:center;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alertsTableBody">
+                                <tr id="alertsEmptyRow">
+                                    <td colspan="6" class="alerts-empty">No alerts configured. Use the dropdown above to add one.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- TAB: RAW DATA -->
+                <div class="modal-tab-content" id="tab-rawdata">
+                    <div style="overflow-x:auto;">
+                        <table class="raw-data-table">
+                            <thead>
+                                <tr>
+                                    <th>GPS Time</th><th>Server Time</th><th>Lat</th><th>Lon</th><th>Speed</th>
+                                    <th>Heading</th><th>Sat</th><th>Alt</th><th>Ign</th><th>Driver</th><th>Attributes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rawDataBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="pagination">
+                        <button type="button" class="btn btn-secondary" id="prevPageBtn" onclick="changeRawDataPage(-1)">Previous</button>
+                        <span class="page-info" id="pageInfo"></span>
+                        <button type="button" class="btn btn-secondary" id="nextPageBtn" onclick="changeRawDataPage(1)">Next</button>
+                    </div>
+                </div>
+
+                <!-- TAB: USERS -->
+                <div class="modal-tab-content" id="tab-users">
+                    <div class="form-group">
+                        <input type="text" class="form-input" id="usersTabSearch" placeholder="Search users&#8230;" oninput="filterUsersTab()">
+                    </div>
+                    <div id="usersAssignList" style="display:flex;flex-direction:column;gap:0.5rem;"></div>
+                </div>
+
+                <!-- TAB: COMMANDS -->
+                <div class="modal-tab-content" id="tab-commands">
+                    <div class="command-tabs">
+                        <button type="button" class="command-tab active" onclick="switchCommandTab('send')"><i class="mdi mdi-send"></i> Send Command</button>
+                        <button type="button" class="command-tab" onclick="switchCommandTab('history')"><i class="mdi mdi-history"></i> History</button>
+                    </div>
+
+                    <!-- Send Command Tab -->
+                    <div class="command-tab-content active" id="sendCommandTab">
+                        <div class="command-subtabs">
+                            <button type="button" class="command-subtab active" onclick="switchCommandSubtab('predefined')">Predefined Commands</button>
+                            <button type="button" class="command-subtab" onclick="switchCommandSubtab('custom')">Custom Command</button>
+                        </div>
+
+                        <div class="command-subtab-content active" id="predefinedCommandContent">
+                            <div class="form-group">
+                                <label class="form-label">Select Command</label>
+                                <select class="form-select" id="commandTypeSelect" onchange="onCommandSelect()">
+                                    <option value="">-- Select a command --</option>
+                                </select>
+                            </div>
+                            <div id="commandInfoBox" class="command-info-box" style="display:none;">
+                                <div class="command-info-label">Description:</div>
+                                <div id="commandDescription"></div>
+                                <div class="command-info-label" style="margin-top:0.75rem;">Example:</div>
+                                <div id="commandExample" style="font-family:var(--font-mono);background:var(--bg-tertiary);padding:0.5rem;border-radius:6px;margin-top:0.25rem;"></div>
+                            </div>
+                            <div id="commandParamsBox" class="form-group" style="display:none;">
+                                <label class="form-label">Parameters</label>
+                                <input type="text" class="form-input" id="commandParams" placeholder="Enter parameters here">
+                                <div style="font-size:0.8125rem;color:var(--text-muted);margin-top:0.5rem;">Parameters will be appended after the command with a space</div>
+                            </div>
+                            <div id="commandPreviewBox" class="command-preview-box" style="display:none;">
+                                <div class="command-preview-label">Data to be sent:</div>
+                                <div id="commandPreviewHex" class="command-preview-hex"></div>
+                                <div id="commandPreviewAscii" class="command-preview-ascii"></div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" onclick="previewCommand()"><i class="mdi mdi-magnify"></i> Preview</button>
+                                <button type="button" class="btn btn-primary" id="sendCommandBtn" onclick="sendCommand()"><i class="mdi mdi-antenna"></i> Send Command</button>
+                            </div>
+                        </div>
+
+                        <div class="command-subtab-content" id="customCommandContent">
+                            <div class="form-group">
+                                <label class="form-label">Custom Command</label>
+                                <textarea class="form-textarea" id="customCommandInput" placeholder="Enter raw command text or hex string" rows="3"></textarea>
+                                <div style="font-size:0.875rem;color:var(--text-muted);margin-top:0.5rem;">Enter plain text or hex string (will be automatically converted to bytes)</div>
+                            </div>
+                            <div id="customCommandPreviewBox" class="command-preview-box" style="display:none;">
+                                <div class="command-preview-label">Data to be sent:</div>
+                                <div id="customCommandPreviewHex" class="command-preview-hex"></div>
+                                <div id="customCommandPreviewAscii" class="command-preview-ascii"></div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-secondary" onclick="previewCustomCommand()"><i class="mdi mdi-magnify"></i> Preview</button>
+                                <button type="button" class="btn btn-primary" id="sendCustomCommandBtn" onclick="sendCustomCommand()"><i class="mdi mdi-antenna"></i> Send Custom Command</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- History Tab -->
+                    <div class="command-tab-content" id="historyCommandTab">
+                        <div style="overflow-x:auto;">
+                            <table class="command-history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th><th>Command</th><th>Payload</th><th>Status</th><th>Response</th><th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="commandHistoryBody"></tbody>
+                            </table>
+                        </div>
+                        <div id="commandHistoryEmpty" style="display:none;text-align:center;padding:3rem;color:var(--text-muted);">
+                            <div style="font-size:3rem;margin-bottom:1rem;"><i class="mdi mdi-inbox-remove"></i></div>
+                            <div>No command history available</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- /.modal-scrollable -->
+
+            <!-- PERSISTENT FOOTER -->
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" id="deleteDeviceBtn" onclick="deleteCurrentDevice()" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
+                <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                    <button type="button" class="btn btn-secondary" onclick="closeDeviceModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                        <i id="submitIcon" class="mdi mdi-content-save"></i>
+                        <span id="submitText">Save</span>
+                        <span id="submitLoading" class="loading" style="display:none;"></span>
+                    </button>
+                </div>
+            </div>
+
+        </form>
+    </div>
+</div>
+
+<!-- =============================================================
+     ALERT EDITOR MODAL
+============================================================= -->
+<div class="modal" id="alertEditorModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title" id="alertEditorTitle">Edit Alert</h2>
+            <button type="button" class="modal-close" onclick="closeAlertEditor()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div id="alertEditorBody"></div>
+        <div class="modal-footer">
+            <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                <button type="button" class="btn btn-secondary" onclick="closeAlertEditor()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveAlertFromEditor()">Save Alert</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast container (required by device-commands.js) -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="js/demo-mock-api.js"></script>
+<script src="js/config.js"></script>
+<script src="js/units.js"></script>
+<script src="js/impersonation.js"></script>
+<script src="js/ui-utils.js"></script>
+<script src="js/vehicle-icons.js"></script>
+<script src="js/device-management.js"></script>
+<script src="js/device-management-integrations.js"></script>
+<script src="js/device-commands.js"></script>
+<script src="js/voice-ptt.js"></script>
+<script>
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    const closers = [
+        ['alertProfileMergeModal', () => closeAlertProfileMergeChoice()],
+        ['alertProfileDevicePickerModal', () => closeAlertProfileDevicePicker()],
+        ['alertEditorModal', () => closeAlertEditor()],
+        ['deviceModal', () => closeDeviceModal()],
+    ];
+    for (const [id, fn] of closers) {
+        if (document.getElementById(id)?.classList.contains('active')) { fn(); break; }
+    }
+});
+</script>
+</body>
+</html>
