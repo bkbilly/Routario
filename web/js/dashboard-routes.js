@@ -75,18 +75,23 @@ function dashboardRouteAssignmentStatus(deviceId) {
 }
 
 async function loadDashboardRoutes({ force = false } = {}) {
-    if (dashboardRoutesLoaded && !force) return dashboardRoutes;
+    if (dashboardRoutesLoaded && !force) {
+        updateDashboardRouteBadge();
+        return dashboardRoutes;
+    }
     dashboardRoutesLoaded = true;
     try {
         const res = await apiFetch(`${API_BASE}/planned-routes`);
         if (!res.ok) {
             dashboardRoutes = [];
+            updateDashboardRouteBadge();
             return dashboardRoutes;
         }
         dashboardRoutes = await res.json();
     } catch {
         dashboardRoutes = [];
     }
+    updateDashboardRouteBadge();
     return dashboardRoutes;
 }
 
@@ -108,6 +113,19 @@ function dashboardRoutesForDevice(deviceId) {
 
 function dashboardRouteForDevice(deviceId) {
     return dashboardRoutesForDevice(deviceId)[0] || null;
+}
+
+function updateDashboardRouteBadge() {
+    const badge = document.getElementById('routeCount');
+    if (!badge) return;
+    const activeCount = dashboardRoutes.filter(route => String(route.status || '').toLowerCase() === 'active').length;
+    if (activeCount > 0) {
+        badge.textContent = activeCount > 99 ? '99+' : String(activeCount);
+        badge.style.display = 'block';
+    } else {
+        badge.textContent = '';
+        badge.style.display = 'none';
+    }
 }
 
 function selectedDashboardRouteForDevice(deviceId) {
@@ -137,6 +155,7 @@ function upsertDashboardRoute(route) {
         dashboardRoutes.unshift(route);
     }
     dashboardRoutesLoaded = true;
+    updateDashboardRouteBadge();
 }
 
 function renderDashboardRouteMutation(route) {
@@ -154,6 +173,7 @@ function renderDashboardRouteMutation(route) {
 
 function removeDashboardRoute(routeId) {
     dashboardRoutes = dashboardRoutes.filter(route => Number(route.id) !== Number(routeId));
+    updateDashboardRouteBadge();
     if (selectedDashboardRoute && Number(selectedDashboardRoute.id) === Number(routeId)) {
         clearDashboardRouteLayer();
         renderSelectedRoutePanel(null, []);

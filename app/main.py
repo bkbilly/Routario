@@ -1071,6 +1071,7 @@ def run_server():
         host="0.0.0.0",
         port=8000,
         loop="uvloop",
+        ws_ping_interval=None,
         timeout_graceful_shutdown=2,
     ))
 

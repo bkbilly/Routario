@@ -21,7 +21,7 @@ const tripColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b
 
 // --- HISTORY MODAL ---
 function openHistoryModal(deviceId) {
-    historyDeviceId = deviceId;
+    document.getElementById('historyModal').dataset.deviceId = String(deviceId);
 
     // Reset all cycle buttons to their first option
     document.querySelectorAll('.history-quick-btn[data-group]').forEach(btn => {
@@ -174,9 +174,10 @@ async function handleHistorySubmit(e) {
     btn.disabled = true;
     btn.textContent = 'Loading...';
     try {
+        const modalDeviceId = parseInt(document.getElementById('historyModal').dataset.deviceId || '', 10);
         const start = new Date(document.getElementById('historyStart').value);
         const end = new Date(document.getElementById('historyEnd').value);
-        await loadHistory(historyDeviceId, start, end);
+        await loadHistory(modalDeviceId, start, end);
         closeHistoryModal();
     } finally {
         btn.disabled = false;
@@ -185,6 +186,7 @@ async function handleHistorySubmit(e) {
 }
 
 async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
+    const previousHistoryDeviceId = historyDeviceId;
     historyBatchOffset = batchOffset;
     historyLineRenderMode = null;
     _historyZoomLineSwitchActive = false;
@@ -217,6 +219,7 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
         historyIndex = 0;
         if (historyData.length === 0) {
             showAlert({ title: 'History', message: 'No data found.', type: 'warning' });
+            historyDeviceId = previousHistoryDeviceId;
             // Restore live markers since we're not entering history mode
             devices.forEach(d => {
                 if (markers[d.id] && !clusterGroup.hasLayer(markers[d.id])) clusterGroup.addLayer(markers[d.id]);
@@ -224,6 +227,7 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
             });
             return;
         }
+        historyDeviceId = deviceId;
         if (typeof hideDashboardRouteLayerForHistory === 'function') {
             hideDashboardRouteLayerForHistory();
         }
@@ -267,6 +271,7 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
     } catch (error) {
         console.log(error);
         showAlert({ title: 'Error', message: 'Failed to load history.', type: 'error' });
+        historyDeviceId = previousHistoryDeviceId;
         // Restore live markers since history mode was not entered
         devices.forEach(d => {
             if (markers[d.id] && !clusterGroup.hasLayer(markers[d.id])) clusterGroup.addLayer(markers[d.id]);
@@ -397,6 +402,9 @@ function _updateLineModeBtn() {
 function exitHistoryMode() {
     stopPlayback();
     _clearAlertHighlight();
+    historyDeviceId = null;
+    historyData = [];
+    historyIndex = 0;
     historyLineRenderMode = null;
     _historyZoomLineSwitchActive = false;
     if (polylines['history']) {

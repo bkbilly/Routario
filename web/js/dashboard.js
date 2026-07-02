@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (hasPermission('view_management') && hasPermission('manage_routes')) {
         document.getElementById('dashboardRoutesBtn')?.style.removeProperty('display');
+        loadDashboardRoutes({ force: true });
     }
 
     // Restore saved sort (fixes the bug where sort was highlighted but not active)
