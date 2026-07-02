@@ -510,10 +510,24 @@ try {
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 
+let wsReconnectTimer = null;
+let wsConnectedUserId = null;
+
 function connectWebSocket() {
     const userId = localStorage.getItem('user_id');
     if (!userId) return;
 
+    if (wsReconnectTimer) {
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = null;
+    }
+
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        if (wsConnectedUserId === userId) return;
+        ws.close(1000, 'user changed');
+    }
+
+    wsConnectedUserId = userId;
     const wsUrl = `${WS_BASE_URL}${userId}`;
     console.log('Connecting to WebSocket:', wsUrl);
     ws = new WebSocket(wsUrl);
@@ -536,10 +550,19 @@ function connectWebSocket() {
     };
 
     ws.onclose = (e) => {
-        console.log('WebSocket disconnected, reconnecting...', e.reason);
-        setTimeout(connectWebSocket, 5000);
+        console.log('WebSocket disconnected', e.reason);
+        if (!localStorage.getItem('auth_token') || localStorage.getItem('user_id') !== userId) {
+            return;
+        }
+        wsReconnectTimer = setTimeout(connectWebSocket, 5000);
     };
 }
+
+window.addEventListener('beforeunload', () => {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        ws.close(1000, 'page unloading');
+    }
+});
 
 function handleWebSocketMessage(message) {
     if (message.type === 'position_update') {

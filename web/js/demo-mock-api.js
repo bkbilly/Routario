@@ -55,7 +55,7 @@
     const devices = [
         {
             id: 1, name: 'Athens Van 12', imei: 'demo-0001', protocol: 'teltonika',
-            vehicle_type: 'van', license_plate: 'ATH-1201', company_id: null,
+            vehicle_type: 'van', license_plate: 'ATH-1201', company_id: 1,
             supports_commands: true, is_active: true,
             custom_attributes: { department: 'Operations' },
             config: {
@@ -77,7 +77,7 @@
         },
         {
             id: 2, name: 'Piraeus Truck 4', imei: 'demo-0002', protocol: 'gt06',
-            vehicle_type: 'truck', license_plate: 'PIR-4040', company_id: null,
+            vehicle_type: 'truck', license_plate: 'PIR-4040', company_id: 1,
             supports_commands: false, is_active: true,
             custom_attributes: { department: 'Logistics' },
             config: {
@@ -98,7 +98,7 @@
         },
         {
             id: 3, name: 'Thessaloniki Car 7', imei: 'demo-0003', protocol: 'osmand',
-            vehicle_type: 'car', license_plate: 'SKG-7007', company_id: null,
+            vehicle_type: 'car', license_plate: 'SKG-7007', company_id: 1,
             supports_commands: false, is_active: true,
             custom_attributes: { department: 'Sales' },
             config: { offline_timeout_hours: 12, trip_merge_gap_minutes: 0, alert_rows: [], alert_channels: {} },
@@ -114,7 +114,82 @@
 
     const users = [
         DEMO_USER,
-        { id: 2, username: 'dispatcher', email: 'dispatch@routario.local', is_admin: false, is_company_admin: false, company_id: null, permissions: ['view_reports', 'view_devices'], units: 'metric', currency: 'EUR' },
+        { id: 2, username: 'dispatcher', email: 'dispatch@routario.local', is_admin: false, is_company_admin: false, company_id: 1, permissions: ['view_reports', 'view_devices'], units: 'metric', currency: 'EUR' },
+        {
+            id: 3,
+            username: 'fleetadmin',
+            email: 'fleetadmin@routario.local',
+            is_admin: false,
+            is_company_admin: true,
+            company_id: 1,
+            permissions: [
+                'view_management', 'view_devices', 'edit_devices', 'manage_alerts',
+                'manage_geofences', 'view_history', 'view_reports', 'manage_routes',
+                'manage_users', 'send_commands', 'manage_drivers', 'manage_fuel',
+                'manage_maintenance', 'manage_logbook', 'live_share',
+            ],
+            units: 'metric',
+            currency: 'EUR',
+        },
+    ];
+    let demoCompanies = [
+        { id: 1, name: 'Demo Fleet', app_name: 'Routario Demo', login_slug: 'demo-fleet', billing_plan_id: 1, user_count: users.length, device_count: devices.length, created_at: iso(10000), branding_version: 1, icon_url: null, badge_url: null },
+    ];
+    let billingPlans = [
+        {
+            id: 1,
+            name: 'Fleet Starter',
+            currency: 'EUR',
+            base_price_cents: 4900,
+            included_devices: 5,
+            included_positions: 250000,
+            included_api_calls: 10000,
+            price_per_device_cents: 900,
+            price_per_1000_positions_cents: 12,
+            price_per_1000_api_calls_cents: 30,
+            is_active: true,
+            created_at: iso(20000),
+        },
+        {
+            id: 2,
+            name: 'Operations Pro',
+            currency: 'EUR',
+            base_price_cents: 14900,
+            included_devices: 25,
+            included_positions: 1500000,
+            included_api_calls: 100000,
+            price_per_device_cents: 650,
+            price_per_1000_positions_cents: 8,
+            price_per_1000_api_calls_cents: 18,
+            is_active: true,
+            created_at: iso(18000),
+        },
+    ];
+    let currencyRates = [
+        { currency: 'EUR', rate: 1, source: 'system', updated_at: iso(60) },
+        { currency: 'USD', rate: 1.08, source: 'manual', updated_at: iso(60) },
+        { currency: 'GBP', rate: 0.86, source: 'manual', updated_at: iso(60) },
+        { currency: 'CHF', rate: 0.95, source: 'manual', updated_at: iso(60) },
+    ];
+    let apiKeys = [
+        {
+            id: 1,
+            name: 'Demo reporting key',
+            user_id: 1,
+            company_id: null,
+            key_prefix: 'rt_demo_001',
+            scopes: ['devices:read', 'positions:read', 'reports:read'],
+            is_active: true,
+            expires_at: null,
+            last_used_at: iso(180),
+            last_used_ip: '127.0.0.1',
+            created_at: iso(5000),
+            revoked_at: null,
+        },
+    ];
+    const apiKeyScopes = [
+        'devices:read', 'devices:write', 'positions:read', 'commands:send',
+        'reports:read', 'routes:read', 'routes:write', 'billing:read',
     ];
     const drivers = [
         { id: 1, name: 'Nikos Demo', phone: '+30 210 000 1001', license_number: 'DEMO-A1', assigned_device_id: 1 },
@@ -134,12 +209,105 @@
             keep_runs: 10, is_active: true, next_run: iso(-1200), run_count: 2,
         },
     ];
+    let demoAlerts = [
+        {
+            id: 1,
+            device_id: 2,
+            device_name: 'Piraeus Truck 4',
+            alert_type: 'idling',
+            severity: 'info',
+            message: 'Idling for 12 minutes near Drapetsona',
+            created_at: iso(100),
+            latitude: 37.97,
+            longitude: 23.688,
+            address: 'Drapetsona, Piraeus',
+            is_read: false,
+            alert_metadata: { config_key: 'idle_timeout_minutes' },
+        },
+        {
+            id: 2,
+            device_id: 1,
+            device_name: 'Athens Van 12',
+            alert_type: 'speeding',
+            severity: 'warning',
+            message: 'Vehicle exceeded 90 km/h',
+            created_at: iso(30),
+            latitude: 38.0118,
+            longitude: 23.7695,
+            address: 'Leof. Kifisias, Athens',
+            is_read: false,
+            alert_metadata: { config_key: 'speed_tolerance' },
+        },
+    ];
+    let plannedRoutes = [
+        {
+            id: 1,
+            name: 'Piraeus Port Delivery Loop',
+            device_id: 2,
+            device_name: 'Piraeus Truck 4',
+            status: 'active',
+            distance_km: 8.6,
+            duration_minutes: 24,
+            created_at: iso(360),
+            updated_at: iso(12),
+            route_geometry: {
+                provider: 'demo',
+                coordinates: [
+                    [23.646, 37.942],
+                    [23.6515, 37.9475],
+                    [23.6605, 37.9528],
+                    [23.671, 37.9605],
+                    [23.688, 37.97],
+                ],
+            },
+            stops: [
+                { id: 1, route_id: 1, sequence: 0, name: 'Piraeus Warehouse', stop_kind: 'stop', latitude: 37.942, longitude: 23.646, arrival_radius_m: 80, status: 'completed', arrived_at: iso(130), completed_at: iso(126), notes: 'Loaded pallets for port deliveries.' },
+                { id: 2, route_id: 1, sequence: 1, name: 'Keratsini Checkpoint', stop_kind: 'waypoint', latitude: 37.9528, longitude: 23.6605, arrival_radius_m: 70, status: 'arrived', arrived_at: iso(104), completed_at: null, notes: 'Driver waiting for gate clearance.' },
+                { id: 3, route_id: 1, sequence: 2, name: 'Drapetsona Drop-off', stop_kind: 'stop', latitude: 37.97, longitude: 23.688, arrival_radius_m: 90, status: 'pending', arrived_at: null, completed_at: null, notes: 'Final delivery point.' },
+            ],
+        },
+    ];
+    let demoGeofences = [
+        {
+            id: 1,
+            user_id: 1,
+            owner_username: 'demo',
+            name: 'Lamia Transit Zone',
+            description: 'Large demo geofence on the Athens-Thessaloniki corridor near Lamia.',
+            color: '#10b981',
+            geometry_type: 'polygon',
+            coordinates: [
+                [22.285, 39.010],
+                [22.535, 39.040],
+                [22.555, 38.865],
+                [22.325, 38.820],
+                [22.285, 39.010],
+            ],
+            created_at: iso(7200),
+            updated_at: iso(60),
+        },
+    ];
 
     const reportDefs = [
-        { key: 'summary', label: 'Fleet Summary', description: 'Totals per vehicle for the selected period.', renderer: 'summary', needs_date_range: true, supports_vehicle_filter: true, schedule_supported: true },
-        { key: 'trips', label: 'Trips', description: 'Trip list with distance, duration, and speed.', renderer: 'table', needs_date_range: true, supports_vehicle_filter: true, supports_driver_filter: true, schedule_supported: true },
-        { key: 'alerts', label: 'Alerts', description: 'Alert history over a selected period.', renderer: 'table', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: true, schedule_supported: true },
-        { key: 'users', label: 'User Fleet', description: 'User readiness and alert delivery status.', renderer: 'table', needs_date_range: true, supports_user_filter: true, schedule_supported: true, schedule_uses_user_filter: true },
+        { key: 'alerts', label: 'Alerts', description: 'Alert history for the selected period. Admins can filter by user.', renderer: 'alerts', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: true, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
+        { key: 'audit', label: 'Audit', description: 'System audit log for super admins.', renderer: 'table', needs_date_range: true, supports_vehicle_filter: false, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, super_admin_required: true, schedule_supported: false, schedule_uses_device_filter: false, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
+        { key: 'billing', label: 'Billing', description: 'Draft billing usage and totals by company for the selected billing period.', renderer: 'table', needs_date_range: false, supports_vehicle_filter: false, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, company_admin_required: true, schedule_supported: true, schedule_uses_device_filter: false, schedule_uses_user_filter: false, controls: [
+            { key: 'period_type', label: 'Billing Period', type: 'select', default: 'year', options: [{ value: 'year', label: 'Year' }, { value: 'month', label: 'Month' }] },
+            { key: 'year', label: 'Year', type: 'number', default: now.getFullYear(), min: 1970, max: 2100, step: 1 },
+            { key: 'month', label: 'Month', type: 'select', default: now.getMonth() + 1, visible_when: { key: 'period_type', value: 'month' }, options: [
+                { value: 1, label: 'January' }, { value: 2, label: 'February' }, { value: 3, label: 'March' }, { value: 4, label: 'April' },
+                { value: 5, label: 'May' }, { value: 6, label: 'June' }, { value: 7, label: 'July' }, { value: 8, label: 'August' },
+                { value: 9, label: 'September' }, { value: 10, label: 'October' }, { value: 11, label: 'November' }, { value: 12, label: 'December' },
+            ] },
+        ], schedule_controls: [{ key: 'billing_period', label: 'Billing Period', type: 'select', default: 'this_month', options: [{ value: 'this_year', label: 'This year' }, { value: 'last_year', label: 'Last year' }, { value: 'this_month', label: 'This month' }, { value: 'last_month', label: 'Last month' }] }] },
+        { key: 'daily', label: 'Daily Activity', description: 'Trip activity aggregated by day for the whole fleet, each vehicle, or each driver.', renderer: 'daily', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: true, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [{ key: 'group_by', label: 'Daily Breakdown', type: 'select', default: 'fleet', options: [{ value: 'fleet', label: 'Fleet total' }, { value: 'vehicles', label: 'Vehicles' }, { value: 'drivers', label: 'Drivers' }] }], schedule_controls: [] },
+        { key: 'drivers', label: 'Driver Activity', description: 'Activity per driver for the selected period - trips, distance, driving time, and top speed.', renderer: 'drivers', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
+        { key: 'geofences', label: 'Geofence Activity', description: 'Geofence enter and exit activity by vehicle, geofence, event, and recipient.', renderer: 'geofences', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
+        { key: 'logbook', label: 'Logbook', description: 'Fuel or maintenance logbook reports for the selected vehicles and period.', renderer: 'logbook', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [{ key: 'logbook_type', label: 'Logbook Type', type: 'select', default: 'maintenance', options: [{ value: 'maintenance', label: 'Maintenance' }, { value: 'fuel', label: 'Fuel' }] }], schedule_controls: [] },
+        { key: 'sensors', label: 'Vehicle Sensors', description: 'Current sensor readings for all vehicles. Enable historical data to view sensor values over a date range.', renderer: 'sensors', needs_date_range: false, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: true, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
+        { key: 'summary', label: 'Fleet Summary', description: 'Totals per vehicle for the selected period - trips, distance, driving time, and top speed.', renderer: 'summary', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
+        { key: 'trips', label: 'Trip List', description: 'Individual trips with start/end location, distance, duration, and driver. Click any row to view the route on a map.', renderer: 'trips', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
+        { key: 'users', label: 'User Fleet', description: 'Account readiness by user - vehicle access, push status, notification channels, alert backlog, schedules, and key permissions.', renderer: 'users', needs_date_range: true, supports_vehicle_filter: false, supports_user_filter: true, supports_driver_filter: false, supports_historical_toggle: false, company_admin_required: true, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: true, controls: [], schedule_controls: [] },
     ];
 
     const alertTypes = {
@@ -280,6 +448,88 @@
                 ['username', 'User'], ['email', 'Email'], ['assigned_devices', 'Devices', 'integer'], ['push_enabled', 'Push', 'bool_active'], ['notification_channel_count', 'Channels', 'integer'], ['webhook_count', 'Webhooks', 'integer'], ['unread_alerts', 'Unread', 'integer'], ['last_activity', 'Last Activity', 'datetime_split'],
             ], [{ label: 'Users', value: rows.length }, { label: 'Unread Alerts', value: 1 }]);
         }
+        if (type === 'drivers') {
+            const rows = drivers.map((driver, idx) => ({
+                driver: driver.name,
+                trips: 3 + idx,
+                distance_km: 148.4 + idx * 37.2,
+                driving_minutes: 214 + idx * 52,
+                avg_speed: 47 + idx * 4,
+                max_speed: 92 + idx * 5,
+                vehicle_count: 1,
+                vehicle_list: devices.find(d => d.id === driver.assigned_device_id)?.name || 'Unassigned',
+            }));
+            return table('drivers', rows, [
+                ['driver', 'Driver'], ['trips', 'Trips', 'integer'], ['distance_km', 'Distance (km)', 'number'], ['driving_minutes', 'Drive Time', 'duration_minutes'], ['avg_speed', 'Avg Speed', 'number'], ['max_speed', 'Top Speed', 'number'], ['vehicle_count', 'Vehicles', 'integer'],
+            ], [{ label: 'Drivers', value: rows.length }, { label: 'Total Trips', value: rows.reduce((a, r) => a + r.trips, 0) }, { label: 'Distance (km)', value: rows.reduce((a, r) => a + r.distance_km, 0).toFixed(1) }], { key: 'driver', dir: 1 });
+        }
+        if (type === 'daily') {
+            const rows = [
+                { date: iso(60).slice(0, 10), trips: 7, distance_km: 238.6, driving_minutes: 312 },
+                { date: iso(1500).slice(0, 10), trips: 5, distance_km: 184.2, driving_minutes: 251 },
+                { date: iso(2940).slice(0, 10), trips: 6, distance_km: 205.7, driving_minutes: 286 },
+            ];
+            return table('daily', rows, [
+                ['date', 'Date'], ['trips', 'Trips', 'integer'], ['distance_km', 'Distance (km)', 'number'], ['driving_minutes', 'Drive Time', 'duration_minutes'],
+            ], [{ label: 'Days', value: rows.length }, { label: 'Total Trips', value: rows.reduce((a, r) => a + r.trips, 0) }, { label: 'Driving Time (h)', value: (rows.reduce((a, r) => a + r.driving_minutes, 0) / 60).toFixed(1) }], { key: 'date', dir: -1 });
+        }
+        if (type === 'geofences') {
+            const rows = [
+                { created_at: iso(45), device_id: 1, vehicle: 'Athens Van 12', license_plate: 'ATH-1201', geofence_name: 'Athens Depot Zone', event: 'Exit', severity: 'warning', notification_count: 1, latitude: 37.9841, longitude: 23.7278, message: 'Geofence Exited: Athens Depot Zone', recipients_text: 'demo' },
+                { created_at: iso(210), device_id: 2, vehicle: 'Piraeus Truck 4', license_plate: 'PIR-4040', geofence_name: 'Lamia Transit Zone', event: 'Enter', severity: 'info', notification_count: 2, latitude: 38.902, longitude: 22.434, message: 'Geofence Entered: Lamia Transit Zone', recipients_text: 'demo, dispatcher' },
+            ];
+            return table('geofences', rows, [
+                ['created_at', 'Date / Time', 'datetime'], ['vehicle', 'Vehicle'], ['geofence_name', 'Geofence'], ['event', 'Event'], ['severity', 'Severity', 'severity'], ['notification_count', 'Notifications', 'integer'], ['latitude', 'Latitude', 'number'], ['longitude', 'Longitude', 'number'], ['message', 'Message'],
+            ], [{ label: 'Events', value: rows.length }, { label: 'Entries', value: 1 }, { label: 'Exits', value: 1 }], { key: 'created_at', dir: -1 });
+        }
+        if (type === 'logbook') {
+            const rows = [
+                { date: iso(6000), vehicle: 'Athens Van 12', license_plate: 'ATH-1201', type: 'Service', description: 'Oil and filter service', odometer_km: 24800, cost_cents: 18500, vendor: 'Demo Service Center' },
+                { date: iso(4200), vehicle: 'Piraeus Truck 4', license_plate: 'PIR-4040', type: 'Fuel', description: 'Diesel refill', odometer_km: 88080, cost_cents: 9600, vendor: 'Port Fuel Station' },
+            ];
+            return table('logbook', rows, [
+                ['date', 'Date', 'datetime_split'], ['vehicle', 'Vehicle'], ['license_plate', 'Plate'], ['type', 'Type'], ['description', 'Description'], ['odometer_km', 'Odometer (km)', 'number'], ['cost_cents', 'Cost', 'currency_cents'], ['vendor', 'Vendor'],
+            ], [{ label: 'Entries', value: rows.length }, { label: 'Total Cost', value: typeof fmtMoneyCents === 'function' ? fmtMoneyCents(rows.reduce((a, r) => a + r.cost_cents, 0)) : '281.00' }], { key: 'date', dir: -1 });
+        }
+        if (type === 'sensors') {
+            const rows = filteredDevices(input).map(d => ({
+                name: d.name,
+                license_plate: d.license_plate,
+                current_driver_name: d.state.current_driver?.name || null,
+                last_update: d.state.last_update,
+                ignition_on: d.state.ignition_on,
+                last_speed: d.state.last_speed,
+                last_altitude: d.state.last_altitude,
+                sensor__fuel_level: d.state.sensors?.fuel_level,
+                sensor__battery_voltage: d.state.sensors?.battery_voltage,
+                sensor__temperature: d.state.sensors?.temperature,
+                sensor__satellites: d.state.sensors?.last_known_satellites,
+            }));
+            return table('sensors', rows, [
+                ['name', 'Vehicle'], ['license_plate', 'Plate'], ['current_driver_name', 'Driver'], ['last_update', 'Last Seen', 'datetime_split'], ['ignition_on', 'Ignition', 'bool_on'], ['last_speed', 'Speed', 'number'], ['last_altitude', 'Altitude', 'number'], ['sensor__fuel_level', 'fuel_level', 'number'], ['sensor__battery_voltage', 'battery_voltage', 'number'], ['sensor__temperature', 'temperature', 'number'], ['sensor__satellites', 'satellites', 'integer'],
+            ], [{ label: 'Vehicles', value: rows.length }, { label: 'Online', value: rows.filter(r => r.last_update).length }]);
+        }
+        if (type === 'audit') {
+            const rows = [
+                { created_at: iso(25), action: 'route.updated', actor: 'demo', actor_user_id: 1, company: 'Demo Fleet', company_id: 1, target: 'planned_route 1', ip_address: '127.0.0.1', metadata_text: 'status: active' },
+                { created_at: iso(140), action: 'billing.plan_updated', actor: 'demo', actor_user_id: 1, company: 'Demo Fleet', company_id: 1, target: 'billing_plan 1', ip_address: '127.0.0.1', metadata_text: 'plan: Fleet Starter' },
+            ];
+            return table('audit', rows, [
+                ['created_at', 'Time', 'datetime'], ['action', 'Action'], ['actor', 'User'], ['company', 'Company'], ['target', 'Target'], ['ip_address', 'IP'], ['metadata_text', 'Metadata'],
+            ], [{ label: 'Events', value: rows.length }, { label: 'Actions', value: rows.length }], { key: 'created_at', dir: -1 });
+        }
+        if (type === 'billing') {
+            const company = demoCompanies[0];
+            const plan = billingPlans.find(p => p.id === company.billing_plan_id);
+            const rows = [
+                { company_id: company.id, company_name: company.name, period_key: `year:${now.getFullYear()}`, period_label: String(now.getFullYear()), plan_name: plan?.name || 'No plan', active_devices: devices.length, positions: 384200, api_calls: 12840, total_display_cents: 64200, currency: 'EUR' },
+            ];
+            const payload = table('billing', rows, [
+                ['company_name', 'Company'], ['period_label', 'Period'], ['plan_name', 'Plan'], ['active_devices', 'Active Devices', 'integer'], ['positions', 'Positions', 'integer'], ['api_calls', 'API Calls', 'integer'], ['total_display_cents', 'Draft Total', 'currency_cents'],
+            ], [{ label: 'Companies', value: rows.length }, { label: 'Draft Total', value: '€642.00' }], { key: 'company_name', dir: 1 });
+            payload.row_action = { type: 'billing_detail', label: 'View billing details' };
+            return payload;
+        }
         const rows = filteredDevices(input).map((d, idx) => ({
             device_id: d.id, device_name: d.name, license_plate: d.license_plate,
             driver_name: d.state.current_driver?.name || null,
@@ -379,6 +629,10 @@
             if ((body.username === 'demo' || body.username === 'demo@routario.local') && body.password === 'demo') {
                 return json({ access_token: 'demo-token', user_id: 1, username: 'demo', is_admin: true, is_company_admin: true, company_id: null, units: 'metric', currency: 'EUR', permissions: DEMO_USER.permissions });
             }
+            if ((body.username === 'fleetadmin' || body.username === 'fleetadmin@routario.local') && body.password === 'demo') {
+                const user = users.find(u => u.username === 'fleetadmin');
+                return json({ access_token: 'demo-company-admin-token', user_id: user.id, username: user.username, is_admin: false, is_company_admin: true, company_id: 1, units: user.units, currency: user.currency, permissions: user.permissions });
+            }
             return json({ detail: 'Invalid credentials' }, 401);
         }
         if (path.endsWith('/health/ready')) return json({ ok: true, checks: { database: { ok: true, latency_ms: 2, database_type: 'mock' }, redis: { ok: true, optional: true, mode: 'in_process' }, runtime: { ok: true, app_version: 'demo', python_version: 'n/a', uptime_seconds: 3600 } } });
@@ -401,11 +655,73 @@
         if (apiPath.match(/^\/devices\/\d+\/state$/)) return json(devices.find(d => d.id === Number(apiPath.split('/')[2]))?.state || {});
         if (apiPath.match(/^\/devices\/\d+\/users$/)) return json(users);
         if (apiPath === '/drivers') return json(drivers);
-        if (apiPath === '/companies') return json([{ id: 1, name: 'Demo Fleet', user_count: users.length, device_count: devices.length, created_at: iso(10000) }]);
+        if (apiPath === '/companies') {
+            if (method === 'POST') {
+                const company = { id: Date.now(), user_count: 0, device_count: 0, created_at: iso(0), branding_version: 1, icon_url: null, badge_url: null, ...body };
+                demoCompanies.push(company);
+                return json(company);
+            }
+            return json(demoCompanies);
+        }
+        if (apiPath.match(/^\/companies\/\d+\/users$/)) return json(users);
+        if (apiPath.match(/^\/companies\/\d+\/devices$/)) return json(devices);
+        if (apiPath.match(/^\/companies\/\d+$/)) {
+            const id = Number(apiPath.split('/')[2]);
+            const idx = demoCompanies.findIndex(c => c.id === id);
+            if (idx < 0) return json({ detail: 'Not found' }, 404);
+            if (method === 'PUT') demoCompanies[idx] = { ...demoCompanies[idx], ...body };
+            return json(demoCompanies[idx]);
+        }
+        if (apiPath === '/billing/plans') {
+            if (method === 'POST') {
+                const plan = { id: Date.now(), is_active: true, created_at: iso(0), ...body };
+                billingPlans.push(plan);
+                return json(plan);
+            }
+            return json(billingPlans);
+        }
+        if (apiPath.match(/^\/billing\/plans\/\d+$/)) {
+            const id = Number(apiPath.split('/')[3]);
+            const idx = billingPlans.findIndex(plan => plan.id === id);
+            if (idx < 0) return json({ detail: 'Plan not found' }, 404);
+            if (method === 'DELETE') {
+                billingPlans = billingPlans.filter(plan => plan.id !== id);
+                demoCompanies = demoCompanies.map(company => Number(company.billing_plan_id) === id ? { ...company, billing_plan_id: null } : company);
+                return json({ status: 'deleted' });
+            }
+            if (method === 'PUT') billingPlans[idx] = { ...billingPlans[idx], ...body };
+            return json(billingPlans[idx]);
+        }
+        if (apiPath.match(/^\/billing\/companies\/\d+$/) && method === 'PUT') {
+            const id = Number(apiPath.split('/')[3]);
+            const idx = demoCompanies.findIndex(company => company.id === id);
+            if (idx < 0) return json({ detail: 'Company not found' }, 404);
+            demoCompanies[idx] = { ...demoCompanies[idx], billing_plan_id: body.plan_id ?? null };
+            return json({
+                company_id: id,
+                billing_plan_id: demoCompanies[idx].billing_plan_id,
+                billing_email: demoCompanies[idx].billing_email || null,
+                billing_status: demoCompanies[idx].billing_status || 'active',
+            });
+        }
         if (apiPath === '/protocols') return json({ protocols: ['teltonika', 'gt06', 'osmand'], protocol_info: { teltonika: { port: 5027, protocol_types: ['tcp'] }, gt06: { port: 5023, protocol_types: ['tcp'] }, osmand: { port: 5055, protocol_types: ['http'] } } });
         if (apiPath === '/integrations/providers' || apiPath === '/integrations/accounts') return json([]);
         if (apiPath === '/alerts/types') return json(alertTypes);
-        if (apiPath.startsWith('/alerts')) return json([{ id: 1, device_id: 1, device_name: 'Athens Van 12', alert_type: 'speeding', severity: 'warning', message: 'Vehicle exceeded 90 km/h', created_at: iso(30), is_read: false }]);
+        if (apiPath.match(/^\/alerts\/\d+\/read$/) && method === 'POST') {
+            const id = Number(apiPath.split('/')[2]);
+            demoAlerts = demoAlerts.map(alert => alert.id === id ? { ...alert, is_read: true } : alert);
+            return json({ ok: true });
+        }
+        if (apiPath.startsWith('/alerts')) {
+            const readOnly = url.searchParams.get('read_only') === 'true';
+            const unreadOnly = url.searchParams.get('unread_only') === 'true';
+            let rows = demoAlerts.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            if (readOnly) rows = rows.filter(alert => alert.is_read);
+            if (unreadOnly) rows = rows.filter(alert => !alert.is_read);
+            const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+            const limit = parseInt(url.searchParams.get('limit') || String(rows.length), 10);
+            return json(rows.slice(offset, offset + limit));
+        }
         if (apiPath === '/voice/users') return json(users.map(u => ({ id: u.id, username: u.username, is_admin: !!u.is_admin, is_company_admin: !!u.is_company_admin })));
         if (apiPath === '/voice/messages') {
             if (method === 'DELETE') {
@@ -436,7 +752,7 @@
             }
             return json(voiceMessages.find(m => m.id === id) || { detail: 'Not found' }, voiceMessages.some(m => m.id === id) ? 200 : 404);
         }
-        if (apiPath === '/geofences' || apiPath.startsWith('/geofences?')) return json([{ id: 1, name: 'Athens Depot', color: '#3b82f6', type: 'circle', coordinates: [[37.9838, 23.7275]], radius: 450 }]);
+        if (apiPath === '/geofences' || apiPath.startsWith('/geofences?')) return json(demoGeofences);
         if (apiPath === '/positions/history') {
             const points = historyPositions(body);
             return json({
@@ -446,11 +762,46 @@
                 count: points.length,
             });
         }
-        if (apiPath === '/planned-routes') return json([]);
-        if (apiPath === '/planned-routes/preview') return json({ distance_km: 18.4, duration_minutes: 32, geometry: [[37.9838, 23.7275], [37.942, 23.646]] });
+        if (apiPath === '/planned-routes') return json(plannedRoutes);
+        if (apiPath.match(/^\/planned-routes\/\d+$/)) {
+            const id = Number(apiPath.split('/')[2]);
+            return json(plannedRoutes.find(route => route.id === id) || { detail: 'Not found' }, plannedRoutes.some(route => route.id === id) ? 200 : 404);
+        }
+        if (apiPath === '/planned-routes/preview') return json({ distance_km: 18.4, duration_minutes: 32, route_geometry: { provider: 'demo', coordinates: [[23.646, 37.942], [23.6605, 37.9528], [23.688, 37.97]] } });
         if (apiPath === '/reports/types') return json(reportDefs);
         if (apiPath.startsWith('/reports/export/pdf') || apiPath.endsWith('/pdf')) return text('Routario demo PDF export placeholder', 200, 'application/pdf');
-        if (apiPath.startsWith('/reports/billing/details')) return json(table('billing_detail', [], [], []));
+        if (apiPath === '/reports/billing/details') {
+            const company = demoCompanies[0];
+            const plan = billingPlans.find(p => p.id === company.billing_plan_id);
+            return json({
+                company: { id: company.id, name: company.name, billing_email: 'billing@example.com', billing_status: 'active' },
+                period: { key: queryOf(input).get('period') || `year:${now.getFullYear()}`, label: String(now.getFullYear()) },
+                currency: 'EUR',
+                plan: plan ? {
+                    name: plan.name,
+                    base_price_display_cents: plan.base_price_cents,
+                    included_devices: plan.included_devices,
+                    included_positions: plan.included_positions,
+                    included_api_calls: plan.included_api_calls,
+                    price_per_device_display_cents: plan.price_per_device_cents,
+                    price_per_1000_positions_display_cents: plan.price_per_1000_positions_cents,
+                    price_per_1000_api_calls_display_cents: plan.price_per_1000_api_calls_cents,
+                } : null,
+                usage: { active_devices: devices.length, positions: 384200, api_calls: 12840, events: { support_minutes: 35 } },
+                line_items: [
+                    { label: 'Base subscription', quantity: 1, amount_display_cents: 4900 },
+                    { label: 'Additional devices', quantity: 0, amount_display_cents: 0 },
+                    { label: 'Position overage', quantity: 134200, amount_display_cents: 1610 },
+                ],
+                total_display_cents: 6510,
+                breakdown_grain: 'monthly',
+                breakdown: [
+                    { period: 'Jan', active_devices: 3, positions: 120000, api_calls: 3900, amount_display_cents: 5120, line_items: [{ label: 'Base subscription', quantity: 1, amount_display_cents: 4900 }] },
+                    { period: 'Feb', active_devices: 3, positions: 132400, api_calls: 4200, amount_display_cents: 5270, line_items: [{ label: 'Base subscription', quantity: 1, amount_display_cents: 4900 }] },
+                    { period: 'Mar', active_devices: 3, positions: 131800, api_calls: 4740, amount_display_cents: 5360, line_items: [{ label: 'Base subscription', quantity: 1, amount_display_cents: 4900 }] },
+                ],
+            });
+        }
         if (apiPath.startsWith('/reports/')) return json(reportPayload(apiPath.split('/')[2], input));
         if (apiPath === '/report-schedules') {
             if (method === 'POST') {
@@ -471,10 +822,48 @@
             return json(schedules[idx] || { detail: 'Not found' }, idx >= 0 ? 200 : 404);
         }
         if (apiPath.match(/^\/report-schedules\/\d+\/runs/)) return json([{ id: 1, run_at: iso(120), status: 'success', row_count: 3, error: null }]);
-        if (apiPath === '/api-keys/scopes') return json(DEMO_USER.permissions);
-        if (apiPath === '/api-keys') return json([]);
-        if (apiPath === '/billing/plans') return json([]);
-        if (apiPath === '/currency/rates') return json({ base: 'EUR', rates: { EUR: 1, USD: 1.08 }, updated_at: iso(60) });
+        if (apiPath === '/api-keys/scopes') return json({ scopes: apiKeyScopes });
+        if (apiPath === '/api-keys') {
+            if (method === 'POST') {
+                const key = {
+                    id: Date.now(),
+                    name: body.name || 'API Key',
+                    user_id: 1,
+                    company_id: null,
+                    key_prefix: `rt_demo_${String(Date.now()).slice(-4)}`,
+                    scopes: Array.isArray(body.scopes) ? body.scopes : ['devices:read', 'positions:read', 'reports:read'],
+                    is_active: true,
+                    expires_at: body.expires_at || null,
+                    last_used_at: null,
+                    last_used_ip: null,
+                    created_at: iso(0),
+                    revoked_at: null,
+                };
+                apiKeys.unshift(key);
+                return json({ ...key, key: `${key.key_prefix}_example_secret_value` });
+            }
+            return json(apiKeys);
+        }
+        if (apiPath.match(/^\/api-keys\/\d+$/) && method === 'DELETE') {
+            const id = Number(apiPath.split('/')[2]);
+            apiKeys = apiKeys.map(key => key.id === id ? { ...key, is_active: false, revoked_at: iso(0) } : key);
+            return json({ status: 'revoked' });
+        }
+        if (apiPath === '/currency/rates') {
+            if (method === 'PUT') {
+                currencyRates = (body.rates || []).map(row => ({
+                    currency: String(row.currency || '').toUpperCase(),
+                    rate: Number(row.rate || 1),
+                    source: String(row.currency || '').toUpperCase() === 'EUR' ? 'system' : 'manual',
+                    updated_at: iso(0),
+                }));
+                if (!currencyRates.some(row => row.currency === 'EUR')) {
+                    currencyRates.unshift({ currency: 'EUR', rate: 1, source: 'system', updated_at: iso(0) });
+                }
+            }
+            return json(currencyRates);
+        }
+        if (apiPath === '/currency/rates/refresh') return json(currencyRates);
         if (apiPath.startsWith('/dashcam/clips')) return json([]);
         if (apiPath.startsWith('/share')) return json([]);
 
@@ -499,7 +888,7 @@
                 const hint = document.createElement('div');
                 hint.id = 'demoLoginHint';
                 hint.style.cssText = 'margin:-0.75rem 0 1.25rem;color:#9ca3af;font-size:0.85rem;';
-                hint.innerHTML = 'Demo login: <strong>demo</strong> / <strong>demo</strong>';
+                hint.innerHTML = 'Demo login: <strong>demo</strong> / <strong>demo</strong><br>Company admin: <strong>fleetadmin</strong> / <strong>demo</strong>';
                 card.querySelector('form')?.prepend(hint);
             }
         }

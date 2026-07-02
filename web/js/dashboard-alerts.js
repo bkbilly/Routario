@@ -83,8 +83,6 @@ async function jumpToAlert(alert) {
         return;
     }
 
-    historyDeviceId = alert.device_id;
-
     const alertTime = new Date(alert.created_at.endsWith('Z') ? alert.created_at : alert.created_at + 'Z');
     const startTime = new Date(alertTime.getTime() - 30 * 60 * 1000);
     const endTime   = new Date(alertTime.getTime() + 30 * 60 * 1000);
