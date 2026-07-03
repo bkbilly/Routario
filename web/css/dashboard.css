@@ -1136,6 +1136,48 @@ body::before {
     color: var(--text-primary);
 }
 
+.device-maintenance-row {
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.device-maintenance-list {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.2rem;
+    min-width: 0;
+    font-family: inherit;
+}
+
+.maintenance-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    max-width: 100%;
+    color: var(--text-primary);
+    font-size: 0.66rem;
+    line-height: 1.2;
+    text-align: right;
+}
+
+.maintenance-pill span {
+    overflow-wrap: anywhere;
+}
+
+.maintenance-pill.due {
+    color: var(--accent-danger);
+}
+
+.maintenance-pill.warn {
+    color: #f59e0b;
+}
+
+.maintenance-pill.more {
+    color: var(--text-muted);
+}
+
 .device-actions {
     margin-top: 0.5rem;
     padding-top: 0.4rem;
@@ -2451,17 +2493,6 @@ body::before {
 /* Sensor attr list scrollbar */
 #sensorAttrList::-webkit-scrollbar { height: 4px; width: 4px; }
 #sensorAttrList::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 2px; }
-
-/* Alert highlight — shown when device has unread alerts */
-.device-card.has-alert {
-    border-color: var(--accent-danger);
-    background: color-mix(in srgb, var(--accent-danger) 5%, var(--bg-tertiary));
-}
-
-.device-card.has-alert:hover {
-    border-color: var(--accent-danger);
-    background: color-mix(in srgb, var(--accent-danger) 10%, var(--bg-tertiary));
-}
 
 .alert-pulse {
     display: inline-block;

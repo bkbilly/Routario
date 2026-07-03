@@ -238,7 +238,6 @@ function applyDeviceAlertHighlights() {
     document.querySelectorAll('.device-card').forEach(card => {
         const deviceId = parseInt(card.id.replace('device-card-', ''));
         const count    = alertCountByDevice[deviceId] || 0;
-        card.classList.toggle('has-alert', count > 0);
 
         const infoEl   = card.querySelector('.device-info');
         const existing = card.querySelector('.device-alert-row');

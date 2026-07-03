@@ -54,6 +54,109 @@ async function loadDeviceState(deviceId) {
     }
 }
 
+function _sidebarCurrentOdometer(device, fallback = 0) {
+    const value = device?.state?.total_odometer ?? device?.total_odometer ?? fallback;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : fallback;
+}
+
+function _sidebarMaintenanceDays(days) {
+    if (days === 1) return '1 day';
+    if (days < 7) return `${days} days`;
+    if (days < 30) {
+        const weeks = Math.round(days / 7);
+        return weeks === 1 ? '1 week' : `${weeks} weeks`;
+    }
+    const months = Math.round(days / 30);
+    return months === 1 ? '1 month' : `${months} months`;
+}
+
+function _sidebarMaintenanceLabel(params) {
+    return params.custom_label || (params.maintenance_type || 'service')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function _sidebarMaintenanceItems(device) {
+    const rows = Array.isArray(device?.config?.alert_rows) ? device.config.alert_rows : [];
+    const odometer = _sidebarCurrentOdometer(device, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return rows
+        .filter(row => row.alertKey === 'maintenance_alert')
+        .flatMap(row => {
+            const p = row.params || {};
+            const mode = p.tracking_mode || 'km';
+            const label = _sidebarMaintenanceLabel(p);
+            const items = [];
+
+            if (mode === 'km' || mode === 'both') {
+                const nextKm = Number(p.next_service_km || 0);
+                const warningKm = Number(p.warning_km || 500);
+                if (Number.isFinite(nextKm)) {
+                    const remaining = Math.round(nextKm - odometer);
+                    if (remaining <= Math.max(0, warningKm || 0)) {
+                        items.push({
+                            label,
+                            status: remaining <= 0 ? 'due' : 'warn',
+                            sort: remaining <= 0 ? remaining : remaining + 1000000,
+                            text: remaining < 0
+                                ? `${Math.abs(remaining).toLocaleString()} km late`
+                                : remaining === 0
+                                    ? 'now'
+                                    : `in ${remaining.toLocaleString()} km`,
+                        });
+                    }
+                }
+            }
+
+            if (mode === 'days' || mode === 'both') {
+                const nextDate = p.next_service_date ? new Date(p.next_service_date) : null;
+                const warningDays = parseInt(p.warning_days || 14, 10);
+                if (nextDate && !Number.isNaN(nextDate.getTime())) {
+                    nextDate.setHours(0, 0, 0, 0);
+                    const daysLeft = Math.round((nextDate - today) / 86400000);
+                    if (daysLeft <= Math.max(0, warningDays || 0)) {
+                        items.push({
+                            label,
+                            status: daysLeft <= 0 ? 'due' : 'warn',
+                            sort: daysLeft <= 0 ? daysLeft : daysLeft + 1000000,
+                            text: daysLeft < 0
+                                ? `${_sidebarMaintenanceDays(Math.abs(daysLeft))} late`
+                                : daysLeft === 0
+                                    ? 'today'
+                                    : `in ${_sidebarMaintenanceDays(daysLeft)}`,
+                        });
+                    }
+                }
+            }
+
+            return items;
+        })
+        .sort((a, b) => a.sort - b.sort);
+}
+
+function _sidebarMaintenanceHtml(device) {
+    const items = _sidebarMaintenanceItems(device);
+    if (!items.length) return '';
+
+    const visible = items.slice(0, 2).map(item => `
+        <span class="maintenance-pill ${item.status}" title="${_esc(item.label)}: ${_esc(item.text)}">
+            <i class="mdi mdi-wrench"></i>
+            <span>${_esc(item.label)}: ${_esc(item.text)}</span>
+        </span>`).join('');
+    const extra = items.length > 2
+        ? `<span class="maintenance-pill more">+${items.length - 2} more</span>`
+        : '';
+
+    return `
+        <div class="device-info-row device-maintenance-row">
+            <span class="info-label">Maintenance</span>
+            <span class="info-value device-maintenance-list">${visible}${extra}</span>
+        </div>`;
+}
+
 // Render Device List
 function renderDeviceList() {
     // Clear search when re-rendering (optional, but good UX)
@@ -91,6 +194,7 @@ function renderDeviceList() {
 function getDeviceCardContent(device, icon) {
     const vs = getVehicleStatus(device);
     const lastSeen = timeAgo(device.last_update);
+    const maintenanceHtml = _sidebarMaintenanceHtml(device);
 
     // Full datetime string for tooltip on Last Seen
     const lastSeenFull = device.last_update ? formatDateToLocal(device.last_update) : 'Never';
@@ -142,6 +246,7 @@ function getDeviceCardContent(device, icon) {
                 <span class="info-label">IMEI</span>
                 <span class="info-value" id="imei-${device.id}" style="font-family:var(--font-mono);font-size:0.72rem;">${device.imei || '—'}</span>
             </div>
+            ${maintenanceHtml}
         </div>
         ${vs.cls !== 'pending' ? `
         <div class="device-actions">
