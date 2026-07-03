@@ -175,6 +175,17 @@ These rules use the internal `device_event` alert implementation and are injecte
 
 ---
 
+### 🏁 Route Alerts
+
+Route alerts can fire when a vehicle deviates from an active route, skips an earlier route point, or completes the assigned route.
+
+| Alert | Description |
+|---|---|
+| Route Deviation Alert | Fires when the vehicle remains farther than the configured distance from the route path. |
+| Route Progress Alert | Fires when a later route point is completed before an earlier configured point, when the route is completed, or both. |
+
+---
+
 ## Configuring Alerts
 
 Alert rules are configured per device in **Device Management**:

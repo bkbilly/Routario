@@ -204,9 +204,10 @@
             id: 1, name: 'Weekly fleet summary', report_type: 'summary',
             filter_device_ids: [], filter_user_ids: [], options: {},
             notification_channels: ['Ops Email'], attach_results: true, attach_documents: false,
-            sensors_historical: false, date_range: 'last_7_days', frequency: 'weekly',
+            sensors_historical: false, date_range: 'last_7_days', trigger_type: 'time',
+            trigger_options: {}, frequency: 'weekly',
             run_time: '07:00', day_of_week: 1, day_of_month: 1, timezone: 'Europe/Athens',
-            keep_runs: 10, is_active: true, next_run: iso(-1200), run_count: 2,
+            keep_runs: 10, is_active: true, next_run: iso(-1200), last_triggered_at: null, run_count: 2,
         },
     ];
     let demoAlerts = [
@@ -316,7 +317,10 @@
             desc: "Fires when the vehicle exceeds the road's actual speed limit by more than the configured tolerance.",
             fields: [
                 { key: 'overspeed_percent', label: 'Overspeed Tolerance', field_type: 'number', default: 10, unit: '%', min_value: 0, max_value: 50 },
-                { key: 'duration_seconds', label: 'Confirmation Duration', field_type: 'number', default: 30, unit: 'seconds', min_value: 0, max_value: 3600 },
+                { key: 'duration_seconds', label: 'Confirmation Duration', field_type: 'number', default: 15, unit: 'seconds', min_value: 0, max_value: 300 },
+                { key: 'min_speed_kmh', label: 'Minimum Speed to Check', field_type: 'number', default: 30, unit: 'km/h', min_value: 0, max_value: 100 },
+                { key: 'check_interval_seconds', label: 'Valhalla Query Interval', field_type: 'number', default: 10, unit: 'seconds', min_value: 5, max_value: 60 },
+                { key: 'trace_seconds', label: 'Trace Window', field_type: 'number', default: 15, unit: 'seconds', min_value: 5, max_value: 60 },
             ],
         },
         idle_timeout_minutes: {
@@ -362,9 +366,14 @@
             desc: 'Fires when a maintenance interval is approaching or due.',
             fields: [
                 { key: 'maintenance_type', label: 'Maintenance Type', field_type: 'select', default: 'service', required: true, options: [{ value: 'service', label: '🔧 Service' }, { value: 'oil_change', label: '🛢️ Oil Change' }, { value: 'tire_change', label: '🔄 Tire Change' }, { value: 'brake_service', label: '🛑 Brake Service' }, { value: 'air_filter', label: '💨 Air Filter' }, { value: 'custom', label: '⚙️ Custom' }] },
+                { key: 'custom_label', label: 'Custom Label', field_type: 'text', default: '', required: false, show_if: { key: 'maintenance_type', value: 'custom' } },
                 { key: 'tracking_mode', label: 'Track By', field_type: 'select', default: 'km', required: true, options: [{ value: 'km', label: 'Mileage only' }, { value: 'days', label: 'Time only' }, { value: 'both', label: 'Either' }] },
-                { key: 'interval_km', label: 'Interval', field_type: 'number', default: 10000, unit: 'km', required: false },
-                { key: 'interval_days', label: 'Interval', field_type: 'number', default: 180, unit: 'days', required: false },
+                { key: 'next_service_km', label: 'Next Service At', field_type: 'number', default: 0, unit: 'km', min_value: 0, max_value: 9999999, required: true, show_if: { key: 'tracking_mode', values: ['km', 'both'] } },
+                { key: 'interval_km', label: 'Repeat Every', field_type: 'number', default: 5000, unit: 'km', min_value: 10, max_value: 100000, required: false, show_if: { key: 'tracking_mode', values: ['km', 'both'] } },
+                { key: 'warning_km', label: 'Warn When Within', field_type: 'number', default: 500, unit: 'km', min_value: 10, max_value: 5000, required: false, show_if: { key: 'tracking_mode', values: ['km', 'both'] } },
+                { key: 'next_service_date', label: 'Next Service Date', field_type: 'date', default: '', required: true, show_if: { key: 'tracking_mode', values: ['days', 'both'] } },
+                { key: 'interval_days', label: 'Repeat Every', field_type: 'number', default: 180, unit: 'days', min_value: 1, max_value: 3650, required: false, show_if: { key: 'tracking_mode', values: ['days', 'both'] } },
+                { key: 'warning_days', label: 'Warn When Within', field_type: 'number', default: 14, unit: 'days', min_value: 1, max_value: 365, required: false, show_if: { key: 'tracking_mode', values: ['days', 'both'] } },
             ],
         },
         no_driver: {
@@ -377,9 +386,12 @@
             ],
         },
         route_waypoint_skipped: {
-            label: 'Route Point Skipped', icon: '↷', severity: 'warning',
-            desc: 'Fires when a later route point is completed before an earlier point.',
-            fields: [{ key: 'point_scope', label: 'Check', field_type: 'select', default: 'all', options: [{ value: 'all', label: 'Stops and waypoints' }, { value: 'stops', label: 'Stops only' }, { value: 'waypoints', label: 'Waypoints only' }] }],
+            label: 'Route Progress Alert', icon: '🏁', severity: 'warning',
+            desc: 'Fires when the vehicle skips an earlier route point or completes the assigned route.',
+            fields: [
+                { key: 'event_type', label: 'Trigger On', field_type: 'select', default: 'skipped', options: [{ value: 'skipped', label: 'Skipped route point' }, { value: 'completed', label: 'Route completed' }, { value: 'both', label: 'Skipped point or completed route' }] },
+                { key: 'point_scope', label: 'Check', field_type: 'select', default: 'all', options: [{ value: 'all', label: 'Stops and waypoints' }, { value: 'stops', label: 'Stops only' }, { value: 'waypoints', label: 'Waypoints only' }], show_if: { key: 'event_type', values: ['skipped', 'both'] } },
+            ],
         },
         route_off_route: {
             label: 'Route Deviation Alert', icon: '🧭', severity: 'warning',
@@ -389,7 +401,29 @@
                 { key: 'duration_seconds', label: 'Confirmation Duration', field_type: 'number', default: 60, unit: 'seconds', min_value: 0, max_value: 3600 },
             ],
         },
+        __custom__: {
+            label: 'Custom Rule', icon: '⚡', severity: 'warning',
+            desc: 'Fires when a user-defined rule expression evaluates to true.',
+            fields: [
+                { key: 'name', label: 'Rule Name', field_type: 'text', default: '', required: true },
+                { key: 'rule', label: 'Condition', field_type: 'text', default: '', required: true },
+            ],
+        },
     };
+    const scheduleTriggers = [
+        { value: 'time', label: 'Time schedule', alert_type: 'time', icon: '🕒', description: 'Run on a daily, weekly, or monthly time schedule.', source: 'schedule' },
+        { value: '__custom__', key: '__custom__', alert_type: 'custom', label: alertTypes.__custom__.label, icon: alertTypes.__custom__.icon, description: alertTypes.__custom__.desc, severity: alertTypes.__custom__.severity, source: 'alert', fields: alertTypes.__custom__.fields },
+        { value: 'speed_tolerance', key: 'speed_tolerance', alert_type: 'speeding', label: alertTypes.speed_tolerance.label, icon: alertTypes.speed_tolerance.icon, description: alertTypes.speed_tolerance.desc, severity: alertTypes.speed_tolerance.severity, source: 'alert', fields: alertTypes.speed_tolerance.fields },
+        { value: 'idle_timeout_minutes', key: 'idle_timeout_minutes', alert_type: 'idling', label: alertTypes.idle_timeout_minutes.label, icon: alertTypes.idle_timeout_minutes.icon, description: alertTypes.idle_timeout_minutes.desc, severity: alertTypes.idle_timeout_minutes.severity, source: 'alert', fields: alertTypes.idle_timeout_minutes.fields },
+        { value: 'geofence_alert', key: 'geofence_alert', alert_type: 'geofence_enter', label: alertTypes.geofence_alert.label, icon: alertTypes.geofence_alert.icon, description: alertTypes.geofence_alert.desc, severity: alertTypes.geofence_alert.severity, source: 'alert', fields: alertTypes.geofence_alert.fields },
+        { value: 'offline_detection', key: 'offline_detection', alert_type: 'offline', label: alertTypes.offline_detection.label, icon: alertTypes.offline_detection.icon, description: alertTypes.offline_detection.desc, severity: alertTypes.offline_detection.severity, source: 'alert', fields: alertTypes.offline_detection.fields },
+        { value: 'towing_threshold_meters', key: 'towing_threshold_meters', alert_type: 'towing', label: alertTypes.towing_threshold_meters.label, icon: alertTypes.towing_threshold_meters.icon, description: alertTypes.towing_threshold_meters.desc, severity: alertTypes.towing_threshold_meters.severity, source: 'alert', fields: alertTypes.towing_threshold_meters.fields },
+        { value: 'maintenance_alert', key: 'maintenance_alert', alert_type: 'maintenance', label: alertTypes.maintenance_alert.label, icon: alertTypes.maintenance_alert.icon, description: alertTypes.maintenance_alert.desc, severity: alertTypes.maintenance_alert.severity, source: 'alert', fields: alertTypes.maintenance_alert.fields },
+        { value: 'low_battery', key: 'low_battery', alert_type: 'low_battery', label: alertTypes.low_battery.label, icon: alertTypes.low_battery.icon, description: alertTypes.low_battery.desc, severity: alertTypes.low_battery.severity, source: 'alert', fields: alertTypes.low_battery.fields },
+        { value: 'no_driver', key: 'no_driver', alert_type: 'unauthorized_driver', label: alertTypes.no_driver.label, icon: alertTypes.no_driver.icon, description: alertTypes.no_driver.desc, severity: alertTypes.no_driver.severity, source: 'alert', fields: alertTypes.no_driver.fields },
+        { value: 'route_waypoint_skipped', key: 'route_waypoint_skipped', alert_type: 'route_waypoint_skipped', label: alertTypes.route_waypoint_skipped.label, icon: alertTypes.route_waypoint_skipped.icon, description: alertTypes.route_waypoint_skipped.desc, severity: alertTypes.route_waypoint_skipped.severity, source: 'alert', fields: alertTypes.route_waypoint_skipped.fields },
+        { value: 'route_off_route', key: 'route_off_route', alert_type: 'route_off_route', label: alertTypes.route_off_route.label, icon: alertTypes.route_off_route.icon, description: alertTypes.route_off_route.desc, severity: alertTypes.route_off_route.severity, source: 'alert', fields: alertTypes.route_off_route.fields },
+    ];
 
     function json(data, status = 200) {
         return new Response(JSON.stringify(data), {
@@ -803,9 +837,18 @@
             });
         }
         if (apiPath.startsWith('/reports/')) return json(reportPayload(apiPath.split('/')[2], input));
+        if (apiPath === '/report-schedules/triggers') return json(scheduleTriggers);
         if (apiPath === '/report-schedules') {
             if (method === 'POST') {
-                const schedule = { id: Date.now(), ...body, run_count: 0, next_run: iso(-1440) };
+                const schedule = {
+                    id: Date.now(),
+                    ...body,
+                    trigger_type: body.trigger_type || 'time',
+                    trigger_options: body.trigger_options || {},
+                    run_count: 0,
+                    next_run: (body.trigger_type || 'time') === 'time' ? iso(-1440) : null,
+                    last_triggered_at: null,
+                };
                 schedules.push(schedule);
                 return json(schedule);
             }

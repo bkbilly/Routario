@@ -377,6 +377,8 @@ class ScheduledReport(Base):
     attach_documents:   Mapped[bool]          = mapped_column(Boolean, default=True)
     sensors_historical: Mapped[bool]          = mapped_column(Boolean, default=False)
     date_range:         Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    trigger_type:       Mapped[str]           = mapped_column(String(50), default='time', nullable=False)
+    trigger_options:    Mapped[Optional[dict]] = mapped_column(JsonType, nullable=True, default=dict)
     frequency:          Mapped[str]           = mapped_column(String(20), nullable=False)
     run_time:           Mapped[str]           = mapped_column(String(5), nullable=False)
     day_of_week:        Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -386,6 +388,7 @@ class ScheduledReport(Base):
     is_active:          Mapped[bool]          = mapped_column(Boolean, default=True)
     next_run:           Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
     last_run:           Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_triggered_at:  Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at:         Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
 
     user: Mapped["User"]                     = relationship("User")

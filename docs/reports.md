@@ -49,6 +49,8 @@ Each schedule stores:
 - report-specific filters
 - backend-defined report options, such as breakdown or report period selectors
 - date range preset, when required
+- trigger type: either a normal time schedule, route completion, or an alert event such as speeding, idling, geofence enter/exit, towing, maintenance, low battery, unauthorized driver, route deviation, route point skipped, or custom/device event
+- trigger-specific options, when the selected alert type exposes backend-defined fields
 - frequency: daily, weekly, or monthly
 - run time and timezone
 - number of stored runs to keep
@@ -57,6 +59,8 @@ Each schedule stores:
 - active/paused state
 
 Date ranges are stored as relative presets rather than fixed start/end dates, so a recurring schedule can run against windows such as the last 30 days or last calendar month.
+
+Alert-triggered report schedules run when the schedule owner has access to the alerting vehicle and the schedule's vehicle filter matches that vehicle. Native device events such as ignition on/off can be used through the custom/device event alert trigger.
 
 The background schedule runner dispatches through the same report registry used by manual reports, so scheduled and manual output share the same schema and report-specific options. When notification channels are selected, the runner sends the result to those channels and attaches a CSV plus printable HTML result file. Reports that expose related uploaded documents, such as logbook maintenance entries, can attach those documents too.
 

@@ -17,6 +17,7 @@ from core.auth import require_permission
 from core.database import get_db
 from models import User
 from models.models import ScheduledReport, ScheduledReportRun
+from alerts import ALERT_DEFINITIONS, ALERT_DEFINITIONS_PUBLIC
 from reports import get_report, valid_report_types
 
 router = APIRouter(prefix="/api/report-schedules", tags=["report-schedules"])
@@ -24,6 +25,15 @@ router = APIRouter(prefix="/api/report-schedules", tags=["report-schedules"])
 MAX_KEEP_RUNS = 100
 
 _VALID_FREQS      = {"daily", "weekly", "monthly"}
+_VALID_TRIGGERS   = {
+    "time",
+    "route_completed",
+    "custom",
+    *{
+        d.alert_type.value if hasattr(d.alert_type, "value") else str(d.alert_type)
+        for d in ALERT_DEFINITIONS_PUBLIC.values()
+    },
+}
 _VALID_RANGES     = {
     "last_day", "last_7_days", "last_14_days", "last_30_days",
     "last_calendar_month", "last_quarter", "last_year",
@@ -93,8 +103,10 @@ class ScheduleCreate(BaseModel):
     attach_documents:   bool             = True
     sensors_historical: bool             = False
     date_range:         Optional[str]    = None
-    frequency:          str
-    run_time:           str
+    trigger_type:       str              = "time"
+    trigger_options:    Dict[str, Any]   = Field(default_factory=dict)
+    frequency:          str              = "daily"
+    run_time:           str              = "07:00"
     day_of_week:        Optional[int]    = None
     day_of_month:       Optional[int]    = None
     timezone:           str              = "UTC"
@@ -113,6 +125,8 @@ class ScheduleUpdate(BaseModel):
     attach_documents:   Optional[bool]      = None
     sensors_historical: Optional[bool]      = None
     date_range:         Optional[str]       = None
+    trigger_type:       Optional[str]       = None
+    trigger_options:    Optional[Dict[str, Any]] = None
     frequency:          Optional[str]       = None
     run_time:           Optional[str]       = None
     day_of_week:        Optional[int]       = None
@@ -151,6 +165,62 @@ def _normalise_options(report, options: Optional[dict]) -> dict:
     return clean
 
 
+def _trigger_definition_for(data: "ScheduleCreate"):
+    if data.trigger_type == "time":
+        return None
+    alert_key = (data.trigger_options or {}).get("alert_key")
+    if alert_key and alert_key in ALERT_DEFINITIONS:
+        return ALERT_DEFINITIONS[alert_key]
+    for definition in ALERT_DEFINITIONS.values():
+        alert_type = definition.alert_type.value if hasattr(definition.alert_type, "value") else str(definition.alert_type)
+        if alert_type == data.trigger_type:
+            return definition
+    return None
+
+
+def _trigger_field_visible(field, fields: list, params: dict) -> bool:
+    if not field.show_if:
+        return True
+    source = next((f for f in fields if f.key == field.show_if.get("key")), None)
+    current = params.get(field.show_if.get("key"), source.default if source else None)
+    if "values" in field.show_if:
+        return str(current) in {str(v) for v in field.show_if.get("values") or []}
+    return str(current) == str(field.show_if.get("value"))
+
+
+def _validate_trigger_options(data: "ScheduleCreate") -> None:
+    definition = _trigger_definition_for(data)
+    if not definition:
+        return
+
+    options = data.trigger_options or {}
+    params = options.get("params") or {}
+    for field in definition.fields:
+        if not _trigger_field_visible(field, definition.fields, params):
+            continue
+
+        value = params.get(field.key, field.default)
+        missing = value in (None, "", [], {})
+        if field.required and missing:
+            raise HTTPException(400, f"{field.label} is required")
+
+        if missing:
+            continue
+        if field.field_type == "select":
+            allowed = {str(option.get("value")) for option in field.options or []}
+            if allowed and str(value) not in allowed:
+                raise HTTPException(400, f"Invalid option for {field.label}")
+        elif field.field_type == "number":
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                raise HTTPException(400, f"Invalid value for {field.label}")
+            if field.min_value is not None and numeric < float(field.min_value):
+                raise HTTPException(400, f"Invalid value for {field.label}")
+            if field.max_value is not None and numeric > float(field.max_value):
+                raise HTTPException(400, f"Invalid value for {field.label}")
+
+
 def _validate(data: ScheduleCreate) -> dict:
     if data.report_type not in valid_report_types():
         raise HTTPException(400, "Invalid report_type")
@@ -159,6 +229,9 @@ def _validate(data: ScheduleCreate) -> dict:
         raise HTTPException(400, "Report type cannot be scheduled")
     if data.frequency not in _VALID_FREQS:
         raise HTTPException(400, "Invalid frequency")
+    if data.trigger_type not in _VALID_TRIGGERS:
+        raise HTTPException(400, "Invalid trigger_type")
+    _validate_trigger_options(data)
     if data.frequency == "weekly" and data.day_of_week is None:
         raise HTTPException(400, "day_of_week required for weekly frequency")
     if data.frequency == "monthly" and data.day_of_month is None:
@@ -195,6 +268,8 @@ def _to_dict(s: ScheduledReport, run_count: int = 0) -> dict:
         "attach_documents":   s.attach_documents,
         "sensors_historical": s.sensors_historical,
         "date_range":         s.date_range,
+        "trigger_type":       s.trigger_type or "time",
+        "trigger_options":    s.trigger_options or {},
         "frequency":          s.frequency,
         "run_time":           s.run_time,
         "day_of_week":        s.day_of_week,
@@ -204,9 +279,70 @@ def _to_dict(s: ScheduledReport, run_count: int = 0) -> dict:
         "is_active":          s.is_active,
         "next_run":           _utc_iso(s.next_run),
         "last_run":           _utc_iso(s.last_run),
+        "last_triggered_at":  _utc_iso(s.last_triggered_at),
         "created_at":         _utc_iso(s.created_at),
         "run_count":          run_count,
     }
+
+
+def _alert_field_dict(field) -> dict:
+    return {
+        "key":           field.key,
+        "label":         field.label,
+        "field_type":    field.field_type,
+        "default":       field.default,
+        "unit":          field.unit,
+        "min_value":     field.min_value,
+        "max_value":     field.max_value,
+        "options":       field.options,
+        "required":      field.required,
+        "help_text":     field.help_text,
+        "updates_field": field.updates_field,
+        "show_if":       field.show_if,
+    }
+
+
+def _trigger_options() -> list[dict]:
+    triggers = [{
+        "value": "time",
+        "label": "Time schedule",
+        "alert_type": "time",
+        "icon": "🕒",
+        "description": "Run on a daily, weekly, or monthly time schedule.",
+        "source": "schedule",
+    }]
+    custom_definition = ALERT_DEFINITIONS.get("__custom__")
+    if custom_definition:
+        triggers.append({
+            "value": "__custom__",
+            "key": "__custom__",
+            "alert_type": custom_definition.alert_type.value if hasattr(custom_definition.alert_type, "value") else str(custom_definition.alert_type),
+            "label": custom_definition.label,
+            "icon": custom_definition.icon,
+            "description": custom_definition.description,
+            "severity": custom_definition.severity.value if hasattr(custom_definition.severity, "value") else custom_definition.severity,
+            "source": "alert",
+            "fields": [_alert_field_dict(field) for field in custom_definition.fields],
+        })
+    for key, definition in ALERT_DEFINITIONS_PUBLIC.items():
+        alert_type = definition.alert_type.value if hasattr(definition.alert_type, "value") else str(definition.alert_type)
+        triggers.append({
+            "value": key,
+            "key": key,
+            "alert_type": alert_type,
+            "label": definition.label,
+            "icon": definition.icon,
+            "description": definition.description,
+            "severity": definition.severity.value if hasattr(definition.severity, "value") else definition.severity,
+            "source": "alert",
+            "fields": [_alert_field_dict(field) for field in definition.fields],
+        })
+    return triggers
+
+
+@router.get("/triggers")
+async def list_schedule_triggers(current_user: User = Depends(require_permission("view_reports"))):
+    return _trigger_options()
 
 
 @router.get("")
@@ -240,7 +376,10 @@ async def create_schedule(
     if report and report.definition.company_admin_required and not (current_user.is_admin or current_user.is_company_admin):
         raise HTTPException(403, "Company admin access required")
     tz = data.timezone or current_user.timezone or "UTC"
-    next_run = compute_next_run(data.frequency, data.run_time, data.day_of_week, data.day_of_month, tz)
+    next_run = (
+        compute_next_run(data.frequency, data.run_time, data.day_of_week, data.day_of_month, tz)
+        if data.trigger_type == "time" else None
+    )
 
     db = get_db()
     async with db.get_session() as session:
@@ -256,6 +395,8 @@ async def create_schedule(
             attach_documents=data.attach_documents,
             sensors_historical=data.sensors_historical,
             date_range=data.date_range,
+            trigger_type=data.trigger_type,
+            trigger_options=data.trigger_options,
             frequency=data.frequency,
             run_time=data.run_time,
             day_of_week=data.day_of_week,
@@ -311,6 +452,8 @@ async def update_schedule(
         if data.attach_documents   is not None: schedule.attach_documents   = data.attach_documents
         if data.sensors_historical is not None: schedule.sensors_historical = data.sensors_historical
         if data.date_range         is not None: schedule.date_range         = data.date_range
+        if data.trigger_type       is not None: schedule.trigger_type       = data.trigger_type
+        if data.trigger_options    is not None: schedule.trigger_options    = data.trigger_options
         if data.frequency          is not None: schedule.frequency          = data.frequency
         if data.run_time           is not None: schedule.run_time           = data.run_time
         if data.day_of_week        is not None: schedule.day_of_week        = data.day_of_week
@@ -330,6 +473,8 @@ async def update_schedule(
             attach_documents=schedule.attach_documents,
             sensors_historical=schedule.sensors_historical,
             date_range=schedule.date_range,
+            trigger_type=schedule.trigger_type or "time",
+            trigger_options=schedule.trigger_options or {},
             frequency=schedule.frequency,
             run_time=schedule.run_time,
             day_of_week=schedule.day_of_week,
@@ -341,12 +486,15 @@ async def update_schedule(
         schedule.report_options = _validate(merged)
 
         timing_changed = any(
-            v is not None for v in [data.frequency, data.run_time, data.day_of_week, data.day_of_month, data.timezone]
+            v is not None for v in [data.trigger_type, data.frequency, data.run_time, data.day_of_week, data.day_of_month, data.timezone]
         )
         if timing_changed:
-            schedule.next_run = compute_next_run(
-                schedule.frequency, schedule.run_time, schedule.day_of_week, schedule.day_of_month,
-                schedule.user_timezone,
+            schedule.next_run = (
+                compute_next_run(
+                    schedule.frequency, schedule.run_time, schedule.day_of_week, schedule.day_of_month,
+                    schedule.user_timezone,
+                )
+                if (schedule.trigger_type or "time") == "time" else None
             )
 
         await session.commit()

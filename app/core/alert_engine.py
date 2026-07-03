@@ -140,6 +140,32 @@ class AlertEngine:
         Handles database creation, real-time broadcasting, and external notifications.
         Ensures WebSocket broadcast only happens ONCE per alert event.
         """
+        alert_type = alert_data.get("type")
+        alert_type_value = alert_type.value if hasattr(alert_type, "value") else str(alert_type or "")
+        try:
+            from core.schedule_runner import trigger_report_schedules_for_alert
+            if alert_type_value != "route_completed":
+                def _log_schedule_trigger_result(task: asyncio.Task) -> None:
+                    if task.cancelled():
+                        return
+                    exc = task.exception()
+                    if exc:
+                        logger.error(
+                            "Alert-triggered report schedule failed: %s",
+                            exc,
+                            exc_info=(type(exc), exc, exc.__traceback__),
+                        )
+
+                task = asyncio.create_task(trigger_report_schedules_for_alert(
+                    alert_type_value,
+                    device.id,
+                    alert_data=alert_data,
+                    allowed_user_ids=[u.id for u in users if getattr(u, "id", None) is not None],
+                ))
+                task.add_done_callback(_log_schedule_trigger_result)
+        except Exception as exc:
+            logger.error("Alert-triggered report schedule failed: %s", exc, exc_info=True)
+
         notify_ids = alert_data.get('notify_user_ids')
         db = get_db()
         if notify_ids is not None:

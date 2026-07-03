@@ -25,6 +25,7 @@ class AlertType(str, Enum):
     UNAUTHORIZED_DRIVER = "unauthorized_driver"
     ROUTE_WAYPOINT_SKIPPED = "route_waypoint_skipped"
     ROUTE_OFF_ROUTE = "route_off_route"
+    ROUTE_COMPLETED = "route_completed"
     CUSTOM = "custom"
     NOTIFICATION = "notification"
 

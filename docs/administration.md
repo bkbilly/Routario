@@ -209,7 +209,7 @@ Users with **Manage Routes** can create planned routes with stops, assign them t
 - Planned routes are company-scoped.
 - Route geometry uses Valhalla when available and falls back to straight-line geometry when routing is unavailable.
 - Unassigned routes are saved as `draft`; assigned routes are saved as `planned`.
-- Active routes can be paused, resumed, finished as `completed`, or reset back to `planned`/`draft` based on assignment.
+- Active routes can be paused, resumed, completed, or reset back to `planned`/`draft` based on assignment.
 - Once a route is active or paused, core route details such as name, assigned vehicle, and stops cannot be edited.
 - Starting a route requires an assigned vehicle.
 

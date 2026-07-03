@@ -170,12 +170,24 @@ class RouteWaypointSkippedAlert(BaseAlert):
         return AlertDefinition(
             key="route_waypoint_skipped",
             alert_type=AlertType.ROUTE_WAYPOINT_SKIPPED,
-            label="Route Point Skipped",
-            description="Fires when the vehicle completes a later route point while an earlier configured route point remains incomplete.",
-            icon="↷",
+            label="Route Progress Alert",
+            description="Fires when the vehicle skips an earlier route point or completes the assigned route.",
+            icon="🏁",
             severity=Severity.WARNING,
-            state_keys=["route_skipped_alerted_*"],
+            state_keys=["route_skipped_alerted_*", "route_completed_alerted_*"],
             fields=[
+                AlertField(
+                    key="event_type",
+                    label="Trigger On",
+                    field_type="select",
+                    default="skipped",
+                    options=[
+                        {"value": "skipped", "label": "Skipped route point"},
+                        {"value": "completed", "label": "Route completed"},
+                        {"value": "both", "label": "Skipped point or completed route"},
+                    ],
+                    help_text="Choose which route progress event should fire this alert.",
+                ),
                 AlertField(
                     key="point_scope",
                     label="Check",
@@ -187,6 +199,7 @@ class RouteWaypointSkippedAlert(BaseAlert):
                         {"value": "waypoints", "label": "Waypoints only"},
                     ],
                     help_text="Choose which route point types can trigger skipped alerts.",
+                    show_if={"key": "event_type", "values": ["skipped", "both"]},
                 ),
             ],
         )
@@ -195,11 +208,31 @@ class RouteWaypointSkippedAlert(BaseAlert):
         return None
 
     async def check_many(self, position, device, state, params: dict) -> list:
+        event_type = params.get("event_type", "skipped")
         scope = params.get("point_scope", "all")
         alerts = []
         routes = await _routes_for_device(device.id, include_recent_completed=True)
 
         for route in routes:
+            if event_type in {"completed", "both"} and (route.status or "").lower() == "completed":
+                completed_key = f"route_completed_alerted_{route.id}"
+                if not state.alert_states.get(completed_key):
+                    state.alert_states[completed_key] = True
+                    alerts.append({
+                        "type": AlertType.ROUTE_COMPLETED,
+                        "severity": Severity.INFO,
+                        "message": f"Route completed: {route.name}.",
+                        "alert_metadata": {
+                            "config_key": "route_waypoint_skipped",
+                            "event_type": "completed",
+                            "route_id": route.id,
+                            "route_name": route.name,
+                        },
+                    })
+
+            if event_type == "completed":
+                continue
+
             stops = sorted(route.stops or [], key=lambda s: int(s.sequence or 0))
             completed_sequences = [
                 int(stop.sequence or 0)
@@ -235,6 +268,7 @@ class RouteWaypointSkippedAlert(BaseAlert):
                     "message": f"Route point skipped: {label} on {route.name}.",
                     "alert_metadata": {
                         "config_key": "route_waypoint_skipped",
+                        "event_type": "skipped",
                         "route_id": route.id,
                         "route_name": route.name,
                         "stop_id": stop.id,

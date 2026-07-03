@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
@@ -122,6 +123,7 @@ async def _broadcast_route_update(payload: dict) -> None:
 async def process_route_progress_for_position(position: NormalizedPosition, device: Device) -> None:
     db = get_db()
     changed_payloads: list[dict] = []
+    route_completed = False
 
     async with db.get_session() as session:
         result = await session.execute(_active_routes_query(device.id))
@@ -162,6 +164,7 @@ async def process_route_progress_for_position(position: NormalizedPosition, devi
                 route.updated_at = now_utc
                 if _is_final_route_point(route, stop):
                     route.status = "completed"
+                    route_completed = True
                 _route_dwell_state.pop(key, None)
                 changed = True
                 await session.flush()
@@ -176,3 +179,38 @@ async def process_route_progress_for_position(position: NormalizedPosition, devi
 
     for payload in changed_payloads:
         await _broadcast_route_update(payload)
+
+    if route_completed:
+        for payload in changed_payloads:
+            if payload.get("status") != "completed":
+                continue
+            try:
+                from core.schedule_runner import trigger_report_schedules_for_alert
+                def _log_schedule_trigger_result(task: asyncio.Task) -> None:
+                    if task.cancelled():
+                        return
+                    exc = task.exception()
+                    if exc:
+                        logger.error(
+                            "Route-completed report schedule failed: %s",
+                            exc,
+                            exc_info=(type(exc), exc, exc.__traceback__),
+                        )
+
+                metadata = {
+                    "config_key": "route_waypoint_skipped",
+                    "event_type": "completed",
+                    "route_id": payload.get("id"),
+                    "route_name": payload.get("name"),
+                }
+                allowed_user_ids = [u.id for u in (device.users or []) if getattr(u, "id", None) is not None]
+                for trigger_type in ("route_waypoint_skipped", "route_completed"):
+                    task = asyncio.create_task(trigger_report_schedules_for_alert(
+                        trigger_type,
+                        device.id,
+                        alert_data={"alert_metadata": metadata},
+                        allowed_user_ids=allowed_user_ids,
+                    ))
+                    task.add_done_callback(_log_schedule_trigger_result)
+            except Exception as exc:
+                logger.error("Route-completed report schedule failed: %s", exc, exc_info=True)
