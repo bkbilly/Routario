@@ -46,12 +46,14 @@
             'view_management', 'view_devices', 'edit_devices', 'manage_alerts',
             'manage_geofences', 'view_history', 'view_reports', 'manage_routes',
             'manage_users', 'manage_integrations', 'send_commands', 'view_audit',
-            'view_health', 'manage_backups',
+            'view_health', 'manage_backups', 'manage_logbook', 'manage_fuel',
+            'manage_maintenance',
         ],
     };
 
     const now = new Date();
     const iso = minutesAgo => new Date(now.getTime() - minutesAgo * 60000).toISOString();
+    const dateIn = days => new Date(now.getTime() + days * 86400000).toISOString().split('T')[0];
     const devices = [
         {
             id: 1, name: 'Athens Van 12', imei: 'demo-0001', protocol: 'teltonika',
@@ -64,8 +66,9 @@
                 alert_rows: [
                     { alertKey: 'speed_tolerance', params: { overspeed_percent: 10, duration_seconds: 30 }, channels: ['Ops Email'], schedule: null, notify_user_ids: [1] },
                     { alertKey: 'offline_detection', params: { timeout_hours: 4 }, channels: ['Dispatch Slack'], schedule: null, notify_user_ids: [1] },
+                    { alertKey: 'maintenance_alert', uid: 'demo-maint-van-service', params: { maintenance_type: 'service', custom_label: '', tracking_mode: 'km', next_service_km: 24825, interval_km: 5000, warning_km: 500 }, channels: ['Ops Email'], schedule: null, notify_user_ids: [1] },
                 ],
-                alert_channels: { speed_tolerance: ['Ops Email'], offline_detection: ['Dispatch Slack'] },
+                alert_channels: { speed_tolerance: ['Ops Email'], offline_detection: ['Dispatch Slack'], maintenance_alert: ['Ops Email'] },
             },
             state: {
                 device_id: 1, last_latitude: 37.9838, last_longitude: 23.7275, last_speed: 38,
@@ -85,8 +88,9 @@
                 trip_merge_gap_minutes: 10,
                 alert_rows: [
                     { alertKey: 'idle_timeout_minutes', params: { timeout_minutes: 12, speed_threshold: 2 }, channels: ['Ops Email'], schedule: null, notify_user_ids: [1] },
+                    { alertKey: 'maintenance_alert', uid: 'demo-maint-truck-oil', params: { maintenance_type: 'oil_change', custom_label: '', tracking_mode: 'both', next_service_km: 88100, interval_km: 10000, warning_km: 500, next_service_date: dateIn(-3), interval_days: 180, warning_days: 14 }, channels: ['Ops Email'], schedule: null, notify_user_ids: [1] },
                 ],
-                alert_channels: { idle_timeout_minutes: ['Ops Email'] },
+                alert_channels: { idle_timeout_minutes: ['Ops Email'], maintenance_alert: ['Ops Email'] },
             },
             state: {
                 device_id: 2, last_latitude: 37.942, last_longitude: 23.646, last_speed: 0,

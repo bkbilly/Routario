@@ -30,6 +30,13 @@ function _lbMoneyFromInput(id) {
     return typeof currencyInputToBase === 'function' ? currencyInputToBase(value) : (value === '' ? null : Number(value));
 }
 
+function _lbCurrentOdometer(device, fallback = '') {
+    const value = device?.state?.total_odometer ?? device?.total_odometer ?? fallback;
+    if (value === '' || value == null) return fallback;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : fallback;
+}
+
 function _lbApplyCurrencyLabels() {
     const cur = typeof userCurrency === 'function' ? userCurrency() : 'EUR';
     const entryLabel = document.getElementById('lbEntryPriceLabel');
@@ -160,7 +167,7 @@ function openEntryModal(logId = null) {
         document.getElementById('lbEntryFiles').value       = '';
 
         const device = devices.find(d => d.id === _logbookDeviceId);
-        const odo = device?.state?.total_odometer ?? device?.total_odometer ?? '';
+        const odo = _lbCurrentOdometer(device);
         document.getElementById('lbEntryOdometer').value = odo !== '' ? parseFloat(odo).toFixed(1) : '';
     } else {
         document.getElementById('lbEntryDescription').value = entry.description;
@@ -414,7 +421,7 @@ function openFuelLogModal(logId = null) {
     document.getElementById('lbFuelNotes').value      = log?.notes || '';
 
     const device = devices.find(d => d.id === _logbookDeviceId);
-    const defaultOdo = isNew ? (device?.state?.total_odometer ?? '') : '';
+    const defaultOdo = isNew ? _lbCurrentOdometer(device) : '';
     if (isNew && defaultOdo !== '') document.getElementById('lbFuelOdometer').value = Math.round(defaultOdo);
 
     const dt = log?.date
@@ -477,7 +484,7 @@ async function deleteFuelLog() {
 
 function _renderMaintenanceStatus() {
     const device    = devices.find(d => d.id === _logbookDeviceId);
-    const odometer  = device?.state?.total_odometer ?? 0;
+    const odometer  = _lbCurrentOdometer(device, 0);
     const config    = device?.config || {};
     const alertRows = Array.isArray(config.alert_rows) ? config.alert_rows : [];
     const maintRows = alertRows.filter(r => r.alertKey === 'maintenance_alert');
@@ -496,14 +503,21 @@ function _renderMaintenanceStatus() {
                         .replace(/\b\w/g, c => c.toUpperCase());
         const mode  = p.tracking_mode || 'km';
         const parts = [];
+        const humanDays = d => d === 1 ? '1 day' : d < 7 ? `${d} days` : d < 30 ? (w => w === 1 ? '1 week' : `${w} weeks`)(Math.round(d / 7)) : (m => m === 1 ? '1 month' : `${m} months`)(Math.round(d / 30));
 
         if (mode === 'km' || mode === 'both') {
             const nextKm    = parseFloat(p.next_service_km || 0);
             const remaining = nextKm - odometer;
             const status    = remaining <= 0 ? 'due' : remaining <= parseFloat(p.warning_km || 500) ? 'warn' : 'ok';
             const colour    = status === 'due' ? 'var(--accent-danger)' : status === 'warn' ? '#f59e0b' : 'var(--accent-success)';
+            const roundedRemaining = Math.round(remaining);
+            const kmText    = roundedRemaining < 0
+                ? `${Math.abs(roundedRemaining).toLocaleString()} km overdue`
+                : roundedRemaining === 0
+                    ? 'due now'
+                    : `${roundedRemaining.toLocaleString()} km remaining`;
             parts.push(`<span style="color:${colour};font-weight:600;">
-                ${remaining <= 0 ? 'OVERDUE' : Math.round(remaining) + ' km remaining'}
+                ${kmText}
             </span> <span style="color:var(--text-muted);font-size:0.8rem;">(due at ${Math.round(nextKm).toLocaleString()} km)</span>`);
         }
 
@@ -513,9 +527,13 @@ function _renderMaintenanceStatus() {
                 const daysLeft = Math.round((nextDate - new Date()) / 86400000);
                 const status   = daysLeft <= 0 ? 'due' : daysLeft <= parseInt(p.warning_days || 14) ? 'warn' : 'ok';
                 const colour   = status === 'due' ? 'var(--accent-danger)' : status === 'warn' ? '#f59e0b' : 'var(--accent-success)';
-                const humanDays = d => d === 1 ? '1 day' : d < 7 ? `${d} days` : d < 30 ? (w => w === 1 ? '1 week' : `${w} weeks`)(Math.round(d / 7)) : (m => m === 1 ? '1 month' : `${m} months`)(Math.round(d / 30));
+                const dayText  = daysLeft < 0
+                    ? `${humanDays(Math.abs(daysLeft))} overdue`
+                    : daysLeft === 0
+                        ? 'due today'
+                        : `${humanDays(daysLeft)} remaining`;
                 parts.push(`<span style="color:${colour};font-weight:600;">
-                    ${daysLeft <= 0 ? 'OVERDUE' : humanDays(daysLeft) + ' remaining'}
+                    ${dayText}
                 </span> <span style="color:var(--text-muted);font-size:0.8rem;">(due ${nextDate.toLocaleDateString()})</span>`);
             }
         }
@@ -546,7 +564,7 @@ async function lbLogMaintenanceService(uid, deviceId) {
     const row       = alertRows.find(r => (r.uid || r.alertKey) == uid);
     if (!row) return;
 
-    const odometer     = device.state?.total_odometer ?? 0;
+    const odometer     = _lbCurrentOdometer(device, 0);
     const intervalKm   = parseFloat(row.params?.interval_km   || 5000);
     const intervalDays = parseInt(row.params?.interval_days   || 180);
     const mode         = row.params?.tracking_mode || 'km';
