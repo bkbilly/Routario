@@ -24,6 +24,12 @@ let _billingDetailPdfUrl = null;
 let _selectedBillingKey  = null;
 let _sfControlValues     = {};
 let _notificationChannels = [];
+let _scheduleTriggerDefs = [];
+let _scheduleTriggerMap  = {};
+let _sfTriggerOptions    = {};
+let _scheduleGeofenceOptions = null;
+let _lastScheduleTrigger = null;
+let _scheduleTriggerRenderToken = 0;
 const _REPORT_TABS = [
     { name: 'reports', panelId: 'panelReports', tabId: 'tabReports' },
     { name: 'schedules', panelId: 'panelSchedules', tabId: 'tabSchedules' },
@@ -58,6 +64,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (_CAN_SEE_USERS) await _loadUsers();
         await _loadDrivers();
         await _loadReportTypes();
+        await _loadScheduleTriggers();
         _updateDescription();
     }
     _injectNavScheduleAction();
@@ -93,6 +100,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             closeBillingDetail();
         }
     });
+});
+
+document.addEventListener('input', e => {
+    if (e.target?.closest?.('#schedModal')) _clearScheduleValidation();
+});
+
+document.addEventListener('change', e => {
+    if (e.target?.closest?.('#schedModal')) _clearScheduleValidation();
 });
 
 async function _loadDevices() {
@@ -153,6 +168,41 @@ async function _loadReportTypes() {
     _populateReportSelect('reportType', _reportDefs);
     _populateReportSelect('sfType', _reportDefs.filter(d => d.schedule_supported !== false));
     _syncReportFilters();
+}
+
+async function _loadScheduleTriggers() {
+    try {
+        const res = await apiFetch(`${API_BASE}/report-schedules/triggers`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        _scheduleTriggerDefs = await res.json();
+    } catch (e) {
+        console.error(e);
+        _scheduleTriggerDefs = [];
+        showAlert('Failed to load schedule triggers.', 'error');
+    }
+    _scheduleTriggerMap = Object.fromEntries(_scheduleTriggerDefs.map(d => [d.value, d]));
+    _populateScheduleTriggerSelect();
+}
+
+function _populateScheduleTriggerSelect() {
+    const select = document.getElementById('sfTriggerType');
+    if (!select) return;
+    const current = select.value || 'time';
+    select.disabled = !_scheduleTriggerDefs.length;
+    const grouped = _scheduleTriggerDefs.reduce((acc, d) => {
+        const label = d.source === 'alert' ? 'Alerts' : d.source === 'route' ? 'Routes' : 'Schedule';
+        (acc[label] ||= []).push(d);
+        return acc;
+    }, {});
+    select.innerHTML = _scheduleTriggerDefs.length
+        ? Object.entries(grouped).map(([label, defs]) =>
+            `<optgroup label="${_esc(label)}">${
+                defs.map(d => `<option value="${_esc(d.value)}">${_esc(`${d.icon || ''} ${d.label}`.trim())}</option>`).join('')
+            }</optgroup>`
+        ).join('')
+        : '<option value="">Triggers unavailable</option>';
+    if (_scheduleTriggerDefs.some(d => d.value === current)) select.value = current;
+    else if (_scheduleTriggerDefs.some(d => d.value === 'time')) select.value = 'time';
 }
 
 function _populateReportSelect(id, defs) {
@@ -1157,6 +1207,11 @@ function _reportLabel(type) {
 }
 
 function _freqLabel(s) {
+    if ((s.trigger_type || 'time') !== 'time') {
+        const triggerKey = s.trigger_options?.alert_key;
+        const def = triggerKey ? _scheduleTriggerMap[triggerKey] : _scheduleTriggerDefs.find(d => d.alert_type === s.trigger_type);
+        return def ? `${def.icon || ''} ${def.label}`.trim() : s.trigger_type;
+    }
     if (s.frequency === 'daily')   return `Daily at ${s.run_time}`;
     if (s.frequency === 'weekly')  return `Weekly (${_DOW[s.day_of_week]}) at ${s.run_time}`;
     if (s.frequency === 'monthly') return `Monthly (day ${s.day_of_month}) at ${s.run_time}`;
@@ -1563,6 +1618,8 @@ async function openScheduleModal(scheduleIdOrObj) {
     _sfSelectedVehIds.clear();
     _sfSelectedUserIds.clear();
     _sfControlValues = schedule?.options || {};
+    _sfTriggerOptions = schedule?.trigger_options || {};
+    _lastScheduleTrigger = schedule?.trigger_type || 'time';
     _renderSfChannels(schedule?.notification_channels || []);
 
     if (schedule) {
@@ -1570,6 +1627,7 @@ async function openScheduleModal(scheduleIdOrObj) {
         document.getElementById('sfType').value        = schedule.report_type;
         document.getElementById('sfHistorical').checked = schedule.sensors_historical;
         document.getElementById('sfDateRange').value   = schedule.date_range || 'last_30_days';
+        document.getElementById('sfTriggerType').value  = _scheduleTriggerValue(schedule);
         document.getElementById('sfFreq').value        = schedule.frequency;
         document.getElementById('sfTime').value        = schedule.run_time;
         document.getElementById('sfDow').value         = schedule.day_of_week ?? 0;
@@ -1583,6 +1641,7 @@ async function openScheduleModal(scheduleIdOrObj) {
         document.getElementById('sfType').value        = _defaultScheduleReportType();
         document.getElementById('sfHistorical').checked = false;
         document.getElementById('sfDateRange').value   = 'last_30_days';
+        document.getElementById('sfTriggerType').value  = 'time';
         document.getElementById('sfFreq').value        = 'daily';
         document.getElementById('sfTime').value        = '07:00';
         document.getElementById('sfDow').value         = '0';
@@ -1594,6 +1653,7 @@ async function openScheduleModal(scheduleIdOrObj) {
     _buildSfVehList();
     _buildSfUserList();
     onSchedTypeChange();
+    await onSchedTriggerChange();
     onSchedFreqChange();
 
     document.getElementById('schedModal').classList.add('active');
@@ -1663,12 +1723,23 @@ function onSchedTypeChange() {
 
     document.getElementById('sfHistGroup').style.display  = isSens ? '' : 'none';
     document.getElementById('sfUserGroup').style.display  = (def.schedule_uses_user_filter && _CAN_SEE_USERS) ? '' : 'none';
-    document.getElementById('sfVehWrap').closest('.form-group').style.display = def.schedule_uses_device_filter === false ? 'none' : '';
+    _updateScheduleVehicleVisibility(def);
     _renderScheduleControls(def.schedule_controls?.length ? def.schedule_controls : (def.controls || []), current);
 
     // Date range: hidden for sensors when not in historical mode
     const needsRange = def.needs_date_range !== false || document.getElementById('sfHistorical').checked;
     document.getElementById('sfDateRangeGroup').style.display = needsRange ? '' : 'none';
+}
+
+function _isScheduleEventTrigger() {
+    return (document.getElementById('sfTriggerType')?.value || 'time') !== 'time';
+}
+
+function _updateScheduleVehicleVisibility(def = null) {
+    const reportDef = def || _reportDefMap[document.getElementById('sfType')?.value] || {};
+    const group = document.getElementById('sfVehWrap')?.closest('.form-group');
+    if (!group) return;
+    group.style.display = _isScheduleEventTrigger() || reportDef.schedule_uses_device_filter !== false ? '' : 'none';
 }
 
 function onSchedHistChange() {
@@ -1687,9 +1758,269 @@ function _renderScheduleControls(controls, current = _sfControlValues) {
 }
 
 function onSchedFreqChange() {
+    const trigger = document.getElementById('sfTriggerType')?.value || 'time';
     const f = document.getElementById('sfFreq').value;
-    document.getElementById('sfDowGroup').style.display = f === 'weekly'  ? '' : 'none';
-    document.getElementById('sfDomGroup').style.display = f === 'monthly' ? '' : 'none';
+    document.getElementById('sfDowGroup').style.display = trigger === 'time' && f === 'weekly'  ? '' : 'none';
+    document.getElementById('sfDomGroup').style.display = trigger === 'time' && f === 'monthly' ? '' : 'none';
+}
+
+async function onSchedTriggerChange() {
+    const trigger = document.getElementById('sfTriggerType')?.value || 'time';
+    if (_lastScheduleTrigger !== null && _lastScheduleTrigger !== trigger) {
+        _sfTriggerOptions = {};
+    }
+    _lastScheduleTrigger = trigger;
+    const isTime = trigger === 'time';
+    document.querySelectorAll('.sf-time-field').forEach(el => { el.style.display = isTime ? '' : 'none'; });
+    await _renderScheduleTriggerOptions(trigger);
+    _updateScheduleVehicleVisibility();
+    _updateSfVehLabel();
+    onSchedFreqChange();
+}
+
+function _clearScheduleValidation() {
+    const error = document.getElementById('schedFormError');
+    if (error) {
+        error.style.display = 'none';
+        error.innerHTML = '';
+    }
+    document.querySelectorAll('#schedModal .invalid').forEach(el => el.classList.remove('invalid'));
+}
+
+function _showScheduleValidation(message, input = null) {
+    const error = document.getElementById('schedFormError');
+    if (error) {
+        error.innerHTML = `<i class="mdi mdi-alert-circle" style="font-size:1rem;line-height:1.2;"></i><span>${_esc(message)}</span>`;
+        error.style.display = 'flex';
+        error.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+    if (input) {
+        input.classList.add('invalid');
+        input.focus?.();
+    }
+    showAlert(message, 'warning');
+}
+
+function _selectedScheduleTrigger() {
+    const trigger = document.getElementById('sfTriggerType')?.value || 'time';
+    return _scheduleTriggerMap[trigger] || null;
+}
+
+function _selectedScheduleAlertDef() {
+    const trigger = _selectedScheduleTrigger();
+    return trigger?.source === 'alert' ? trigger : null;
+}
+
+async function _loadScheduleGeofenceOptions() {
+    if (_scheduleGeofenceOptions) return _scheduleGeofenceOptions;
+    try {
+        const res = await apiFetch(`${API_BASE}/geofences`);
+        _scheduleGeofenceOptions = res.ok
+            ? (await res.json()).map(g => ({ value: String(g.id), label: g.name }))
+            : [];
+    } catch {
+        _scheduleGeofenceOptions = [];
+    }
+    return _scheduleGeofenceOptions;
+}
+
+async function _patchScheduleAlertDef(def) {
+    if (!def) return null;
+    let fields = def.fields || [];
+    if (fields.some(f => f.key === 'geofence_id')) {
+        const geofenceOptions = await _loadScheduleGeofenceOptions();
+        fields = fields.map(f => f.key === 'geofence_id' ? { ...f, options: geofenceOptions } : f);
+    }
+    if (fields.some(f => f.field_type === 'driver_select')) {
+        const driverOptions = _allDrivers.map(d => ({ value: String(d.id), label: d.name }));
+        fields = fields.map(f => f.field_type === 'driver_select' ? { ...f, field_type: 'select', options: driverOptions } : f);
+    }
+    return { ...def, fields };
+}
+
+async function _renderScheduleTriggerOptions(trigger) {
+    const wrap = document.getElementById('sfTriggerOptionsGroup');
+    if (!wrap) return;
+    const renderToken = ++_scheduleTriggerRenderToken;
+    wrap.innerHTML = '';
+    const triggerDef = _scheduleTriggerMap[trigger];
+    if (!triggerDef || triggerDef.source !== 'alert') {
+        _sfTriggerOptions = {};
+        return;
+    }
+
+    _sfTriggerOptions.alert_key = triggerDef.key || triggerDef.value;
+    const def = await _patchScheduleAlertDef(triggerDef);
+    if (
+        renderToken !== _scheduleTriggerRenderToken ||
+        (document.getElementById('sfTriggerType')?.value || 'time') !== trigger
+    ) {
+        return;
+    }
+
+    wrap.innerHTML = `
+        ${def?.description ? `<p class="sched-trigger-description">${_esc(def.description)}</p>` : ''}
+        ${_renderScheduleTriggerFields(def)}
+    `;
+    _bindScheduleTriggerFieldBehavior();
+}
+
+function _defaultTriggerValue(trigger, field) {
+    const params = _sfTriggerOptions.params || {};
+    if (params[field.key] !== undefined) return params[field.key];
+    if (field.key === 'event_type' && trigger === 'geofence_enter') return 'enter';
+    if (field.key === 'event_type' && trigger === 'geofence_exit') return 'exit';
+    return field.default;
+}
+
+function _renderScheduleTriggerFields(def) {
+    if (!def?.fields?.length) return '';
+    const trigger = document.getElementById('sfTriggerType')?.value || 'time';
+    return def.fields.map(f => {
+        const fieldType = f.field_type || 'number';
+        const v = _defaultTriggerValue(trigger, f);
+        const requiredAttr = f.required ? ' required' : '';
+        const metaAttrs = ` data-param-label="${_esc(f.label)}" data-param-required="${f.required ? '1' : '0'}"`;
+        let input = '';
+        if (fieldType === 'number') {
+            const isSpeedField = f.unit === 'km/h';
+            const isDistField = f.unit === 'km';
+            const displayVal = v == null ? '' : isSpeedField ? toDisplaySpeed(v) : isDistField ? toDisplayDist(v) : v;
+            const displayUnit = isSpeedField ? speedUnit() : isDistField ? distUnit() : (f.unit || '');
+            const unitAttr = isSpeedField ? 'data-unit-type="speed"' : isDistField ? 'data-unit-type="dist"' : '';
+            input = `<div style="display:flex;align-items:center;gap:0.75rem;">
+                <input type="number" class="form-input schedule-trigger-param" data-param-key="${_esc(f.key)}" ${metaAttrs} ${unitAttr}${requiredAttr}
+                       value="${_esc(displayVal ?? '')}"
+                       ${f.min_value != null ? `min="${_esc(f.min_value)}"` : ''}
+                       ${f.max_value != null ? `max="${_esc(f.max_value)}"` : ''}
+                       style="max-width:140px;">
+                ${displayUnit ? `<span style="color:var(--text-muted);">${_esc(displayUnit)}</span>` : ''}
+            </div>`;
+        } else if (fieldType === 'text') {
+            input = `<input type="text" class="form-input schedule-trigger-param" data-param-key="${_esc(f.key)}" ${metaAttrs}${requiredAttr} value="${_esc(v ?? '')}">`;
+        } else if (fieldType === 'checkbox') {
+            input = `<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+                <input type="checkbox" class="schedule-trigger-param" data-param-key="${_esc(f.key)}" ${metaAttrs}${requiredAttr} ${v ? 'checked' : ''} style="width:auto;">
+                <span style="font-size:0.875rem;">${_esc(f.label)}${f.required ? '<span class="sched-required-mark">*</span>' : ''}</span>
+            </label>`;
+        } else if (fieldType === 'select') {
+            const opts = (f.options || []).map(o => {
+                const preset = o.threshold != null ? ` data-threshold="${_esc(o.threshold)}"` : '';
+                return `<option value="${_esc(o.value)}"${String(o.value) === String(v) ? ' selected' : ''}${preset}>${_esc(o.label)}</option>`;
+            }).join('');
+            const placeholder = f.required && (v === undefined || v === null || v === '')
+                ? `<option value="" selected disabled>Select ${_esc(f.label.toLowerCase())}</option>`
+                : '';
+            const updatesAttr = f.updates_field ? ` data-updates-field="${_esc(f.updates_field)}"` : '';
+            input = `<select class="form-input schedule-trigger-param" data-param-key="${_esc(f.key)}" ${metaAttrs}${requiredAttr}${updatesAttr}>${placeholder}${opts}</select>`;
+        } else if (fieldType === 'date') {
+            input = `<input type="date" class="form-input schedule-trigger-param" data-param-key="${_esc(f.key)}" ${metaAttrs}${requiredAttr} value="${_esc(v || '')}">`;
+        } else {
+            return '';
+        }
+
+        const showIfAttr = f.show_if
+            ? ` data-show-if-key="${_esc(f.show_if.key)}" ` + (
+                f.show_if.values
+                    ? `data-show-if-vals='${JSON.stringify(f.show_if.values)}'`
+                    : `data-show-if-val="${_esc(String(f.show_if.value))}"`)
+            : '';
+        const groupStyle = _scheduleTriggerFieldVisible(def, f) ? '' : ' style="display:none;"';
+        return fieldType === 'checkbox'
+            ? `<div class="form-group"${showIfAttr}${groupStyle}>${input}</div>`
+            : `<div class="form-group"${showIfAttr}${groupStyle}>
+                <label class="form-label">${_esc(f.label)}${f.required ? '<span class="sched-required-mark">*</span>' : ''}</label>
+                ${input}
+                ${f.help_text ? `<div class="form-help">${_esc(f.help_text)}</div>` : ''}
+            </div>`;
+    }).join('');
+}
+
+function _scheduleTriggerFieldVisible(def, field) {
+    if (!field.show_if) return true;
+    const source = def?.fields?.find(f => f.key === field.show_if.key);
+    const params = _sfTriggerOptions.params || {};
+    const current = String(params[field.show_if.key] ?? source?.default ?? '');
+    if (field.show_if.values) return field.show_if.values.map(String).includes(current);
+    return current === String(field.show_if.value);
+}
+
+function _bindScheduleTriggerFieldBehavior() {
+    const applyShowIf = () => {
+        document.querySelectorAll('#sfTriggerOptionsGroup .form-group[data-show-if-key]').forEach(group => {
+            const ctrl = document.querySelector(`#sfTriggerOptionsGroup .schedule-trigger-param[data-param-key="${group.dataset.showIfKey}"]`);
+            let show = true;
+            if (group.dataset.showIfVals) show = ctrl && JSON.parse(group.dataset.showIfVals).map(String).includes(String(ctrl.value));
+            else if (group.dataset.showIfVal !== undefined) show = ctrl && String(ctrl.value) === group.dataset.showIfVal;
+            group.style.display = show ? '' : 'none';
+        });
+    };
+    document.querySelectorAll('#sfTriggerOptionsGroup .schedule-trigger-param').forEach(input => {
+        const clearInvalid = () => input.classList.remove('invalid');
+        input.addEventListener('input', clearInvalid);
+        input.addEventListener('change', () => {
+            clearInvalid();
+            if (input.dataset.updatesField) {
+                const preset = input.options?.[input.selectedIndex]?.dataset?.threshold;
+                const target = document.querySelector(`#sfTriggerOptionsGroup .schedule-trigger-param[data-param-key="${input.dataset.updatesField}"]`);
+                if (preset != null && target) target.value = preset;
+            }
+            applyShowIf();
+        });
+    });
+    applyShowIf();
+}
+
+function _validateScheduleTriggerRequiredFields() {
+    const trigger = document.getElementById('sfTriggerType')?.value || 'time';
+    if (trigger === 'time') return true;
+
+    for (const input of document.querySelectorAll('#sfTriggerOptionsGroup .schedule-trigger-param[data-param-required="1"]')) {
+        const group = input.closest('.form-group');
+        if (group && group.style.display === 'none') continue;
+
+        const value = input.type === 'checkbox' ? input.checked : String(input.value ?? '').trim();
+        const missing = input.type === 'checkbox' ? !value : value === '';
+        if (!missing) continue;
+
+        _showScheduleValidation(`${input.dataset.paramLabel || 'This field'} is required.`, input);
+        return false;
+    }
+
+    return true;
+}
+
+function _getScheduleTriggerOptions() {
+    const trigger = document.getElementById('sfTriggerType')?.value || 'time';
+    if (trigger === 'time') return {};
+    const def = _selectedScheduleAlertDef();
+    const params = {};
+    document.querySelectorAll('#sfTriggerOptionsGroup .schedule-trigger-param').forEach(input => {
+        const key = input.dataset.paramKey;
+        if (!key) return;
+        if (input.type === 'checkbox') {
+            params[key] = input.checked;
+        } else if (input.type === 'number') {
+            const v = parseFloat(input.value);
+            if (!isNaN(v)) {
+                const unitType = input.dataset.unitType;
+                params[key] = unitType === 'speed' ? fromDisplaySpeed(v)
+                            : unitType === 'dist' ? fromDisplayDist(v)
+                            : v;
+            }
+        } else {
+            params[key] = input.value;
+        }
+    });
+    return def ? { alert_key: def.key || def.value, params } : {};
+}
+
+function _scheduleTriggerValue(schedule) {
+    if (!schedule || (schedule.trigger_type || 'time') === 'time') return 'time';
+    const key = schedule.trigger_options?.alert_key;
+    if (key && _scheduleTriggerMap[key]) return key;
+    const match = _scheduleTriggerDefs.find(d => d.source === 'alert' && d.alert_type === schedule.trigger_type);
+    return match?.value || 'time';
 }
 
 function toggleSfVeh(e) { e.stopPropagation(); document.getElementById('sfVehWrap').classList.toggle('open'); }
@@ -1725,7 +2056,10 @@ function toggleSfAllUser(cb) {
 
 function _updateSfVehLabel() {
     const lbl = document.getElementById('sfVehLabel');
-    if (_sfSelectedVehIds.size === 0) { lbl.textContent = 'All vehicles'; return; }
+    if (_sfSelectedVehIds.size === 0) {
+        lbl.textContent = 'All vehicles';
+        return;
+    }
     if (_sfSelectedVehIds.size === 1) {
         const d = _allDevices.find(d => _sfSelectedVehIds.has(d.id));
         lbl.textContent = d ? d.name : '1 vehicle';
@@ -1746,27 +2080,52 @@ function _updateSfUserLabel() {
 }
 
 async function saveSchedule() {
-    const name = document.getElementById('sfName').value.trim();
-    if (!name) { showAlert('Schedule name is required.', 'warning'); return; }
+    _clearScheduleValidation();
+
+    const nameInput = document.getElementById('sfName');
+    const name = nameInput.value.trim();
+    if (!name) {
+        _showScheduleValidation('Schedule Name is required.', nameInput);
+        return;
+    }
 
     const rtype      = document.getElementById('sfType').value;
     const historical = document.getElementById('sfHistorical').checked;
     const dateRange  = document.getElementById('sfDateRange').value;
     const freq       = document.getElementById('sfFreq').value;
     const runTime    = document.getElementById('sfTime').value;
+    const trigger    = document.getElementById('sfTriggerType').value || 'time';
     const keep       = parseInt(document.getElementById('sfKeep').value);
 
-    if (!runTime) { showAlert('Run time is required.', 'warning'); return; }
-    if (isNaN(keep) || keep < 1 || keep > 100) { showAlert('Keep Runs must be between 1 and 100.', 'warning'); return; }
+    if (!rtype) {
+        _showScheduleValidation('Report Type is required.', document.getElementById('sfType'));
+        return;
+    }
+    if (trigger === 'time' && !runTime) {
+        _showScheduleValidation('Run Time is required.', document.getElementById('sfTime'));
+        return;
+    }
+    if (!_scheduleTriggerMap[trigger]) {
+        _showScheduleValidation('Trigger is required.', document.getElementById('sfTriggerType'));
+        return;
+    }
+    if (!_validateScheduleTriggerRequiredFields()) return;
+    if (isNaN(keep) || keep < 1 || keep > 100) {
+        _showScheduleValidation('Keep Last N Runs must be between 1 and 100.', document.getElementById('sfKeep'));
+        return;
+    }
 
     const def = _reportDefMap[rtype] || {};
     const needsRange = def.needs_date_range !== false || historical;
-    if (needsRange && !dateRange) { showAlert('Date range is required.', 'warning'); return; }
+    if (needsRange && !dateRange) {
+        _showScheduleValidation('Date Range is required.', document.getElementById('sfDateRange'));
+        return;
+    }
 
     const body = {
         name,
         report_type:        rtype,
-        filter_device_ids:  def.schedule_uses_device_filter === false ? [] : [..._sfSelectedVehIds],
+        filter_device_ids:  trigger === 'time' && def.schedule_uses_device_filter === false ? [] : [..._sfSelectedVehIds],
         filter_user_ids:    [..._sfSelectedUserIds],
         options:            _getScheduleControlValues(),
         notification_channels: _getSelectedScheduleChannels(),
@@ -1774,6 +2133,8 @@ async function saveSchedule() {
         attach_documents:   true,
         sensors_historical: historical,
         date_range:         needsRange ? dateRange : null,
+        trigger_type:       trigger === 'time' ? 'time' : _scheduleTriggerMap[trigger]?.alert_type,
+        trigger_options:    _getScheduleTriggerOptions(),
         frequency:          freq,
         run_time:           runTime,
         day_of_week:        freq === 'weekly'  ? parseInt(document.getElementById('sfDow').value) : null,

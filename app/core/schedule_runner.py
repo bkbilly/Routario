@@ -13,7 +13,7 @@ from pathlib import Path
 from textwrap import wrap
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 
 from core.database import get_db
 from core.runtime_health import mark_task_error, mark_task_success
@@ -789,12 +789,93 @@ async def _execute(schedule_id: int) -> None:
             )
 
         sched.last_run = datetime.utcnow()
-        sched.next_run = compute_next_run(
-            sched.frequency, sched.run_time, sched.day_of_week, sched.day_of_month,
-            sched.user_timezone or user.timezone or "UTC",
-        )
+        if (sched.trigger_type or "time") == "time":
+            sched.next_run = compute_next_run(
+                sched.frequency, sched.run_time, sched.day_of_week, sched.day_of_month,
+                sched.user_timezone or user.timezone or "UTC",
+            )
+        else:
+            sched.next_run = None
         await session.commit()
         logger.info("Schedule %s (%s): %s", sched.id, sched.name, status)
+
+
+def _trigger_options_match(schedule: ScheduledReport, alert_data: dict | None) -> bool:
+    options = schedule.trigger_options or {}
+    if not options or not alert_data:
+        return True
+
+    metadata = alert_data.get("alert_metadata") or {}
+    aliases = {
+        "name": "rule_name",
+        "rule": "rule_condition",
+        "trigger_value": "sensor_value",
+        "event_type": "event",
+    }
+    alert_key = options.get("alert_key")
+    if alert_key:
+        config_key = metadata.get("config_key")
+        if config_key and str(config_key) != str(alert_key):
+            return False
+
+    params = options.get("params") or {}
+    for key, expected in params.items():
+        if expected in (None, "", [], {}):
+            continue
+        actual = metadata.get(key)
+        if actual is None and key in aliases:
+            actual = metadata.get(aliases[key])
+        if actual is None:
+            continue
+        if isinstance(expected, list):
+            if str(actual) not in {str(v) for v in expected}:
+                return False
+        elif str(actual) != str(expected):
+            return False
+
+    return True
+
+
+async def trigger_report_schedules_for_alert(
+    alert_type: str,
+    device_id: int,
+    alert_data: dict | None = None,
+    allowed_user_ids: list[int] | None = None,
+) -> None:
+    """Run active report schedules whose trigger_type matches an alert event."""
+    if not alert_type:
+        return
+    if allowed_user_ids is not None and not allowed_user_ids:
+        return
+
+    now = datetime.utcnow()
+    due_ids: list[int] = []
+    db = get_db()
+    async with db.get_session() as session:
+        query = select(ScheduledReport).where(
+            ScheduledReport.is_active == True,
+            ScheduledReport.trigger_type == alert_type,
+        )
+        if allowed_user_ids is not None:
+            query = query.where(ScheduledReport.user_id.in_(allowed_user_ids))
+        result = await session.execute(query)
+        schedules = result.scalars().all()
+
+        for schedule in schedules:
+            device_ids = schedule.filter_device_ids or []
+            if device_ids and int(device_id) not in {int(d) for d in device_ids}:
+                continue
+
+            if not _trigger_options_match(schedule, alert_data):
+                continue
+
+            schedule.last_triggered_at = now
+            due_ids.append(schedule.id)
+
+        await session.commit()
+
+    for schedule_id in due_ids:
+        await _execute(schedule_id)
 
 
 # ── Periodic task ─────────────────────────────────────────────────────────────
@@ -809,6 +890,7 @@ async def periodic_schedule_task() -> None:
                 due_r = await session.execute(
                     select(ScheduledReport).where(
                         ScheduledReport.is_active == True,
+                        or_(ScheduledReport.trigger_type == "time", ScheduledReport.trigger_type.is_(None)),
                         ScheduledReport.next_run  <= now,
                     )
                 )

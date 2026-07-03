@@ -65,6 +65,7 @@ async function jumpToAlert(alert) {
         offline: 'mdi-wifi-off', towing: 'mdi-tow-truck', low_battery: 'mdi-battery-low',
         power_cut: 'mdi-power-plug-off', sos: 'mdi-alarm-light', tampering: 'mdi-alert',
         route_waypoint_skipped: 'mdi-map-marker-off', route_off_route: 'mdi-map-marker-path',
+        route_completed: 'mdi-flag-checkered',
     };
     const icon  = `<i class="mdi ${ICON_MAP[alert.alert_type] || 'mdi-bell'}"></i>`;
     const title = alert.alert_type === 'custom' && alert.alert_metadata?.rule_name
@@ -130,6 +131,7 @@ function _buildAlertItem(alert, { dimmed = false, clickable = true, dismissable 
         notification:   'mdi-message-badge',
         route_waypoint_skipped: 'mdi-map-marker-off',
         route_off_route: 'mdi-map-marker-path',
+        route_completed: 'mdi-flag-checkered',
     };
     const icon = `<i class="mdi ${ICON_MAP[alert.alert_type] || 'mdi-bell'}"></i>`;
 

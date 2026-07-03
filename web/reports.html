@@ -419,6 +419,55 @@
             gap: 0 1.5rem;
         }
         .sched-col { display: flex; flex-direction: column; gap: 0.85rem; }
+        .sched-trigger-options {
+            margin-top: -0.35rem;
+        }
+        .sf-trigger-field {
+            margin-bottom: 0;
+        }
+        .sched-trigger-description {
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            line-height: 1.35;
+            margin: 0 0 0.55rem;
+        }
+        .sched-trigger-options .form-group {
+            margin-bottom: 0.8rem;
+        }
+        .sched-trigger-options .form-label {
+            font-size: 0.82rem;
+            margin-bottom: 0.35rem;
+        }
+        .sched-trigger-options .form-help {
+            margin-top: 0.25rem;
+            line-height: 1.35;
+        }
+        .sched-required-mark {
+            color: var(--accent-danger);
+            margin-left: 0.2rem;
+        }
+        .sched-trigger-options .form-input.invalid {
+            border-color: var(--accent-danger);
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+        }
+        #schedModal .form-input.invalid,
+        #schedModal .veh-select-btn.invalid {
+            border-color: var(--accent-danger);
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+        }
+        .sched-form-error {
+            display: none;
+            align-items: flex-start;
+            gap: 0.45rem;
+            margin: 0 0 0.9rem;
+            padding: 0.65rem 0.8rem;
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            border-radius: 8px;
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--accent-danger);
+            font-size: 0.84rem;
+            line-height: 1.35;
+        }
         @media (max-width: 560px) {
             #schedModal .modal-content { max-width: 100%; }
             .sched-two-col { grid-template-columns: 1fr; }
@@ -657,11 +706,12 @@
             <button class="modal-close" onclick="closeScheduleModal()">&times;</button>
         </div>
         <div class="modal-scrollable">
+            <div id="schedFormError" class="sched-form-error" role="alert"></div>
 
             <!-- Name: full width above the two columns -->
             <div class="form-group" style="margin-bottom:1rem;">
-                <label class="form-label">Schedule Name</label>
-                <input type="text" id="sfName" class="form-input" placeholder="e.g. Monthly Fleet Summary" maxlength="200">
+                <label class="form-label">Schedule Name<span class="sched-required-mark">*</span></label>
+                <input type="text" id="sfName" class="form-input" placeholder="e.g. Monthly Fleet Summary" maxlength="200" required>
             </div>
 
             <div class="sched-two-col">
@@ -742,7 +792,16 @@
 
                 <!-- ── Right column: when to run ───────────────────── -->
                 <div class="sched-col">
-                    <div class="form-group">
+                    <div class="form-group sf-trigger-field">
+                        <label class="form-label">Trigger</label>
+                        <select id="sfTriggerType" class="form-input" onchange="onSchedTriggerChange()">
+                            <option value="">Loading triggers...</option>
+                        </select>
+                    </div>
+
+                    <div id="sfTriggerOptionsGroup" class="sched-trigger-options"></div>
+
+                    <div class="form-group sf-time-field">
                         <label class="form-label">Frequency</label>
                         <select id="sfFreq" class="form-input" onchange="onSchedFreqChange()">
                             <option value="daily">Daily</option>
@@ -751,9 +810,9 @@
                         </select>
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-group sf-time-field">
                         <label class="form-label">Run Time</label>
-                        <input type="time" id="sfTime" class="form-input" value="07:00">
+                        <input type="time" id="sfTime" class="form-input" value="07:00" required>
                     </div>
 
                     <div class="form-group" id="sfDowGroup" style="display:none;">
@@ -806,6 +865,7 @@
 </div>
 
 <script src="js/config.js"></script>
+<script src="js/units.js"></script>
 <script src="js/vehicle-icons.js"></script>
 <script src="js/ui-utils.js"></script>
 <script src="js/reports.js"></script>

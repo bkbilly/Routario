@@ -201,6 +201,9 @@ class DatabaseService:
             "ALTER TABLE scheduled_reports ADD COLUMN notification_channels JSON DEFAULT '[]'",
             "ALTER TABLE scheduled_reports ADD COLUMN attach_results BOOLEAN DEFAULT TRUE",
             "ALTER TABLE scheduled_reports ADD COLUMN attach_documents BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE scheduled_reports ADD COLUMN trigger_type VARCHAR(50) DEFAULT 'time'",
+            "ALTER TABLE scheduled_reports ADD COLUMN trigger_options JSON DEFAULT '{}'",
+            "ALTER TABLE scheduled_reports ADD COLUMN last_triggered_at DATETIME",
             """CREATE TABLE IF NOT EXISTS voice_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 sender_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
