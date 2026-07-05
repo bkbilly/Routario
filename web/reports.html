@@ -365,6 +365,84 @@
             min-width: 0;
             overflow-wrap: anywhere;
         }
+        .log-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin: 0 0 1rem;
+        }
+        .log-summary-card {
+            min-width: 105px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.7rem 0.85rem;
+            color: inherit;
+            cursor: pointer;
+            font: inherit;
+            text-align: left;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+        }
+        .log-summary-card:hover,
+        .log-summary-card.active {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
+        }
+        .log-summary-card.log-tone-debug.has-logs,
+        .log-summary-card.log-tone-total.has-logs {
+            background: color-mix(in srgb, var(--accent) 10%, var(--bg-card));
+            border-color: color-mix(in srgb, var(--accent) 45%, var(--border-color));
+        }
+        .log-summary-card.log-tone-info.has-logs {
+            background: color-mix(in srgb, #22c55e 11%, var(--bg-card));
+            border-color: color-mix(in srgb, #22c55e 48%, var(--border-color));
+        }
+        .log-summary-card.log-tone-warning.has-logs {
+            background: color-mix(in srgb, #f59e0b 13%, var(--bg-card));
+            border-color: color-mix(in srgb, #f59e0b 52%, var(--border-color));
+        }
+        .log-summary-card.log-tone-error.has-logs,
+        .log-summary-card.log-tone-critical.has-logs {
+            background: color-mix(in srgb, #ef4444 12%, var(--bg-card));
+            border-color: color-mix(in srgb, #ef4444 52%, var(--border-color));
+        }
+        .log-summary-card.active {
+            border-color: var(--accent);
+        }
+        .log-summary-card .val {
+            font-family: var(--font-mono);
+            font-weight: 800;
+            font-size: 1.1rem;
+            color: var(--text-primary);
+        }
+        .log-summary-card .lbl {
+            margin-top: 0.15rem;
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .runtime-log-table {
+            min-width: 940px;
+        }
+        .runtime-log-message {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            color: var(--text-secondary);
+            line-height: 1.35;
+        }
+        .runtime-log-exception {
+            margin-top: 0.45rem;
+            padding: 0.55rem;
+            border-radius: 6px;
+            background: #070b14;
+            color: #fecaca;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            max-height: 180px;
+            overflow: auto;
+            white-space: pre-wrap;
+        }
         @media (max-width: 768px) {
             .health-table {
                 min-width: 560px;
@@ -487,6 +565,9 @@
         </button>
         <button class="page-tab" id="tabHealth" onclick="switchTab('health')" style="display:none;">
             <i class="mdi mdi-heart-pulse"></i> Health
+        </button>
+        <button class="page-tab" id="tabLogs" onclick="switchTab('logs')" style="display:none;">
+            <i class="mdi mdi-text-box-search-outline"></i> Logs
         </button>
     </div>
 
@@ -655,6 +736,30 @@
                     </tr>
                 </thead>
                 <tbody id="healthTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="panelLogs" style="display:none;">
+        <div class="log-summary" id="runtimeLogSummary"></div>
+        <div class="devices-search-bar">
+            <div class="search-input-wrap">
+                <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                <input type="text" id="runtimeLogSearch" class="search-input" placeholder="Search runtime logs..." oninput="renderRuntimeLogs()">
+            </div>
+            <span class="devices-count" id="runtimeLogCount"></span>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="devices-table runtime-log-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Level</th>
+                        <th>Logger</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody id="runtimeLogTableBody"></tbody>
             </table>
         </div>
     </div>

@@ -30,6 +30,7 @@ from core.database import get_db, init_database
 from core.gateway import connection_manager, protocol_server_manager, sync_active_protocol_servers
 from core.push_notifications import get_push_service
 from core.runtime_health import register_task, set_runtime_state
+from core.runtime_logs import install_runtime_log_handler
 from core.valhalla import check_valhalla_health, set_valhalla_url
 from integrations.engine import integration_poll_task
 from models import AlertHistory, Company, Device, User
@@ -396,6 +397,7 @@ async def handle_new_alert(alert: AlertHistory, notify_user_ids=None):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    install_runtime_log_handler()
     logger.info("Starting Routario Platform...")
     settings = get_settings()
 
