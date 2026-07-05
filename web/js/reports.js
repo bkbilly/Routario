@@ -1575,6 +1575,7 @@ function _logLevelClass(level) {
     if (level === 'critical' || level === 'error') return 'health-status-fail';
     if (level === 'warning') return 'health-status-degraded';
     if (level === 'info') return 'health-status-ok';
+    if (level === 'debug') return 'log-level-debug';
     return 'health-status-optional';
 }
 

@@ -33,6 +33,8 @@ SCOPED_TABLE_ORDER = [
     "command_queue",
     "fuel_logs",
     "logbook_entries",
+    "support_tickets",
+    "support_ticket_comments",
     "voice_messages",
     "voice_message_reads",
     "location_shares",
@@ -112,12 +114,14 @@ async def _dump_company_database(company_id: int) -> bytes:
             {"company_id": company_id},
         ) if {"scheduled_reports", "users"}.issubset(tables) else []
         voice_messages = await _rows(conn, 'SELECT id FROM "voice_messages" WHERE company_id = :company_id', {"company_id": company_id}) if "voice_messages" in tables else []
+        tickets = await _rows(conn, 'SELECT id FROM "support_tickets" WHERE company_id = :company_id', {"company_id": company_id}) if "support_tickets" in tables else []
 
         user_ids = [r["id"] for r in users]
         device_ids = [r["id"] for r in devices]
         route_ids = [r["id"] for r in routes]
         schedule_ids = [r["id"] for r in schedules]
         voice_message_ids = [r["id"] for r in voice_messages]
+        ticket_ids = [r["id"] for r in tickets]
 
         def id_csv(ids: list[int]) -> str:
             return ",".join(str(int(i)) for i in ids) or "NULL"
@@ -128,6 +132,8 @@ async def _dump_company_database(company_id: int) -> bytes:
             "drivers": ('SELECT * FROM "drivers" WHERE company_id = :company_id', {"company_id": company_id}),
             "devices": ('SELECT * FROM "devices" WHERE company_id = :company_id', {"company_id": company_id}),
             "voice_messages": ('SELECT * FROM "voice_messages" WHERE company_id = :company_id', {"company_id": company_id}),
+            "support_tickets": ('SELECT * FROM "support_tickets" WHERE company_id = :company_id', {"company_id": company_id}),
+            "support_ticket_comments": (f'SELECT * FROM "support_ticket_comments" WHERE ticket_id IN ({id_csv(ticket_ids)})', {}),
             "audit_logs": ('SELECT * FROM "audit_logs" WHERE company_id = :company_id', {"company_id": company_id}),
             "api_keys": ('SELECT * FROM "api_keys" WHERE company_id = :company_id', {"company_id": company_id}),
             "usage_events": ('SELECT * FROM "usage_events" WHERE company_id = :company_id', {"company_id": company_id}),
@@ -354,7 +360,13 @@ def _safe_upload_paths(payload: dict) -> set[Path]:
     def add(candidate):
         if not candidate:
             return
-        path = Path(str(candidate))
+        raw = str(candidate)
+        if raw.startswith("/uploads/"):
+            path = Path("web") / raw.lstrip("/")
+        elif raw.startswith("uploads/"):
+            path = Path("web") / raw
+        else:
+            path = Path(raw)
         if not path.is_absolute():
             path = Path("web/uploads") / path if not str(path).startswith("web/uploads") else path
         try:
@@ -377,6 +389,11 @@ def _safe_upload_paths(payload: dict) -> set[Path]:
         if isinstance(docs, list):
             for doc in docs:
                 add(doc.get("path") if isinstance(doc, dict) else doc)
+    for row in [*payload.get("support_tickets", []), *payload.get("support_ticket_comments", [])]:
+        attachments = row.get("attachments") or []
+        if isinstance(attachments, list):
+            for attachment in attachments:
+                add(attachment.get("url") if isinstance(attachment, dict) else attachment)
     return paths
 
 

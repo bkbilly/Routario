@@ -1058,7 +1058,7 @@ async def _websocket_direct_loop(websocket: WebSocket, user_id: int):
 
 # Static files — must be last
 os.makedirs("web/uploads", exist_ok=True)
-for _d in ["voice", "dashcam", "company-branding"]:
+for _d in ["voice", "dashcam", "company-branding", "tickets"]:
     try:
         os.makedirs(f"web/uploads/{_d}", exist_ok=True)
     except OSError:

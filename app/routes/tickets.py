@@ -7,10 +7,14 @@ Access rules:
   Super admin   : manage all tickets
 """
 from datetime import datetime
+import os
+import uuid
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+import aiofiles
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import selectinload
 
@@ -21,6 +25,9 @@ from core.permissions import user_has_permission
 from models import SupportTicket, SupportTicketComment, User
 
 router = APIRouter(prefix="/api/tickets", tags=["tickets"])
+TICKET_UPLOAD_ROOT = Path("web/uploads/tickets")
+MAX_TICKET_FILE_BYTES = 25 * 1024 * 1024
+MAX_TICKET_FILES = 10
 
 TICKET_STATUSES = {"open", "in_progress", "waiting_on_user", "resolved", "closed"}
 TICKET_PRIORITIES = {"low", "normal", "high", "urgent"}
@@ -52,12 +59,12 @@ class TicketUpdate(BaseModel):
 
 
 class TicketCommentCreate(BaseModel):
-    body: str = Field(..., min_length=1, max_length=5000)
+    body: str = Field("", max_length=5000)
     is_internal: bool = False
 
 
 class TicketCommentUpdate(BaseModel):
-    body: str = Field(..., min_length=1, max_length=5000)
+    body: str = Field("", max_length=5000)
     is_internal: Optional[bool] = None
 
 
@@ -106,6 +113,7 @@ def _comment_visible(comment: SupportTicketComment, current_user: User) -> bool:
 
 
 def _ticket_payload(ticket: SupportTicket, current_user: User) -> dict:
+    ticket_attachments = ticket.attachments or _ticket_file_fallback(ticket.id, "ticket")
     comments = [
         {
             "id": c.id,
@@ -114,6 +122,7 @@ def _ticket_payload(ticket: SupportTicket, current_user: User) -> dict:
             "author_name": c.author.username if c.author else None,
             "body": c.body,
             "is_internal": c.is_internal,
+            "attachments": c.attachments or [],
             "created_at": c.created_at,
         }
         for c in sorted(ticket.comments or [], key=lambda row: row.created_at)
@@ -134,11 +143,185 @@ def _ticket_payload(ticket: SupportTicket, current_user: User) -> dict:
         "status": ticket.status,
         "related_type": ticket.related_type,
         "related_id": ticket.related_id,
+        "attachments": ticket_attachments,
         "created_at": ticket.created_at,
         "updated_at": ticket.updated_at,
         "closed_at": ticket.closed_at,
         "comments": comments,
     }
+
+
+def _attachment_name(filename: str) -> str:
+    cleaned = os.path.basename(filename or "attachment").strip() or "attachment"
+    return cleaned[:180]
+
+
+def _ticket_file_fallback(ticket_id: int, prefix: str) -> list[dict]:
+    folder = TICKET_UPLOAD_ROOT / str(ticket_id)
+    if not folder.is_dir():
+        return []
+    files = sorted(folder.glob(f"{prefix}-*"))
+    return [
+        {
+            "name": path.name,
+            "url": f"/uploads/tickets/{ticket_id}/{path.name}",
+            "size": path.stat().st_size,
+            "content_type": "application/octet-stream",
+        }
+        for path in files
+        if path.is_file()
+    ]
+
+
+def _attachment_path(ticket_id: int, attachment: dict) -> Path | None:
+    url = str((attachment or {}).get("url") or "")
+    if not url.startswith(f"/uploads/tickets/{ticket_id}/"):
+        return None
+    filename = os.path.basename(url)
+    path = (TICKET_UPLOAD_ROOT / str(ticket_id) / filename).resolve()
+    root = (TICKET_UPLOAD_ROOT / str(ticket_id)).resolve()
+    if root not in path.parents:
+        return None
+    return path
+
+
+def _remove_attachment_file(ticket_id: int, attachment: dict) -> None:
+    path = _attachment_path(ticket_id, attachment)
+    if not path:
+        return
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _can_manage_ticket_attachments(ticket: SupportTicket, current_user: User) -> bool:
+    return _is_ticket_admin(current_user) or ticket.created_by == current_user.id
+
+
+def _can_manage_comment_attachments(comment: SupportTicketComment, current_user: User) -> bool:
+    return _is_ticket_admin(current_user) or comment.author_id == current_user.id
+
+
+async def _store_ticket_uploads(ticket_id: int, uploads: list[UploadFile], prefix: str) -> list[dict]:
+    files = [upload for upload in uploads if upload and upload.filename]
+    if len(files) > MAX_TICKET_FILES:
+        raise HTTPException(status_code=400, detail=f"Maximum {MAX_TICKET_FILES} files per upload")
+
+    target_dir = TICKET_UPLOAD_ROOT / str(ticket_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    stored: list[dict] = []
+
+    for upload in files:
+        original = _attachment_name(upload.filename)
+        ext = Path(original).suffix[:20]
+        fname = f"{prefix}-{uuid.uuid4().hex}{ext}"
+        fpath = target_dir / fname
+        size = 0
+        async with aiofiles.open(fpath, "wb") as out:
+            while True:
+                chunk = await upload.read(1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > MAX_TICKET_FILE_BYTES:
+                    await out.close()
+                    try:
+                        fpath.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                    raise HTTPException(status_code=400, detail=f"File is too large: {original}")
+                await out.write(chunk)
+        stored.append({
+            "name": original,
+            "url": f"/uploads/tickets/{ticket_id}/{fname}",
+            "size": size,
+            "content_type": upload.content_type or "application/octet-stream",
+        })
+    return stored
+
+
+def _is_upload_file(item) -> bool:
+    return bool(getattr(item, "filename", None)) and callable(getattr(item, "read", None))
+
+
+def _as_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+async def _ticket_create_from_request(request: Request) -> tuple[TicketCreate, list[UploadFile]]:
+    content_type = request.headers.get("content-type", "")
+    try:
+        if content_type.startswith("multipart/form-data"):
+            form = await request.form()
+            data = TicketCreate(
+                title=str(form.get("title") or ""),
+                description=str(form.get("description") or ""),
+                category=str(form.get("category") or "other"),
+                priority=str(form.get("priority") or "normal"),
+                related_type=str(form.get("related_type") or "") or None,
+                related_id=int(form["related_id"]) if str(form.get("related_id") or "").strip() else None,
+            )
+            uploads = [item for item in form.getlist("attachments") if _is_upload_file(item)]
+            return data, uploads
+        return TicketCreate.model_validate(await request.json()), []
+    except (ValidationError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="Invalid ticket fields") from exc
+
+
+async def _comment_create_from_request(request: Request) -> tuple[TicketCommentCreate, list[UploadFile]]:
+    content_type = request.headers.get("content-type", "")
+    try:
+        if content_type.startswith("multipart/form-data"):
+            form = await request.form()
+            data = TicketCommentCreate(
+                body=str(form.get("body") or ""),
+                is_internal=_as_bool(form.get("is_internal")),
+            )
+            uploads = [item for item in form.getlist("attachments") if _is_upload_file(item)]
+            return data, uploads
+        return TicketCommentCreate.model_validate(await request.json()), []
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail="Invalid comment fields") from exc
+
+
+async def _ticket_update_from_request(request: Request) -> tuple[TicketUpdate, list[UploadFile]]:
+    content_type = request.headers.get("content-type", "")
+    try:
+        if content_type.startswith("multipart/form-data"):
+            form = await request.form()
+            raw = {}
+            for field in ("title", "description", "category", "priority", "status", "related_type"):
+                if field in form:
+                    raw[field] = str(form.get(field) or "").strip() or None
+            if "assigned_to" in form:
+                value = str(form.get("assigned_to") or "").strip()
+                raw["assigned_to"] = int(value) if value else None
+            if "related_id" in form:
+                value = str(form.get("related_id") or "").strip()
+                raw["related_id"] = int(value) if value else None
+            uploads = [item for item in form.getlist("attachments") if _is_upload_file(item)]
+            return TicketUpdate.model_validate(raw), uploads
+        return TicketUpdate.model_validate(await request.json()), []
+    except (ValidationError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="Invalid ticket fields") from exc
+
+
+async def _comment_update_from_request(request: Request) -> tuple[TicketCommentUpdate, list[UploadFile]]:
+    content_type = request.headers.get("content-type", "")
+    try:
+        if content_type.startswith("multipart/form-data"):
+            form = await request.form()
+            raw = {"body": str(form.get("body") or "")}
+            if "is_internal" in form:
+                raw["is_internal"] = _as_bool(form.get("is_internal"))
+            uploads = [item for item in form.getlist("attachments") if _is_upload_file(item)]
+            return TicketCommentUpdate.model_validate(raw), uploads
+        return TicketCommentUpdate.model_validate(await request.json()), []
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail="Invalid comment fields") from exc
 
 
 async def _validate_assignee(assignee_id: Optional[int], current_user: User) -> Optional[User]:
@@ -224,10 +407,10 @@ async def list_ticket_assignees(current_user: User = Depends(get_current_user)):
 
 @router.post("")
 async def create_ticket(
-    data: TicketCreate,
     request: Request,
     current_user: User = Depends(get_current_user),
 ):
+    data, uploads = await _ticket_create_from_request(request)
     _require_ticket_permission(current_user)
     _validate_choice(data.category, TICKET_CATEGORIES, "category")
     _validate_choice(data.priority, TICKET_PRIORITIES, "priority")
@@ -248,6 +431,9 @@ async def create_ticket(
         )
         session.add(ticket)
         await session.flush()
+        attachments = await _store_ticket_uploads(ticket.id, uploads, "ticket") if uploads else []
+        ticket.attachments = attachments
+        await session.flush()
         await session.refresh(ticket)
         ticket_id = ticket.id
 
@@ -266,10 +452,10 @@ async def get_ticket(ticket_id: int, current_user: User = Depends(get_current_us
 @router.patch("/{ticket_id}")
 async def update_ticket(
     ticket_id: int,
-    data: TicketUpdate,
     request: Request,
     current_user: User = Depends(get_current_user),
 ):
+    data, uploads = await _ticket_update_from_request(request)
     _require_ticket_permission(current_user)
     if not _is_ticket_admin(current_user):
         raise HTTPException(status_code=403, detail="Only admins can update tickets")
@@ -299,6 +485,8 @@ async def update_ticket(
         ticket.updated_at = datetime.utcnow()
         if "status" in data.model_fields_set:
             ticket.closed_at = datetime.utcnow() if ticket.status in CLOSED_STATUSES else None
+        if uploads:
+            ticket.attachments = list(ticket.attachments or _ticket_file_fallback(ticket.id, "ticket")) + await _store_ticket_uploads(ticket.id, uploads, "ticket")
 
         await session.flush()
         await session.refresh(ticket)
@@ -309,15 +497,48 @@ async def update_ticket(
     return _ticket_payload(ticket, current_user)
 
 
-@router.post("/{ticket_id}/comments")
-async def add_ticket_comment(
+@router.delete("/{ticket_id}/attachments/{attachment_index}")
+async def delete_ticket_attachment(
     ticket_id: int,
-    data: TicketCommentCreate,
+    attachment_index: int,
     request: Request,
     current_user: User = Depends(get_current_user),
 ):
     _require_ticket_permission(current_user)
     ticket = await _get_ticket(ticket_id, current_user)
+    if not _can_manage_ticket_attachments(ticket, current_user):
+        raise HTTPException(status_code=403, detail="You cannot delete this attachment")
+
+    attachments = list(ticket.attachments or _ticket_file_fallback(ticket.id, "ticket"))
+    if attachment_index < 0 or attachment_index >= len(attachments):
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    removed = attachments.pop(attachment_index)
+    _remove_attachment_file(ticket.id, removed)
+
+    db = get_db()
+    async with db.get_session() as session:
+        db_ticket = await session.get(SupportTicket, ticket.id)
+        if db_ticket:
+            db_ticket.attachments = attachments
+            db_ticket.updated_at = datetime.utcnow()
+            await session.flush()
+
+    ticket = await _get_ticket(ticket.id, current_user)
+    await write_audit_log("ticket.attachment.deleted", actor=current_user, company_id=ticket.company_id, target_type="support_ticket", target_id=ticket.id, request=request)
+    return _ticket_payload(ticket, current_user)
+
+
+@router.post("/{ticket_id}/comments")
+async def add_ticket_comment(
+    ticket_id: int,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    data, uploads = await _comment_create_from_request(request)
+    _require_ticket_permission(current_user)
+    ticket = await _get_ticket(ticket_id, current_user)
+    if not data.body.strip() and not uploads:
+        raise HTTPException(status_code=400, detail="Comment or attachment is required")
     if data.is_internal and not _is_ticket_admin(current_user):
         raise HTTPException(status_code=403, detail="Only admins can add internal notes")
 
@@ -328,6 +549,7 @@ async def add_ticket_comment(
             author_id=current_user.id,
             body=data.body.strip(),
             is_internal=data.is_internal,
+            attachments=await _store_ticket_uploads(ticket.id, uploads, "comment") if uploads else [],
         )
         session.add(comment)
         db_ticket = await session.get(SupportTicket, ticket.id)
@@ -344,12 +566,14 @@ async def add_ticket_comment(
 async def update_ticket_comment(
     ticket_id: int,
     comment_id: int,
-    data: TicketCommentUpdate,
     request: Request,
     current_user: User = Depends(get_current_user),
 ):
+    data, uploads = await _comment_update_from_request(request)
     _require_ticket_permission(current_user)
     ticket = await _get_ticket(ticket_id, current_user)
+    if not data.body.strip() and not uploads:
+        raise HTTPException(status_code=400, detail="Comment or attachment is required")
     if data.is_internal and not _is_ticket_admin(current_user):
         raise HTTPException(status_code=403, detail="Only admins can mark comments as internal")
 
@@ -366,6 +590,8 @@ async def update_ticket_comment(
         comment.body = data.body.strip()
         if data.is_internal is not None:
             comment.is_internal = data.is_internal
+        if uploads:
+            comment.attachments = list(comment.attachments or []) + await _store_ticket_uploads(ticket.id, uploads, "comment")
         db_ticket = await session.get(SupportTicket, ticket.id)
         if db_ticket:
             db_ticket.updated_at = datetime.utcnow()
@@ -374,6 +600,52 @@ async def update_ticket_comment(
     ticket = await _get_ticket(ticket.id, current_user)
     await write_audit_log(
         "ticket.comment.updated",
+        actor=current_user,
+        company_id=ticket.company_id,
+        target_type="support_ticket",
+        target_id=ticket.id,
+        request=request,
+        metadata={"comment_id": comment_id},
+    )
+    return _ticket_payload(ticket, current_user)
+
+
+@router.delete("/{ticket_id}/comments/{comment_id}/attachments/{attachment_index}")
+async def delete_ticket_comment_attachment(
+    ticket_id: int,
+    comment_id: int,
+    attachment_index: int,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    _require_ticket_permission(current_user)
+    ticket = await _get_ticket(ticket_id, current_user)
+
+    db = get_db()
+    async with db.get_session() as session:
+        comment = await session.get(SupportTicketComment, comment_id)
+        if not comment or comment.ticket_id != ticket.id:
+            raise HTTPException(status_code=404, detail="Comment not found")
+        if comment.is_internal and not _is_ticket_admin(current_user):
+            raise HTTPException(status_code=403, detail="Only admins can edit internal notes")
+        if not _can_manage_comment_attachments(comment, current_user):
+            raise HTTPException(status_code=403, detail="You cannot delete this attachment")
+
+        attachments = list(comment.attachments or [])
+        if attachment_index < 0 or attachment_index >= len(attachments):
+            raise HTTPException(status_code=404, detail="Attachment not found")
+        removed = attachments.pop(attachment_index)
+        _remove_attachment_file(ticket.id, removed)
+        comment.attachments = attachments
+
+        db_ticket = await session.get(SupportTicket, ticket.id)
+        if db_ticket:
+            db_ticket.updated_at = datetime.utcnow()
+        await session.flush()
+
+    ticket = await _get_ticket(ticket.id, current_user)
+    await write_audit_log(
+        "ticket.comment.attachment.deleted",
         actor=current_user,
         company_id=ticket.company_id,
         target_type="support_ticket",

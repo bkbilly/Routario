@@ -27,7 +27,7 @@ Routario connects directly to your GPS hardware over TCP/UDP and gives you a liv
 |---|---|---|
 | 🗺️ | **Live map** — real-time positions with smooth movement and heading rotation | |
 | 🕒 | **History & playback** — scrub through routes, replay trips, graph any sensor over time | |
-| 📊 | **Fleet reports** — backend-defined reports for summary, trips, daily aggregates, drivers, users, alerts, logbook, geofences, sensors, billing, schedules, audit logs, health checks, and CSV export | |
+| 📊 | **Fleet reports** — backend-defined reports for summary, trips, daily aggregates, drivers, users, alerts, logbook, geofences, sensors, billing, time, route, and alert-triggered schedules, audit logs, health checks, and CSV export | |
 | 🔔 | **Smart alerts** — speeding, geofence, idling, towing, low battery, maintenance, and custom rules | |
 | 📣 | **Notifications** — Telegram, Discord, Email, Slack, browser push, and SIP voice calls. Route each alert to specific channels, schedule alerts by day and hour | |
 | 🚗 | **Driver management** — create driver profiles, assign to vehicles, track who drove which trip | |
@@ -37,11 +37,12 @@ Routario connects directly to your GPS hardware over TCP/UDP and gives you a liv
 | ⚙️ | **Remote commands** — reboot, request position, set interval, and more from the dashboard | |
 | 🔗 | **Live sharing** — send a time-limited link; recipients see the live map with no login required | |
 | 🎙️ | **Voice PTT** — push-to-talk voice messages over WebSocket; read receipts, push notifications to offline users, message history | |
+| 🎫 | **Support tickets** — users can create tickets with file attachments, add comments, and let admins assign, prioritise, and resolve requests | |
 | 📡 | **8 native protocols** — Teltonika, GT06, Queclink, H02, TK103, Meitrack, Flespi, OsmAnd; listeners run only for protocols used by active devices | |
 | 🔌 | **Cloud integrations** — pull live data from Traccar, Wialon, 3D Tracking, Flespi Cloud, GPS Server, Google Find Hub, and the built-in GPS simulator alongside native devices | |
 | 🪝 | **Webhooks** — push live position data to any HTTP endpoint on every update | |
 | 👥 | **Multi-user & multi-tenant** — three-tier roles (super admin → company admin → user), fine-grained per-user permissions, company-scoped device and user management, and company branding with custom login slugs | |
-| 🔐 | **Security controls** — passkey login, scoped API keys, authenticator-app MFA with recovery codes, user impersonation, per-permission settings access, audit logging, health checks, and company-isolated admin tools | |
+| 🔐 | **Security controls** — SSO/OIDC login, passkey login, scoped API keys, authenticator-app MFA with recovery codes, user impersonation, per-permission settings access, audit logging, health checks, runtime logs, and company-isolated admin tools | |
 | 🌍 | **Unit systems** — switch between metric (km, km/h, m) and imperial (mi, mph, ft) per user | |
 | 📱 | **PWA** — installs on Android and iOS, push notifications even when the tab is closed | |
 | 💾 | **Backup & restore** — super admins can back up the whole platform; company admins with permission can back up and restore only their own company | |

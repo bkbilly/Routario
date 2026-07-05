@@ -388,10 +388,13 @@
             border-color: var(--accent);
             box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
         }
-        .log-summary-card.log-tone-debug.has-logs,
         .log-summary-card.log-tone-total.has-logs {
-            background: color-mix(in srgb, var(--accent) 10%, var(--bg-card));
-            border-color: color-mix(in srgb, var(--accent) 45%, var(--border-color));
+            background: color-mix(in srgb, #8b5cf6 12%, var(--bg-card));
+            border-color: color-mix(in srgb, #8b5cf6 52%, var(--border-color));
+        }
+        .log-summary-card.log-tone-debug.has-logs {
+            background: color-mix(in srgb, #06b6d4 12%, var(--bg-card));
+            border-color: color-mix(in srgb, #06b6d4 52%, var(--border-color));
         }
         .log-summary-card.log-tone-info.has-logs {
             background: color-mix(in srgb, #22c55e 11%, var(--bg-card));
@@ -424,6 +427,11 @@
         }
         .runtime-log-table {
             min-width: 940px;
+        }
+        .runtime-log-table .log-level-debug {
+            background: rgba(6, 182, 212, 0.14);
+            border-color: rgba(6, 182, 212, 0.32);
+            color: #22d3ee;
         }
         .runtime-log-message {
             white-space: pre-wrap;

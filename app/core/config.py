@@ -34,6 +34,17 @@ class Settings(BaseSettings):
     passkey_rp_id: Optional[str] = None
     passkey_rp_name: str = "Routario"
     passkey_origin: Optional[str] = None
+
+    # Single Sign-On (OIDC)
+    sso_enabled: bool = False
+    sso_provider_name: str = "SSO"
+    sso_issuer_url: Optional[str] = None
+    sso_client_id: Optional[str] = None
+    sso_client_secret: Optional[str] = None
+    sso_redirect_uri: Optional[str] = None
+    sso_scopes: str = "openid email profile"
+    sso_allowed_domains: str = ""
+    sso_require_verified_email: bool = True
     
     # Logging
     log_level: str = "INFO"

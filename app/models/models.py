@@ -539,6 +539,7 @@ class SupportTicket(Base):
     status:      Mapped[str]           = mapped_column(String(30), default='open', nullable=False, index=True)
     related_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     related_id:   Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    attachments:  Mapped[list]          = mapped_column(JsonType, default=list, nullable=False)
     created_at:  Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow, index=True)
     updated_at:  Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
     closed_at:   Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -557,6 +558,7 @@ class SupportTicketComment(Base):
     author_id:  Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
     body:       Mapped[str]      = mapped_column(Text, nullable=False)
     is_internal: Mapped[bool]    = mapped_column(Boolean, default=False, nullable=False)
+    attachments: Mapped[list]    = mapped_column(JsonType, default=list, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
     ticket: Mapped["SupportTicket"] = relationship(back_populates="comments")

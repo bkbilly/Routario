@@ -27,6 +27,10 @@ let _rtpEditingTicketId = null;
 let _rtpCurrentTicket = null;
 let _rtpEditingCommentId = null;
 let _rtpEditingTicketField = null;
+let _rtpTicketCreateFiles = [];
+let _rtpTicketCommentFiles = [];
+let _rtpTicketEditFiles = [];
+let _rtpTicketCommentEditFiles = [];
 let _rtpCurrencyRates = [];
 let _rtpRouteSort = { col: 'name', dir: 'asc' };
 let _rtpBillingSort = { col: 'name', dir: 'asc' };
@@ -193,6 +197,7 @@ function rtpOpenCreateTicketModal() {
     document.getElementById('ticketCreateDescription').value = '';
     document.getElementById('ticketCreateCategory').value = 'other';
     document.getElementById('ticketCreatePriority').value = 'normal';
+    rtpClearTicketFiles('ticketCreateAttachments', 'ticketCreateAttachmentSummary');
     document.getElementById('ticketCreateModal').classList.add('active');
     setTimeout(() => document.getElementById('ticketCreateTitle')?.focus(), 50);
 }
@@ -213,14 +218,15 @@ async function rtpCreateTicket() {
     btn.disabled = true;
     btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Creating';
     try {
+        const form = new FormData();
+        form.append('title', title);
+        form.append('description', description);
+        form.append('category', document.getElementById('ticketCreateCategory')?.value || 'other');
+        form.append('priority', document.getElementById('ticketCreatePriority')?.value || 'normal');
+        _rtpTicketCreateFiles.forEach(file => form.append('attachments', file));
         await rtpJson(`${API_BASE}/tickets`, {
             method: 'POST',
-            body: JSON.stringify({
-                title,
-                description,
-                category: document.getElementById('ticketCreateCategory')?.value || 'other',
-                priority: document.getElementById('ticketCreatePriority')?.value || 'normal',
-            }),
+            body: form,
         });
         rtpCloseCreateTicketModal();
         await rtpLoadTickets();
@@ -248,6 +254,89 @@ function rtpTicketBadgeClass(value, kind) {
     if (value === 'waiting_on_user') return 'health-status-degraded';
     if (value === 'in_progress') return 'health-status-optional';
     return 'route-status-default';
+}
+
+function rtpFormatBytes(bytes) {
+    const size = Number(bytes) || 0;
+    if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
+    if (size >= 1024) return `${Math.round(size / 1024)} KB`;
+    return `${size} B`;
+}
+
+function rtpTicketAttachmentsHtml(attachments, options = {}) {
+    const files = attachments || [];
+    if (!files.length) return '';
+    return `
+        <div style="display:flex;flex-wrap:wrap;gap:0.45rem;margin-top:0.65rem;">
+            ${files.map((file, index) => `
+                <span style="display:inline-flex;align-items:center;gap:0.35rem;">
+                    <a class="btn btn-secondary btn-small ticket-attachment-link" href="${rtpEsc(file.url)}" target="_blank" rel="noopener">
+                        <i class="mdi mdi-paperclip"></i>
+                        <span class="ticket-attachment-name">${rtpEsc(file.name || 'Attachment')}</span>
+                        <span class="ticket-attachment-size">${rtpEsc(rtpFormatBytes(file.size))}</span>
+                    </a>
+                    ${options.canDelete ? `
+                        <button type="button" class="btn btn-secondary btn-small" title="Delete attachment" onclick="rtpDeleteTicketAttachment('${rtpEsc(options.kind || 'ticket')}', ${Number(index)}, ${Number(options.commentId || 0)})">
+                            <i class="mdi mdi-trash-can-outline"></i>
+                        </button>
+                    ` : ''}
+                </span>
+            `).join('')}
+        </div>
+    `;
+}
+
+function rtpTicketFileBucket(inputId) {
+    if (inputId === 'ticketCreateAttachments') return _rtpTicketCreateFiles;
+    if (inputId === 'ticketEditAttachments') return _rtpTicketEditFiles;
+    if (inputId === 'ticketCommentEditAttachments') return _rtpTicketCommentEditFiles;
+    return _rtpTicketCommentFiles;
+}
+
+function rtpAddTicketFiles(inputId, summaryId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const bucket = rtpTicketFileBucket(inputId);
+    Array.from(input.files || []).forEach(file => bucket.push(file));
+    input.value = '';
+    rtpUpdateTicketFileSummary(inputId, summaryId);
+}
+
+function rtpClearTicketFiles(inputId, summaryId) {
+    const input = document.getElementById(inputId);
+    const bucket = rtpTicketFileBucket(inputId);
+    bucket.splice(0, bucket.length);
+    if (input) input.value = '';
+    rtpUpdateTicketFileSummary(inputId, summaryId);
+}
+
+function rtpUpdateTicketFileSummary(inputId, summaryId) {
+    const summary = document.getElementById(summaryId);
+    if (!summary) return;
+    const files = rtpTicketFileBucket(inputId);
+    if (!files.length) {
+        summary.textContent = 'No files selected';
+        return;
+    }
+    if (files.length === 1) {
+        summary.textContent = `${files[0].name} (${rtpFormatBytes(files[0].size)})`;
+        return;
+    }
+    const total = files.reduce((sum, file) => sum + (Number(file.size) || 0), 0);
+    summary.textContent = `${files.length} files selected (${rtpFormatBytes(total)})`;
+}
+
+async function rtpDeleteTicketAttachment(kind, index, commentId = 0) {
+    if (!_rtpEditingTicketId) return;
+    if (!confirm('Delete this attachment?')) return;
+    const url = kind === 'comment'
+        ? `${API_BASE}/tickets/${_rtpEditingTicketId}/comments/${commentId}/attachments/${index}`
+        : `${API_BASE}/tickets/${_rtpEditingTicketId}/attachments/${index}`;
+    await rtpJson(url, { method: 'DELETE' }).then(ticket => {
+        showAlert('Attachment deleted', 'success');
+        rtpRenderTicketDetail(ticket);
+        return rtpLoadTickets();
+    }).catch(err => showAlert(err.message || 'Failed to delete attachment', 'error'));
 }
 
 function rtpSortTickets(col) {
@@ -332,6 +421,7 @@ async function rtpOpenTicketModal(id) {
     }
     rtpRenderTicketDetail(ticket);
     document.getElementById('ticketCommentBody').value = '';
+    rtpClearTicketFiles('ticketCommentAttachments', 'ticketCommentAttachmentSummary');
     document.getElementById('ticketCommentInternal').checked = false;
     document.getElementById('ticketModal').classList.add('active');
 }
@@ -341,6 +431,9 @@ function rtpRenderTicketDetail(ticket) {
     const el = document.getElementById('ticketDetailBody');
     if (!el) return;
     const currentUserId = parseInt(localStorage.getItem('user_id') || '0', 10);
+    const isTicketAdmin = localStorage.getItem('is_admin') === 'true' || localStorage.getItem('is_company_admin') === 'true';
+    const canManageTicketAttachments = isTicketAdmin || Number(ticket.created_by) === currentUserId;
+    const canDeleteTicketAttachments = _rtpEditingTicketField === 'description' && canManageTicketAttachments;
     const related = ticket.related_type && ticket.related_id ? `${ticket.related_type} #${ticket.related_id}` : 'None';
     const titleBlock = _rtpEditingTicketField === 'title'
         ? `
@@ -353,13 +446,19 @@ function rtpRenderTicketDetail(ticket) {
         : `
             <div class="stack-item-title" style="display:flex;align-items:center;gap:0.5rem;">
                 <span>${rtpEsc(ticket.title)}</span>
-                <button class="btn btn-secondary btn-small" onclick="rtpStartTicketFieldEdit('title')" style="margin-left:auto;"><i class="mdi mdi-pencil"></i> Edit</button>
+                <button class="btn btn-secondary btn-small ticket-edit-btn" onclick="rtpStartTicketFieldEdit('title')" style="margin-left:auto;"><i class="mdi mdi-pencil"></i> <span>Edit</span></button>
             </div>
         `;
     const descriptionBlock = _rtpEditingTicketField === 'description'
         ? `
             <div style="display:grid;gap:0.5rem;">
                 <textarea id="ticketDescriptionEdit" class="form-input" rows="5">${rtpEsc(ticket.description)}</textarea>
+                ${rtpTicketAttachmentsHtml(ticket.attachments, { kind: 'ticket', canDelete: canDeleteTicketAttachments })}
+                <div class="ticket-file-picker">
+                    <input type="file" id="ticketEditAttachments" class="ticket-file-input" multiple onchange="rtpAddTicketFiles('ticketEditAttachments','ticketEditAttachmentSummary')">
+                    <button type="button" class="btn btn-secondary btn-small" onclick="document.getElementById('ticketEditAttachments').click()"><i class="mdi mdi-paperclip"></i> Attach files</button>
+                    <span id="ticketEditAttachmentSummary" class="ticket-file-summary">No files selected</span>
+                </div>
                 <div style="display:flex;gap:0.5rem;">
                     <button class="btn btn-primary btn-small" onclick="rtpSaveTicketField('description')"><i class="mdi mdi-content-save"></i> Save</button>
                     <button class="btn btn-secondary btn-small" onclick="rtpCancelTicketFieldEdit()">Cancel</button>
@@ -369,17 +468,24 @@ function rtpRenderTicketDetail(ticket) {
         : `
             <div style="display:flex;align-items:flex-start;gap:0.5rem;">
                 <div style="white-space:pre-wrap;color:var(--text-secondary);line-height:1.5;flex:1;">${rtpEsc(ticket.description)}</div>
-                <button class="btn btn-secondary btn-small" onclick="rtpStartTicketFieldEdit('description')"><i class="mdi mdi-pencil"></i> Edit</button>
+                <button class="btn btn-secondary btn-small ticket-edit-btn" onclick="rtpStartTicketFieldEdit('description')"><i class="mdi mdi-pencil"></i> <span>Edit</span></button>
             </div>
         `;
     const comments = (ticket.comments || []).map(comment => {
         const canEdit = Number(comment.author_id) === currentUserId;
         const editing = _rtpEditingCommentId === comment.id;
         if (editing) {
+            const canDeleteCommentAttachments = isTicketAdmin || canEdit;
             return `
                 <div class="stack-item" style="margin-top:0.65rem;">
                     <div class="stack-item-title">Edit comment</div>
                     <textarea id="ticketCommentEditBody" class="form-input" rows="4">${rtpEsc(comment.body)}</textarea>
+                    ${rtpTicketAttachmentsHtml(comment.attachments, { kind: 'comment', commentId: comment.id, canDelete: canDeleteCommentAttachments })}
+                    <div class="ticket-file-picker">
+                        <input type="file" id="ticketCommentEditAttachments" class="ticket-file-input" multiple onchange="rtpAddTicketFiles('ticketCommentEditAttachments','ticketCommentEditAttachmentSummary')">
+                        <button type="button" class="btn btn-secondary btn-small" onclick="document.getElementById('ticketCommentEditAttachments').click()"><i class="mdi mdi-paperclip"></i> Attach files</button>
+                        <span id="ticketCommentEditAttachmentSummary" class="ticket-file-summary">No files selected</span>
+                    </div>
                     <label class="ticket-switch" style="margin-top:0.65rem;${localStorage.getItem('is_admin') === 'true' || localStorage.getItem('is_company_admin') === 'true' ? '' : 'display:none;'}">
                         <input type="checkbox" id="ticketCommentEditInternal" ${comment.is_internal ? 'checked' : ''}>
                         <span class="ticket-switch-track"></span>
@@ -397,10 +503,11 @@ function rtpRenderTicketDetail(ticket) {
                 <div class="stack-item-title">
                     ${rtpEsc(comment.author_name || 'Unknown')}
                     ${comment.is_internal ? '<span class="proto-badge health-status health-status-degraded">internal</span>' : ''}
-                    ${canEdit ? `<button class="btn btn-secondary btn-small" onclick="rtpStartTicketCommentEdit(${Number(comment.id)})" style="margin-left:auto;"><i class="mdi mdi-pencil"></i> Edit</button>` : ''}
+                    ${canEdit ? `<button class="btn btn-secondary btn-small ticket-edit-btn" onclick="rtpStartTicketCommentEdit(${Number(comment.id)})" style="margin-left:auto;"><i class="mdi mdi-pencil"></i> <span>Edit</span></button>` : ''}
                 </div>
                 <div style="color:var(--text-muted);font-size:0.75rem;margin-bottom:0.35rem;">${rtpDateTime(comment.created_at)}</div>
                 <div style="white-space:pre-wrap;color:var(--text-secondary);line-height:1.45;">${rtpEsc(comment.body)}</div>
+                ${rtpTicketAttachmentsHtml(comment.attachments, { kind: 'comment', commentId: comment.id, canDelete: false })}
             </div>
         `;
     }).join('');
@@ -411,6 +518,7 @@ function rtpRenderTicketDetail(ticket) {
                 Created by ${rtpEsc(ticket.creator_name || '-')} · ${rtpDateTime(ticket.created_at)} · Related: ${rtpEsc(related)}
             </div>
             ${descriptionBlock}
+            ${_rtpEditingTicketField === 'description' ? '' : rtpTicketAttachmentsHtml(ticket.attachments, { kind: 'ticket', canDelete: false })}
         </div>
         <div style="margin-top:1rem;font-weight:700;color:var(--text-primary);">Comments</div>
         ${comments || '<div style="color:var(--text-muted);padding:0.8rem 0;">No comments yet.</div>'}
@@ -423,6 +531,8 @@ function rtpCloseTicketModal() {
     _rtpCurrentTicket = null;
     _rtpEditingCommentId = null;
     _rtpEditingTicketField = null;
+    _rtpTicketEditFiles = [];
+    _rtpTicketCommentEditFiles = [];
 }
 
 async function rtpSaveTicket() {
@@ -448,19 +558,21 @@ async function rtpSaveTicket() {
 async function rtpAddTicketComment() {
     if (!_rtpEditingTicketId) return;
     const body = document.getElementById('ticketCommentBody')?.value.trim();
-    if (!body) {
-        showAlert('Comment is required', 'warning');
+    const files = _rtpTicketCommentFiles;
+    if (!body && !files.length) {
+        showAlert('Comment or attachment is required', 'warning');
         return;
     }
-    const payload = {
-        body,
-        is_internal: !!document.getElementById('ticketCommentInternal')?.checked,
-    };
+    const payload = new FormData();
+    payload.append('body', body);
+    payload.append('is_internal', document.getElementById('ticketCommentInternal')?.checked ? 'true' : 'false');
+    files.forEach(file => payload.append('attachments', file));
     await rtpJson(`${API_BASE}/tickets/${_rtpEditingTicketId}/comments`, {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: payload,
     }).then(ticket => {
         document.getElementById('ticketCommentBody').value = '';
+        rtpClearTicketFiles('ticketCommentAttachments', 'ticketCommentAttachmentSummary');
         document.getElementById('ticketCommentInternal').checked = false;
         rtpRenderTicketDetail(ticket);
         return rtpLoadTickets();
@@ -469,6 +581,9 @@ async function rtpAddTicketComment() {
 
 function rtpStartTicketFieldEdit(field) {
     _rtpEditingTicketField = field;
+    if (field === 'description') {
+        _rtpTicketEditFiles = [];
+    }
     if (_rtpCurrentTicket) rtpRenderTicketDetail(_rtpCurrentTicket);
     setTimeout(() => {
         const el = document.getElementById(field === 'title' ? 'ticketTitleEdit' : 'ticketDescriptionEdit');
@@ -479,6 +594,7 @@ function rtpStartTicketFieldEdit(field) {
 
 function rtpCancelTicketFieldEdit() {
     _rtpEditingTicketField = null;
+    _rtpTicketEditFiles = [];
     if (_rtpCurrentTicket) rtpRenderTicketDetail(_rtpCurrentTicket);
 }
 
@@ -490,11 +606,17 @@ async function rtpSaveTicketField(field) {
         showAlert(field === 'title' ? 'Title is required' : 'Description is required', 'warning');
         return;
     }
-    await rtpJson(`${API_BASE}/tickets/${_rtpEditingTicketId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ [field]: value }),
-    }).then(ticket => {
+    const request = _rtpTicketEditFiles.length && field === 'description'
+        ? (() => {
+            const form = new FormData();
+            form.append(field, value);
+            _rtpTicketEditFiles.forEach(file => form.append('attachments', file));
+            return { method: 'PATCH', body: form };
+        })()
+        : { method: 'PATCH', body: JSON.stringify({ [field]: value }) };
+    await rtpJson(`${API_BASE}/tickets/${_rtpEditingTicketId}`, request).then(ticket => {
         _rtpEditingTicketField = null;
+        _rtpTicketEditFiles = [];
         document.getElementById('ticketModalTitle').textContent = ticket.title || `Ticket #${ticket.id}`;
         rtpRenderTicketDetail(ticket);
         return rtpLoadTickets();
@@ -503,11 +625,13 @@ async function rtpSaveTicketField(field) {
 
 function rtpStartTicketCommentEdit(commentId) {
     _rtpEditingCommentId = commentId;
+    _rtpTicketCommentEditFiles = [];
     if (_rtpCurrentTicket) rtpRenderTicketDetail(_rtpCurrentTicket);
 }
 
 function rtpCancelTicketCommentEdit() {
     _rtpEditingCommentId = null;
+    _rtpTicketCommentEditFiles = [];
     if (_rtpCurrentTicket) rtpRenderTicketDetail(_rtpCurrentTicket);
 }
 
@@ -518,14 +642,21 @@ async function rtpSaveTicketComment(commentId) {
         showAlert('Comment is required', 'warning');
         return;
     }
-    const payload = { body };
+    const payload = _rtpTicketCommentEditFiles.length ? new FormData() : { body };
     const internal = document.getElementById('ticketCommentEditInternal');
-    if (internal) payload.is_internal = !!internal.checked;
+    if (payload instanceof FormData) {
+        payload.append('body', body);
+        if (internal) payload.append('is_internal', internal.checked ? 'true' : 'false');
+        _rtpTicketCommentEditFiles.forEach(file => payload.append('attachments', file));
+    } else if (internal) {
+        payload.is_internal = !!internal.checked;
+    }
     await rtpJson(`${API_BASE}/tickets/${_rtpEditingTicketId}/comments/${commentId}`, {
         method: 'PATCH',
-        body: JSON.stringify(payload),
+        body: payload instanceof FormData ? payload : JSON.stringify(payload),
     }).then(ticket => {
         _rtpEditingCommentId = null;
+        _rtpTicketCommentEditFiles = [];
         rtpRenderTicketDetail(ticket);
         return rtpLoadTickets();
     }).catch(err => showAlert(err.message || 'Failed to update comment', 'error'));
