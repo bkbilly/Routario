@@ -19,6 +19,8 @@ Routario connects directly to your GPS hardware over TCP/UDP and gives you a liv
 
 **A live demo is available at https://bkbilly.github.io/Routario/demo/.**
 
+**Independent project note:** Routario is an independent open-source project first committed on February 14, 2026. It is not affiliated with any company or commercial product using the Routario name.
+
 ---
 
 ## Features at a Glance
