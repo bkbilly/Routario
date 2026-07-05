@@ -421,6 +421,12 @@
                 <div style="margin-top:1rem;">
                     <label class="form-label">Reply</label>
                     <textarea id="ticketCommentBody" class="form-input" rows="4" placeholder="Write a reply or internal note..."></textarea>
+                    <label class="form-label" style="margin-top:0.75rem;">Attachments</label>
+                    <div class="ticket-file-picker">
+                        <input type="file" id="ticketCommentAttachments" class="ticket-file-input" multiple onchange="rtpAddTicketFiles('ticketCommentAttachments','ticketCommentAttachmentSummary')">
+                        <button type="button" class="btn btn-secondary btn-small" onclick="document.getElementById('ticketCommentAttachments').click()"><i class="mdi mdi-paperclip"></i> Attach files</button>
+                        <span id="ticketCommentAttachmentSummary" class="ticket-file-summary">No files selected</span>
+                    </div>
                     <label class="ticket-switch" style="margin-top:0.65rem;">
                         <input type="checkbox" id="ticketCommentInternal">
                         <span class="ticket-switch-track"></span>
@@ -464,6 +470,13 @@
                         <option value="urgent">Urgent</option>
                     </select></label>
                     <label style="grid-column:1 / -1;"><span>Description <b style="color:var(--accent-danger);font-weight:600;">*</b></span><textarea id="ticketCreateDescription" class="form-input" rows="6" placeholder="Describe what happened and what you expected."></textarea></label>
+                    <label style="grid-column:1 / -1;"><span>Attachments</span>
+                        <div class="ticket-file-picker">
+                            <input type="file" id="ticketCreateAttachments" class="ticket-file-input" multiple onchange="rtpAddTicketFiles('ticketCreateAttachments','ticketCreateAttachmentSummary')">
+                            <button type="button" class="btn btn-secondary btn-small" onclick="document.getElementById('ticketCreateAttachments').click()"><i class="mdi mdi-paperclip"></i> Attach files</button>
+                            <span id="ticketCreateAttachmentSummary" class="ticket-file-summary">No files selected</span>
+                        </div>
+                    </label>
                 </div>
             </div>
             <div class="modal-footer">

@@ -61,6 +61,36 @@ Redis is **optional**. When not available, Routario falls back to in-process Web
 !!! danger "Important"
     Always change `SECRET_KEY` to a long, random string before deploying to production. Never commit it to version control.
 
+### Single Sign-On
+
+Routario supports single sign-on through OpenID Connect providers such as Keycloak, Authentik, Okta, Google Workspace, Microsoft Entra ID, and Zitadel.
+
+| Variable | Default | Description |
+|---|---|---|
+| `SSO_ENABLED` | `false` | Show the SSO login button and enable the OIDC login flow |
+| `SSO_PROVIDER_NAME` | `SSO` | Button label, for example `Company SSO` |
+| `SSO_ISSUER_URL` | — | OIDC issuer URL |
+| `SSO_CLIENT_ID` | — | OIDC client ID |
+| `SSO_CLIENT_SECRET` | — | OIDC client secret |
+| `SSO_REDIRECT_URI` | auto | Public callback URL, usually `https://your-domain/api/sso/callback` |
+| `SSO_ALLOWED_DOMAINS` | all | Optional comma-separated email domains, for example `example.com,example.org` |
+| `SSO_SCOPES` | `openid email profile` | OIDC scopes to request |
+| `SSO_REQUIRE_VERIFIED_EMAIL` | `true` | Reject users whose provider marks email as unverified |
+
+Example:
+
+```env
+SSO_ENABLED=true
+SSO_PROVIDER_NAME=Company SSO
+SSO_ISSUER_URL=https://sso.example.com/application/o/routario/
+SSO_CLIENT_ID=routario
+SSO_CLIENT_SECRET=change-me
+SSO_REDIRECT_URI=https://routario.example.com/api/sso/callback
+SSO_ALLOWED_DOMAINS=example.com
+```
+
+SSO matches existing Routario users by email address. Create the Routario user first with the same email used by the SSO provider.
+
 ---
 
 ## Logging

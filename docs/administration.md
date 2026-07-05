@@ -34,7 +34,7 @@ The archive is a `.tar.gz` file containing:
 
 - **`manifest.json`** — backup metadata.
 - **`db.json`** — a JSON dump of the full platform for super admins, or company-scoped rows for company admins.
-- **`uploads/`** — related uploaded files, when `web/uploads` exists.
+- **`uploads/`** — related uploaded files, when `web/uploads` exists, including logbook, dashcam, voice, and ticket attachments.
 
 The dump is compatible with any SQLAlchemy-supported database (PostgreSQL, MySQL, SQLite), so backups can be used to migrate between database engines.
 
@@ -148,6 +148,17 @@ API keys are shown only once when created. Stored keys are hashed, can be expire
 
 ---
 
+## Single Sign-On
+
+Routario can use an OpenID Connect provider for single sign-on. When SSO is enabled, the login page shows a provider button and users authenticate through the configured identity provider.
+
+- SSO matches existing Routario users by email address. Create the Routario user first with the same email used by the provider.
+- Optional allowed email domains can restrict which provider accounts are accepted.
+- Verified email enforcement can be enabled so unverified provider accounts are rejected.
+- SSO configuration is controlled through environment variables. See [Configuration](configuration.md#single-sign-on).
+
+---
+
 ## Multi-Factor Authentication
 
 Every user can set up authenticator-app MFA and recovery codes for their own account from **User Settings → Profile**. The **Manage Users' MFA** permission is only for administering MFA on other users.
@@ -177,6 +188,16 @@ Users with **View Audit Log** can review recorded administrative and security ev
 
 ---
 
+## Runtime Logs
+
+Runtime logs give admins a live operational view without opening the server console.
+
+- Users with health or administrative access can inspect recent application log lines from the management area.
+- The runtime log API exposes recent buffered logs and a WebSocket stream for live updates.
+- Use runtime logs for quick checks after deployments, protocol listener changes, integration polling issues, or background task errors.
+
+---
+
 ## Health Checks
 
 The health endpoints are useful for uptime checks and deployment readiness checks:
@@ -195,7 +216,7 @@ The readiness payload also includes:
 - **Background tasks** — verifies alert checks, integration polling, and scheduled report processing are still running and recently completed a loop.
 - **Ingestion freshness** — reports active devices, online devices, latest position age, never-seen devices, and stale device samples.
 - **Integration accounts** — reports active integration accounts, assigned device counts, last authentication time, and last error.
-- **Disk** — checks writeability and reports free/used space for upload paths, including dashcam and voice uploads.
+- **Disk** — checks writeability and reports free/used space for upload paths, including dashcam, voice, and ticket uploads.
 - **Database** — checks query latency and reports pool class, size, connections in pool, checked-out connections, overflow, and database type when available.
 - **Redis** — checks reachability and shows whether WebSocket pub/sub is using Redis or in-process fallback.
 - **Runtime** — shows app version, git commit when available, process start time, uptime, Python version, platform, and database type.
@@ -212,6 +233,21 @@ Users with **Manage Routes** can create planned routes with stops, assign them t
 - Active routes can be paused, resumed, completed, or reset back to `planned`/`draft` based on assignment.
 - Once a route is active or paused, core route details such as name, assigned vehicle, and stops cannot be edited.
 - Starting a route requires an assigned vehicle.
+
+---
+
+## Support Tickets
+
+Support tickets let users report issues and keep follow-up discussion in Routario.
+
+- Regular users can create tickets, add comments, and view their own tickets.
+- Company admins with **Manage Tickets** can manage tickets in their company.
+- Super admins can manage tickets across all companies.
+- Tickets support status, priority, assignment, device context, internal admin notes, comments, and multiple file attachments.
+- Attachments can be added when creating a ticket, when commenting, and while editing a ticket description or comment.
+- Ticket attachments are included in backup archives when the related ticket data is in scope.
+
+Access via **Management → Tickets**.
 
 ---
 

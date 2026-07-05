@@ -94,6 +94,7 @@
             background: var(--bg-tertiary);
             border: 1px solid var(--border-color);
         }
+        .btn-sso { display: none; }
 
         .error-msg { color: #ef4444; font-size: 0.85rem; margin-top: 1rem; display: none; }
     </style>
@@ -121,6 +122,7 @@
             </div>
             <button type="submit" class="btn" id="loginBtn">Sign In</button>
             <button type="button" class="btn btn-secondary" id="passkeyBtn" onclick="handlePasskeyLogin()">Sign in with passkey</button>
+            <button type="button" class="btn btn-secondary btn-sso" id="ssoBtn" onclick="handleSsoLogin()">Sign in with SSO</button>
             <div class="error-msg" id="errorMsg">Invalid credentials</div>
         </form>
     </div>
@@ -131,6 +133,16 @@
             return match ? decodeURIComponent(match[1]) : null;
         })();
         if (loginSlug) applyCompanyLoginBranding(loginSlug);
+
+        const storedLoginError = localStorage.getItem('login_error');
+        if (storedLoginError) {
+            localStorage.removeItem('login_error');
+            const err = document.getElementById('errorMsg');
+            err.textContent = storedLoginError;
+            err.style.display = 'block';
+        }
+
+        loadSsoConfig();
 
         function b64urlToBuffer(value) {
             const padding = '='.repeat((4 - value.length % 4) % 4);
@@ -191,6 +203,22 @@
                 localStorage.removeItem('company_login_slug');
                 localStorage.removeItem('company_login_slug_company_id');
             }
+        }
+
+        async function loadSsoConfig() {
+            try {
+                const res = await fetch(`${API_BASE}/sso/config`);
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!data.enabled) return;
+                const btn = document.getElementById('ssoBtn');
+                btn.textContent = `Sign in with ${data.provider_name || 'SSO'}`;
+                btn.style.display = 'block';
+            } catch (_) {}
+        }
+
+        function handleSsoLogin() {
+            window.location.href = `${API_BASE}/sso/login`;
         }
 
         async function handleLogin(e) {

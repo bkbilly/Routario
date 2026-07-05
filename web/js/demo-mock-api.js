@@ -191,6 +191,113 @@
             revoked_at: null,
         },
     ];
+    let runtimeLogs = [
+        { timestamp: iso(2), level: 'info', logger: 'routario.gateway', module: 'gateway', function: 'handle_position', line: 214, message: 'Accepted Teltonika position from Athens Van 12', exception: null },
+        { timestamp: iso(6), level: 'debug', logger: 'routario.websocket', module: 'main', function: 'broadcast_position', line: 736, message: 'Broadcast position update to 3 dashboard clients', exception: null },
+        { timestamp: iso(14), level: 'warning', logger: 'routario.integrations.traccar', module: 'engine', function: 'poll_account', line: 118, message: 'Traccar demo account returned no new positions', exception: null },
+        { timestamp: iso(23), level: 'info', logger: 'routario.reports', module: 'schedule_runner', function: 'run_due_schedules', line: 302, message: 'Generated scheduled fleet summary for Demo Fleet', exception: null },
+        { timestamp: iso(37), level: 'error', logger: 'routario.notifications.email', module: 'z_apprise', function: 'send', line: 91, message: 'Demo email notification failed for invalid recipient', exception: 'ValueError: invalid demo recipient address' },
+        { timestamp: iso(55), level: 'info', logger: 'routario.tickets', module: 'tickets', function: 'create_ticket', line: 426, message: 'Support ticket #101 created by demo', exception: null },
+        { timestamp: iso(68), level: 'debug', logger: 'routario.reports', module: 'reports', function: 'report_types', line: 74, message: 'Loaded 10 backend-defined report definitions', exception: null },
+        { timestamp: iso(82), level: 'info', logger: 'routario.alerts', module: 'alert_engine', function: 'evaluate_device', line: 211, message: 'Evaluated 3 active alert rules for Piraeus Truck 4', exception: null },
+        { timestamp: iso(96), level: 'warning', logger: 'routario.health', module: 'runtime_health', function: 'check_protocol_listeners', line: 156, message: 'GT06 listener is active but has not received data for 18 minutes', exception: null },
+        { timestamp: iso(110), level: 'debug', logger: 'routario.auth', module: 'auth', function: 'get_current_user', line: 88, message: 'Resolved demo user permissions from token', exception: null },
+        { timestamp: iso(126), level: 'info', logger: 'routario.routes', module: 'route_progress', function: 'update_route_progress', line: 264, message: 'Route progress updated for Piraeus Port Delivery Loop', exception: null },
+        { timestamp: iso(142), level: 'error', logger: 'routario.gateway.teltonika', module: 'teltonika', function: 'decode_packet', line: 319, message: 'Rejected malformed demo AVL packet', exception: 'DecodeError: invalid codec id 0xff' },
+        { timestamp: iso(158), level: 'critical', logger: 'routario.database', module: 'database', function: 'health_check', line: 184, message: 'Demo database pool exhausted during readiness check', exception: 'TimeoutError: connection pool checkout timed out' },
+        { timestamp: iso(174), level: 'info', logger: 'routario.backup', module: 'backup', function: 'download_backup', line: 182, message: 'Company-scoped backup archive prepared for Demo Fleet', exception: null },
+        { timestamp: iso(190), level: 'debug', logger: 'routario.push', module: 'push_notifications', function: 'send_web_push', line: 245, message: 'Skipped browser push for offline demo subscription endpoint', exception: null },
+        { timestamp: iso(206), level: 'warning', logger: 'routario.tickets', module: 'tickets', function: 'store_upload', line: 234, message: 'Ticket attachment demo-invoice.pdf is near the configured upload size warning threshold', exception: null },
+    ];
+    let demoTickets = [
+        {
+            id: 101,
+            title: 'Route completion report did not arrive',
+            description: 'The scheduled route completion report for Piraeus Truck 4 did not send to the dispatch email this morning.',
+            status: 'open',
+            priority: 'high',
+            category: 'route',
+            related_type: 'device',
+            related_id: 2,
+            company_id: 1,
+            created_by: 1,
+            creator_name: 'demo',
+            assigned_to: 3,
+            assignee_name: 'fleetadmin',
+            created_at: iso(240),
+            updated_at: iso(55),
+            internal_notes: 'Check notification channel and schedule history before closing.',
+            attachments: [
+                { name: 'missing-report-screenshot.png', size: 184320, url: '/uploads/tickets/demo/missing-report-screenshot.png' },
+                { name: 'schedule-settings.csv', size: 9216, url: '/uploads/tickets/demo/schedule-settings.csv' },
+            ],
+            comments: [
+                {
+                    id: 1001,
+                    ticket_id: 101,
+                    author_id: 3,
+                    author_name: 'fleetadmin',
+                    body: 'I can see the schedule ran successfully, but the email channel rejected the recipient. I will update the channel and rerun the report.',
+                    is_internal: false,
+                    created_at: iso(90),
+                    updated_at: iso(90),
+                    attachments: [{ name: 'schedule-run-log.txt', size: 4096, url: '/uploads/tickets/demo/schedule-run-log.txt' }],
+                },
+            ],
+        },
+        {
+            id: 102,
+            title: 'Athens Van 12 shows stale fuel level',
+            description: 'Fuel level has stayed at 62% since yesterday even though the vehicle was refueled.',
+            status: 'in_progress',
+            priority: 'normal',
+            category: 'device',
+            related_type: 'device',
+            related_id: 1,
+            company_id: 1,
+            created_by: 2,
+            creator_name: 'dispatcher',
+            assigned_to: 1,
+            assignee_name: 'demo',
+            created_at: iso(720),
+            updated_at: iso(180),
+            internal_notes: '',
+            attachments: [{ name: 'fuel-sensor-reading.jpg', size: 512000, url: '/uploads/tickets/demo/fuel-sensor-reading.jpg' }],
+            comments: [
+                {
+                    id: 1002,
+                    ticket_id: 102,
+                    author_id: 1,
+                    author_name: 'demo',
+                    body: 'The last raw payload still contains the old fuel value. Please confirm the device wiring after the next ignition cycle.',
+                    is_internal: false,
+                    created_at: iso(180),
+                    updated_at: iso(180),
+                    attachments: [],
+                },
+            ],
+        },
+        {
+            id: 103,
+            title: 'Need access for new maintenance user',
+            description: 'Please create access for the maintenance desk so they can upload service records and invoices.',
+            status: 'waiting_on_user',
+            priority: 'low',
+            category: 'access',
+            related_type: null,
+            related_id: null,
+            company_id: 1,
+            created_by: 3,
+            creator_name: 'fleetadmin',
+            assigned_to: null,
+            assignee_name: null,
+            created_at: iso(1320),
+            updated_at: iso(540),
+            internal_notes: '',
+            attachments: [],
+            comments: [],
+        },
+    ];
     const apiKeyScopes = [
         'devices:read', 'devices:write', 'positions:read', 'commands:send',
         'reports:read', 'routes:read', 'routes:write', 'billing:read',
@@ -456,6 +563,65 @@
         return String(options.method || 'GET').toUpperCase();
     }
 
+    function bodyOf(options = {}) {
+        const raw = options.body;
+        if (!raw) return {};
+        if (raw instanceof FormData) {
+            const data = {};
+            raw.forEach((value, key) => {
+                if (key === 'attachments') {
+                    if (!Array.isArray(data.attachments)) data.attachments = [];
+                    data.attachments.push(value);
+                    return;
+                }
+                data[key] = value;
+            });
+            return data;
+        }
+        if (typeof raw === 'string') {
+            try { return JSON.parse(raw || '{}'); } catch { return {}; }
+        }
+        return raw;
+    }
+
+    function runtimeLogPayload(limit = 1000) {
+        const records = runtimeLogs.slice(-limit);
+        const counts = records.reduce((acc, row) => {
+            const level = row.level || 'info';
+            acc.total += 1;
+            acc[level] = (acc[level] || 0) + 1;
+            return acc;
+        }, { total: 0, debug: 0, info: 0, warning: 0, error: 0, critical: 0 });
+        return { records, counts };
+    }
+
+    function demoAttachment(file, ticketId) {
+        const name = file?.name || 'demo-attachment.txt';
+        const size = Number(file?.size || 2048);
+        return {
+            name,
+            size,
+            url: `/uploads/tickets/demo-${ticketId}/${encodeURIComponent(name)}`,
+        };
+    }
+
+    function ticketUserName(userId) {
+        return users.find(u => Number(u.id) === Number(userId))?.username || null;
+    }
+
+    function normalizeTicket(ticket) {
+        return {
+            ...ticket,
+            comments: (ticket.comments || []).map(comment => ({ ...comment })),
+            attachments: (ticket.attachments || []).map(file => ({ ...file })),
+        };
+    }
+
+    function touchTicket(ticket) {
+        ticket.updated_at = iso(0);
+        return ticket;
+    }
+
     function filteredDevices(input) {
         const ids = (queryOf(input).get('device_ids') || '').split(',').map(v => parseInt(v, 10)).filter(Boolean);
         return ids.length ? devices.filter(d => ids.includes(d.id)) : devices;
@@ -661,7 +827,7 @@
         const url = new URL(typeof input === 'string' ? input : input.url, location.href);
         const path = url.pathname;
         const method = methodOf(options);
-        const body = options.body ? JSON.parse(options.body || '{}') : {};
+        const body = bodyOf(options);
 
         if (path.endsWith('/api/login') && method === 'POST') {
             if ((body.username === 'demo' || body.username === 'demo@routario.local') && body.password === 'demo') {
@@ -681,6 +847,10 @@
         if (apiPath === '/users/1') return json(DEMO_USER);
         if (apiPath === '/users') return json(users);
         if (apiPath.match(/^\/users\/\d+$/)) return json(users.find(u => u.id === Number(apiPath.split('/').pop())) || DEMO_USER);
+        if (apiPath === '/runtime-logs') {
+            const limit = parseInt(url.searchParams.get('limit') || '1000', 10);
+            return json(runtimeLogPayload(limit));
+        }
         if (apiPath === '/devices' || apiPath === '/devices/all') return json(devices);
         if (apiPath.match(/^\/devices\/\d+$/)) {
             const id = Number(apiPath.split('/')[2]);
@@ -895,6 +1065,100 @@
             const id = Number(apiPath.split('/')[2]);
             apiKeys = apiKeys.map(key => key.id === id ? { ...key, is_active: false, revoked_at: iso(0) } : key);
             return json({ status: 'revoked' });
+        }
+        if (apiPath === '/tickets/assignees') return json(users.filter(u => u.is_admin || u.is_company_admin));
+        if (apiPath === '/tickets') {
+            if (method === 'POST') {
+                const ticket = {
+                    id: Date.now(),
+                    title: String(body.title || 'Demo ticket'),
+                    description: String(body.description || ''),
+                    status: 'open',
+                    priority: String(body.priority || 'normal'),
+                    category: String(body.category || 'other'),
+                    related_type: body.related_type || null,
+                    related_id: body.related_id ? Number(body.related_id) : null,
+                    company_id: 1,
+                    created_by: 1,
+                    creator_name: 'demo',
+                    assigned_to: null,
+                    assignee_name: null,
+                    created_at: iso(0),
+                    updated_at: iso(0),
+                    internal_notes: '',
+                    attachments: (body.attachments || []).map(file => demoAttachment(file, Date.now())),
+                    comments: [],
+                };
+                demoTickets.unshift(ticket);
+                runtimeLogs.push({ timestamp: iso(0), level: 'info', logger: 'routario.tickets', module: 'tickets', function: 'create_ticket', line: 426, message: `Support ticket #${ticket.id} created in demo`, exception: null });
+                return json(normalizeTicket(ticket), 201);
+            }
+            return json(demoTickets.map(normalizeTicket));
+        }
+        if (apiPath.match(/^\/tickets\/\d+\/attachments\/\d+$/) && method === 'DELETE') {
+            const [, , ticketId, , attachmentIndex] = apiPath.split('/');
+            const ticket = demoTickets.find(item => item.id === Number(ticketId));
+            if (!ticket) return json({ detail: 'Ticket not found' }, 404);
+            ticket.attachments.splice(Number(attachmentIndex), 1);
+            return json(normalizeTicket(touchTicket(ticket)));
+        }
+        if (apiPath.match(/^\/tickets\/\d+\/comments$/)) {
+            const ticketId = Number(apiPath.split('/')[2]);
+            const ticket = demoTickets.find(item => item.id === ticketId);
+            if (!ticket) return json({ detail: 'Ticket not found' }, 404);
+            if (method === 'POST') {
+                const comment = {
+                    id: Date.now(),
+                    ticket_id: ticket.id,
+                    author_id: 1,
+                    author_name: 'demo',
+                    body: String(body.body || ''),
+                    is_internal: body.is_internal === true || body.is_internal === 'true',
+                    created_at: iso(0),
+                    updated_at: iso(0),
+                    attachments: (body.attachments || []).map(file => demoAttachment(file, ticket.id)),
+                };
+                ticket.comments.push(comment);
+                return json(normalizeTicket(touchTicket(ticket)), 201);
+            }
+        }
+        if (apiPath.match(/^\/tickets\/\d+\/comments\/\d+\/attachments\/\d+$/) && method === 'DELETE') {
+            const parts = apiPath.split('/');
+            const ticket = demoTickets.find(item => item.id === Number(parts[2]));
+            const comment = ticket?.comments.find(item => item.id === Number(parts[4]));
+            if (!ticket || !comment) return json({ detail: 'Comment not found' }, 404);
+            comment.attachments.splice(Number(parts[6]), 1);
+            return json(normalizeTicket(touchTicket(ticket)));
+        }
+        if (apiPath.match(/^\/tickets\/\d+\/comments\/\d+$/)) {
+            const parts = apiPath.split('/');
+            const ticket = demoTickets.find(item => item.id === Number(parts[2]));
+            const comment = ticket?.comments.find(item => item.id === Number(parts[4]));
+            if (!ticket || !comment) return json({ detail: 'Comment not found' }, 404);
+            if (method === 'PATCH') {
+                if (body.body !== undefined) comment.body = String(body.body);
+                if (body.is_internal !== undefined) comment.is_internal = body.is_internal === true || body.is_internal === 'true';
+                if (Array.isArray(body.attachments)) comment.attachments.push(...body.attachments.map(file => demoAttachment(file, ticket.id)));
+                comment.updated_at = iso(0);
+                return json(normalizeTicket(touchTicket(ticket)));
+            }
+        }
+        if (apiPath.match(/^\/tickets\/\d+$/)) {
+            const id = Number(apiPath.split('/')[2]);
+            const ticket = demoTickets.find(item => item.id === id);
+            if (!ticket) return json({ detail: 'Ticket not found' }, 404);
+            if (method === 'PATCH') {
+                ['title', 'description', 'status', 'priority', 'category', 'internal_notes'].forEach(key => {
+                    if (body[key] !== undefined) ticket[key] = String(body[key]);
+                });
+                if (body.assigned_to !== undefined) {
+                    ticket.assigned_to = body.assigned_to ? Number(body.assigned_to) : null;
+                    ticket.assignee_name = ticket.assigned_to ? ticketUserName(ticket.assigned_to) : null;
+                }
+                if (Array.isArray(body.attachments)) ticket.attachments.push(...body.attachments.map(file => demoAttachment(file, ticket.id)));
+                return json(normalizeTicket(touchTicket(ticket)));
+            }
+            return json(normalizeTicket(ticket));
         }
         if (apiPath === '/currency/rates') {
             if (method === 'PUT') {

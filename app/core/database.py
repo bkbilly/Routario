@@ -293,6 +293,7 @@ class DatabaseService:
                 status VARCHAR(30) NOT NULL DEFAULT 'open',
                 related_type VARCHAR(50),
                 related_id INTEGER,
+                attachments JSON DEFAULT '[]',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 closed_at DATETIME
@@ -303,6 +304,7 @@ class DatabaseService:
                 author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
                 body TEXT NOT NULL,
                 is_internal BOOLEAN DEFAULT FALSE,
+                attachments JSON DEFAULT '[]',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )""",
             """CREATE TABLE IF NOT EXISTS planned_routes (
@@ -354,6 +356,8 @@ class DatabaseService:
             "ALTER TABLE route_stops ADD COLUMN stop_kind VARCHAR(30) DEFAULT 'stop'",
             "ALTER TABLE route_stops ADD COLUMN arrival_radius_m INTEGER DEFAULT 50",
             "ALTER TABLE route_stops ADD COLUMN dwell_seconds INTEGER DEFAULT 0",
+            "ALTER TABLE support_tickets ADD COLUMN attachments JSON DEFAULT '[]'",
+            "ALTER TABLE support_ticket_comments ADD COLUMN attachments JSON DEFAULT '[]'",
         ]
         if self._is_postgres:
             migrations.extend([
@@ -768,6 +772,16 @@ class DatabaseService:
         async with self.get_session() as session:
             result = await session.execute(
                 select(User).where(User.username == username)
+            )
+            return result.scalar_one_or_none()
+
+    async def get_user_by_email(self, email: str) -> Optional[User]:
+        identifier = (email or "").strip().lower()
+        if not identifier:
+            return None
+        async with self.get_session() as session:
+            result = await session.execute(
+                select(User).where(func.lower(User.email) == identifier)
             )
             return result.scalar_one_or_none()
 

@@ -74,7 +74,7 @@ Routario evaluates alert rules continuously as positions arrive. Supported alert
 - **Device assignment** — grant or revoke access to specific devices per user. Regular users only see their assigned devices.
 - **Per-user notification channels** — each user independently configures their alert delivery URLs (Telegram, email, Slack, webhooks, etc.).
 - **Unit system** — each user can independently choose metric (km, km/h, m) or imperial (mi, mph, ft) display units.
-- **Security settings** — passkey login, self-service MFA setup, permission-based API key management, scoped backup/restore, audit logs, and health visibility.
+- **Security settings** — SSO/OIDC login, passkey login, self-service MFA setup, permission-based API key management, scoped backup/restore, audit logs, runtime logs, and health visibility.
 
 ---
 
@@ -119,7 +119,7 @@ Generate reports across your fleet for any time window:
 - **Alerts** — alert history report with optional user filtering for admins.
 - **Billing** — draft billing usage, totals, and company billing details for a selected period.
 - **Audit** — super-admin report for administrative and security events.
-- **Scheduled reports** — run reports daily, weekly, or monthly and keep stored run history.
+- **Scheduled reports** — run reports daily, weekly, monthly, when a route completes, or when selected alert events happen, and keep stored run history.
 - **CSV export** — download data for each report type.
 - **Backend-defined reports** — report files define their own controls, columns, summaries, CSV output, and optional row actions.
 
@@ -171,6 +171,17 @@ Push-to-talk voice messaging for direct communication with drivers and team memb
 
 ---
 
+## Support Tickets
+
+Users can create support tickets from the management area when they need help with a vehicle, account, or workflow.
+
+- **Ticket creation** — create tickets with subject, description, priority, optional device context, and one or more file attachments.
+- **Comments** — add follow-up comments with additional attachments so screenshots, invoices, exports, or photos stay with the ticket.
+- **Admin workflow** — users with **Manage Tickets** can view company tickets, assign them, change status and priority, add internal notes, and close resolved requests.
+- **Scoped visibility** — regular users see their own tickets; company admins see tickets in their company; super admins can manage tickets across companies.
+
+---
+
 ## Logbook
 
 Per-vehicle records across three tabs:
@@ -216,7 +227,8 @@ Pull live positions from third-party GPS platforms without reconfiguring your de
 - **User impersonation** — admins can temporarily act as any user to diagnose access or configuration issues.
 - **Company management** — partition users and devices into isolated companies with their own admin accounts.
 - **Company branding** — optionally set a company app name, `/login/<slug>` URL, app icons, and notification badge.
-- **Passkeys, API keys, and MFA** — register passkeys, create scoped API keys, and manage authenticator-app MFA.
-- **Billing, audit, and health** — manage super-admin billing plans, review audit logs, and inspect readiness checks.
+- **SSO, passkeys, API keys, and MFA** — configure OIDC login, register passkeys, create scoped API keys, and manage authenticator-app MFA.
+- **Support tickets** — manage user tickets, assignments, priorities, comments, internal notes, and attachments.
+- **Billing, audit, runtime logs, and health** — manage super-admin billing plans, review audit logs, inspect live runtime logs, and check deployment readiness.
 
 [:octicons-arrow-right-24: Administration Guide](administration.md)
