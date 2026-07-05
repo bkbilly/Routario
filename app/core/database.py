@@ -196,14 +196,6 @@ class DatabaseService:
             "ALTER TABLE drivers ADD COLUMN assignment_grace_period INTEGER",
             "ALTER TABLE drivers ADD COLUMN assignment_clear VARCHAR(20)",
             "ALTER TABLE position_records ADD COLUMN driver_id INTEGER REFERENCES drivers(id) ON DELETE SET NULL",
-            "ALTER TABLE scheduled_reports ADD COLUMN user_timezone VARCHAR(50) DEFAULT 'UTC'",
-            "ALTER TABLE scheduled_reports ADD COLUMN options JSON DEFAULT '{}'",
-            "ALTER TABLE scheduled_reports ADD COLUMN notification_channels JSON DEFAULT '[]'",
-            "ALTER TABLE scheduled_reports ADD COLUMN attach_results BOOLEAN DEFAULT TRUE",
-            "ALTER TABLE scheduled_reports ADD COLUMN attach_documents BOOLEAN DEFAULT TRUE",
-            "ALTER TABLE scheduled_reports ADD COLUMN trigger_type VARCHAR(50) DEFAULT 'time'",
-            "ALTER TABLE scheduled_reports ADD COLUMN trigger_options JSON DEFAULT '{}'",
-            "ALTER TABLE scheduled_reports ADD COLUMN last_triggered_at DATETIME",
             """CREATE TABLE IF NOT EXISTS voice_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 sender_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -289,6 +281,30 @@ class DatabaseService:
                 source VARCHAR(80) NOT NULL DEFAULT 'manual',
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )""",
+            """CREATE TABLE IF NOT EXISTS support_tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
+                created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                title VARCHAR(200) NOT NULL,
+                description TEXT NOT NULL,
+                category VARCHAR(50) NOT NULL DEFAULT 'other',
+                priority VARCHAR(20) NOT NULL DEFAULT 'normal',
+                status VARCHAR(30) NOT NULL DEFAULT 'open',
+                related_type VARCHAR(50),
+                related_id INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                closed_at DATETIME
+            )""",
+            """CREATE TABLE IF NOT EXISTS support_ticket_comments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket_id INTEGER NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+                author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                body TEXT NOT NULL,
+                is_internal BOOLEAN DEFAULT FALSE,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )""",
             """CREATE TABLE IF NOT EXISTS planned_routes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
@@ -340,6 +356,16 @@ class DatabaseService:
             "ALTER TABLE route_stops ADD COLUMN dwell_seconds INTEGER DEFAULT 0",
         ]
         if self._is_postgres:
+            migrations.extend([
+                "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS user_timezone VARCHAR(50) DEFAULT 'UTC'",
+                "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS options JSON DEFAULT '{}'",
+                "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS notification_channels JSON DEFAULT '[]'",
+                "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS attach_results BOOLEAN DEFAULT TRUE",
+                "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS attach_documents BOOLEAN DEFAULT TRUE",
+                "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS trigger_type VARCHAR(50) DEFAULT 'time'",
+                "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS trigger_options JSON DEFAULT '{}'",
+                "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS last_triggered_at TIMESTAMP",
+            ])
             migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP")
             migrations.append("ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)")
             migrations.append("ALTER TABLE alert_history ALTER COLUMN device_id DROP NOT NULL")
@@ -352,6 +378,16 @@ class DatabaseService:
                 END
             """)
         else:
+            migrations.extend([
+                "ALTER TABLE scheduled_reports ADD COLUMN user_timezone VARCHAR(50) DEFAULT 'UTC'",
+                "ALTER TABLE scheduled_reports ADD COLUMN options JSON DEFAULT '{}'",
+                "ALTER TABLE scheduled_reports ADD COLUMN notification_channels JSON DEFAULT '[]'",
+                "ALTER TABLE scheduled_reports ADD COLUMN attach_results BOOLEAN DEFAULT TRUE",
+                "ALTER TABLE scheduled_reports ADD COLUMN attach_documents BOOLEAN DEFAULT TRUE",
+                "ALTER TABLE scheduled_reports ADD COLUMN trigger_type VARCHAR(50) DEFAULT 'time'",
+                "ALTER TABLE scheduled_reports ADD COLUMN trigger_options JSON DEFAULT '{}'",
+                "ALTER TABLE scheduled_reports ADD COLUMN last_triggered_at DATETIME",
+            ])
             migrations.append("ALTER TABLE users ADD COLUMN last_activity DATETIME")
 
         for stmt in migrations:

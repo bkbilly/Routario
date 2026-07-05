@@ -198,6 +198,49 @@
             min-width: 0;
             overflow-wrap: anywhere;
         }
+        .ticket-switch {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.55rem;
+            color: var(--text-secondary);
+            font-size: 0.86rem;
+            cursor: pointer;
+            user-select: none;
+        }
+        .ticket-switch input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .ticket-switch-track {
+            width: 42px;
+            height: 24px;
+            border-radius: 999px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            position: relative;
+            transition: background var(--transition-fast), border-color var(--transition-fast);
+            flex: 0 0 auto;
+        }
+        .ticket-switch-track::after {
+            content: "";
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: transform var(--transition-fast), background var(--transition-fast);
+        }
+        .ticket-switch input:checked + .ticket-switch-track {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: rgba(59, 130, 246, 0.45);
+        }
+        .ticket-switch input:checked + .ticket-switch-track::after {
+            transform: translateX(18px);
+            background: var(--accent-primary);
+        }
         @media (max-width: 768px) {
             .audit-table th,
             .audit-table td,
@@ -591,7 +634,6 @@
         </div>
     </div>
 
-    <!-- ── USERS SECTION ──────────────────────────────────────────── -->
     <!-- ── CLIPS SECTION ───────────────────────────────────────────── -->
     <div id="section-clips" style="display:none;">
         <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;flex-wrap:wrap;">

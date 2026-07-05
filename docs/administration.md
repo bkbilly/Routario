@@ -114,7 +114,7 @@ On top of the three-tier role hierarchy, users can be granted fine-grained permi
 |---|---|
 | **Devices & Integrations** | View Devices, Edit Devices, Send Commands, Manage Integrations |
 | **Monitoring & Reports** | Manage Alerts, Manage Geofences, View History, View Reports |
-| **Fleet Operations** | Manage Drivers, Manage Fuel, Manage Maintenance, Manage Logbook, Manage Routes |
+| **Fleet Operations** | Manage Drivers, Manage Fuel, Manage Maintenance, Manage Logbook, Manage Routes, Manage Tickets |
 | **Communication & Sharing** | Voice PTT, Live Share |
 | **Administration** | View Management, Manage Users, View Audit Log, View Health Checks |
 | **Account Tools** | Manage API Keys, Manage Users' MFA, Backup & Restore |
