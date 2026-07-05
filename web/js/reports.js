@@ -19,6 +19,11 @@ let _reportDefMap        = {};
 let _reportRenderToken   = 0;
 let _healthRows          = [];
 let _healthSort          = { col: 'name', dir: 'asc' };
+let _runtimeLogRows      = [];
+let _runtimeLogCounts    = {};
+let _runtimeLogLevelFilter = '';
+let _runtimeLogWs        = null;
+let _runtimeLogReconnect = null;
 let _billingDetail       = null;
 let _billingDetailPdfUrl = null;
 let _selectedBillingKey  = null;
@@ -34,16 +39,18 @@ const _REPORT_TABS = [
     { name: 'reports', panelId: 'panelReports', tabId: 'tabReports' },
     { name: 'schedules', panelId: 'panelSchedules', tabId: 'tabSchedules' },
     { name: 'health', panelId: 'panelHealth', tabId: 'tabHealth' },
+    { name: 'logs', panelId: 'panelLogs', tabId: 'tabLogs' },
 ];
 
 const _IS_ADMIN         = localStorage.getItem('is_admin') === 'true';
 const _IS_COMPANY_ADMIN = localStorage.getItem('is_company_admin') === 'true';
 const _CAN_SEE_USERS    = _IS_ADMIN || _IS_COMPANY_ADMIN;
+const _CAN_SEE_LOGS     = _IS_ADMIN;
 
 document.addEventListener('DOMContentLoaded', async () => {
     checkLogin();
     await permissionsReady;
-    if (!hasPermission('view_reports') && !hasPermission('view_health')) {
+    if (!hasPermission('view_reports') && !hasPermission('view_health') && !_CAN_SEE_LOGS) {
         window.location.href = 'gps-dashboard.html';
         return;
     }
@@ -51,6 +58,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('tabReports').style.display = hasPermission('view_reports') ? '' : 'none';
     document.getElementById('tabSchedules').style.display = hasPermission('view_reports') ? '' : 'none';
     document.getElementById('tabHealth').style.display = hasPermission('view_health') ? '' : 'none';
+    document.getElementById('tabLogs').style.display = _CAN_SEE_LOGS ? '' : 'none';
 
     const now   = new Date();
     const start = new Date(now);
@@ -69,7 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     _injectNavScheduleAction();
     const hash = RoutarioTabs.hashValue();
-    switchTab(_validReportTab(hash) ? hash : hasPermission('view_reports') ? 'reports' : 'health', false);
+    switchTab(_validReportTab(hash) ? hash : hasPermission('view_reports') ? 'reports' : hasPermission('view_health') ? 'health' : 'logs', false);
 
     window.addEventListener('hashchange', () => {
         const next = RoutarioTabs.hashValue();
@@ -1122,19 +1130,21 @@ function _esc(s) {
 let _activeTab = 'reports';
 
 function _validReportTab(tab) {
-    return ['reports', 'schedules', 'health'].includes(tab);
+    return ['reports', 'schedules', 'health', 'logs'].includes(tab);
 }
 
 function switchTab(tab, pushState = true) {
     if (tab === 'reports' && !hasPermission('view_reports')) tab = 'health';
     if (tab === 'schedules' && !hasPermission('view_reports')) tab = 'health';
     if (tab === 'health' && !hasPermission('view_health')) tab = 'reports';
+    if (tab === 'logs' && !_CAN_SEE_LOGS) tab = hasPermission('view_reports') ? 'reports' : 'health';
     _activeTab = tab;
     RoutarioTabs.activate(_REPORT_TABS, tab);
     _injectNavScheduleAction();
     if (pushState !== false) RoutarioTabs.replaceHash(tab);
     if (tab === 'schedules') _loadSchedules();
     if (tab === 'health') loadHealth();
+    if (tab === 'logs') initRuntimeLogs();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1426,10 +1436,157 @@ function _injectNavScheduleAction() {
         </button>`;
         return;
     }
+    if (_activeTab === 'logs') {
+        el.innerHTML = `<button class="header-menu-item" onclick="refreshRuntimeLogs();${closeMenu}">
+            <span class="header-menu-item-icon"><i class="mdi mdi-refresh" style="font-size:15px;"></i></span>
+            <span>Refresh</span>
+        </button>`;
+        return;
+    }
     el.innerHTML = hasPermission('view_reports') ? `<button class="header-menu-item" onclick="openScheduleModal(null);${closeMenu}">
         <span class="header-menu-item-icon"><i class="mdi mdi-calendar-plus" style="font-size:15px;"></i></span>
         <span>New Schedule</span>
     </button>` : '';
+}
+
+async function initRuntimeLogs() {
+    if (!_CAN_SEE_LOGS) return;
+    await refreshRuntimeLogs();
+    connectRuntimeLogWebSocket();
+}
+
+async function refreshRuntimeLogs() {
+    const body = document.getElementById('runtimeLogTableBody');
+    if (body) body.innerHTML = RoutarioTables.stateRow('Loading runtime logs...', 4);
+    try {
+        const res = await apiFetch(`${API_BASE}/runtime-logs?limit=1000`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        _runtimeLogRows = data.records || [];
+        _runtimeLogCounts = data.counts || {};
+        renderRuntimeLogs();
+    } catch (e) {
+        if (body) body.innerHTML = RoutarioTables.stateRow(_esc(e.message), 4);
+    }
+}
+
+function connectRuntimeLogWebSocket() {
+    if (!_CAN_SEE_LOGS) return;
+    if (_runtimeLogWs && (_runtimeLogWs.readyState === WebSocket.OPEN || _runtimeLogWs.readyState === WebSocket.CONNECTING)) return;
+    if (_runtimeLogReconnect) {
+        clearTimeout(_runtimeLogReconnect);
+        _runtimeLogReconnect = null;
+    }
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    _runtimeLogWs = new WebSocket(`${proto}://${location.host}/api/runtime-logs/ws?token=${encodeURIComponent(token)}&limit=1000`);
+    _runtimeLogWs.onmessage = event => {
+        try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'runtime_log_snapshot') {
+                _runtimeLogRows = data.records || [];
+                _runtimeLogCounts = data.counts || {};
+            } else if (data.type === 'runtime_log' && data.record) {
+                _runtimeLogRows.push(data.record);
+                if (_runtimeLogRows.length > 1000) _runtimeLogRows = _runtimeLogRows.slice(-1000);
+                _runtimeLogCounts = data.counts || _runtimeLogCounts;
+            }
+            renderRuntimeLogs();
+        } catch (e) {
+            console.warn('Runtime log WS parse failed', e);
+        }
+    };
+    _runtimeLogWs.onclose = () => {
+        if (_activeTab !== 'logs') return;
+        _runtimeLogReconnect = setTimeout(connectRuntimeLogWebSocket, 3000);
+    };
+}
+
+function renderRuntimeLogs() {
+    renderRuntimeLogSummary();
+    const body = document.getElementById('runtimeLogTableBody');
+    if (!body) return;
+    const q = (document.getElementById('runtimeLogSearch')?.value || '').toLowerCase().trim();
+    const level = _runtimeLogLevelFilter;
+    const rows = _runtimeLogRows
+        .filter(row => !level || row.level === level)
+        .filter(row => {
+            if (!q) return true;
+            return [row.timestamp, row.level, row.logger, row.module, row.function, row.message, row.exception]
+                .some(value => String(value || '').toLowerCase().includes(q));
+        })
+        .slice()
+        .reverse();
+    const count = document.getElementById('runtimeLogCount');
+    if (count) {
+        const levelLabel = _runtimeLogLevelLabel(level);
+        count.textContent = `${rows.length} ${levelLabel ? `${levelLabel} ` : ''}log${rows.length === 1 ? '' : 's'}`;
+    }
+    body.innerHTML = rows.length ? rows.map(row => `
+        <tr>
+            <td style="white-space:nowrap;font-family:var(--font-mono);font-size:0.78rem;">${_esc(_logTime(row.timestamp))}</td>
+            <td><span class="proto-badge health-status ${_logLevelClass(row.level)}">${_esc(row.level || '-')}</span></td>
+            <td>
+                <div style="font-weight:700;color:var(--text-primary);">${_esc(row.logger || '-')}</div>
+                <div style="color:var(--text-muted);font-size:0.75rem;">${_esc([row.module, row.function, row.line].filter(Boolean).join(':'))}</div>
+            </td>
+            <td>
+                <div class="runtime-log-message">${_esc(row.message || '')}</div>
+                ${row.exception ? `<div class="runtime-log-exception">${_esc(row.exception)}</div>` : ''}
+            </td>
+        </tr>
+    `).join('') : RoutarioTables.stateRow('No runtime logs match.', 4);
+}
+
+function setRuntimeLogLevelFilter(level) {
+    _runtimeLogLevelFilter = level || '';
+    renderRuntimeLogs();
+}
+
+function renderRuntimeLogSummary() {
+    const el = document.getElementById('runtimeLogSummary');
+    if (!el) return;
+    const items = [
+        ['total', 'Total'],
+        ['debug', 'Debug'],
+        ['info', 'Info'],
+        ['warning', 'Warnings'],
+        ['error', 'Errors'],
+        ['critical', 'Critical'],
+    ];
+    el.innerHTML = items.map(([key, label]) => `
+        <button type="button"
+                class="log-summary-card log-tone-${_esc(key)} ${Number(_runtimeLogCounts[key] || 0) > 0 ? 'has-logs' : ''} ${(_runtimeLogLevelFilter || 'total') === key ? 'active' : ''}"
+                onclick="setRuntimeLogLevelFilter('${key === 'total' ? '' : _esc(key)}')">
+            <div class="val">${Number(_runtimeLogCounts[key] || 0)}</div>
+            <div class="lbl">${_esc(label)}</div>
+        </button>
+    `).join('');
+}
+
+function _logTime(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
+}
+
+function _logLevelClass(level) {
+    if (level === 'critical' || level === 'error') return 'health-status-fail';
+    if (level === 'warning') return 'health-status-degraded';
+    if (level === 'info') return 'health-status-ok';
+    return 'health-status-optional';
+}
+
+function _runtimeLogLevelLabel(level) {
+    const labels = {
+        debug: 'debug',
+        info: 'info',
+        warning: 'warning',
+        error: 'error',
+        critical: 'critical',
+    };
+    return labels[level] || '';
 }
 
 async function loadHealth() {
