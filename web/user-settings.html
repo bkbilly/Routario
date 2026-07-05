@@ -20,12 +20,117 @@
     <link rel="stylesheet" href="css/user-settings.css">
     <script src="js/settings-nav.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <style>
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.8rem;
+            margin-bottom: 0.9rem;
+        }
+        .form-grid label span {
+            display: block;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            margin-bottom: 0.3rem;
+            font-weight: 600;
+        }
+        .stack-item {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.85rem;
+        }
+        .stack-item-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.35rem;
+        }
+        .health-status {
+            border: 1px solid transparent;
+            font-weight: 700;
+        }
+        .health-status-ok {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: rgba(16, 185, 129, 0.28);
+            color: var(--accent-success, #10b981);
+        }
+        .health-status-degraded {
+            background: rgba(245, 158, 11, 0.15);
+            border-color: rgba(245, 158, 11, 0.3);
+            color: var(--accent-warning, #f59e0b);
+        }
+        .health-status-optional {
+            background: rgba(59, 130, 246, 0.14);
+            border-color: rgba(59, 130, 246, 0.28);
+            color: var(--accent-primary, #3b82f6);
+        }
+        .health-status-fail {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: var(--accent-danger, #ef4444);
+        }
+        .route-status-default {
+            background: rgba(148, 163, 184, 0.14);
+            border-color: rgba(148, 163, 184, 0.25);
+            color: var(--text-secondary, #94a3b8);
+        }
+        .ticket-switch {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.55rem;
+            color: var(--text-secondary);
+            font-size: 0.86rem;
+            cursor: pointer;
+            user-select: none;
+        }
+        .ticket-switch input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .ticket-switch-track {
+            width: 42px;
+            height: 24px;
+            border-radius: 999px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            position: relative;
+            transition: background var(--transition-fast), border-color var(--transition-fast);
+            flex: 0 0 auto;
+        }
+        .ticket-switch-track::after {
+            content: "";
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: transform var(--transition-fast), background var(--transition-fast);
+        }
+        .ticket-switch input:checked + .ticket-switch-track {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: rgba(59, 130, 246, 0.45);
+        }
+        .ticket-switch input:checked + .ticket-switch-track::after {
+            transform: translateX(18px);
+            background: var(--accent-primary);
+        }
+        @media (max-width: 640px) {
+            .form-grid { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <div class="mgmt-tabs settings-tabs" id="settingsTabs">
             <button class="mgmt-tab settings-tab active" onclick="switchSettingsTab('profile')" id="settingsTabProfile"><i class="mdi mdi-account-circle"></i> Profile</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('users')" id="settingsTabUsers" style="display:none;"><i class="mdi mdi-account-group"></i> Users</button>
+            <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('tickets')" id="settingsTabTickets"><i class="mdi mdi-ticket-confirmation-outline"></i> Tickets</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('webhooks')" id="settingsTabWebhooks"><i class="mdi mdi-link-variant"></i> Webhooks</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('apiKeys')" id="settingsTabApiKeys" style="display:none;"><i class="mdi mdi-key-variant"></i> API Keys</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('backups')" id="settingsTabBackups" style="display:none;"><i class="mdi mdi-database-arrow-down"></i> Backups</button>
@@ -125,6 +230,39 @@
                                     Loading users&#8230;
                                 </td>
                             </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tickets -->
+            <div class="settings-section" id="settings-section-tickets" style="display:none;">
+                <p class="settings-section-description">
+                    Create tickets and track issue status, assignments, and comments.
+                </p>
+                <div class="devices-search-bar">
+                    <div class="search-input-wrap">
+                        <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                        <input type="text" id="ticketSearch" class="search-input" placeholder="Search tickets..." oninput="rtpRenderTicketsTable()">
+                    </div>
+                    <span class="devices-count" id="ticketsCount"></span>
+                </div>
+                <div class="table-wrapper">
+                    <table class="devices-table settings-table tickets-table">
+                        <thead>
+                            <tr>
+                                <th data-sort="updated" data-sort-dir="desc" onclick="rtpSortTickets('updated')">Updated</th>
+                                <th data-sort="title" onclick="rtpSortTickets('title')">Ticket</th>
+                                <th data-sort="status" onclick="rtpSortTickets('status')">Status</th>
+                                <th data-sort="priority" onclick="rtpSortTickets('priority')">Priority</th>
+                                <th data-sort="comments" onclick="rtpSortTickets('comments')">Comments</th>
+                                <th data-sort="creator" onclick="rtpSortTickets('creator')">Created By</th>
+                                <th data-sort="assignee" onclick="rtpSortTickets('assignee')">Assigned To</th>
+                                <th style="width:130px;text-align:center;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ticketsTableBody">
+                            <tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading tickets...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -265,6 +403,75 @@
     </div>
 
     <div class="toast-container" id="toastContainer"></div>
+
+    <div class="modal" id="ticketModal">
+        <div class="modal-content wide" style="max-width:920px;height:auto;max-height:90vh;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="ticketModalTitle">Ticket</h2>
+                <button type="button" class="modal-close" onclick="rtpCloseTicketModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
+                <div class="form-grid">
+                    <label><span>Status</span><select id="ticketStatus" class="form-input"></select></label>
+                    <label><span>Priority</span><select id="ticketPriority" class="form-input"></select></label>
+                    <label><span>Category</span><select id="ticketCategory" class="form-input"></select></label>
+                    <label><span>Assigned To</span><select id="ticketAssignee" class="form-input"></select></label>
+                </div>
+                <div id="ticketDetailBody" style="margin-top:1rem;"></div>
+                <div style="margin-top:1rem;">
+                    <label class="form-label">Reply</label>
+                    <textarea id="ticketCommentBody" class="form-input" rows="4" placeholder="Write a reply or internal note..."></textarea>
+                    <label class="ticket-switch" style="margin-top:0.65rem;">
+                        <input type="checkbox" id="ticketCommentInternal">
+                        <span class="ticket-switch-track"></span>
+                        <span>Internal note</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="rtpAddTicketComment()"><i class="mdi mdi-comment-plus-outline"></i> Add Comment</button>
+                <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                    <button type="button" class="btn btn-secondary" onclick="rtpCloseTicketModal()">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="rtpSaveTicket()"><i class="mdi mdi-content-save"></i> Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="ticketCreateModal">
+        <div class="modal-content" style="max-width:720px;height:auto;max-height:90vh;">
+            <div class="modal-header">
+                <h2 class="modal-title">New Ticket</h2>
+                <button type="button" class="modal-close" onclick="rtpCloseCreateTicketModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
+                <div class="form-grid">
+                    <label><span>Title <b style="color:var(--accent-danger);font-weight:600;">*</b></span><input id="ticketCreateTitle" class="form-input" placeholder="Short issue summary"></label>
+                    <label><span>Category</span><select id="ticketCreateCategory" class="form-input">
+                        <option value="device">Device</option>
+                        <option value="route">Route</option>
+                        <option value="driver">Driver</option>
+                        <option value="billing">Billing</option>
+                        <option value="alert">Alert</option>
+                        <option value="maintenance">Maintenance</option>
+                        <option value="access">Access</option>
+                        <option value="other" selected>Other</option>
+                    </select></label>
+                    <label><span>Priority</span><select id="ticketCreatePriority" class="form-input">
+                        <option value="low">Low</option>
+                        <option value="normal" selected>Normal</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                    </select></label>
+                    <label style="grid-column:1 / -1;"><span>Description <b style="color:var(--accent-danger);font-weight:600;">*</b></span><textarea id="ticketCreateDescription" class="form-input" rows="6" placeholder="Describe what happened and what you expected."></textarea></label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="rtpCloseCreateTicketModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="ticketCreateBtn" onclick="rtpCreateTicket()"><i class="mdi mdi-ticket-confirmation-outline"></i> Create Ticket</button>
+            </div>
+        </div>
+    </div>
 
     <div class="modal" id="userModal">
         <div class="modal-content" style="max-width:860px;height:auto;max-height:90vh;">
@@ -486,6 +693,7 @@
     <script src="js/impersonation.js"></script>
     <script src="js/ui-utils.js"></script>
     <script src="js/users-management.js"></script>
+    <script src="js/management-advanced.js"></script>
     <script src="js/user-settings.js"></script>
     <script src="js/pwa.js"></script>
     <script>

@@ -45,7 +45,7 @@
         permissions: [
             'view_management', 'view_devices', 'edit_devices', 'manage_alerts',
             'manage_geofences', 'view_history', 'view_reports', 'manage_routes',
-            'manage_users', 'manage_integrations', 'send_commands', 'view_audit',
+            'manage_tickets', 'manage_users', 'manage_integrations', 'send_commands', 'view_audit',
             'view_health', 'manage_backups', 'manage_logbook', 'manage_fuel',
             'manage_maintenance',
         ],
@@ -129,7 +129,7 @@
             permissions: [
                 'view_management', 'view_devices', 'edit_devices', 'manage_alerts',
                 'manage_geofences', 'view_history', 'view_reports', 'manage_routes',
-                'manage_users', 'send_commands', 'manage_drivers', 'manage_fuel',
+                'manage_tickets', 'manage_users', 'send_commands', 'manage_drivers', 'manage_fuel',
                 'manage_maintenance', 'manage_logbook', 'live_share',
             ],
             units: 'metric',

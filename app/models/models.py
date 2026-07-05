@@ -525,6 +525,44 @@ class CurrencyRate(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class SupportTicket(Base):
+    __tablename__ = 'support_tickets'
+
+    id:          Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_id:  Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), nullable=True, index=True)
+    created_by:  Mapped[int]           = mapped_column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    assigned_to: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    title:       Mapped[str]           = mapped_column(String(200), nullable=False)
+    description: Mapped[str]           = mapped_column(Text, nullable=False)
+    category:    Mapped[str]           = mapped_column(String(50), default='other', nullable=False)
+    priority:    Mapped[str]           = mapped_column(String(20), default='normal', nullable=False)
+    status:      Mapped[str]           = mapped_column(String(30), default='open', nullable=False, index=True)
+    related_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    related_id:   Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at:  Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at:  Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
+    closed_at:   Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    company:  Mapped[Optional["Company"]] = relationship("Company")
+    creator:  Mapped["User"]              = relationship("User", foreign_keys=[created_by])
+    assignee: Mapped[Optional["User"]]     = relationship("User", foreign_keys=[assigned_to])
+    comments: Mapped[List["SupportTicketComment"]] = relationship(back_populates="ticket", cascade="all, delete-orphan")
+
+
+class SupportTicketComment(Base):
+    __tablename__ = 'support_ticket_comments'
+
+    id:         Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ticket_id:  Mapped[int]      = mapped_column(Integer, ForeignKey('support_tickets.id', ondelete='CASCADE'), nullable=False, index=True)
+    author_id:  Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    body:       Mapped[str]      = mapped_column(Text, nullable=False)
+    is_internal: Mapped[bool]    = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    ticket: Mapped["SupportTicket"] = relationship(back_populates="comments")
+    author: Mapped[Optional["User"]] = relationship("User")
+
+
 class PlannedRoute(Base):
     __tablename__ = 'planned_routes'
 

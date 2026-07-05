@@ -17,6 +17,7 @@ ALL_PERMISSIONS: List[str] = [
     "manage_maintenance",
     "manage_logbook",
     "manage_routes",
+    "manage_tickets",
     "voice_ptt",
     "live_share",
     "view_management",
@@ -55,6 +56,7 @@ PERMISSION_GROUPS = [
             ("manage_maintenance", "Manage Maintenance"),
             ("manage_logbook",     "Manage Logbook"),
             ("manage_routes",      "Manage Routes"),
+            ("manage_tickets",     "Manage Tickets"),
         ],
     },
     {

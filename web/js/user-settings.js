@@ -14,7 +14,7 @@ let notificationSort = { col: 'name', dir: 1 };
 let webhookSort = { col: 'url', dir: 1 };
 let settingsApiKeySort = { col: 'name', dir: 1 };
 let currentSettingsTab = 'profile';
-const SETTINGS_TABS = ['profile', 'users', 'webhooks', 'apiKeys', 'backups'].map(name => ({
+const SETTINGS_TABS = ['profile', 'users', 'tickets', 'webhooks', 'apiKeys', 'backups'].map(name => ({
     name,
     panelId: `settings-section-${name}`,
     tabId: 'settingsTab' + name.charAt(0).toUpperCase() + name.slice(1),
@@ -80,13 +80,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (ch) ch.style.display = '';
     }
     const hash = normalizeSettingsTab(RoutarioTabs.hashValue());
-    switchSettingsTab(['profile', 'users', 'webhooks', 'apiKeys', 'backups'].includes(hash) ? hash : currentSettingsTab, false);
+    switchSettingsTab(['profile', 'users', 'tickets', 'webhooks', 'apiKeys', 'backups'].includes(hash) ? hash : currentSettingsTab, false);
 });
 
 document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
     closeChannelModal();
     closeWebhookModal();
+    if (typeof rtpCloseCreateTicketModal === 'function') rtpCloseCreateTicketModal();
+    if (typeof rtpCloseTicketModal === 'function') rtpCloseTicketModal();
     closeApiKeyModal();
     closeUserModal();
     usrCloseAssignModal();
@@ -96,9 +98,10 @@ document.addEventListener('keydown', e => {
 function switchSettingsTab(name, pushState = true) {
     name = normalizeSettingsTab(name);
     const fallback = 'profile';
-    const sections = ['profile', 'users', 'webhooks', 'apiKeys', 'backups'];
+    const sections = ['profile', 'users', 'tickets', 'webhooks', 'apiKeys', 'backups'];
     if (!sections.includes(name)) name = fallback;
     if (name === 'users' && !hasPermission('manage_users')) name = fallback;
+    if (name === 'tickets' && !hasPermission('manage_tickets')) name = fallback;
     if (name === 'backups' && !((IS_ADMIN || IS_COMPANY_ADMIN) && hasPermission('manage_backups'))) name = fallback;
     if (name === 'apiKeys' && !hasPermission('manage_api_keys')) name = fallback;
     currentSettingsTab = name;
@@ -106,6 +109,7 @@ function switchSettingsTab(name, pushState = true) {
     if (pushState) RoutarioTabs.replaceHash(name);
     if (name === 'profile') initProfileSection();
     if (name === 'users') initUsersSection();
+    if (name === 'tickets') rtpInitTickets();
     if (name === 'apiKeys') initSettingsApiKeys();
     updateSettingsGearAction(name);
 }
@@ -117,6 +121,8 @@ function normalizeSettingsTab(name) {
 function applySettingsPermissions() {
     const usersTab = document.getElementById('settingsTabUsers');
     if (usersTab) usersTab.style.display = hasPermission('manage_users') ? '' : 'none';
+    const ticketsTab = document.getElementById('settingsTabTickets');
+    if (ticketsTab) ticketsTab.style.display = hasPermission('manage_tickets') ? '' : 'none';
     const apiTab = document.getElementById('settingsTabApiKeys');
     if (apiTab) apiTab.style.display = hasPermission('manage_api_keys') ? '' : 'none';
     const backupTab = document.getElementById('settingsTabBackups');
@@ -141,6 +147,11 @@ function updateSettingsGearAction(name = currentSettingsTab) {
             label: 'Add Webhook',
             icon: 'mdi-link-plus',
             fn: 'openWebhookModal()',
+        },
+        tickets: {
+            label: 'New Ticket',
+            icon: 'mdi-ticket-confirmation-outline',
+            fn: 'rtpOpenCreateTicketModal()',
         },
         apiKeys: hasPermission('manage_api_keys') ? {
             label: 'Create API Key',

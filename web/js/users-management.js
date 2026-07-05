@@ -21,7 +21,7 @@ let _usrAssignedDevices = new Set();
 const PERMISSION_GROUPS = [
     { label: 'Devices & Integrations', perms: [['view_devices','View Devices'],['edit_devices','Edit Devices'],['send_commands','Send Commands'],['manage_integrations','Manage Integrations']] },
     { label: 'Monitoring & Reports', perms: [['manage_alerts','Manage Alerts'],['manage_geofences','Manage Geofences'],['view_history','View History'],['view_reports','View Reports']] },
-    { label: 'Fleet Operations', perms: [['manage_drivers','Manage Drivers'],['manage_fuel','Manage Fuel'],['manage_maintenance','Manage Maintenance'],['manage_logbook','Manage Logbook'],['manage_routes','Manage Routes']] },
+    { label: 'Fleet Operations', perms: [['manage_drivers','Manage Drivers'],['manage_fuel','Manage Fuel'],['manage_maintenance','Manage Maintenance'],['manage_logbook','Manage Logbook'],['manage_routes','Manage Routes'],['manage_tickets','Manage Tickets']] },
     { label: 'Communication & Sharing', perms: [['voice_ptt','Voice PTT'],['live_share','Live Share']] },
     { label: 'Administration', perms: [['view_management','View Management'],['manage_users','Manage Users'],['view_audit','View Audit Log'],['view_health','View Health Checks']] },
     { label: 'Account Tools', perms: [['manage_api_keys','Manage API Keys'],['manage_mfa',"Manage Users' MFA"],['manage_backups','Backup & Restore']] },
@@ -241,7 +241,7 @@ function _usrRenderPermissions() {
     }
 
     // Permissions that don't apply to regular users
-    const adminOnlyPerms = new Set(['manage_users', 'edit_devices', 'manage_integrations', 'view_management', 'manage_routes', 'view_audit', 'view_health', 'manage_mfa', 'manage_backups']);
+    const adminOnlyPerms = new Set(['manage_users', 'edit_devices', 'manage_integrations', 'view_management', 'manage_routes', 'manage_tickets', 'view_audit', 'view_health', 'manage_mfa', 'manage_backups']);
     const isUserRole = role === 'user';
 
     container.innerHTML = PERMISSION_GROUPS.map(group => {

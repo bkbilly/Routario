@@ -20,11 +20,19 @@ let _rtpRouteReadonly = false;
 let _rtpAuditRows = [];
 let _rtpHealthRows = [];
 let _rtpRouteRows = [];
+let _rtpTicketRows = [];
+let _rtpTicketAssignees = [];
+let _rtpTicketsLoaded = false;
+let _rtpEditingTicketId = null;
+let _rtpCurrentTicket = null;
+let _rtpEditingCommentId = null;
+let _rtpEditingTicketField = null;
 let _rtpCurrencyRates = [];
 let _rtpRouteSort = { col: 'name', dir: 'asc' };
 let _rtpBillingSort = { col: 'name', dir: 'asc' };
 let _rtpAuditSort = { col: 'time', dir: 'desc' };
 let _rtpHealthSort = { col: 'name', dir: 'asc' };
+let _rtpTicketSort = { col: 'updated', dir: 'desc' };
 let _rtpPlanCompanySelection = new Set();
 
 function rtpEsc(value) {
@@ -128,6 +136,399 @@ function rtpUpdateSortHeaders(sectionId, sortState) {
 
 function rtpCurrentCompanyId() {
     return parseInt(localStorage.getItem('company_id') || '0', 10) || null;
+}
+
+// ── Tickets ──────────────────────────────────────────────────────
+
+const RTP_TICKET_STATUSES = [
+    ['open', 'Open'],
+    ['in_progress', 'In Progress'],
+    ['waiting_on_user', 'Waiting on User'],
+    ['resolved', 'Resolved'],
+    ['closed', 'Closed'],
+];
+const RTP_TICKET_PRIORITIES = [
+    ['low', 'Low'],
+    ['normal', 'Normal'],
+    ['high', 'High'],
+    ['urgent', 'Urgent'],
+];
+const RTP_TICKET_CATEGORIES = [
+    ['device', 'Device'],
+    ['route', 'Route'],
+    ['driver', 'Driver'],
+    ['billing', 'Billing'],
+    ['alert', 'Alert'],
+    ['maintenance', 'Maintenance'],
+    ['access', 'Access'],
+    ['other', 'Other'],
+];
+
+async function rtpInitTickets() {
+    if (_rtpTicketsLoaded) {
+        await rtpLoadTickets();
+        return;
+    }
+    _rtpTicketsLoaded = true;
+    await Promise.all([
+        rtpLoadTicketAssignees(),
+        rtpLoadTickets(),
+    ]);
+}
+
+async function rtpLoadTicketAssignees() {
+    _rtpTicketAssignees = await rtpJson(`${API_BASE}/tickets/assignees`).catch(() => []);
+}
+
+async function rtpLoadTickets() {
+    _rtpTicketRows = await rtpJson(`${API_BASE}/tickets`).catch(err => {
+        showAlert(err.message || 'Failed to load tickets', 'error');
+        return [];
+    });
+    rtpRenderTicketsTable();
+}
+
+function rtpOpenCreateTicketModal() {
+    document.getElementById('ticketCreateTitle').value = '';
+    document.getElementById('ticketCreateDescription').value = '';
+    document.getElementById('ticketCreateCategory').value = 'other';
+    document.getElementById('ticketCreatePriority').value = 'normal';
+    document.getElementById('ticketCreateModal').classList.add('active');
+    setTimeout(() => document.getElementById('ticketCreateTitle')?.focus(), 50);
+}
+
+function rtpCloseCreateTicketModal() {
+    document.getElementById('ticketCreateModal')?.classList.remove('active');
+}
+
+async function rtpCreateTicket() {
+    const title = document.getElementById('ticketCreateTitle')?.value.trim();
+    const description = document.getElementById('ticketCreateDescription')?.value.trim();
+    if (!title || !description) {
+        showAlert('Title and description are required', 'warning');
+        return;
+    }
+    const btn = document.getElementById('ticketCreateBtn');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Creating';
+    try {
+        await rtpJson(`${API_BASE}/tickets`, {
+            method: 'POST',
+            body: JSON.stringify({
+                title,
+                description,
+                category: document.getElementById('ticketCreateCategory')?.value || 'other',
+                priority: document.getElementById('ticketCreatePriority')?.value || 'normal',
+            }),
+        });
+        rtpCloseCreateTicketModal();
+        await rtpLoadTickets();
+        showAlert('Ticket created', 'success');
+    } catch (err) {
+        showAlert(err.message || 'Failed to create ticket', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = original;
+    }
+}
+
+function rtpTicketLabel(value, options) {
+    return (options.find(([key]) => key === value) || [value, value || '-'])[1];
+}
+
+function rtpTicketBadgeClass(value, kind) {
+    if (kind === 'priority') {
+        if (value === 'urgent') return 'health-status-fail';
+        if (value === 'high') return 'health-status-degraded';
+        if (value === 'low') return 'health-status-optional';
+        return 'health-status-ok';
+    }
+    if (value === 'closed' || value === 'resolved') return 'health-status-ok';
+    if (value === 'waiting_on_user') return 'health-status-degraded';
+    if (value === 'in_progress') return 'health-status-optional';
+    return 'route-status-default';
+}
+
+function rtpSortTickets(col) {
+    _rtpTicketSort = RoutarioTables.toggleTextSort(_rtpTicketSort, col);
+    rtpRenderTicketsTable();
+}
+
+function rtpSortedTickets() {
+    const search = (document.getElementById('ticketSearch')?.value || '').toLowerCase().trim();
+    const rows = _rtpTicketRows.filter(row => {
+        if (!search) return true;
+        return [row.title, row.description, row.creator_name, row.assignee_name, row.status, row.priority, row.category]
+            .some(value => String(value || '').toLowerCase().includes(search));
+    });
+    const keyFor = row => {
+        if (_rtpTicketSort.col === 'updated') return rtpDate(row.updated_at).getTime() || 0;
+        if (_rtpTicketSort.col === 'title') return row.title || '';
+        if (_rtpTicketSort.col === 'status') return row.status || '';
+        if (_rtpTicketSort.col === 'priority') return row.priority || '';
+        if (_rtpTicketSort.col === 'comments') return (row.comments || []).length;
+        if (_rtpTicketSort.col === 'creator') return row.creator_name || '';
+        if (_rtpTicketSort.col === 'assignee') return row.assignee_name || '';
+        return row.id || 0;
+    };
+    return rows.sort((a, b) => rtpCompareValues(keyFor(a), keyFor(b), _rtpTicketSort.dir));
+}
+
+function rtpRenderTicketsTable() {
+    const tbody = document.getElementById('ticketsTableBody');
+    if (!tbody) return;
+    const rows = rtpSortedTickets();
+    const count = document.getElementById('ticketsCount');
+    if (count) count.textContent = `${rows.length} ticket${rows.length === 1 ? '' : 's'}`;
+    rtpUpdateSortHeaders('section-tickets', _rtpTicketSort);
+    tbody.innerHTML = rows.length ? rows.map(row => `
+        <tr class="device-row" ondblclick="rtpOpenTicketModal(${Number(row.id)})">
+            <td>${rtpDateTime(row.updated_at)}</td>
+            <td>
+                <div style="font-weight:700;color:var(--text-primary);">${rtpEsc(row.title)}</div>
+                <div style="color:var(--text-muted);font-size:0.78rem;">#${row.id} · ${rtpEsc(rtpTicketLabel(row.category, RTP_TICKET_CATEGORIES))}</div>
+            </td>
+            <td><span class="proto-badge health-status ${rtpTicketBadgeClass(row.status, 'status')}">${rtpEsc(rtpTicketLabel(row.status, RTP_TICKET_STATUSES))}</span></td>
+            <td><span class="proto-badge health-status ${rtpTicketBadgeClass(row.priority, 'priority')}">${rtpEsc(rtpTicketLabel(row.priority, RTP_TICKET_PRIORITIES))}</span></td>
+            <td>${(row.comments || []).length}</td>
+            <td>${rtpEsc(row.creator_name || '-')}</td>
+            <td>${rtpEsc(row.assignee_name || 'Unassigned')}</td>
+            <td style="text-align:center;">
+                <button class="btn btn-secondary btn-small" onclick="rtpOpenTicketModal(${Number(row.id)})"><i class="mdi mdi-pencil"></i> Open</button>
+            </td>
+        </tr>
+    `).join('') : RoutarioTables.stateRow('No tickets match.', 8);
+}
+
+function rtpFillTicketSelect(id, options, value) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = options.map(([key, label]) => `<option value="${rtpEsc(key)}">${rtpEsc(label)}</option>`).join('');
+    el.value = value || options[0]?.[0] || '';
+}
+
+async function rtpOpenTicketModal(id) {
+    _rtpEditingTicketId = id;
+    const ticket = await rtpJson(`${API_BASE}/tickets/${id}`).catch(err => {
+        showAlert(err.message || 'Failed to load ticket', 'error');
+        return null;
+    });
+    if (!ticket) return;
+    _rtpCurrentTicket = ticket;
+    _rtpEditingCommentId = null;
+    _rtpEditingTicketField = null;
+    document.getElementById('ticketModalTitle').textContent = ticket.title || `Ticket #${ticket.id}`;
+    rtpFillTicketSelect('ticketStatus', RTP_TICKET_STATUSES, ticket.status);
+    rtpFillTicketSelect('ticketPriority', RTP_TICKET_PRIORITIES, ticket.priority);
+    rtpFillTicketSelect('ticketCategory', RTP_TICKET_CATEGORIES, ticket.category);
+    const assignee = document.getElementById('ticketAssignee');
+    if (assignee) {
+        assignee.innerHTML = '<option value="">Unassigned</option>' + _rtpTicketAssignees.map(user => {
+            const role = user.is_admin ? 'Super Admin' : 'Company Admin';
+            return `<option value="${user.id}">${rtpEsc(user.username)} · ${role}</option>`;
+        }).join('');
+        assignee.value = ticket.assigned_to ? String(ticket.assigned_to) : '';
+    }
+    rtpRenderTicketDetail(ticket);
+    document.getElementById('ticketCommentBody').value = '';
+    document.getElementById('ticketCommentInternal').checked = false;
+    document.getElementById('ticketModal').classList.add('active');
+}
+
+function rtpRenderTicketDetail(ticket) {
+    _rtpCurrentTicket = ticket;
+    const el = document.getElementById('ticketDetailBody');
+    if (!el) return;
+    const currentUserId = parseInt(localStorage.getItem('user_id') || '0', 10);
+    const related = ticket.related_type && ticket.related_id ? `${ticket.related_type} #${ticket.related_id}` : 'None';
+    const titleBlock = _rtpEditingTicketField === 'title'
+        ? `
+            <div class="stack-item-title" style="display:flex;gap:0.5rem;align-items:center;">
+                <input id="ticketTitleEdit" class="form-input" value="${rtpEsc(ticket.title)}" style="font-weight:700;">
+                <button class="btn btn-primary btn-small" onclick="rtpSaveTicketField('title')"><i class="mdi mdi-content-save"></i> Save</button>
+                <button class="btn btn-secondary btn-small" onclick="rtpCancelTicketFieldEdit()">Cancel</button>
+            </div>
+        `
+        : `
+            <div class="stack-item-title" style="display:flex;align-items:center;gap:0.5rem;">
+                <span>${rtpEsc(ticket.title)}</span>
+                <button class="btn btn-secondary btn-small" onclick="rtpStartTicketFieldEdit('title')" style="margin-left:auto;"><i class="mdi mdi-pencil"></i> Edit</button>
+            </div>
+        `;
+    const descriptionBlock = _rtpEditingTicketField === 'description'
+        ? `
+            <div style="display:grid;gap:0.5rem;">
+                <textarea id="ticketDescriptionEdit" class="form-input" rows="5">${rtpEsc(ticket.description)}</textarea>
+                <div style="display:flex;gap:0.5rem;">
+                    <button class="btn btn-primary btn-small" onclick="rtpSaveTicketField('description')"><i class="mdi mdi-content-save"></i> Save</button>
+                    <button class="btn btn-secondary btn-small" onclick="rtpCancelTicketFieldEdit()">Cancel</button>
+                </div>
+            </div>
+        `
+        : `
+            <div style="display:flex;align-items:flex-start;gap:0.5rem;">
+                <div style="white-space:pre-wrap;color:var(--text-secondary);line-height:1.5;flex:1;">${rtpEsc(ticket.description)}</div>
+                <button class="btn btn-secondary btn-small" onclick="rtpStartTicketFieldEdit('description')"><i class="mdi mdi-pencil"></i> Edit</button>
+            </div>
+        `;
+    const comments = (ticket.comments || []).map(comment => {
+        const canEdit = Number(comment.author_id) === currentUserId;
+        const editing = _rtpEditingCommentId === comment.id;
+        if (editing) {
+            return `
+                <div class="stack-item" style="margin-top:0.65rem;">
+                    <div class="stack-item-title">Edit comment</div>
+                    <textarea id="ticketCommentEditBody" class="form-input" rows="4">${rtpEsc(comment.body)}</textarea>
+                    <label class="ticket-switch" style="margin-top:0.65rem;${localStorage.getItem('is_admin') === 'true' || localStorage.getItem('is_company_admin') === 'true' ? '' : 'display:none;'}">
+                        <input type="checkbox" id="ticketCommentEditInternal" ${comment.is_internal ? 'checked' : ''}>
+                        <span class="ticket-switch-track"></span>
+                        <span>Internal note</span>
+                    </label>
+                    <div style="display:flex;gap:0.5rem;margin-top:0.75rem;">
+                        <button class="btn btn-primary btn-small" onclick="rtpSaveTicketComment(${Number(comment.id)})"><i class="mdi mdi-content-save"></i> Save</button>
+                        <button class="btn btn-secondary btn-small" onclick="rtpCancelTicketCommentEdit()">Cancel</button>
+                    </div>
+                </div>
+            `;
+        }
+        return `
+            <div class="stack-item" style="margin-top:0.65rem;">
+                <div class="stack-item-title">
+                    ${rtpEsc(comment.author_name || 'Unknown')}
+                    ${comment.is_internal ? '<span class="proto-badge health-status health-status-degraded">internal</span>' : ''}
+                    ${canEdit ? `<button class="btn btn-secondary btn-small" onclick="rtpStartTicketCommentEdit(${Number(comment.id)})" style="margin-left:auto;"><i class="mdi mdi-pencil"></i> Edit</button>` : ''}
+                </div>
+                <div style="color:var(--text-muted);font-size:0.75rem;margin-bottom:0.35rem;">${rtpDateTime(comment.created_at)}</div>
+                <div style="white-space:pre-wrap;color:var(--text-secondary);line-height:1.45;">${rtpEsc(comment.body)}</div>
+            </div>
+        `;
+    }).join('');
+    el.innerHTML = `
+        <div class="stack-item">
+            ${titleBlock}
+            <div style="color:var(--text-muted);font-size:0.78rem;margin-bottom:0.5rem;">
+                Created by ${rtpEsc(ticket.creator_name || '-')} · ${rtpDateTime(ticket.created_at)} · Related: ${rtpEsc(related)}
+            </div>
+            ${descriptionBlock}
+        </div>
+        <div style="margin-top:1rem;font-weight:700;color:var(--text-primary);">Comments</div>
+        ${comments || '<div style="color:var(--text-muted);padding:0.8rem 0;">No comments yet.</div>'}
+    `;
+}
+
+function rtpCloseTicketModal() {
+    document.getElementById('ticketModal')?.classList.remove('active');
+    _rtpEditingTicketId = null;
+    _rtpCurrentTicket = null;
+    _rtpEditingCommentId = null;
+    _rtpEditingTicketField = null;
+}
+
+async function rtpSaveTicket() {
+    if (!_rtpEditingTicketId) return;
+    const assigned = document.getElementById('ticketAssignee')?.value || '';
+    const payload = {
+        status: document.getElementById('ticketStatus')?.value,
+        priority: document.getElementById('ticketPriority')?.value,
+        category: document.getElementById('ticketCategory')?.value,
+        assigned_to: assigned ? Number(assigned) : null,
+    };
+    await rtpJson(`${API_BASE}/tickets/${_rtpEditingTicketId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+    }).then(ticket => {
+        showAlert('Ticket updated', 'success');
+        rtpRenderTicketDetail(ticket);
+        rtpCloseTicketModal();
+        return rtpLoadTickets();
+    }).catch(err => showAlert(err.message || 'Failed to update ticket', 'error'));
+}
+
+async function rtpAddTicketComment() {
+    if (!_rtpEditingTicketId) return;
+    const body = document.getElementById('ticketCommentBody')?.value.trim();
+    if (!body) {
+        showAlert('Comment is required', 'warning');
+        return;
+    }
+    const payload = {
+        body,
+        is_internal: !!document.getElementById('ticketCommentInternal')?.checked,
+    };
+    await rtpJson(`${API_BASE}/tickets/${_rtpEditingTicketId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    }).then(ticket => {
+        document.getElementById('ticketCommentBody').value = '';
+        document.getElementById('ticketCommentInternal').checked = false;
+        rtpRenderTicketDetail(ticket);
+        return rtpLoadTickets();
+    }).catch(err => showAlert(err.message || 'Failed to add comment', 'error'));
+}
+
+function rtpStartTicketFieldEdit(field) {
+    _rtpEditingTicketField = field;
+    if (_rtpCurrentTicket) rtpRenderTicketDetail(_rtpCurrentTicket);
+    setTimeout(() => {
+        const el = document.getElementById(field === 'title' ? 'ticketTitleEdit' : 'ticketDescriptionEdit');
+        el?.focus();
+        el?.select?.();
+    }, 50);
+}
+
+function rtpCancelTicketFieldEdit() {
+    _rtpEditingTicketField = null;
+    if (_rtpCurrentTicket) rtpRenderTicketDetail(_rtpCurrentTicket);
+}
+
+async function rtpSaveTicketField(field) {
+    if (!_rtpEditingTicketId) return;
+    const inputId = field === 'title' ? 'ticketTitleEdit' : 'ticketDescriptionEdit';
+    const value = document.getElementById(inputId)?.value.trim();
+    if (!value) {
+        showAlert(field === 'title' ? 'Title is required' : 'Description is required', 'warning');
+        return;
+    }
+    await rtpJson(`${API_BASE}/tickets/${_rtpEditingTicketId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ [field]: value }),
+    }).then(ticket => {
+        _rtpEditingTicketField = null;
+        document.getElementById('ticketModalTitle').textContent = ticket.title || `Ticket #${ticket.id}`;
+        rtpRenderTicketDetail(ticket);
+        return rtpLoadTickets();
+    }).catch(err => showAlert(err.message || 'Failed to update ticket', 'error'));
+}
+
+function rtpStartTicketCommentEdit(commentId) {
+    _rtpEditingCommentId = commentId;
+    if (_rtpCurrentTicket) rtpRenderTicketDetail(_rtpCurrentTicket);
+}
+
+function rtpCancelTicketCommentEdit() {
+    _rtpEditingCommentId = null;
+    if (_rtpCurrentTicket) rtpRenderTicketDetail(_rtpCurrentTicket);
+}
+
+async function rtpSaveTicketComment(commentId) {
+    if (!_rtpEditingTicketId) return;
+    const body = document.getElementById('ticketCommentEditBody')?.value.trim();
+    if (!body) {
+        showAlert('Comment is required', 'warning');
+        return;
+    }
+    const payload = { body };
+    const internal = document.getElementById('ticketCommentEditInternal');
+    if (internal) payload.is_internal = !!internal.checked;
+    await rtpJson(`${API_BASE}/tickets/${_rtpEditingTicketId}/comments/${commentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+    }).then(ticket => {
+        _rtpEditingCommentId = null;
+        rtpRenderTicketDetail(ticket);
+        return rtpLoadTickets();
+    }).catch(err => showAlert(err.message || 'Failed to update comment', 'error'));
 }
 
 // ── Routes ───────────────────────────────────────────────────────
