@@ -30,7 +30,7 @@ from core.database import get_db, init_database
 from core.gateway import connection_manager, protocol_server_manager, sync_active_protocol_servers
 from core.push_notifications import get_push_service
 from core.runtime_health import register_task, set_runtime_state
-from core.runtime_logs import install_runtime_log_handler
+from core.runtime_logs import install_runtime_log_handler, MakeAccessLogsDebug
 from core.valhalla import check_valhalla_health, set_valhalla_url
 from integrations.engine import integration_poll_task
 from models import AlertHistory, Company, Device, User
@@ -367,7 +367,12 @@ async def command_callback(imei: str, writer) -> None:
                 writer.write(command_bytes)
                 await writer.drain()
                 await db.mark_command_sent(command.id)
-                logger.info("Command sent to %s: %s", device.name, command.command_type)
+                payload_str = params.get("payload") or command.payload or ""
+                if payload_str and payload_str != command.command_type:
+                    cmd_desc = f"{command.command_type} ({payload_str})"
+                else:
+                    cmd_desc = payload_str or command.command_type
+                logger.info("Command sent to %s: %s", device.name, cmd_desc)
             except Exception as exc:
                 logger.error("Failed to write command %s: %s", command.id, exc)
     except Exception as exc:
@@ -381,7 +386,10 @@ async def ack_callback(imei: str, response_text: str = "") -> None:
         if not device:
             return
         await db.mark_oldest_sent_command_acked(device.id, response_text)
-        logger.info("Command ACKed by %s", device.name)
+        if response_text:
+            logger.info("Command response received from %s: %s", device.name, response_text)
+        else:
+            logger.info("Command ACK received from %s", device.name)
     except Exception as exc:
         logger.error("ACK callback error: %s", exc, exc_info=True)
 
@@ -1068,6 +1076,11 @@ app.mount("/", StaticFiles(directory="web"), name="static")
 
 
 def run_server():
+    access_logger = logging.getLogger("uvicorn.access")
+    access_logger.setLevel(logging.DEBUG)
+    if not any(isinstance(f, MakeAccessLogsDebug) for f in access_logger.filters):
+        access_logger.addFilter(MakeAccessLogsDebug())
+
     server = uvicorn.Server(uvicorn.Config(
         app,
         host="0.0.0.0",

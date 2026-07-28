@@ -140,7 +140,7 @@ class GT06Decoder(BaseProtocolDecoder):
 
             # ── Server command ACK ─────────────────────────────────────
             if protocol_number == 0x19:
-                logger.debug(f"GT06: Command ACK received from {known_imei}")
+                logger.info(f"GT06: Command ACK received from {known_imei or 'device'}")
                 return {'event': 'command_ack'}, consumed
 
             logger.debug(f"GT06: Unhandled protocol 0x{protocol_number:02X}")

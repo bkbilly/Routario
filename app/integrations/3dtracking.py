@@ -167,7 +167,7 @@ class ThreeDTrackingIntegration(BaseIntegration):
             params["StartId"] = current_start_id
         else:
             params["timestamp"] = int(datetime.now(timezone.utc).timestamp())
-            logger.info("3DTracking: first poll — fetching positions from now (no StartId)")
+            logger.debug("3DTracking: first poll — fetching positions from now (no StartId)")
 
         try:
             async with httpx.AsyncClient(timeout=30) as client:

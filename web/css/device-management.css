@@ -1184,6 +1184,18 @@ h1 {
     }
 }
 
+#userModalBody {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 1.5rem;
+    align-items: start;
+}
+
+@media (max-width: 640px) {
+    #userModalBody { grid-template-columns: 1fr; }
+    #userModal .modal-content { max-width: 95vw; }
+}
+
 @media (max-width: 480px) {
     .container {
         padding: 1rem 0.75rem;

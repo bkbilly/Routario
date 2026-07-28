@@ -9,6 +9,7 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <style>
         :root {
             --bg-primary: #0a0e1a;
@@ -81,6 +82,39 @@
         }
         .form-input:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
 
+        .password-input-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .password-input-wrap .form-input {
+            padding-right: 2.75rem;
+        }
+        .password-toggle-btn {
+            position: absolute;
+            right: 0.4rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #9ca3af;
+            font-size: 1.25rem;
+            padding: 0.35rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            transition: color 0.2s, background-color 0.2s;
+        }
+        .password-toggle-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.06);
+        }
+        .password-toggle-btn:focus-visible {
+            outline: 2px solid var(--accent-primary);
+        }
+
         .btn {
             width: 100%; padding: 0.75rem;
             background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
@@ -114,7 +148,12 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Password</label>
-                <input type="password" id="password" class="form-input" required>
+                <div class="password-input-wrap">
+                    <input type="password" id="password" class="form-input" required autocomplete="current-password">
+                    <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility()" aria-label="Toggle password visibility" title="Show password">
+                        <i class="mdi mdi-eye-outline" id="togglePasswordIcon"></i>
+                    </button>
+                </div>
             </div>
             <div class="form-group" id="mfaGroup" style="display:none;">
                 <label class="form-label">Authenticator or Recovery Code</label>
@@ -128,6 +167,20 @@
     </div>
     <script src="/js/config.js"></script>
     <script>
+        function togglePasswordVisibility() {
+            const input = document.getElementById('password');
+            const icon = document.getElementById('togglePasswordIcon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'mdi mdi-eye-off-outline';
+                icon.parentElement.setAttribute('title', 'Hide password');
+            } else {
+                input.type = 'password';
+                icon.className = 'mdi mdi-eye-outline';
+                icon.parentElement.setAttribute('title', 'Show password');
+            }
+        }
+
         const loginSlug = (() => {
             const match = window.location.pathname.match(/^\/login\/([^/]+)\/?$/);
             return match ? decodeURIComponent(match[1]) : null;

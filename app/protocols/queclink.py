@@ -233,7 +233,7 @@ class QueclinkDecoder(BaseProtocolDecoder):
 
             # ── ACK packets ───────────────────────────────────────
             if prefix == 'ACK':
-                logger.debug(f"Queclink: Command ACK for {msg_type}")
+                logger.info(f"Queclink: Command ACK for {msg_type}")
                 return {'event': 'command_ack', 'msg_type': msg_type}, consumed
 
             logger.debug(f"Queclink: Unhandled message type: {msg_type}")

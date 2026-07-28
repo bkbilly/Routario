@@ -31,6 +31,8 @@ const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap(g => g.perms.map(p => p[0]));
 let _usrSectionInitialized = false;
 
 async function initUsersSection() {
+    const ch = document.getElementById('userCompanyHeader');
+    if (ch) ch.style.display = _usrIsAdmin ? '' : 'none';
     if (_usrSectionInitialized) return;
     _usrSectionInitialized = true;
     if (!hasPermission('manage_users')) return;
@@ -43,6 +45,8 @@ async function _usrLoad() {
         const res = await apiFetch(`${API_BASE}/users`);
         if (res.ok) _usrUsers = await res.json();
     } catch (e) { console.error(e); }
+    const ch = document.getElementById('userCompanyHeader');
+    if (ch) ch.style.display = _usrIsAdmin ? '' : 'none';
     _usrRender();
 }
 

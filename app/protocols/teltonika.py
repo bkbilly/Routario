@@ -304,7 +304,7 @@ class TeltonikaDecoder(BaseProtocolDecoder):
                                 ).strip()
                     except Exception as e:
                         logger.warning(f"Teltonika: Failed to parse codec 0x{codec_id:02X} response: {e}")
-                    logger.debug(
+                    logger.info(
                         f"Teltonika: Text command response from {known_imei!r}: {response_text!r}"
                     )
                     return {'event': 'command_ack', 'response_text': response_text}, consumed
@@ -320,7 +320,7 @@ class TeltonikaDecoder(BaseProtocolDecoder):
                                 response_hex = packet_data[7:7 + resp_len].hex()
                     except Exception as e:
                         logger.warning(f"Teltonika: Failed to parse codec 0x0F response: {e}")
-                    logger.debug(
+                    logger.info(
                         f"Teltonika: Binary command response from {known_imei!r}: {response_hex!r}"
                     )
                     return {'event': 'command_ack', 'response_text': response_hex}, consumed

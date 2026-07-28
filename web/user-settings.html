@@ -129,7 +129,6 @@
     <div class="container">
         <div class="mgmt-tabs settings-tabs" id="settingsTabs">
             <button class="mgmt-tab settings-tab active" onclick="switchSettingsTab('profile')" id="settingsTabProfile"><i class="mdi mdi-account-circle"></i> Profile</button>
-            <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('users')" id="settingsTabUsers" style="display:none;"><i class="mdi mdi-account-group"></i> Users</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('tickets')" id="settingsTabTickets"><i class="mdi mdi-ticket-confirmation-outline"></i> Tickets</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('webhooks')" id="settingsTabWebhooks"><i class="mdi mdi-link-variant"></i> Webhooks</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('apiKeys')" id="settingsTabApiKeys" style="display:none;"><i class="mdi mdi-key-variant"></i> API Keys</button>
@@ -194,44 +193,6 @@
                         <div id="passkeySupportNote" style="display:none;color:var(--text-muted);font-size:0.86rem;margin-bottom:0.75rem;">Passkeys are not supported by this browser.</div>
                         <div id="passkeyList" class="profile-passkey-list"></div>
                     </section>
-                </div>
-            </div>
-
-            <!-- Users -->
-            <div class="settings-section" id="settings-section-users" style="display:none;">
-                <p class="settings-section-description">
-                    Manage user profiles, permissions, assigned devices, unit preferences, currency, and MFA.
-                </p>
-                <div class="devices-search-bar">
-                    <div class="search-input-wrap">
-                        <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
-                        <input type="text" id="userSearch" class="search-input"
-                            placeholder="Search by username or email&#8230;"
-                            oninput="filterUsers()">
-                    </div>
-                    <span class="devices-count" id="userCount"></span>
-                </div>
-                <div class="table-wrapper">
-                    <table class="devices-table settings-table" id="usersTable">
-                        <thead>
-                            <tr>
-                                <th data-sort="username" data-sort-dir="asc" onclick="sortUsers('username')">Username</th>
-                                <th data-sort="email" onclick="sortUsers('email')">Email</th>
-                                <th id="userCompanyHeader" data-sort="company" onclick="sortUsers('company')" style="display:none;">Company</th>
-                                <th data-sort="role" onclick="sortUsers('role')">Role</th>
-                                <th data-sort="created" onclick="sortUsers('created')">Created</th>
-                                <th style="width:320px;text-align:center;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="usersTableBody">
-                            <tr>
-                                <td colspan="6" style="text-align:center;padding:3rem;color:var(--text-muted);">
-                                    <div class="loading" style="margin:0 auto 1rem;"></div>
-                                    Loading users&#8230;
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
                 </div>
             </div>
 
@@ -486,149 +447,6 @@
         </div>
     </div>
 
-    <div class="modal" id="userModal">
-        <div class="modal-content" style="max-width:860px;height:auto;max-height:90vh;">
-            <div class="modal-header">
-                <h2 class="modal-title" id="userModalTitle">Add User</h2>
-                <button type="button" class="modal-close" onclick="closeUserModal()"><i class="mdi mdi-close"></i></button>
-            </div>
-            <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
-                <div id="userModalBody">
-                    <div>
-                        <div class="form-group">
-                            <label class="form-label">Username *</label>
-                            <input type="text" id="userModalUsername" class="form-input" placeholder="johndoe" autocomplete="off">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Email *</label>
-                            <input type="email" id="userModalEmail" class="form-input" placeholder="john@example.com">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" id="userPasswordLabel">Password *</label>
-                            <input type="password" id="userModalPassword" class="form-input" autocomplete="new-password">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Role *</label>
-                            <select id="userModalRole" class="form-input" onchange="onUserRoleChange()"></select>
-                        </div>
-                        <div class="form-group" id="userModalCompanyGroup" style="display:none;">
-                            <label class="form-label">Company *</label>
-                            <select id="userModalCompany" class="form-input">
-                                <option value="">— Select company —</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Unit System</label>
-                            <select id="userModalUnits" class="form-input">
-                                <option value="metric">Metric (km, km/h, m)</option>
-                                <option value="imperial">Imperial (mi, mph, ft)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Currency</label>
-                            <select id="userModalCurrency" class="form-input">
-                                <option value="EUR">Euro (€)</option>
-                                <option value="USD">US Dollar ($)</option>
-                                <option value="GBP">British Pound (£)</option>
-                                <option value="CHF">Swiss Franc (CHF)</option>
-                            </select>
-                        </div>
-                        <div class="form-group" id="userModalMfaGroup" style="display:none;">
-                            <label class="form-label">Multi-Factor Authentication</label>
-                            <div style="border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;background:var(--bg-secondary);">
-                                <div id="userModalMfaStatus" style="font-size:0.86rem;color:var(--text-secondary);margin-bottom:0.7rem;"></div>
-                                <div id="userModalMfaSetupBox" class="secret-box" style="display:none;margin:0 0 0.75rem 0;"></div>
-                                <div id="userModalMfaCodeGroup" style="display:none;margin-bottom:0.75rem;">
-                                    <label class="form-label" id="userModalMfaCodeLabel" style="font-size:0.78rem;">Authenticator Code</label>
-                                    <input type="text" id="userModalMfaCode" class="form-input" placeholder="123456" inputmode="numeric" autocomplete="one-time-code">
-                                </div>
-                                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                                    <button type="button" class="btn btn-secondary" id="userModalMfaSetupBtn" onclick="usrSetupMfa()"><i class="mdi mdi-qrcode"></i> Setup</button>
-                                    <button type="button" class="btn btn-primary" id="userModalMfaEnableBtn" onclick="usrEnableMfa()" style="display:none;"><i class="mdi mdi-shield-check"></i> Enable</button>
-                                    <button type="button" class="btn btn-danger" id="userModalMfaDisableBtn" onclick="usrDisableMfa()" style="display:none;"><i class="mdi mdi-shield-off"></i> Disable</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-group" id="userModalPasskeyGroup" style="display:none;">
-                            <label class="form-label">Passkeys</label>
-                            <div style="border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;background:var(--bg-secondary);">
-                                <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.75rem;">
-                                    <div id="userModalPasskeyStatus" style="font-size:0.86rem;color:var(--text-secondary);"></div>
-                                    <button type="button" class="btn btn-primary btn-small" id="userModalPasskeyAddBtn" onclick="usrRegisterPasskey()" style="display:none;"><i class="mdi mdi-fingerprint"></i> Add</button>
-                                </div>
-                                <div id="userModalPasskeyList" style="display:flex;flex-direction:column;gap:0.45rem;"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-group" id="userModalPermissionsGroup">
-                        <label class="form-label" style="display:flex;align-items:center;justify-content:space-between;">
-                            <span>Permissions</span>
-                            <span id="userModalPermHint" style="font-size:0.75rem;color:var(--text-muted);font-weight:400;"></span>
-                        </label>
-                        <div id="userModalPermissions" style="border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;display:flex;flex-direction:column;gap:0.75rem;"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-danger" id="userDeleteBtn" onclick="usrDelete(_usrEditing?.id)" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
-                <div style="display:flex;gap:0.75rem;margin-left:auto;">
-                    <button type="button" class="btn btn-secondary" onclick="closeUserModal()">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="userSaveBtn" onclick="saveUser()">Save</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal" id="userAssignModal">
-        <div class="modal-content" style="max-width:480px;height:auto;max-height:75vh;">
-            <div class="modal-header">
-                <h2 class="modal-title">Devices for <span id="userAssignName" class="modal-highlight"></span></h2>
-                <button type="button" class="modal-close" onclick="usrCloseAssignModal()"><i class="mdi mdi-close"></i></button>
-            </div>
-            <div class="modal-scrollable" style="padding:1.25rem;">
-                <div class="form-group">
-                    <input type="text" class="form-input" id="userDeviceSearch" placeholder="Search devices&#8230;" oninput="usrFilterDeviceList()">
-                </div>
-                <div id="userDeviceAssignList" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="usrCloseAssignModal()">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal" id="userNotifyModal">
-        <div class="modal-content" style="max-width:620px;height:auto;max-height:75vh;">
-            <div class="modal-header">
-                <h2 class="modal-title">Send Notification</h2>
-                <button type="button" class="modal-close" onclick="usrCloseNotifyModal()"><i class="mdi mdi-close"></i></button>
-            </div>
-            <div class="modal-scrollable" style="display:flex;gap:1.25rem;padding:1.25rem;flex-wrap:wrap;align-items:stretch;">
-                <div style="flex:1;min-width:180px;min-height:0;display:flex;flex-direction:column;gap:0.5rem;">
-                    <label class="form-label">To <span id="userNotifyCount" style="font-size:0.78rem;color:var(--accent-primary);font-weight:600;margin-left:0.25rem;"></span></label>
-                    <input type="text" id="userNotifySearch" class="form-input" placeholder="Search users&#8230;" oninput="usrFilterNotifyUsers()">
-                    <div id="userNotifyList" style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:0.15rem;"></div>
-                </div>
-                <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:0.75rem;">
-                    <div class="form-group">
-                        <label class="form-label">Title</label>
-                        <input type="text" id="userNotifyTitle" class="form-input" placeholder="Notification title" maxlength="100">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Message</label>
-                        <textarea id="userNotifyMessage" class="form-input" rows="6" placeholder="Notification message" maxlength="500" style="resize:vertical;"></textarea>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <div style="display:flex;gap:0.75rem;margin-left:auto;">
-                    <button type="button" class="btn btn-secondary" onclick="usrCloseNotifyModal()">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="userNotifySendBtn" onclick="usrSendNotification()">Send</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div class="modal" id="notificationChannelModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -705,7 +523,6 @@
     <script src="js/units.js"></script>
     <script src="js/impersonation.js"></script>
     <script src="js/ui-utils.js"></script>
-    <script src="js/users-management.js"></script>
     <script src="js/management-advanced.js"></script>
     <script src="js/user-settings.js"></script>
     <script src="js/pwa.js"></script>

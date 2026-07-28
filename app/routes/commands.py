@@ -2,6 +2,7 @@
 Command Routes
 Send and inspect commands for GPS devices.
 """
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
@@ -11,6 +12,8 @@ from core.auth import get_current_user, verify_device_access, require_permission
 from models import User
 from models.schemas import CommandCreate
 from protocols import ProtocolRegistry
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/devices", tags=["commands"])
 
@@ -49,6 +52,13 @@ async def send_command(
 
     command.device_id = device_id
     result = await db.create_command(command)
+
+    cmd_desc = (
+        f"{command.command_type} ({command.payload})"
+        if command.payload and command.command_type != command.payload
+        else (command.payload or command.command_type)
+    )
+    logger.info("Command queued for %s (ID %s): %s", device.name, device.id, cmd_desc)
 
     result_dict = result.__dict__.copy() if hasattr(result, "__dict__") else dict(result)
     result_dict["encoded_preview"] = test_bytes.hex()
