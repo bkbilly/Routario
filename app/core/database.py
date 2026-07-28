@@ -1329,6 +1329,21 @@ class DatabaseService:
 
     async def create_command(self, command_data: CommandCreate) -> CommandQueue:
         async with self.get_session() as session:
+            # Expire any previous un-acknowledged command of the SAME type for this device
+            await session.execute(
+                update(CommandQueue)
+                .where(
+                    and_(
+                        CommandQueue.device_id == command_data.device_id,
+                        CommandQueue.command_type == command_data.command_type,
+                        CommandQueue.status.in_(["sent", "pending"]),
+                    )
+                )
+                .values(
+                    status="timeout",
+                    response="Timed out (no response)",
+                )
+            )
             cmd = CommandQueue(
                 device_id=command_data.device_id,
                 command_type=command_data.command_type,
