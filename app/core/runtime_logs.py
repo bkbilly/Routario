@@ -117,11 +117,13 @@ def install_runtime_log_handler() -> RuntimeLogHandler:
     if root.level > logging.INFO:
         root.setLevel(logging.INFO)
 
-    for logger_name in ("uvicorn.access", "httpx", "httpcore"):
-        lgr = logging.getLogger(logger_name)
-        lgr.setLevel(logging.DEBUG)
-        if not any(isinstance(f, MakeAccessLogsDebug) for f in lgr.filters):
-            lgr.addFilter(MakeAccessLogsDebug())
+    access_logger = logging.getLogger("uvicorn.access")
+    access_logger.setLevel(logging.DEBUG)
+    if not any(isinstance(f, MakeAccessLogsDebug) for f in access_logger.filters):
+        access_logger.addFilter(MakeAccessLogsDebug())
+
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
     for handler in root.handlers:
         if isinstance(handler, RuntimeLogHandler):
