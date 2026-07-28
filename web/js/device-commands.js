@@ -409,7 +409,9 @@ function renderCommandHistory(commands) {
     };
 
     tbody.innerHTML = commands.map(cmd => {
-        const createdTime = new Date(cmd.created_at).toLocaleString();
+        const dtObj = new Date(cmd.created_at);
+        const datePart = dtObj.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        const timePart = dtObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         const statusClass = cmd.status.toLowerCase();
         
         const displayPayload = escape(cmd.payload || '');
@@ -421,7 +423,7 @@ function renderCommandHistory(commands) {
 
         return `
             <tr>
-                <td style="font-family: var(--font-mono); font-size: 0.8125rem; white-space: nowrap;">${createdTime}</td>
+                <td style="white-space: nowrap;">${datePart}<br><span style="color: var(--text-muted); font-size: 0.8rem; font-family: var(--font-mono);">${timePart}</span></td>
                 <td style="font-weight: 600;">${escape(cmd.command_type)}</td>
                 <td class="command-payload" title="${displayPayload}">${displayPayload}</td>
                 <td><span class="command-status ${statusClass}">${escape(cmd.status)}</span></td>
