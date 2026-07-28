@@ -1081,8 +1081,8 @@ def run_server():
     if not any(isinstance(f, MakeAccessLogsDebug) for f in access_logger.filters):
         access_logger.addFilter(MakeAccessLogsDebug())
 
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.DEBUG)
+    logging.getLogger("httpcore").setLevel(logging.DEBUG)
 
     server = uvicorn.Server(uvicorn.Config(
         app,

@@ -122,8 +122,8 @@ def install_runtime_log_handler() -> RuntimeLogHandler:
     if not any(isinstance(f, MakeAccessLogsDebug) for f in access_logger.filters):
         access_logger.addFilter(MakeAccessLogsDebug())
 
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.DEBUG)
+    logging.getLogger("httpcore").setLevel(logging.DEBUG)
 
     for handler in root.handlers:
         if isinstance(handler, RuntimeLogHandler):
