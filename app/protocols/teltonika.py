@@ -285,12 +285,12 @@ class TeltonikaDecoder(BaseProtocolDecoder):
                     else:
                         return {'response': ack}, consumed
 
-                elif codec_id == 0x0D:
-                    # Codec 13 — text command response (device → server)
+                elif codec_id in (0x0C, 0x0D):
+                    # Codec 12 (0x0C) & Codec 13 (0x0D) — text command response (device → server)
                     # Layout (packet_data indices):
-                    #   [0]      codec_id  (0x0D)
+                    #   [0]      codec_id  (0x0C or 0x0D)
                     #   [1]      quantity  (always 1)
-                    #   [2]      type      (0x05 = response)
+                    #   [2]      type      (0x05 or 0x06 = response)
                     #   [3:7]    response length N (big-endian uint32)
                     #   [7:7+N]  response text (ASCII)
                     #   [7+N]    quantity again
@@ -303,7 +303,7 @@ class TeltonikaDecoder(BaseProtocolDecoder):
                                     'ascii', errors='replace'
                                 ).strip()
                     except Exception as e:
-                        logger.warning(f"Teltonika: Failed to parse codec 0x0D response: {e}")
+                        logger.warning(f"Teltonika: Failed to parse codec 0x{codec_id:02X} response: {e}")
                     logger.debug(
                         f"Teltonika: Text command response from {known_imei!r}: {response_text!r}"
                     )
@@ -712,7 +712,7 @@ class TeltonikaDecoder(BaseProtocolDecoder):
         )
 
         crc = self._crc16(data_part)
-        data_field_length = 1 + 1 + cmd_length + 1
+        data_field_length = len(data_part)
 
         return (
             b'\x00\x00\x00\x00' +
