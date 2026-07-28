@@ -30,7 +30,7 @@ from core.database import get_db, init_database
 from core.gateway import connection_manager, protocol_server_manager, sync_active_protocol_servers
 from core.push_notifications import get_push_service
 from core.runtime_health import register_task, set_runtime_state
-from core.runtime_logs import install_runtime_log_handler, MakeAccessLogsDebug
+from core.runtime_logs import install_runtime_log_handler
 from core.valhalla import check_valhalla_health, set_valhalla_url
 from integrations.engine import integration_poll_task
 from models import AlertHistory, Company, Device, User
@@ -1076,13 +1076,9 @@ app.mount("/", StaticFiles(directory="web"), name="static")
 
 
 def run_server():
-    access_logger = logging.getLogger("uvicorn.access")
-    access_logger.setLevel(logging.DEBUG)
-    if not any(isinstance(f, MakeAccessLogsDebug) for f in access_logger.filters):
-        access_logger.addFilter(MakeAccessLogsDebug())
-
-    logging.getLogger("httpx").setLevel(logging.DEBUG)
-    logging.getLogger("httpcore").setLevel(logging.DEBUG)
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
     server = uvicorn.Server(uvicorn.Config(
         app,
