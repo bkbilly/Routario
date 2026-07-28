@@ -1076,10 +1076,11 @@ app.mount("/", StaticFiles(directory="web"), name="static")
 
 
 def run_server():
-    access_logger = logging.getLogger("uvicorn.access")
-    access_logger.setLevel(logging.DEBUG)
-    if not any(isinstance(f, MakeAccessLogsDebug) for f in access_logger.filters):
-        access_logger.addFilter(MakeAccessLogsDebug())
+    for logger_name in ("uvicorn.access", "httpx", "httpcore"):
+        lgr = logging.getLogger(logger_name)
+        lgr.setLevel(logging.DEBUG)
+        if not any(isinstance(f, MakeAccessLogsDebug) for f in lgr.filters):
+            lgr.addFilter(MakeAccessLogsDebug())
 
     server = uvicorn.Server(uvicorn.Config(
         app,

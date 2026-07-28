@@ -384,7 +384,6 @@ async function loadCommandHistory() {
     }
 }
 
-// Render Command History
 function renderCommandHistory(commands) {
     const tbody = document.getElementById('commandHistoryBody');
     const emptyDiv = document.getElementById('commandHistoryEmpty');
@@ -397,20 +396,24 @@ function renderCommandHistory(commands) {
     
     emptyDiv.style.display = 'none';
     
+    const escape = str => {
+        if (!str) return '';
+        if (typeof RoutarioUI !== 'undefined' && RoutarioUI.escapeHtml) {
+            return RoutarioUI.escapeHtml(str);
+        }
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    };
+
     tbody.innerHTML = commands.map(cmd => {
         const createdTime = new Date(cmd.created_at).toLocaleString();
         const statusClass = cmd.status.toLowerCase();
         
-        // Truncate long payloads
-        let displayPayload = cmd.payload || '';
-        if (displayPayload.length > 50) {
-            displayPayload = displayPayload.substring(0, 50) + '...';
-        }
-        
-        let response = cmd.response || '-';
-        if (response.length > 50) {
-            response = response.substring(0, 50) + '...';
-        }
+        const displayPayload = escape(cmd.payload || '');
+        const responseText = cmd.response ? escape(cmd.response) : '-';
         
         const cancelBtn = cmd.status === 'pending'
             ? `<button type="button" class="btn-cancel-command" onclick="cancelCommand(${cmd.id})" title="Cancel command"><i class="mdi mdi-close"></i></button>`
@@ -418,11 +421,11 @@ function renderCommandHistory(commands) {
 
         return `
             <tr>
-                <td style="font-family: var(--font-mono); font-size: 0.8125rem;">${createdTime}</td>
-                <td style="font-weight: 600;">${cmd.command_type}</td>
-                <td class="command-payload" title="${cmd.payload || ''}">${displayPayload}</td>
-                <td><span class="command-status ${statusClass}">${cmd.status}</span></td>
-                <td style="font-family: var(--font-mono); font-size: 0.8125rem;" title="${cmd.response || ''}">${response}</td>
+                <td style="font-family: var(--font-mono); font-size: 0.8125rem; white-space: nowrap;">${createdTime}</td>
+                <td style="font-weight: 600;">${escape(cmd.command_type)}</td>
+                <td class="command-payload" title="${displayPayload}">${displayPayload}</td>
+                <td><span class="command-status ${statusClass}">${escape(cmd.status)}</span></td>
+                <td class="command-response" style="font-family: var(--font-mono); font-size: 0.8125rem; word-break: break-word; max-width: 350px;" title="${responseText}">${responseText}</td>
                 <td>${cancelBtn}</td>
             </tr>
         `;

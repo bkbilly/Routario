@@ -1544,9 +1544,19 @@ function setRuntimeLogLevelFilter(level) {
     renderRuntimeLogs();
 }
 
+function _updateRuntimeLogCountsFromRows() {
+    const counts = { total: _runtimeLogRows.length, debug: 0, info: 0, warning: 0, error: 0, critical: 0 };
+    for (const r of _runtimeLogRows) {
+        const lvl = (r.level || '').toLowerCase();
+        if (lvl in counts) counts[lvl]++;
+    }
+    _runtimeLogCounts = counts;
+}
+
 function renderRuntimeLogSummary() {
     const el = document.getElementById('runtimeLogSummary');
     if (!el) return;
+    _updateRuntimeLogCountsFromRows();
     const items = [
         ['total', 'Total'],
         ['debug', 'Debug'],

@@ -90,7 +90,7 @@ async def filtered_device_map(session, user: Any, device_ids: Optional[list[int]
 
 async def trip_rows(
     session,
-    user: User,
+    user: Any,
     start_date: datetime,
     end_date: datetime,
     device_ids: Optional[list[int]] = None,

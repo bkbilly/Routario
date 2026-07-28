@@ -88,7 +88,8 @@ async def create_device(
     await db.add_device_to_user(target_user, device.id)
     await sync_active_protocol_servers()
     await write_audit_log("device.created", actor=caller, company_id=device.company_id, target_type="device", target_id=device.id, request=request, metadata={"imei": device.imei, "protocol": device.protocol})
-    return device
+    created_device = await db.get_device_by_id(device.id)
+    return created_device if created_device else device
 
 
 @router.get("/{device_id}", response_model=DeviceResponse)

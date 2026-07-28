@@ -856,7 +856,15 @@ class DatabaseService:
             # Use get-or-create to avoid UNIQUE constraint crash on retry
             await self._get_or_create_state(session, device.id)
             await session.flush()
-            return device
+            result = await session.execute(
+                select(Device)
+                .where(Device.id == device.id)
+                .options(
+                    selectinload(Device.state).selectinload(DeviceState.current_driver),
+                    selectinload(Device.users),
+                )
+            )
+            return result.scalar_one()
 
     async def get_device_by_imei(self, imei: str) -> Optional[Device]:
         async with self.get_session() as session:

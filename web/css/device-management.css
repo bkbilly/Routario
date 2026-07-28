@@ -1106,14 +1106,14 @@ h1 {
     background: rgba(239, 68, 68, 0.1);
 }
 
-.command-payload {
+.command-payload,
+.command-response {
     font-family: var(--font-mono);
     font-size: 0.8125rem;
     color: var(--text-muted);
-    max-width: 300px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    max-width: 350px;
+    word-break: break-word;
+    white-space: pre-wrap;
 }
 
 /* ── Responsive ────────────────────────────────────────────────── */

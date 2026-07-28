@@ -24,6 +24,11 @@ class RuntimeLogBuffer:
         async with self._lock:
             record = {**record, "id": self._next_id}
             self._next_id += 1
+            if len(self._records) == self.max_records:
+                old_record = self._records[0]
+                old_level = str(old_record.get("level", "")).lower()
+                if old_level in self._counts and self._counts[old_level] > 0:
+                    self._counts[old_level] -= 1
             self._records.append(record)
             self._counts[record["level"].lower()] += 1
             payload = {"type": "runtime_log", "record": record, "counts": self.counts_unlocked()}
@@ -62,7 +67,7 @@ class RuntimeLogBuffer:
             "warning": int(self._counts.get("warning", 0)),
             "error": int(self._counts.get("error", 0)),
             "critical": int(self._counts.get("critical", 0)),
-            "total": int(sum(self._counts.values())),
+            "total": int(len(self._records)),
         }
 
 
@@ -112,10 +117,11 @@ def install_runtime_log_handler() -> RuntimeLogHandler:
     if root.level > logging.INFO:
         root.setLevel(logging.INFO)
 
-    access_logger = logging.getLogger("uvicorn.access")
-    access_logger.setLevel(logging.DEBUG)
-    if not any(isinstance(f, MakeAccessLogsDebug) for f in access_logger.filters):
-        access_logger.addFilter(MakeAccessLogsDebug())
+    for logger_name in ("uvicorn.access", "httpx", "httpcore"):
+        lgr = logging.getLogger(logger_name)
+        lgr.setLevel(logging.DEBUG)
+        if not any(isinstance(f, MakeAccessLogsDebug) for f in lgr.filters):
+            lgr.addFilter(MakeAccessLogsDebug())
 
     for handler in root.handlers:
         if isinstance(handler, RuntimeLogHandler):

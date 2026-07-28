@@ -734,6 +734,7 @@
                                     <th style="white-space:nowrap;">Date</th>
                                     <th style="text-align:right;">Litres</th>
                                     <th style="text-align:right;white-space:nowrap;">Odometer</th>
+                                    <th style="text-align:right;white-space:nowrap;">Distance</th>
                                     <th style="text-align:right;white-space:nowrap;">Price/L</th>
                                     <th style="text-align:right;">Total</th>
                                     <th style="text-align:center;">Full</th>
@@ -742,7 +743,7 @@
                                 </tr>
                             </thead>
                             <tbody id="lbFuelBody">
-                                <tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading&#8230;</td></tr>
+                                <tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading&#8230;</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -767,7 +768,7 @@
 
     <!-- Fuel fill-up modal -->
     <div class="modal" id="lbFuelModal">
-        <div class="modal-content" style="max-width:420px; padding:0; display:flex; flex-direction:column; max-height:90vh; overflow:hidden;">
+        <div class="modal-content" style="max-width:440px; padding:0; display:flex; flex-direction:column; max-height:90vh; overflow:hidden;">
             <div class="modal-header" style="padding:1.25rem 1.5rem 0.75rem; flex-shrink:0;">
                 <h2 class="modal-title" id="lbFuelModalTitle">Add Fill-up</h2>
                 <button type="button" class="modal-close" onclick="closeFuelLogModal()"><i class="mdi mdi-close"></i></button>
@@ -781,20 +782,37 @@
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
                     <div class="form-group" style="margin:0;">
                         <label class="form-label">Litres *</label>
-                        <input type="number" id="lbFuelLiters" class="form-input" placeholder="0.00" step="0.01" min="0">
+                        <input type="number" id="lbFuelLiters" class="form-input" placeholder="0.00" step="0.01" min="0" oninput="_calcFuelModalLive()">
                     </div>
                     <div class="form-group" style="margin:0;">
                         <label class="form-label" id="lbFuelPriceLabel">Price per litre</label>
                         <input type="number" id="lbFuelPrice" class="form-input" placeholder="0.00" step="0.001" min="0">
                     </div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Odometer (km)</label>
-                    <input type="number" id="lbFuelOdometer" class="form-input" placeholder="0" step="0.1" min="0">
+
+                <div style="background:var(--bg-tertiary); padding:0.75rem 1rem; border-radius:8px; border:1px solid var(--border-color); display:flex; flex-direction:column; gap:0.5rem;">
+                    <div style="display:flex; justify-space-between; align-items:center;">
+                        <span style="font-size:0.75rem; font-weight:700; color:var(--text-secondary); letter-spacing:0.04em;">ODOMETER / TRIP DISTANCE</span>
+                        <span id="lbFuelPrevOdometer" style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono); margin-left:auto;"></span>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+                        <div class="form-group" style="margin:0;">
+                            <label class="form-label">Odometer (km)</label>
+                            <input type="number" id="lbFuelOdometer" class="form-input" placeholder="e.g. 150500" step="0.1" min="0" oninput="_onFuelOdometerChange()">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label class="form-label">Trip Distance (km)</label>
+                            <input type="number" id="lbFuelTripDistance" class="form-input" placeholder="e.g. 450" step="0.1" min="0" oninput="_onFuelTripDistanceChange()">
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group" style="display:flex;align-items:center;gap:0.5rem;">
-                    <input type="checkbox" id="lbFuelFullTank" checked style="width:auto;accent-color:var(--accent-primary);">
-                    <label for="lbFuelFullTank" style="font-size:0.875rem;cursor:pointer;">Full tank (used for L/100km)</label>
+
+                <div class="form-group" style="display:flex;align-items:center;justify-content:space-between;">
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <input type="checkbox" id="lbFuelFullTank" checked style="width:auto;accent-color:var(--accent-primary);" onchange="_calcFuelModalLive()">
+                        <label for="lbFuelFullTank" style="font-size:0.875rem;cursor:pointer;">Full tank (used for L/100km)</label>
+                    </div>
+                    <div id="lbFuelCalcPreview" style="font-size:0.8rem; font-family:var(--font-mono); font-weight:600; color:var(--accent-primary);"></div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Notes</label>

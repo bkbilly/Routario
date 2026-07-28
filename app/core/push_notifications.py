@@ -4,7 +4,7 @@ Push Notification Service (Web Push / VAPID)
 import json
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import Integer, DateTime, ForeignKey, delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -59,31 +59,19 @@ class PushNotificationService:
         if not subscription:
             return False
         icon, badge = await self._get_branding_urls(db_service, user_id)
-        payload = json.dumps({
-            "title":    title,
-            "body":     message,
-            "severity": "info",
-            "tag":      "admin-notification",
-            "icon":     icon,
-            "badge":    badge,
-            "data":     {"url": "/gps-dashboard.html"},
-        })
-        try:
-            from pywebpush import webpush
-            webpush(
-                subscription_info=subscription,
-                data=payload,
-                vapid_private_key=self._private_key,
-                vapid_claims={"sub": self._mailto},
-            )
-            return True
-        except Exception as ex:
-            resp = getattr(ex, "response", None)
-            if resp and resp.status_code in (404, 410):
-                logger.info("[Push] Subscription expired (%s)", resp.status_code)
-            else:
-                logger.error("[Push] Send failed: %s", ex)
-            return False
+        return await self._send(
+            subscription=subscription,
+            alert_type="notification",
+            message=message,
+            severity="info",
+            device_name=None,
+            alert_id=None,
+            icon=icon,
+            badge=badge,
+            user_id=user_id,
+            db_service=db_service,
+            title_override=title,
+        )
 
     async def notify_user(
         self,
@@ -110,6 +98,8 @@ class PushNotificationService:
             alert_id=alert_id,
             icon=icon,
             badge=badge,
+            user_id=user_id,
+            db_service=db_service,
         )
 
     async def save_subscription(self, db_service, user_id: int, subscription: dict):
@@ -186,16 +176,31 @@ class PushNotificationService:
                 badge = f"/branding/company/{company.id}/badge-96.png?v={version}"
         return icon, badge
 
-    async def _send(self, subscription, alert_type, message, severity,
-                    device_name, alert_id, icon="/icons/icon-192.png", badge="/icons/badge-96.png") -> bool:
+    async def _send(
+        self,
+        subscription: dict,
+        alert_type: str,
+        message: str,
+        severity: str,
+        device_name: Optional[str],
+        alert_id: Optional[int],
+        icon: str = "/icons/icon-192.png",
+        badge: str = "/icons/badge-96.png",
+        user_id: Optional[int] = None,
+        db_service: Any = None,
+        title_override: Optional[str] = None,
+    ) -> bool:
         try:
             from pywebpush import webpush, WebPushException
         except ImportError:
             logger.error("[Push] pywebpush not installed")
             return False
 
-        emoji = {"critical": "🚨", "high": "⚠️", "warning": "⚠️", "info": "ℹ️"}.get(severity, "🔔")
-        title = f"{emoji} {device_name + ': ' if device_name else ''}{alert_type.replace('_', ' ').title()}"
+        if title_override:
+            title = title_override
+        else:
+            emoji = {"critical": "🚨", "high": "⚠️", "warning": "⚠️", "info": "ℹ️"}.get(severity, "🔔")
+            title = f"{emoji} {device_name + ': ' if device_name else ''}{alert_type.replace('_', ' ').title()}"
 
         payload = json.dumps({
             "title":    title,
@@ -207,6 +212,7 @@ class PushNotificationService:
             "data":     {"url": "/gps-dashboard.html", "alert_id": alert_id},
         })
 
+        user_str = f"user {user_id}" if user_id else "unknown user"
         try:
             webpush(
                 subscription_info=subscription,
@@ -217,10 +223,22 @@ class PushNotificationService:
             return True
         except Exception as ex:
             resp = getattr(ex, "response", None)
-            if resp and resp.status_code in (404, 410):
-                logger.info("[Push] Subscription expired (%s)", resp.status_code)
+            status_code = getattr(resp, "status_code", None)
+            is_expired = (
+                (status_code in (404, 410))
+                or ("410" in str(ex))
+                or ("404" in str(ex))
+                or ("unsubscribed or expired" in str(ex).lower())
+            )
+            if is_expired:
+                logger.info("[Push] Subscription for %s expired (%s)", user_str, status_code or 410)
+                if db_service and user_id:
+                    try:
+                        await self.remove_subscription(db_service, user_id)
+                    except Exception as clean_ex:
+                        logger.warning("[Push] Failed to auto-remove expired subscription for %s: %s", user_str, clean_ex)
             else:
-                logger.error("[Push] Send failed: %s", ex)
+                logger.error("[Push] Send failed for %s: %s", user_str, ex)
             return False
 
 

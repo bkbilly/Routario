@@ -87,21 +87,49 @@ class LogbookReport(Report):
                     FuelLog.date >= start_date,
                     FuelLog.date <= end_date,
                 )
-                .order_by(FuelLog.date.desc())
+                .order_by(FuelLog.date.asc())
             )
-            for log in fuel_result.scalars().all():
+            logs = fuel_result.scalars().all()
+            calc_map: dict[int, tuple[float | None, float | None]] = {}
+            prev_log_map: dict[int, FuelLog] = {}
+            last_full_map: dict[int, FuelLog] = {}
+
+            for log in logs:
+                prev = prev_log_map.get(log.device_id)
+                dist = None
+                cons = None
+                if prev and prev.odometer_km is not None and log.odometer_km is not None:
+                    d = log.odometer_km - prev.odometer_km
+                    if d > 0:
+                        dist = round_value(d, 1)
+
+                last_full = last_full_map.get(log.device_id)
+                if log.full_tank and last_full and last_full.odometer_km is not None and log.odometer_km is not None:
+                    full_d = log.odometer_km - last_full.odometer_km
+                    if full_d > 0:
+                        cons = round_value((log.liters / full_d) * 100, 1)
+
+                if log.full_tank:
+                    last_full_map[log.device_id] = log
+                prev_log_map[log.device_id] = log
+                calc_map[log.id] = (dist, cons)
+
+            for log in sorted(logs, key=lambda l: l.date, reverse=True):
                 device = device_map.get(log.device_id)
                 total_cost = (log.liters or 0) * (log.price_per_liter or 0) if log.price_per_liter is not None else None
+                dist_km, l_100 = calc_map.get(log.id, (None, None))
                 rows.append({
                     "vehicle": device.name if device else f"Vehicle {log.device_id}",
                     "license_plate": device.license_plate if device else None,
                     "date": log.date.isoformat() if log.date else None,
                     "description": "Fuel fill-up",
                     "odometer_km": log.odometer_km,
+                    "distance_km": dist_km,
                     "liters": log.liters,
                     "price_per_liter": log.price_per_liter,
                     "cost": round_value(total_cost, 2) if total_cost is not None else None,
                     "status": "Full tank" if log.full_tank else "Partial",
+                    "l_100km": l_100,
                     "notes": log.notes,
                 })
 
@@ -225,9 +253,11 @@ class LogbookReport(Report):
         ]
         if logbook_type == "fuel":
             columns += [
+                {"key": "distance_km", "label": "Distance", "type": "number", "decimals": 0, "suffix": " km"},
                 {"key": "liters", "label": "Liters", "type": "number", "decimals": 1},
                 {"key": "cost", "label": "Cost", "type": "number", "decimals": 2},
                 {"key": "price_per_liter", "label": "Price/L", "type": "number", "decimals": 3},
+                {"key": "l_100km", "label": "L/100km", "type": "number", "decimals": 1},
                 {"key": "status", "label": "Status", "type": "text", "empty": "-"},
                 {"key": "notes", "label": "Notes", "type": "text", "max_width": 260},
             ]
