@@ -148,7 +148,7 @@ async def cancel_command(
     db = get_db()
     cancelled = await db.cancel_command(command_id, device_id)
     if not cancelled:
-        raise HTTPException(status_code=404, detail="Command not found or already sent")
+        raise HTTPException(status_code=404, detail="Command not found or already completed")
     return {"ok": True}
 
 

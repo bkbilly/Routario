@@ -481,6 +481,7 @@ class CommandResponse(BaseModel):
     
     id: int
     device_id: int
+    direction: Optional[str] = "sent"
     command_type: str
     payload: str
     status: str

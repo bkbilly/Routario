@@ -293,6 +293,7 @@ class CommandQueue(Base):
 
     id:           Mapped[int]           = mapped_column(Integer, primary_key=True)
     device_id:    Mapped[int]           = mapped_column(Integer, ForeignKey('devices.id', ondelete='CASCADE'), index=True)
+    direction:    Mapped[str]           = mapped_column(String(10), default='sent')
     command_type: Mapped[str]           = mapped_column(String(50), nullable=False)
     payload:      Mapped[str]           = mapped_column(Text, nullable=False)
     status:       Mapped[str]           = mapped_column(String(20), default='pending')

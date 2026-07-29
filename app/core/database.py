@@ -158,6 +158,7 @@ class DatabaseService:
         # Run each migration in its own transaction so a no-op failure (column
         # already exists) on PostgreSQL doesn't abort the whole block.
         migrations = [
+            "ALTER TABLE command_queue ADD COLUMN direction VARCHAR(10) DEFAULT 'sent'",
             "ALTER TABLE integration_accounts ADD COLUMN state TEXT",
             "ALTER TABLE geofences ADD COLUMN buffer_meters INTEGER DEFAULT 50",
             # Old schema had a 'polygon' column (NOT NULL) that was renamed to
@@ -1329,23 +1330,9 @@ class DatabaseService:
 
     async def create_command(self, command_data: CommandCreate) -> CommandQueue:
         async with self.get_session() as session:
-            # Expire any previous un-acknowledged command of the SAME type for this device
-            await session.execute(
-                update(CommandQueue)
-                .where(
-                    and_(
-                        CommandQueue.device_id == command_data.device_id,
-                        CommandQueue.command_type == command_data.command_type,
-                        CommandQueue.status.in_(["sent", "pending"]),
-                    )
-                )
-                .values(
-                    status="timeout",
-                    response="Timed out (no response)",
-                )
-            )
             cmd = CommandQueue(
                 device_id=command_data.device_id,
+                direction="sent",
                 command_type=command_data.command_type,
                 payload=command_data.payload,
                 max_retries=command_data.max_retries,
@@ -1380,29 +1367,37 @@ class DatabaseService:
         self, device_id: int, response_text: str = ""
     ) -> bool:
         async with self.get_session() as session:
+            # Record incoming response as its own entry with its own timestamp
+            rec_cmd = CommandQueue(
+                device_id=device_id,
+                direction="received",
+                command_type="response",
+                payload=response_text or "ACK",
+                status="received",
+                created_at=datetime.utcnow(),
+            )
+            session.add(rec_cmd)
+
+            # Update oldest active sent command to acked if available
             result = await session.execute(
                 select(CommandQueue)
                 .where(
                     and_(
                         CommandQueue.device_id == device_id,
+                        CommandQueue.direction == "sent",
                         CommandQueue.status == "sent",
                     )
                 )
                 .order_by(CommandQueue.sent_at.asc())
                 .limit(1)
             )
-            cmd = result.scalar_one_or_none()
-            if not cmd:
-                return False
-            await session.execute(
-                update(CommandQueue)
-                .where(CommandQueue.id == cmd.id)
-                .values(
-                    status="acked",
-                    acked_at=datetime.utcnow(),
-                    response=response_text or None,
-                )
-            )
+            sent_cmd = result.scalar_one_or_none()
+            if sent_cmd:
+                sent_cmd.status = "acked"
+                sent_cmd.acked_at = datetime.utcnow()
+                sent_cmd.response = response_text or "ACK"
+
+            await session.flush()
             return True
 
     async def cancel_command(self, command_id: int, device_id: int) -> bool:
@@ -1413,10 +1408,10 @@ class DatabaseService:
                     and_(
                         CommandQueue.id == command_id,
                         CommandQueue.device_id == device_id,
-                        CommandQueue.status == "pending",
+                        CommandQueue.status.in_(["pending", "sent"]),
                     )
                 )
-                .values(status="failed", response="Cancelled by user")
+                .values(status="canceled", response="Cancelled by user")
             )
             return result.rowcount > 0
 

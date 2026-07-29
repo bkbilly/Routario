@@ -412,22 +412,38 @@ function renderCommandHistory(commands) {
         const dtObj = new Date(cmd.created_at);
         const datePart = dtObj.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
         const timePart = dtObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        const statusClass = cmd.status.toLowerCase();
         
-        const displayPayload = escape(cmd.payload || '');
-        const responseText = cmd.response ? escape(cmd.response) : '-';
+        const isReceived = (cmd.direction === 'received' || cmd.status === 'received');
+        const statusStr = (cmd.status || (isReceived ? 'received' : 'pending')).toLowerCase();
+
+        let statusBadge = '';
+        if (isReceived || statusStr === 'received') {
+            statusBadge = `<span class="command-status received" title="Message received from device"><i class="mdi mdi-arrow-down-bold"></i> Received</span>`;
+        } else if (statusStr === 'sent') {
+            statusBadge = `<span class="command-status sent" title="Transmitted to device"><i class="mdi mdi-arrow-up-bold"></i> Sent</span>`;
+        } else if (statusStr === 'acked') {
+            statusBadge = `<span class="command-status acked" title="Acknowledged by device"><i class="mdi mdi-arrow-up-bold"></i> Acked</span>`;
+        } else if (statusStr === 'canceled' || statusStr === 'cancelled') {
+            statusBadge = `<span class="command-status canceled" title="Cancelled by user"><i class="mdi mdi-arrow-up-bold"></i> Canceled</span>`;
+        } else if (statusStr === 'failed' || statusStr === 'timeout') {
+            statusBadge = `<span class="command-status failed" title="Execution failed"><i class="mdi mdi-arrow-up-bold"></i> Failed</span>`;
+        } else {
+            statusBadge = `<span class="command-status pending" title="Queued in database"><i class="mdi mdi-arrow-up-bold"></i> Pending</span>`;
+        }
+
+        const cmdType = cmd.command_type || (isReceived ? 'response' : '');
+        const displayData = escape(cmd.payload || cmd.response || '-');
         
-        const cancelBtn = cmd.status === 'pending'
+        const cancelBtn = (!isReceived && (statusStr === 'pending' || statusStr === 'sent'))
             ? `<button type="button" class="btn-cancel-command" onclick="cancelCommand(${cmd.id})" title="Cancel command"><i class="mdi mdi-close"></i></button>`
             : '';
 
         return `
             <tr>
                 <td style="white-space: nowrap;">${datePart}<br><span style="color: var(--text-muted); font-size: 0.8rem; font-family: var(--font-mono);">${timePart}</span></td>
-                <td style="font-weight: 600;">${escape(cmd.command_type)}</td>
-                <td class="command-payload" title="${displayPayload}">${displayPayload}</td>
-                <td><span class="command-status ${statusClass}">${escape(cmd.status)}</span></td>
-                <td class="command-response" style="font-family: var(--font-mono); font-size: 0.8125rem; word-break: break-word; max-width: 350px;" title="${responseText}">${responseText}</td>
+                <td>${statusBadge}</td>
+                <td style="font-weight: 600;">${escape(cmdType)}</td>
+                <td class="command-payload" title="${displayData}">${displayData}</td>
                 <td>${cancelBtn}</td>
             </tr>
         `;
