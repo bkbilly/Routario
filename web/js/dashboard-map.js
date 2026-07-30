@@ -304,7 +304,7 @@ function updateDeviceMarker(deviceId, state) {
             .bindPopup(popupContent);
         clusterGroup.addLayer(markers[deviceId]);
 
-        markers[deviceId].on('click', () => selectDevice(deviceId));
+        markers[deviceId].on('click', () => selectDevice(deviceId, { zoom: false }));
 
         markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
 

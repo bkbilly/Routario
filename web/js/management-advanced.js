@@ -1987,6 +1987,7 @@ function rtpHealthValue(row, col) {
 }
 
 function rtpHealthStatus(row) {
+    if (row.enabled === false) return 'disabled';
     if (row.degraded) return 'degraded';
     if (row.ok) return 'ok';
     if (row.optional) return 'optional';

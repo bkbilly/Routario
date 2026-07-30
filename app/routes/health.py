@@ -453,8 +453,8 @@ def _check_geocoding() -> dict:
     is_active = geocoding_service is not None if enabled else False
 
     return {
-        "ok": True if not enabled else is_active,
-        "optional": True,
+        "ok": is_active,
+        "optional": not enabled or not is_active,
         "enabled": enabled,
         "provider": provider,
         "initialized": is_active,

@@ -1094,6 +1094,7 @@ class DatabaseService:
                         prev_trip.end_time = None
                         prev_trip.end_latitude = None
                         prev_trip.end_longitude = None
+                        prev_trip.end_address = None
                         prev_trip.duration_minutes = 0
                         prev_trip.avg_speed = 0.0
                         state.active_trip_id  = prev_trip.id

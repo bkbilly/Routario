@@ -70,7 +70,18 @@ def _plain(value) -> str:
 
 
 def _pdf_escape(value: str) -> str:
-    return value.replace("\r", " ").replace("\n", " ").replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    import unicodedata
+    res = []
+    for ch in str(value):
+        if ord(ch) <= 255:
+            res.append(ch)
+        else:
+            decomp = [c for c in unicodedata.normalize("NFKD", ch) if ord(c) <= 255]
+            res.extend(decomp if decomp else ["?"])
+    cleaned = "".join(res)
+    return cleaned.replace("\r", " ").replace("\n", " ").replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
 
 
 def _local_generated_label(timezone_name: str | None) -> str:
@@ -439,7 +450,10 @@ def _pdf_cell_value(value, column: dict | None = None) -> str:
         return "Yes" if value else "No"
     if isinstance(value, list):
         return "; ".join(str(v) for v in value)
-    return str(value)
+    val_str = str(value)
+    if len(val_str) >= 16 and "T" in val_str and val_str[:4].isdigit():
+        val_str = val_str.replace("T", " ")
+    return val_str
 
 
 def _report_table_rows(columns: list[dict], rows: list[dict]) -> tuple[list[str], list[list[str]]]:
@@ -461,10 +475,214 @@ def _billing_cards(detail: dict) -> list[tuple[str, str]]:
     ]
 
 
+def _get_reportlab_fonts() -> tuple[str, str]:
+    import os
+    font_paths = [
+        ('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'),
+        ('/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf', '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf'),
+        ('/usr/share/fonts/truetype/freefont/FreeSans.ttf', '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf'),
+        ('/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf', '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'),
+        ('/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf', '/usr/share/fonts/truetype/ubuntu/Ubuntu-B.ttf'),
+    ]
+    for fp, fbp in font_paths:
+        if os.path.exists(fp):
+            try:
+                from reportlab.pdfbase import pdfmetrics
+                from reportlab.pdfbase.ttfonts import TTFont
+
+                if 'AppUnicode' not in pdfmetrics.getRegisteredFontNames():
+                    pdfmetrics.registerFont(TTFont('AppUnicode', fp))
+                bold_name = 'AppUnicode'
+                if os.path.exists(fbp):
+                    if 'AppUnicode-Bold' not in pdfmetrics.getRegisteredFontNames():
+                        pdfmetrics.registerFont(TTFont('AppUnicode-Bold', fbp))
+                    bold_name = 'AppUnicode-Bold'
+                return 'AppUnicode', bold_name
+            except Exception:
+                pass
+    return 'Helvetica', 'Helvetica-Bold'
+
+
+def _write_schedule_pdf_reportlab(path: Path, schedule: ScheduledReport, data: dict, columns: list[dict],
+                                  rows: list[dict], billing_details: list[dict], logo_path: Path | None,
+                                  app_name: str = "Routario", timezone_name: str | None = "UTC") -> None:
+    import html
+    from reportlab.lib.pagesizes import letter, landscape
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+    from reportlab.pdfgen import canvas
+
+    font_reg, font_bold = _get_reportlab_fonts()
+
+    class NumberedCanvas(canvas.Canvas):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._saved_page_states = []
+
+        def showPage(self):
+            self._saved_page_states.append(dict(self.__dict__))
+            self._startPage()
+
+        def save(self):
+            num_pages = len(self._saved_page_states)
+            for state in self._saved_page_states:
+                self.__dict__.update(state)
+                self.draw_page_decorations(num_pages)
+                super().showPage()
+            super().save()
+
+        def draw_page_decorations(self, page_count):
+            self.saveState()
+            page_w, page_h = landscape(letter)
+            margin = 36
+
+            self.setFillColor(colors.HexColor("#0f1420"))
+            self.rect(0, page_h - 88, page_w, 88, fill=1, stroke=0)
+            self.setFillColor(colors.HexColor("#3c98fe"))
+            self.rect(0, page_h - 90, page_w, 2, fill=1, stroke=0)
+
+            logo_x, logo_y = margin, page_h - 69
+            if logo_path and logo_path.is_file():
+                try:
+                    self.drawImage(str(logo_path), logo_x, logo_y, width=36, height=36, preserveAspectRatio=True, mask='auto')
+                except Exception:
+                    self.setFillColor(colors.HexColor("#3c98fe"))
+                    self.rect(logo_x, logo_y, 36, 36, fill=1, stroke=0)
+                    self.setFont(font_bold, 18)
+                    self.setFillColor(colors.white)
+                    self.drawString(logo_x + 11, logo_y + 10, "R")
+            else:
+                self.setFillColor(colors.HexColor("#3c98fe"))
+                self.rect(logo_x, logo_y, 36, 36, fill=1, stroke=0)
+                self.setFont(font_bold, 18)
+                self.setFillColor(colors.white)
+                self.drawString(logo_x + 11, logo_y + 10, "R")
+
+            self.setFont(font_bold, 17)
+            self.setFillColor(colors.white)
+            self.drawString(logo_x + 50, page_h - 43, app_name)
+            self.setFont(font_reg, 9)
+            self.setFillColor(colors.HexColor("#cfdceb"))
+            self.drawString(logo_x + 50, page_h - 62, getattr(schedule, 'name', '') or getattr(schedule, 'report_type', 'Report'))
+
+            gen_label = _local_generated_label(timezone_name)
+            self.setFont(font_reg, 8)
+            self.drawRightString(page_w - margin, page_h - 48, gen_label)
+
+            self.setStrokeColor(colors.HexColor("#d1d5db"))
+            self.setLineWidth(0.6)
+            self.line(margin, 25, page_w - margin, 25)
+            self.setFont(font_reg, 7)
+            self.setFillColor(colors.HexColor("#6b7280"))
+            self.drawString(margin, 12, f"{app_name} scheduled report")
+            self.drawRightString(page_w - margin, 12, f"Page {self._pageNumber} of {page_count}")
+            self.restoreState()
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('SectionTitle', fontName=font_bold, fontSize=13, leading=16, textColor=colors.HexColor('#0f1420'), spaceAfter=8)
+    card_label_style = ParagraphStyle('CardLabel', fontName=font_bold, fontSize=6, leading=8, textColor=colors.HexColor('#6b7280'))
+    card_val_style = ParagraphStyle('CardValue', fontName=font_bold, fontSize=10, leading=12, textColor=colors.HexColor('#111827'))
+    cell_style = ParagraphStyle('CellText', fontName=font_reg, fontSize=7, leading=9, textColor=colors.HexColor('#111827'))
+    header_cell_style = ParagraphStyle('HeaderCellText', fontName=font_bold, fontSize=7, leading=9, textColor=colors.white)
+
+    doc = SimpleDocTemplate(str(path), pagesize=landscape(letter), leftMargin=36, rightMargin=36, topMargin=100, bottomMargin=40)
+    story = []
+
+    # Summary Section
+    story.append(Paragraph("Summary", title_style))
+    summary_items = _summary_items(data) or [("Report", getattr(schedule, 'report_type', 'report')), ("Rows", str(len(rows)))]
+    if summary_items:
+        card_cells = []
+        for label, val in summary_items:
+            content = [
+                Paragraph(html.escape(str(label)).upper(), card_label_style),
+                Spacer(1, 2),
+                Paragraph(html.escape(str(val)), card_val_style)
+            ]
+            card_cells.append(content)
+        chunk_size = 4
+        card_table_data = [card_cells[i:i + chunk_size] for i in range(0, len(card_cells), chunk_size)]
+        while card_table_data and len(card_table_data[-1]) < chunk_size:
+            card_table_data[-1].append("")
+        if card_table_data:
+            total_w = 720
+            col_w = total_w / chunk_size
+            ct = Table(card_table_data, colWidths=[col_w] * chunk_size)
+            ct.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
+                ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d1d5db')),
+                ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e5e7eb')),
+                ('TOPPADDING', (0,0), (-1,-1), 6),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+                ('LEFTPADDING', (0,0), (-1,-1), 8),
+                ('RIGHTPADDING', (0,0), (-1,-1), 8),
+            ]))
+            story.append(ct)
+            story.append(Spacer(1, 14))
+
+    # Results Section
+    headers, table_rows = _report_table_rows(columns, rows)
+    max_rows = 500
+    display_rows = table_rows[:max_rows]
+    story.append(Paragraph("Results", title_style))
+
+    if headers:
+        total_w = 720
+        col_w = total_w / len(headers)
+        res_table_data = [[Paragraph(html.escape(h), header_cell_style) for h in headers]]
+        for r in display_rows:
+            res_table_data.append([Paragraph(html.escape(str(cell)), cell_style) for cell in r])
+
+        rt = Table(res_table_data, colWidths=[col_w] * len(headers))
+        rt.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#212937')),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e5e7eb')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f9fafb')]),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ]))
+        story.append(rt)
+        if len(rows) > max_rows:
+            story.append(Spacer(1, 4))
+            story.append(Paragraph(f"Showing first {max_rows} of {len(rows)} rows. Full results are included in the CSV attachment.", cell_style))
+
+    # Billing Details
+    for detail in billing_details:
+        company = (detail.get("company") or {}).get("name") or "Company"
+        story.append(PageBreak())
+        story.append(Paragraph(f"Billing Details - {html.escape(company)}", title_style))
+        b_cards = _billing_cards(detail)
+        if b_cards:
+            b_cells = [[Paragraph(html.escape(lbl).upper(), card_label_style), Spacer(1, 2), Paragraph(html.escape(v), card_val_style)] for lbl, v in b_cards]
+            b_chunk = 4
+            b_data = [b_cells[i:i+b_chunk] for i in range(0, len(b_cells), b_chunk)]
+            while b_data and len(b_data[-1]) < b_chunk:
+                b_data[-1].append("")
+            bt = Table(b_data, colWidths=[720/b_chunk]*b_chunk)
+            bt.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
+                ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#d1d5db')),
+                ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e5e7eb')),
+                ('TOPPADDING', (0,0), (-1,-1), 6),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+            ]))
+            story.append(bt)
+            story.append(Spacer(1, 10))
+
+    doc.build(story, canvasmaker=NumberedCanvas)
+
+
 def _write_schedule_pdf(path: Path, schedule: ScheduledReport, user: User, data: dict, columns: list[dict],
                         rows: list[dict], billing_details: list[dict], logo_path: Path | None,
                         app_name: str = "Routario", timezone_name: str | None = "UTC") -> None:
-    _write_schedule_pdf_basic(path, schedule, data, columns, rows, billing_details, logo_path, app_name, timezone_name)
+    try:
+        _write_schedule_pdf_reportlab(path, schedule, data, columns, rows, billing_details, logo_path, app_name, timezone_name)
+    except Exception as exc:
+        logger.warning("ReportLab PDF generation failed, falling back to basic PDF: %s", exc)
+        _write_schedule_pdf_basic(path, schedule, data, columns, rows, billing_details, logo_path, app_name, timezone_name)
+
 
 
 def _write_schedule_pdf_basic(path: Path, schedule: ScheduledReport, data: dict, columns: list[dict],

@@ -676,7 +676,9 @@ function _renderTotalRow(row, columns) {
 }
 
 function _renderCell(row, col) {
-    const title = col.title_key && row[col.title_key] ? ` title="${_esc(row[col.title_key])}"` : '';
+    const rawVal = col.title_key ? row[col.title_key] : row[col.key];
+    const titleText = rawVal !== null && rawVal !== undefined && rawVal !== '' ? String(rawVal) : '';
+    const title = titleText ? ` title="${_esc(titleText)}"` : '';
     const style = [
         col.max_width ? `max-width:${col.max_width}px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;` : '',
         ['datetime', 'datetime_split'].includes(col.type) ? 'white-space:nowrap;' : '',
@@ -797,7 +799,11 @@ function _plainValue(value, col = {}) {
     if (col.type === 'bool_active') return value ? 'Active' : 'Missing';
     if (col.type === 'read_status') return value ? 'Read' : 'Unread';
     if (Array.isArray(value)) return value.join('; ');
-    return String(value);
+    let valStr = String(value);
+    if (valStr.length >= 16 && valStr.includes('T') && /^\d{4}-\d{2}-\d{2}/.test(valStr)) {
+        valStr = valStr.replace('T', ' ');
+    }
+    return valStr;
 }
 
 function _downloadCsv(headers, rows, rowFn, filename) {
@@ -1102,12 +1108,19 @@ function _fmtDate(d) { return d.toISOString().split('T')[0]; }
 
 function _fmtDatetime(iso) {
     if (!iso) return '—';
-    return new Date(iso).toLocaleString(undefined, { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    const str = String(iso).replace('T', ' ');
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return str;
+    return d.toLocaleString(undefined, { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }).replace('T', ' ');
 }
 
 function _fmtDatetimeSplit(iso) {
     if (!iso) return '—';
-    const d    = new Date(iso);
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) {
+        const parts = String(iso).replace('T', ' ').split(' ');
+        return `<span style="display:block;">${_esc(parts[0])}</span><span style="display:block;color:var(--text-muted);">${_esc(parts[1] || '')}</span>`;
+    }
     const date = d.toLocaleDateString(undefined, { year:'numeric', month:'2-digit', day:'2-digit' });
     const time = d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
     return `<span style="display:block;">${date}</span><span style="display:block;color:var(--text-muted);">${time}</span>`;
@@ -1798,6 +1811,7 @@ function _healthValue(row, col) {
 }
 
 function _healthStatus(row) {
+    if (row.enabled === false) return 'disabled';
     if (row.degraded) return 'degraded';
     if (row.ok) return 'ok';
     if (row.optional) return 'optional';
