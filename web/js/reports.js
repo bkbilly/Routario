@@ -1425,6 +1425,44 @@ let _sfSelectedVehIds  = new Set();
 let _sfSelectedUserIds = new Set();
 let _editingScheduleId = null;
 
+let _runtimeLogDebugMode = false;
+
+async function fetchRuntimeLogDebugMode() {
+    try {
+        const res = await apiFetch(`${API_BASE}/runtime-logs/debug-mode`);
+        if (res.ok) {
+            const data = await res.json();
+            _runtimeLogDebugMode = !!data.enabled;
+            if (_activeTab === 'logs') _injectNavScheduleAction();
+        }
+    } catch (e) {
+        console.warn('Failed to fetch debug mode status', e);
+    }
+}
+
+async function toggleRuntimeLogDebugMode() {
+    const nextState = !_runtimeLogDebugMode;
+    try {
+        const res = await apiFetch(`${API_BASE}/runtime-logs/debug-mode`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: nextState })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            _runtimeLogDebugMode = !!data.enabled;
+            showAlert(`Debug mode ${_runtimeLogDebugMode ? 'enabled' : 'disabled'}`, 'info');
+            _injectNavScheduleAction();
+            await refreshRuntimeLogs();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showAlert(err.detail || 'Failed to toggle debug mode', 'error');
+        }
+    } catch (e) {
+        showAlert('Failed to toggle debug mode', 'error');
+    }
+}
+
 function _injectNavScheduleAction() {
     const el = document.getElementById('snAddAction');
     if (!el) return;
@@ -1437,10 +1475,14 @@ function _injectNavScheduleAction() {
         return;
     }
     if (_activeTab === 'logs') {
-        el.innerHTML = `<button class="header-menu-item" onclick="refreshRuntimeLogs();${closeMenu}">
-            <span class="header-menu-item-icon"><i class="mdi mdi-refresh" style="font-size:15px;"></i></span>
-            <span>Refresh</span>
-        </button>`;
+        const debugLabel = _runtimeLogDebugMode ? 'Disable Debug Mode' : 'Enable Debug Mode';
+        const debugIcon = _runtimeLogDebugMode ? 'mdi-bug' : 'mdi-bug-outline';
+        el.innerHTML = `
+            <button class="header-menu-item" onclick="toggleRuntimeLogDebugMode();${closeMenu}">
+                <span class="header-menu-item-icon"><i class="mdi ${debugIcon}" style="font-size:15px;"></i></span>
+                <span>${debugLabel}</span>
+            </button>
+        `;
         return;
     }
     el.innerHTML = hasPermission('view_reports') ? `<button class="header-menu-item" onclick="openScheduleModal(null);${closeMenu}">
@@ -1451,6 +1493,7 @@ function _injectNavScheduleAction() {
 
 async function initRuntimeLogs() {
     if (!_CAN_SEE_LOGS) return;
+    await fetchRuntimeLogDebugMode();
     await refreshRuntimeLogs();
     connectRuntimeLogWebSocket();
 }

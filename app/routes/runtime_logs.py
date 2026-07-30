@@ -9,10 +9,14 @@ from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from core.auth import require_admin
 from core.config import get_settings
 from core.database import get_db
-from core.runtime_logs import runtime_log_buffer
-from models import User
+from pydantic import BaseModel
+from core.runtime_logs import runtime_log_buffer, is_debug_mode, set_debug_mode
 
 router = APIRouter(prefix="/api/runtime-logs", tags=["runtime-logs"])
+
+
+class DebugModeRequest(BaseModel):
+    enabled: bool
 
 
 @router.get("")
@@ -21,6 +25,20 @@ async def get_runtime_logs(
     current_user: User = Depends(require_admin),
 ):
     return await runtime_log_buffer.snapshot(limit=limit)
+
+
+@router.get("/debug-mode")
+async def get_debug_mode(current_user: User = Depends(require_admin)):
+    return {"enabled": is_debug_mode()}
+
+
+@router.post("/debug-mode")
+async def toggle_debug_mode(
+    body: DebugModeRequest,
+    current_user: User = Depends(require_admin),
+):
+    enabled = set_debug_mode(body.enabled)
+    return {"enabled": enabled}
 
 
 async def _user_from_ws_token(token: str) -> User | None:

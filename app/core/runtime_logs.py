@@ -118,3 +118,18 @@ def install_runtime_log_handler() -> RuntimeLogHandler:
     handler.setLevel(logging.INFO)
     root.addHandler(handler)
     return handler
+
+
+def is_debug_mode() -> bool:
+    root = logging.getLogger()
+    return root.level <= logging.DEBUG
+
+
+def set_debug_mode(enabled: bool) -> bool:
+    root = logging.getLogger()
+    level = logging.DEBUG if enabled else logging.INFO
+    root.setLevel(level)
+    for handler in root.handlers:
+        if isinstance(handler, RuntimeLogHandler):
+            handler.setLevel(level)
+    return is_debug_mode()

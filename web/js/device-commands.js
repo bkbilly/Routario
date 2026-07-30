@@ -55,7 +55,6 @@ function _checkProtocolUnsaved() {
 // Load available commands for the device
 async function loadAvailableCommands() {
     try {
-        // Use the currently-selected protocol from the form (may differ from saved device protocol)
         const selectedProtocol = document.getElementById('deviceProtocol')?.value;
         const url = selectedProtocol
             ? `${API_BASE}/devices/protocol/${selectedProtocol}/command-support`
@@ -69,23 +68,20 @@ async function loadAvailableCommands() {
         availableCommands = data.available_commands || [];
         commandInfo = data.command_info || {};
         
-        // Filter out 'custom' since it has its own tab
         availableCommands = availableCommands.filter(cmd => cmd !== 'custom');
         
-        // Populate the command select dropdown
         const select = document.getElementById('commandTypeSelect');
-        select.innerHTML = '<option value="">-- Select a command --</option>';
-        
-        availableCommands.forEach(cmd => {
-            const option = document.createElement('option');
-            option.value = cmd;
-            option.textContent = cmd.charAt(0).toUpperCase() + cmd.slice(1).replace('_', ' ');
-            select.appendChild(option);
-        });
-        
-        if (availableCommands.length === 0) {
-            showAlert('This device protocol does not support commands', 'warning');
+        if (select) {
+            select.innerHTML = '<option value="custom" selected>Custom Command</option>';
+            availableCommands.forEach(cmd => {
+                const option = document.createElement('option');
+                option.value = cmd;
+                option.textContent = cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/_/g, ' ');
+                select.appendChild(option);
+            });
         }
+        
+        onCommandSelect();
     } catch (error) {
         console.error('Error loading available commands:', error);
         showAlert('Failed to load available commands', 'error');
@@ -95,76 +91,75 @@ async function loadAvailableCommands() {
 // Handle command selection
 function onCommandSelect() {
     const select = document.getElementById('commandTypeSelect');
-    const commandType = select.value;
+    const commandType = select ? select.value : 'custom';
     
-    if (!commandType) {
-        document.getElementById('commandInfoBox').style.display = 'none';
-        document.getElementById('commandParamsBox').style.display = 'none';
-        document.getElementById('commandPreviewBox').style.display = 'none';
+    const customBox = document.getElementById('customCommandBox');
+    const infoBox = document.getElementById('commandInfoBox');
+    const paramsBox = document.getElementById('commandParamsBox');
+    const previewBox = document.getElementById('commandPreviewBox');
+
+    if (previewBox) previewBox.style.display = 'none';
+
+    if (commandType === 'custom' || !commandType) {
+        if (customBox) customBox.style.display = 'block';
+        if (infoBox) infoBox.style.display = 'none';
+        if (paramsBox) paramsBox.style.display = 'none';
         return;
     }
+
+    if (customBox) customBox.style.display = 'none';
     
     const info = commandInfo[commandType] || {};
     
-    // Show command info
-    document.getElementById('commandDescription').textContent = info.description || 'No description available';
-    
-    // For commands with params, show example with params appended
-    let exampleText = info.example || commandType;
-    if (info.requires_params && info.example && info.example.includes(' ')) {
-        // Example already includes params, show it as is
-        exampleText = info.example;
-    } else if (info.requires_params) {
-        // Add a note about how params will be appended
-        exampleText = `${commandType} [your-parameters]`;
+    if (infoBox) {
+        document.getElementById('commandDescription').textContent = info.description || 'No description available';
+        
+        let exampleText = info.example || commandType;
+        if (info.requires_params && info.example && info.example.includes(' ')) {
+            exampleText = info.example;
+        } else if (info.requires_params) {
+            exampleText = `${commandType} [your-parameters]`;
+        }
+        document.getElementById('commandExample').textContent = exampleText;
+        infoBox.style.display = 'block';
     }
-    document.getElementById('commandExample').textContent = exampleText;
-    document.getElementById('commandInfoBox').style.display = 'block';
     
-    // Show parameters box if needed
     const requiresParams = info.requires_params || false;
-    const paramsBox = document.getElementById('commandParamsBox');
-    paramsBox.style.display = requiresParams ? 'block' : 'none';
-    
-    if (requiresParams) {
-        // Update placeholder based on example
-        const paramsInput = document.getElementById('commandParams');
-        if (info.example && info.example.includes(' ')) {
-            // Extract the params part from the example
-            const paramsPart = info.example.split(' ').slice(1).join(' ');
-            paramsInput.placeholder = `e.g., ${paramsPart}`;
-        } else {
-            paramsInput.placeholder = 'Enter parameters here';
+    if (paramsBox) {
+        paramsBox.style.display = requiresParams ? 'block' : 'none';
+        if (requiresParams) {
+            const paramsInput = document.getElementById('commandParams');
+            if (info.example && info.example.includes(' ')) {
+                const paramsPart = info.example.split(' ').slice(1).join(' ');
+                paramsInput.placeholder = `e.g., ${paramsPart}`;
+            } else {
+                paramsInput.placeholder = 'Enter parameters here';
+            }
         }
     }
-    
-    // Hide preview
-    document.getElementById('commandPreviewBox').style.display = 'none';
 }
 
 // Preview Command
 async function previewCommand() {
-    const commandType = document.getElementById('commandTypeSelect').value;
-    if (!commandType) {
-        showAlert('Please select a command', 'warning');
-        return;
+    const commandType = document.getElementById('commandTypeSelect')?.value || 'custom';
+    let payload = '';
+
+    if (commandType === 'custom') {
+        payload = document.getElementById('customCommandInput')?.value.trim() || '';
+        if (!payload) {
+            showAlert('Please enter a custom command payload', 'warning');
+            return;
+        }
+    } else {
+        const params = document.getElementById('commandParams')?.value.trim() || '';
+        const info = commandInfo[commandType] || {};
+        if (info.requires_params && !params) {
+            showAlert('This command requires parameters', 'warning');
+            return;
+        }
+        payload = info.requires_params && params ? `${commandType} ${params}` : commandType;
     }
-    
-    const params = document.getElementById('commandParams').value.trim();
-    
-    // Build the full command: for commands that require params, append them with a space
-    const info = commandInfo[commandType] || {};
-    let payload = commandType;
-    
-    if (info.requires_params && params) {
-        payload = `${commandType} ${params}`;
-    } else if (!info.requires_params) {
-        payload = commandType;
-    } else if (info.requires_params && !params) {
-        showAlert('This command requires parameters', 'warning');
-        return;
-    }
-    
+
     try {
         const selectedProtocol = document.getElementById('deviceProtocol')?.value;
         const previewUrl = selectedProtocol
@@ -183,7 +178,6 @@ async function previewCommand() {
 
         const data = await response.json();
 
-        // Show preview
         document.getElementById('commandPreviewHex').textContent = data.hex || 'N/A';
         document.getElementById('commandPreviewAscii').textContent = data.ascii || 'Non-ASCII binary data';
         document.getElementById('commandPreviewBox').style.display = 'block';
@@ -197,169 +191,72 @@ async function previewCommand() {
 // Send Command
 async function sendCommand() {
     if (_checkProtocolUnsaved()) return;
-    const commandType = document.getElementById('commandTypeSelect').value;
-    if (!commandType) {
-        showAlert('Please select a command', 'warning');
+    const commandType = document.getElementById('commandTypeSelect')?.value || 'custom';
+    let payload = '';
+
+    if (commandType === 'custom') {
+        payload = document.getElementById('customCommandInput')?.value.trim() || '';
+        if (!payload) {
+            showAlert('Please enter a custom command payload', 'warning');
+            return;
+        }
+    } else {
+        const params = document.getElementById('commandParams')?.value.trim() || '';
+        const info = commandInfo[commandType] || {};
+        if (info.requires_params && !params) {
+            showAlert('This command requires parameters', 'warning');
+            return;
+        }
+        payload = info.requires_params && params ? `${commandType} ${params}` : commandType;
+    }
+
+    const deviceName = currentCommandDevice?.name || 'device';
+    if (!confirm(`Send "${payload}" command to ${deviceName}?`)) {
         return;
     }
-    
-    const params = document.getElementById('commandParams').value.trim();
-    
-    // Build the full command: for commands that require params, append them with a space
-    const info = commandInfo[commandType] || {};
-    let payload = commandType;
-    
-    if (info.requires_params && params) {
-        payload = `${commandType} ${params}`;
-    } else if (!info.requires_params) {
-        payload = commandType;
-    } else if (info.requires_params && !params) {
-        showAlert('This command requires parameters', 'warning');
-        return;
-    }
-    
-    // Confirm before sending
-    if (!confirm(`Send "${payload}" command to ${currentCommandDevice.name}?`)) {
-        return;
-    }
-    
+
     const btn = document.getElementById('sendCommandBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Sending...';
-    
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Sending...';
+    }
+
     try {
         const response = await apiFetch(`${API_BASE}/devices/${currentCommandDeviceId}/command`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 device_id: currentCommandDeviceId,
-                command_type: commandType,  // Use actual command type, not 'custom'
+                command_type: commandType,
                 payload: payload,
                 max_retries: 3
             })
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.detail || 'Failed to send command');
         }
-        
-        const result = await response.json();
-        
+
         showAlert('Command queued successfully', 'success');
-        
-        // Reset form
-        document.getElementById('commandTypeSelect').value = '';
-        document.getElementById('commandParams').value = '';
-        document.getElementById('commandInfoBox').style.display = 'none';
-        document.getElementById('commandParamsBox').style.display = 'none';
-        document.getElementById('commandPreviewBox').style.display = 'none';
-        
-        // Switch to history tab to show the queued command
+
+        if (document.getElementById('commandTypeSelect')) document.getElementById('commandTypeSelect').value = 'custom';
+        if (document.getElementById('customCommandInput')) document.getElementById('customCommandInput').value = '';
+        if (document.getElementById('commandParams')) document.getElementById('commandParams').value = '';
+        onCommandSelect();
+
         setTimeout(() => {
             switchCommandTab('history');
         }, 500);
-        
+
     } catch (error) {
         console.error('Error sending command:', error);
         showAlert(error.message || 'Failed to send command', 'error');
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="mdi mdi-antenna"></i> Send Command';
-    }
-}
-
-// Preview Custom Command
-async function previewCustomCommand() {
-    const customInput = document.getElementById('customCommandInput').value.trim();
-    if (!customInput) {
-        showAlert('Please enter a command', 'warning');
-        return;
-    }
-    
-    try {
-        const selectedProtocol = document.getElementById('deviceProtocol')?.value;
-        const previewUrl = selectedProtocol
-            ? `${API_BASE}/devices/protocol/${selectedProtocol}/command/preview`
-            : `${API_BASE}/devices/${currentCommandDeviceId}/command/preview`;
-        const response = await apiFetch(previewUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ command_type: 'custom', payload: customInput })
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Preview failed');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="mdi mdi-antenna"></i> Send Command';
         }
-        
-        const data = await response.json();
-        
-        // Show preview
-        document.getElementById('customCommandPreviewHex').textContent = data.hex || 'N/A';
-        document.getElementById('customCommandPreviewAscii').textContent = data.ascii || 'Non-ASCII binary data';
-        document.getElementById('customCommandPreviewBox').style.display = 'block';
-        
-    } catch (error) {
-        console.error('Error previewing custom command:', error);
-        showAlert(error.message || 'Failed to preview command', 'error');
-    }
-}
-
-// Send Custom Command
-async function sendCustomCommand() {
-    if (_checkProtocolUnsaved()) return;
-    const customInput = document.getElementById('customCommandInput').value.trim();
-    if (!customInput) {
-        showAlert('Please enter a command', 'warning');
-        return;
-    }
-    
-    // Confirm before sending
-    if (!confirm(`Send custom command to ${currentCommandDevice.name}?`)) {
-        return;
-    }
-    
-    const btn = document.getElementById('sendCustomCommandBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Sending...';
-    
-    try {
-        const response = await apiFetch(`${API_BASE}/devices/${currentCommandDeviceId}/command`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                device_id: currentCommandDeviceId,
-                command_type: 'custom',
-                payload: customInput,
-                max_retries: 3
-            })
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to send command');
-        }
-        
-        const result = await response.json();
-        
-        showAlert('Custom command queued successfully', 'success');
-        
-        // Reset form
-        document.getElementById('customCommandInput').value = '';
-        document.getElementById('customCommandPreviewBox').style.display = 'none';
-        
-        // Switch to history tab to show the queued command
-        setTimeout(() => {
-            switchCommandTab('history');
-        }, 500);
-        
-    } catch (error) {
-        console.error('Error sending custom command:', error);
-        showAlert(error.message || 'Failed to send command', 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="mdi mdi-antenna"></i> Send Custom Command';
     }
 }
 
@@ -434,9 +331,15 @@ function renderCommandHistory(commands) {
         const cmdType = cmd.command_type || (isReceived ? 'response' : '');
         const displayData = escape(cmd.payload || cmd.response || '-');
         
-        const cancelBtn = (!isReceived && (statusStr === 'pending' || statusStr === 'sent'))
-            ? `<button type="button" class="btn-cancel-command" onclick="cancelCommand(${cmd.id})" title="Cancel command"><i class="mdi mdi-close"></i></button>`
-            : '';
+        const showCancel = (!isReceived && (statusStr === 'pending' || statusStr === 'sent'));
+        const isSuperAdmin = localStorage.getItem('is_admin') === 'true';
+
+        let actionBtn = '';
+        if (showCancel) {
+            actionBtn = `<button type="button" class="btn-cancel-command" onclick="cancelCommand(${cmd.id})" title="Cancel command"><i class="mdi mdi-close"></i></button>`;
+        } else if (isSuperAdmin) {
+            actionBtn = `<button type="button" class="btn-delete-command" onclick="deleteCommandHistory(${cmd.id})" title="Delete entry"><i class="mdi mdi-trash-can-outline"></i></button>`;
+        }
 
         return `
             <tr>
@@ -444,7 +347,7 @@ function renderCommandHistory(commands) {
                 <td>${statusBadge}</td>
                 <td style="font-weight: 600;">${escape(cmdType)}</td>
                 <td class="command-payload" title="${displayData}">${displayData}</td>
-                <td>${cancelBtn}</td>
+                <td>${actionBtn}</td>
             </tr>
         `;
     }).join('');
@@ -461,6 +364,24 @@ async function cancelCommand(commandId) {
         }
     } catch {
         showAlert('Failed to cancel command.', 'error');
+    }
+}
+
+async function deleteCommandHistory(commandId) {
+    if (!confirm('Are you sure you want to delete this command history entry?')) {
+        return;
+    }
+    try {
+        const res = await apiFetch(`${API_BASE}/devices/${currentCommandDeviceId}/commands/${commandId}/history`, { method: 'DELETE' });
+        if (res.ok) {
+            showAlert('Command history entry deleted', 'success');
+            loadCommandHistory();
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showAlert(err.detail || 'Failed to delete command history entry.', 'error');
+        }
+    } catch {
+        showAlert('Failed to delete command history entry.', 'error');
     }
 }
 

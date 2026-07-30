@@ -592,7 +592,17 @@ function readCustomAttributes() {
 
 // ── Form Submit ───────────────────────────────────────────────────
 async function handleSubmit(event) {
-    event.preventDefault();
+    if (event) event.preventDefault();
+
+    const activeTab = document.querySelector('.modal-tab.active')?.getAttribute('data-tab');
+    if (activeTab === 'commands') {
+        sendCommand();
+        return;
+    }
+    if (activeTab && activeTab !== 'general') {
+        return;
+    }
+
     const submitBtn  = document.getElementById('submitBtn');
     const submitText = document.getElementById('submitText');
     const submitLoad = document.getElementById('submitLoading');

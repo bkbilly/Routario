@@ -1415,6 +1415,19 @@ class DatabaseService:
             )
             return result.rowcount > 0
 
+    async def delete_command_history(self, command_id: int, device_id: int) -> bool:
+        async with self.get_session() as session:
+            result = await session.execute(
+                delete(CommandQueue).where(
+                    and_(
+                        CommandQueue.id == command_id,
+                        CommandQueue.device_id == device_id,
+                    )
+                )
+            )
+            await session.flush()
+            return result.rowcount > 0
+
     async def get_device_commands(
         self, device_id: int, status: Optional[str] = None
     ) -> List[CommandQueue]:

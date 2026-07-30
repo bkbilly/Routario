@@ -152,6 +152,24 @@ async def cancel_command(
     return {"ok": True}
 
 
+@router.delete("/{device_id}/commands/{command_id}/history")
+async def delete_command_history(
+    device_id: int,
+    command_id: int,
+    caller: User = Depends(verify_device_access),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a command history entry (Super Admin only)."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Super admin privileges required to delete command history")
+
+    db = get_db()
+    deleted = await db.delete_command_history(command_id, device_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Command history entry not found")
+    return {"ok": True}
+
+
 @router.get("/{device_id}/commands")
 async def get_device_commands(
     device_id: int,

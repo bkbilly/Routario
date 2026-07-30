@@ -253,55 +253,43 @@
 
                     <!-- Send Command Tab -->
                     <div class="command-tab-content active" id="sendCommandTab">
-                        <div class="command-subtabs">
-                            <button type="button" class="command-subtab active" onclick="switchCommandSubtab('predefined')">Predefined Commands</button>
-                            <button type="button" class="command-subtab" onclick="switchCommandSubtab('custom')">Custom Command</button>
+                        <div class="form-group">
+                            <label class="form-label">Select Command</label>
+                            <select class="form-select" id="commandTypeSelect" onchange="onCommandSelect()">
+                                <option value="custom" selected>Custom Command</option>
+                            </select>
                         </div>
 
-                        <div class="command-subtab-content active" id="predefinedCommandContent">
-                            <div class="form-group">
-                                <label class="form-label">Select Command</label>
-                                <select class="form-select" id="commandTypeSelect" onchange="onCommandSelect()">
-                                    <option value="">-- Select a command --</option>
-                                </select>
-                            </div>
-                            <div id="commandInfoBox" class="command-info-box" style="display:none;">
-                                <div class="command-info-label">Description:</div>
-                                <div id="commandDescription"></div>
-                                <div class="command-info-label" style="margin-top:0.75rem;">Example:</div>
-                                <div id="commandExample" style="font-family:var(--font-mono);background:var(--bg-tertiary);padding:0.5rem;border-radius:6px;margin-top:0.25rem;"></div>
-                            </div>
-                            <div id="commandParamsBox" class="form-group" style="display:none;">
-                                <label class="form-label">Parameters</label>
-                                <input type="text" class="form-input" id="commandParams" placeholder="Enter parameters here">
-                                <div style="font-size:0.8125rem;color:var(--text-muted);margin-top:0.5rem;">Parameters will be appended after the command with a space</div>
-                            </div>
-                            <div id="commandPreviewBox" class="command-preview-box" style="display:none;">
-                                <div class="command-preview-label">Data to be sent:</div>
-                                <div id="commandPreviewHex" class="command-preview-hex"></div>
-                                <div id="commandPreviewAscii" class="command-preview-ascii"></div>
-                            </div>
-                            <div class="form-actions">
-                                <button type="button" class="btn btn-secondary" onclick="previewCommand()"><i class="mdi mdi-magnify"></i> Preview</button>
-                                <button type="button" class="btn btn-primary" id="sendCommandBtn" onclick="sendCommand()"><i class="mdi mdi-antenna"></i> Send Command</button>
-                            </div>
+                        <!-- Custom Command Box (default) -->
+                        <div id="customCommandBox" class="form-group">
+                            <label class="form-label">Custom Command Payload</label>
+                            <input type="text" class="form-input" id="customCommandInput" placeholder="Enter raw command text or hex string" onkeydown="if(event.key==='Enter'){ event.preventDefault(); sendCommand(); }">
+                            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.35rem;">Enter plain text or hex string (converted to bytes)</div>
                         </div>
 
-                        <div class="command-subtab-content" id="customCommandContent">
-                            <div class="form-group">
-                                <label class="form-label">Custom Command</label>
-                                <textarea class="form-textarea" id="customCommandInput" placeholder="Enter raw command text or hex string" rows="3"></textarea>
-                                <div style="font-size:0.875rem;color:var(--text-muted);margin-top:0.5rem;">Enter plain text or hex string (will be automatically converted to bytes)</div>
-                            </div>
-                            <div id="customCommandPreviewBox" class="command-preview-box" style="display:none;">
-                                <div class="command-preview-label">Data to be sent:</div>
-                                <div id="customCommandPreviewHex" class="command-preview-hex"></div>
-                                <div id="customCommandPreviewAscii" class="command-preview-ascii"></div>
-                            </div>
-                            <div class="form-actions">
-                                <button type="button" class="btn btn-secondary" onclick="previewCustomCommand()"><i class="mdi mdi-magnify"></i> Preview</button>
-                                <button type="button" class="btn btn-primary" id="sendCustomCommandBtn" onclick="sendCustomCommand()"><i class="mdi mdi-antenna"></i> Send Custom Command</button>
-                            </div>
+                        <!-- Predefined Command Info & Params (shown when predefined command selected) -->
+                        <div id="commandInfoBox" class="command-info-box" style="display:none;">
+                            <div class="command-info-label">Description:</div>
+                            <div id="commandDescription"></div>
+                            <div class="command-info-label" style="margin-top:0.75rem;">Example:</div>
+                            <div id="commandExample" style="font-family:var(--font-mono);background:var(--bg-tertiary);padding:0.5rem;border-radius:6px;margin-top:0.25rem;"></div>
+                        </div>
+                        <div id="commandParamsBox" class="form-group" style="display:none;">
+                            <label class="form-label">Parameters</label>
+                            <input type="text" class="form-input" id="commandParams" placeholder="Enter parameters here" onkeydown="if(event.key==='Enter'){ event.preventDefault(); sendCommand(); }">
+                            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.35rem;">Parameters will be appended after the command with a space</div>
+                        </div>
+
+                        <!-- Command Preview Box -->
+                        <div id="commandPreviewBox" class="command-preview-box" style="display:none;">
+                            <div class="command-preview-label">Data to be sent:</div>
+                            <div id="commandPreviewHex" class="command-preview-hex"></div>
+                            <div id="commandPreviewAscii" class="command-preview-ascii"></div>
+                        </div>
+
+                        <div class="form-actions" style="margin-top:1rem;">
+                            <button type="button" class="btn btn-secondary" onclick="previewCommand()"><i class="mdi mdi-magnify"></i> Preview</button>
+                            <button type="button" class="btn btn-primary" id="sendCommandBtn" onclick="sendCommand()"><i class="mdi mdi-antenna"></i> Send Command</button>
                         </div>
                     </div>
 

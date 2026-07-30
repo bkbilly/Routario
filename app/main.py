@@ -166,7 +166,7 @@ class WebSocketManager:
     async def connect(self, user_id: int, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.setdefault(user_id, []).append(websocket)
-        logger.info("WebSocket connected for user %s", user_id)
+        logger.debug("WebSocket connected for user %s", user_id)
 
     def disconnect(self, user_id: int, websocket: WebSocket):
         conns = self.active_connections.get(user_id, [])
@@ -174,7 +174,7 @@ class WebSocketManager:
             conns.remove(websocket)
         if not conns:
             self.active_connections.pop(user_id, None)
-        logger.info("WebSocket disconnected for user %s", user_id)
+        logger.debug("WebSocket disconnected for user %s", user_id)
 
     async def _send_to_user(self, user_id: int, message: str):
         """Send a raw JSON string to all sockets belonging to user_id."""
