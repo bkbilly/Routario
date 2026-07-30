@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     offline_check_interval_seconds: int = 300  # 5 minutes
     
     # Geocoding (optional)
-    geocoding_enabled: bool = False
+    geocoding_enabled: bool = True
     geocoding_provider: str = "nominatim"  # nominatim, google, mapbox
     geocoding_api_key: Optional[str] = None
     

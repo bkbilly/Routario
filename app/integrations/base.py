@@ -110,6 +110,7 @@ class BaseIntegration(ABC):
     POLL_INTERVAL_ACTIVE_SECONDS: int  = 30    # active (ignition ON) interval (seconds)
     FIELDS:          list[IntegrationField] = []   # credential fields for the UI
     SUPPORTS_BROWSE: bool = True                   # False hides the Browse button in the UI
+    SUPPORTS_COMMANDS: bool = False                 # True if provider supports sending commands
 
     # ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -168,3 +169,32 @@ class BaseIntegration(ABC):
             return True, "Connection successful"
         except Exception as e:
             return False, str(e)
+
+    # ── Optional: command support ─────────────────────────────────────────────
+
+    async def get_command_support(self, auth_ctx: AuthContext, remote_id: str) -> dict:
+        """
+        Return command support info for a remote device.
+        Default returns supports_commands=False.
+        """
+        return {
+            "supports_commands": False,
+            "available_commands": [],
+            "command_info": {},
+            "saved_commands": [],
+        }
+
+    async def send_command(
+        self,
+        auth_ctx: AuthContext,
+        remote_id: str,
+        command_type: str,
+        payload: str = "",
+        saved_command_id: int | None = None,
+        attributes: dict | None = None,
+    ) -> dict:
+        """
+        Send a command to a remote device on the integration platform.
+        """
+        raise NotImplementedError("Command sending not supported by this integration provider")
+

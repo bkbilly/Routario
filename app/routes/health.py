@@ -26,13 +26,64 @@ router = APIRouter(tags=["health"])
 _GIT_COMMIT: str | None = None
 
 
+def _format_bytes(size: int) -> str:
+    if size <= 0:
+        return "0 B"
+    units = ["B", "KB", "MB", "GB", "TB"]
+    i = 0
+    s = float(size)
+    while s >= 1024 and i < len(units) - 1:
+        s /= 1024.0
+        i += 1
+    return f"{round(s, 2)} {units[i]}"
+
+
 async def _check_db() -> dict:
     started = monotonic()
+    storage_bytes = 0
+    storage_human = "0 B"
     try:
         db = get_db()
         async with db.get_session() as session:
             await session.execute(text("SELECT 1"))
-        return {"ok": True, "latency_ms": round((monotonic() - started) * 1000, 2)}
+
+            if getattr(db, "_is_postgres", False):
+                res = await session.execute(text("SELECT pg_database_size(current_database())"))
+                storage_bytes = res.scalar() or 0
+            elif getattr(db, "_is_sqlite", False):
+                res_count = await session.execute(text("PRAGMA page_count"))
+                res_size = await session.execute(text("PRAGMA page_size"))
+                page_count = res_count.scalar() or 0
+                page_size = res_size.scalar() or 0
+                db_size = page_count * page_size
+
+                wal_shm_bytes = 0
+                db_path = getattr(db, "db_path", None) or Path("routario.db")
+                if isinstance(db_path, (str, Path)):
+                    p = Path(db_path)
+                    if p.exists():
+                        db_size = max(db_size, p.stat().st_size)
+                        for ext in ["-wal", "-shm"]:
+                            j_file = p.with_name(p.name + ext)
+                            if j_file.exists():
+                                wal_shm_bytes += j_file.stat().st_size
+                storage_bytes = db_size + wal_shm_bytes
+            else:
+                try:
+                    res = await session.execute(text("SELECT pg_database_size(current_database())"))
+                    storage_bytes = res.scalar() or 0
+                except Exception:
+                    res_count = await session.execute(text("PRAGMA page_count"))
+                    res_size = await session.execute(text("PRAGMA page_size"))
+                    storage_bytes = (res_count.scalar() or 0) * (res_size.scalar() or 0)
+
+        storage_human = _format_bytes(storage_bytes)
+        return {
+            "ok": True,
+            "latency_ms": round((monotonic() - started) * 1000, 2),
+            "storage_bytes": storage_bytes,
+            "storage_human": storage_human,
+        }
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
 
@@ -65,16 +116,49 @@ def _check_disk() -> dict:
         return {"ok": False, "error": str(exc)}
 
 
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _resolve_path(path: Path) -> Path:
+    if path.is_absolute():
+        return path
+    return _PROJECT_ROOT / path
+
+
+def _dir_size_bytes(dir_path: Path) -> int:
+    resolved = _resolve_path(dir_path)
+    if not resolved.exists():
+        return 0
+    total = 0
+    try:
+        if resolved.is_file():
+            return resolved.stat().st_size
+        for p in resolved.rglob("*"):
+            if p.is_file() and not p.is_symlink():
+                try:
+                    total += p.stat().st_size
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return total
+
+
 def _disk_usage_row(path: Path) -> dict:
-    usage = shutil.disk_usage(path)
+    resolved = _resolve_path(path)
+    probe = resolved if resolved.exists() else resolved.parent
+    usage = shutil.disk_usage(probe)
     used_pct = round((usage.used / usage.total) * 100, 1) if usage.total else 0
+    dir_bytes = _dir_size_bytes(path)
     return {
         "path": str(path),
-        "exists": path.exists(),
+        "exists": resolved.exists(),
         "total_bytes": usage.total,
         "used_bytes": usage.used,
         "free_bytes": usage.free,
         "used_percent": used_pct,
+        "dir_size_bytes": dir_bytes,
+        "dir_size_human": _format_bytes(dir_bytes),
         "ok": used_pct < 95,
         "degraded": used_pct >= 85,
     }
@@ -85,14 +169,19 @@ def _check_disk_capacity() -> dict:
     rows = []
     for path in paths:
         try:
-            probe = path if path.exists() else path.parent
-            rows.append({**_disk_usage_row(probe), "label": str(path)})
+            rows.append({**_disk_usage_row(path), "label": str(path)})
         except Exception as exc:
             rows.append({"label": str(path), "ok": False, "error": str(exc)})
+
+    uploads_bytes = _dir_size_bytes(Path("web/uploads"))
+    uploads_human = _format_bytes(uploads_bytes)
+
     return {
         "ok": all(row.get("ok") for row in rows),
         "optional": True,
         "degraded": any(row.get("degraded") for row in rows),
+        "uploads_size_bytes": uploads_bytes,
+        "uploads_size_human": uploads_human,
         "paths": rows,
     }
 
@@ -371,6 +460,8 @@ async def ready(response: Response):
     disk_check.update({
         "degraded": disk_capacity.get("degraded", False),
         "capacity_ok": disk_capacity.get("ok", True),
+        "uploads_size_bytes": disk_capacity.get("uploads_size_bytes", 0),
+        "uploads_size_human": disk_capacity.get("uploads_size_human", "0 B"),
         "paths": disk_capacity.get("paths", []),
     })
 

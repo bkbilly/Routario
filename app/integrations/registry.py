@@ -36,7 +36,7 @@ _REGISTRY: dict[str, type["BaseIntegration"]] = {}
 INTEGRATION_PROTOCOL_IDS: set[str] = set()
 
 # Files in the integrations/ folder that are not provider modules
-_NON_PROVIDER_MODULES = {"__init__", "registry", "base", "engine"}
+_NON_PROVIDER_MODULES = {"__init__", "registry", "base", "engine", "integration_model"}
 
 
 class IntegrationRegistry:

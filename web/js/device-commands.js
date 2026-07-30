@@ -54,11 +54,22 @@ function _checkProtocolUnsaved() {
 
 // Load available commands for the device
 async function loadAvailableCommands() {
+    const select = document.getElementById('commandTypeSelect');
+    if (select) {
+        select.innerHTML = '<option value="" disabled selected>Loading available commands...</option>';
+    }
+
     try {
         const selectedProtocol = document.getElementById('deviceProtocol')?.value;
-        const url = selectedProtocol
+        const device = currentCommandDevice || (editingDeviceId ? devices.find(d => d.id === editingDeviceId) : null);
+
+        // Use protocol endpoint if unsaved protocol selection in form, otherwise use device ID endpoint
+        const url = (selectedProtocol && device?.protocol && selectedProtocol !== device.protocol)
             ? `${API_BASE}/devices/protocol/${selectedProtocol}/command-support`
-            : `${API_BASE}/devices/${currentCommandDeviceId}/command-support`;
+            : (currentCommandDeviceId
+                ? `${API_BASE}/devices/${currentCommandDeviceId}/command-support`
+                : `${API_BASE}/devices/protocol/${selectedProtocol || 'custom'}/command-support`);
+
         const response = await apiFetch(url);
         if (!response.ok) {
             throw new Error('Failed to load command support info');
@@ -68,17 +79,43 @@ async function loadAvailableCommands() {
         availableCommands = data.available_commands || [];
         commandInfo = data.command_info || {};
         
-        availableCommands = availableCommands.filter(cmd => cmd !== 'custom');
-        
         const select = document.getElementById('commandTypeSelect');
         if (select) {
-            select.innerHTML = '<option value="custom" selected>Custom Command</option>';
-            availableCommands.forEach(cmd => {
-                const option = document.createElement('option');
-                option.value = cmd;
-                option.textContent = cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/_/g, ' ');
-                select.appendChild(option);
-            });
+            select.innerHTML = '';
+
+            const savedCmds = data.saved_commands || [];
+            if (savedCmds.length > 0) {
+                const savedGroup = document.createElement('optgroup');
+                savedGroup.label = 'Saved Commands';
+                savedCmds.forEach(sc => {
+                    const opt = document.createElement('option');
+                    opt.value = `saved:${sc.id}`;
+                    opt.textContent = sc.name;
+                    savedGroup.appendChild(opt);
+                });
+                select.appendChild(savedGroup);
+            }
+
+            const standardCmds = availableCommands.filter(cmd => cmd !== 'custom' && !cmd.startsWith('saved:'));
+            if (standardCmds.length > 0) {
+                const stdGroup = document.createElement('optgroup');
+                stdGroup.label = 'Standard Commands';
+                standardCmds.forEach(cmd => {
+                    const opt = document.createElement('option');
+                    opt.value = cmd;
+                    opt.textContent = cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/_/g, ' ');
+                    stdGroup.appendChild(opt);
+                });
+                select.appendChild(stdGroup);
+            }
+
+            const customOpt = document.createElement('option');
+            customOpt.value = 'custom';
+            customOpt.textContent = 'Custom Command';
+            if (savedCmds.length === 0 && standardCmds.length === 0) {
+                customOpt.selected = true;
+            }
+            select.appendChild(customOpt);
         }
         
         onCommandSelect();
@@ -141,7 +178,8 @@ function onCommandSelect() {
 
 // Preview Command
 async function previewCommand() {
-    const commandType = document.getElementById('commandTypeSelect')?.value || 'custom';
+    const select = document.getElementById('commandTypeSelect');
+    const commandType = select?.value || 'custom';
     let payload = '';
 
     if (commandType === 'custom') {
@@ -150,6 +188,8 @@ async function previewCommand() {
             showAlert('Please enter a custom command payload', 'warning');
             return;
         }
+    } else if (commandType.startsWith('saved:')) {
+        payload = select?.options[select.selectedIndex]?.textContent || commandType;
     } else {
         const params = document.getElementById('commandParams')?.value.trim() || '';
         const info = commandInfo[commandType] || {};
@@ -162,9 +202,9 @@ async function previewCommand() {
 
     try {
         const selectedProtocol = document.getElementById('deviceProtocol')?.value;
-        const previewUrl = selectedProtocol
-            ? `${API_BASE}/devices/protocol/${selectedProtocol}/command/preview`
-            : `${API_BASE}/devices/${currentCommandDeviceId}/command/preview`;
+        const previewUrl = currentCommandDeviceId
+            ? `${API_BASE}/devices/${currentCommandDeviceId}/command/preview`
+            : `${API_BASE}/devices/protocol/${selectedProtocol}/command/preview`;
         const response = await apiFetch(previewUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -178,8 +218,28 @@ async function previewCommand() {
 
         const data = await response.json();
 
-        document.getElementById('commandPreviewHex').textContent = data.hex || 'N/A';
-        document.getElementById('commandPreviewAscii').textContent = data.ascii || 'Non-ASCII binary data';
+        const hexEl = document.getElementById('commandPreviewHex');
+        const asciiEl = document.getElementById('commandPreviewAscii');
+
+        if (hexEl) {
+            if (data.hex) {
+                hexEl.textContent = data.hex;
+                hexEl.style.display = 'block';
+            } else {
+                hexEl.style.display = 'none';
+            }
+        }
+
+        if (asciiEl) {
+            asciiEl.textContent = data.ascii || 'No payload data';
+            asciiEl.style.display = 'block';
+            if (!data.hex) {
+                asciiEl.classList.add('no-prefix');
+            } else {
+                asciiEl.classList.remove('no-prefix');
+            }
+        }
+
         document.getElementById('commandPreviewBox').style.display = 'block';
         
     } catch (error) {
@@ -191,7 +251,8 @@ async function previewCommand() {
 // Send Command
 async function sendCommand() {
     if (_checkProtocolUnsaved()) return;
-    const commandType = document.getElementById('commandTypeSelect')?.value || 'custom';
+    const select = document.getElementById('commandTypeSelect');
+    const commandType = select?.value || 'custom';
     let payload = '';
 
     if (commandType === 'custom') {
@@ -200,6 +261,8 @@ async function sendCommand() {
             showAlert('Please enter a custom command payload', 'warning');
             return;
         }
+    } else if (commandType.startsWith('saved:')) {
+        payload = select?.options[select.selectedIndex]?.textContent || commandType;
     } else {
         const params = document.getElementById('commandParams')?.value.trim() || '';
         const info = commandInfo[commandType] || {};

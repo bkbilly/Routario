@@ -23,19 +23,29 @@ class GeocodingService:
         self.redis_url = redis_url
         self.cache_ttl = cache_ttl  # 24 hours default
         self.redis_client: Optional[redis.Redis] = None
+        self._last_request_time: float = 0.0
+        self._rate_lock = asyncio.Lock()
         
         # Initialize geocoder (blocking, will run in executor)
-        self.geocoder = Nominatim(user_agent="routario-platform")
+        self.geocoder = Nominatim(user_agent="Routario-Platform/1.0 (https://github.com/bkbilly/Routario)")
     
     async def connect(self):
-        """Connect to Redis"""
-        self.redis_client = await redis.from_url(self.redis_url, decode_responses=True)
-        logger.info("Geocoding service connected to Redis")
+        """Connect to Redis (optional - degrades gracefully if unavailable)"""
+        try:
+            self.redis_client = await redis.from_url(self.redis_url, decode_responses=True)
+            logger.info("Geocoding service connected to Redis")
+        except Exception as exc:
+            logger.warning("Geocoding: Redis unavailable, running without cache: %s", exc)
+            self.redis_client = None
     
     async def close(self):
         """Close connections"""
         if self.redis_client:
-            await self.redis_client.close()
+            try:
+                await self.redis_client.close()
+            except Exception:
+                pass
+            self.redis_client = None
     
     def _get_cache_key(self, latitude: float, longitude: float) -> str:
         """Generate cache key for coordinates"""
@@ -82,50 +92,54 @@ class GeocodingService:
     ) -> Optional[str]:
         """
         Reverse geocode coordinates to address
-        
-        Args:
-            latitude: Latitude
-            longitude: Longitude
-            timeout: Timeout in seconds
-        
-        Returns:
-            Address string or None
         """
+        if latitude is None or longitude is None or (latitude == 0.0 and longitude == 0.0):
+            return None
+
         # Check cache first
         cached_address = await self._get_from_cache(latitude, longitude)
         
         if cached_address:
             return cached_address
         
-        # Perform geocoding in executor (blocking)
-        try:
-            loop = asyncio.get_event_loop()
-            
-            location = await loop.run_in_executor(
-                None,
-                self._reverse_geocode_sync,
-                latitude,
-                longitude,
-                timeout
-            )
-            
-            if location and location.address:
-                address = location.address
+        # Enforce rate limit (1 request per second for Nominatim TOS compliance)
+        async with self._rate_lock:
+            import time
+            now = time.time()
+            elapsed = now - self._last_request_time
+            if elapsed < 1.0:
+                await asyncio.sleep(1.0 - elapsed)
+            self._last_request_time = time.time()
+
+            # Perform geocoding in executor (blocking)
+            try:
+                loop = asyncio.get_event_loop()
                 
-                # Cache result
-                await self._set_cache(latitude, longitude, address)
+                location = await loop.run_in_executor(
+                    None,
+                    self._reverse_geocode_sync,
+                    latitude,
+                    longitude,
+                    timeout
+                )
                 
-                logger.info(f"Geocoded ({latitude}, {longitude}) -> {address}")
-                return address
+                if location and location.address:
+                    address = location.address
+                    
+                    # Cache result
+                    await self._set_cache(latitude, longitude, address)
+                    
+                    logger.info(f"Geocoded ({latitude}, {longitude}) -> {address}")
+                    return address
+                
+                return None
             
-            return None
-        
-        except (GeocoderTimedOut, GeocoderServiceError) as e:
-            logger.warning(f"Geocoding error: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"Unexpected geocoding error: {e}", exc_info=True)
-            return None
+            except (GeocoderTimedOut, GeocoderServiceError) as e:
+                logger.warning(f"Geocoding error: {e}")
+                return None
+            except Exception as e:
+                logger.error(f"Unexpected geocoding error: {e}", exc_info=True)
+                return None
     
     def _reverse_geocode_sync(self, latitude: float, longitude: float, timeout: int):
         """Synchronous geocoding call"""

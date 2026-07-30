@@ -431,6 +431,14 @@ async def lifespan(app: FastAPI):
     # Redis — optional, degrades gracefully
     await redis_pubsub.connect(settings.redis_url)
 
+    if settings.geocoding_enabled:
+        try:
+            from services.geocoding import init_geocoding_service
+            await init_geocoding_service(settings.redis_url)
+            logger.info("Geocoding service initialized (%s)", settings.geocoding_provider)
+        except Exception as exc:
+            logger.warning("Geocoding service init failed: %s", exc)
+
     alert_engine = get_alert_engine()
     alert_engine.set_alert_callback(handle_new_alert)
 
@@ -480,6 +488,14 @@ async def lifespan(app: FastAPI):
     from integrations.google_find_hub import stop_all_fcm_clients
     await stop_all_fcm_clients()
 
+    if settings.geocoding_enabled:
+        try:
+            from services.geocoding import get_geocoding_service
+            geo_svc = get_geocoding_service()
+            await geo_svc.close()
+        except Exception:
+            pass
+
     db = get_db()
     await db.close()
     await redis_pubsub.close()
@@ -518,6 +534,7 @@ app.include_router(integrations_router)
 
 @app.get("/api/protocols")
 async def get_protocols():
+    from integrations.registry import IntegrationRegistry
     protocols_info = {}
     for name, decoder in ProtocolRegistry.get_all().items():
         try:
@@ -530,6 +547,17 @@ async def get_protocols():
             "protocol_types":    getattr(decoder, "PROTOCOL_TYPES", ["tcp"]),
             "supports_commands": len(cmds) > 0,
             "supports_camera":   getattr(decoder, "SUPPORTS_CAMERA", False),
+        }
+    for intg_meta in IntegrationRegistry.all():
+        pid = intg_meta["provider_id"]
+        pcls = IntegrationRegistry.get(pid)
+        supports_cmds = getattr(pcls, "SUPPORTS_COMMANDS", False) if pcls else False
+        protocols_info[pid] = {
+            "native_events":     [],
+            "port":              None,
+            "protocol_types":    ["cloud"],
+            "supports_commands": supports_cmds,
+            "supports_camera":   False,
         }
     return {
         "protocols":       ProtocolRegistry.list_protocols(),

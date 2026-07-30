@@ -13,6 +13,13 @@ from models import User
 from models.schemas import CommandCreate
 from protocols import ProtocolRegistry
 
+import json
+
+from integrations.registry import IntegrationRegistry
+from integrations.integration_model import IntegrationAccount
+from integrations.engine import _get_auth
+from sqlalchemy import select
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/devices", tags=["commands"])
@@ -25,11 +32,76 @@ async def send_command(
     caller: User = Depends(verify_device_access),
     _: User = Depends(require_permission("send_commands")),
 ):
-    """Queue a command to be sent to the device."""
+    """Queue or send a command for a GPS device."""
     db = get_db()
     device = await db.get_device_by_id(device_id)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
+
+    if IntegrationRegistry.is_integration(device.protocol):
+        provider_id = device.protocol
+        provider = IntegrationRegistry.get(provider_id)
+        intg = (device.config or {}).get("integration") or {}
+        if not provider or not getattr(provider, "SUPPORTS_COMMANDS", False):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Integration provider '{provider_id}' does not support sending commands",
+            )
+
+        account_label = intg.get("account_label", "")
+        remote_id = intg.get("remote_id") or device.imei
+
+        async with db.get_session() as session:
+            query = select(IntegrationAccount).where(
+                IntegrationAccount.provider_id == provider_id,
+                IntegrationAccount.is_active == True,
+            )
+            if not (caller.is_admin or caller.is_company_admin):
+                query = query.where(IntegrationAccount.user_id == caller.id)
+            if account_label:
+                query = query.where(IntegrationAccount.account_label == account_label)
+            result = await session.execute(query)
+            account = result.scalar_one_or_none()
+
+        if not account:
+            raise HTTPException(status_code=404, detail="Integration account not found")
+
+        credentials = account.get_decrypted_credentials()
+        auth_ctx = await _get_auth(account.user_id, provider_id, account.account_label, credentials)
+        if not auth_ctx:
+            raise HTTPException(status_code=502, detail="Integration authentication failed")
+
+        saved_cmd_id = None
+        if command.command_type.startswith("saved:"):
+            try:
+                saved_cmd_id = int(command.command_type.split(":", 1)[1])
+            except ValueError:
+                pass
+
+        try:
+            res = await provider.send_command(
+                auth_ctx=auth_ctx,
+                remote_id=remote_id,
+                command_type=command.command_type,
+                payload=command.payload,
+                saved_command_id=saved_cmd_id,
+            )
+        except Exception as e:
+            logger.error(f"Integration send_command error for {device.name}: {e}")
+            raise HTTPException(status_code=400, detail=f"Failed to send command to integration: {str(e)}")
+
+        command.device_id = device_id
+        db_cmd = await db.create_command(command)
+        await db.mark_command_sent(db_cmd.id)
+
+        resp_text = json.dumps(res) if isinstance(res, (dict, list)) else str(res)
+        await db.mark_oldest_sent_command_acked(device_id, resp_text)
+
+        result_dict = db_cmd.__dict__.copy() if hasattr(db_cmd, "__dict__") else dict(db_cmd)
+        result_dict["status"] = "acked"
+        result_dict["response"] = resp_text
+        result_dict["encoded_preview"] = command.payload
+        return result_dict
 
     decoder = ProtocolRegistry.get_decoder(device.protocol)
     if not decoder:
@@ -72,11 +144,40 @@ async def preview_command(
     caller: User = Depends(verify_device_access),
     _: User = Depends(require_permission("send_commands")),
 ):
-    """Preview hex encoding of a command before sending."""
+    """Preview encoding of a command before sending."""
     db = get_db()
     device = await db.get_device_by_id(device_id)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
+
+    if IntegrationRegistry.is_integration(device.protocol):
+        provider_id = device.protocol
+        provider = IntegrationRegistry.get(provider_id)
+        intg = (device.config or {}).get("integration") or {}
+        if not provider or not getattr(provider, "SUPPORTS_COMMANDS", False):
+            raise HTTPException(status_code=400, detail=f"Integration provider '{provider_id}' does not support commands")
+
+        command_type = command_data.get("command_type", "")
+        payload = command_data.get("payload", "")
+
+        dev_id = intg.get("remote_id") or device.imei
+        dev_id_val = int(dev_id) if str(dev_id).isdigit() else dev_id
+        preview_body: dict = {"deviceId": dev_id_val}
+        if command_type.startswith("saved:"):
+            try:
+                preview_body["id"] = int(command_type.split(":", 1)[1])
+            except ValueError:
+                preview_body["type"] = command_type
+        elif command_type == "custom":
+            preview_body["type"] = "custom"
+            preview_body["attributes"] = {"data": payload}
+        else:
+            preview_body["type"] = command_type
+            if payload:
+                preview_body["attributes"] = {"data": payload}
+
+        ascii_repr = json.dumps(preview_body, indent=2)
+        return {"hex": "", "bytes": len(ascii_repr), "ascii": ascii_repr, "success": True}
 
     decoder = ProtocolRegistry.get_decoder(device.protocol)
     if not decoder:
@@ -110,7 +211,32 @@ async def preview_command_for_protocol(
     command_data: dict,
     caller: User = Depends(require_permission("send_commands")),
 ):
-    """Preview hex encoding of a command for a given protocol (no device required)."""
+    """Preview encoding of a command for a given protocol (no device required)."""
+    if IntegrationRegistry.is_integration(protocol):
+        provider = IntegrationRegistry.get(protocol)
+        if not provider or not getattr(provider, "SUPPORTS_COMMANDS", False):
+            raise HTTPException(status_code=400, detail=f"Integration provider '{protocol}' does not support commands")
+
+        command_type = command_data.get("command_type", "")
+        payload = command_data.get("payload", "")
+
+        preview_body: dict = {"deviceId": 0}
+        if command_type.startswith("saved:"):
+            try:
+                preview_body["id"] = int(command_type.split(":", 1)[1])
+            except ValueError:
+                preview_body["type"] = command_type
+        elif command_type == "custom":
+            preview_body["type"] = "custom"
+            preview_body["attributes"] = {"data": payload}
+        else:
+            preview_body["type"] = command_type
+            if payload:
+                preview_body["attributes"] = {"data": payload}
+
+        ascii_repr = json.dumps(preview_body, indent=2)
+        return {"hex": "", "bytes": len(ascii_repr), "ascii": ascii_repr, "success": True}
+
     decoder = ProtocolRegistry.get_decoder(protocol)
     if not decoder:
         raise HTTPException(status_code=400, detail="Protocol not found")

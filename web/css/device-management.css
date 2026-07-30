@@ -1054,6 +1054,11 @@ h1 {
     color: var(--text-secondary);
     font-weight: 600;
 }
+.command-preview-ascii.no-prefix::before {
+    content: 'JSON Payload: ';
+    color: var(--accent-primary);
+    font-weight: 600;
+}
 
 .command-history-table {
     width: 100%;

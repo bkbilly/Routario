@@ -114,20 +114,29 @@ async def update_device(
     caller: User = Depends(verify_device_access),
 ):
     db = get_db()
+    old_device = await db.get_device_by_id(device_id)
     if not (caller.is_admin or caller.is_company_admin):
-        existing = await db.get_device_by_id(device_id)
-        if existing:
-            device_data.imei       = existing.imei
-            device_data.protocol   = existing.protocol
-            device_data.company_id = existing.company_id
+        if old_device:
+            device_data.imei       = old_device.imei
+            device_data.protocol   = old_device.protocol
+            device_data.company_id = old_device.company_id
     elif not caller.is_admin:
         # Company admins can change IMEI and protocol but not company assignment
-        existing = await db.get_device_by_id(device_id)
-        if existing:
-            device_data.company_id = existing.company_id
+        if old_device:
+            device_data.company_id = old_device.company_id
+
+    # If protocol is changed to a native protocol (non-integration), remove integration config
+    from integrations.registry import IntegrationRegistry
+    if device_data.protocol and not IntegrationRegistry.is_integration(device_data.protocol):
+        if isinstance(device_data.config, dict) and "integration" in device_data.config:
+            device_data.config.pop("integration", None)
+
     device = await db.update_device(device_id, device_data)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
+
+    if old_device and old_device.imei:
+        clear_device_state(old_device.imei)
 
     if new_odometer is not None:
         async with db.get_session() as session:
@@ -292,10 +301,51 @@ async def check_command_support(
     _: User = Depends(require_permission("send_commands")),
 ):
     from protocols import ProtocolRegistry
+    from integrations.registry import IntegrationRegistry
+    from integrations.integration_model import IntegrationAccount
+    from integrations.engine import _get_auth
+    from sqlalchemy import select
+
     db = get_db()
     device = await db.get_device_by_id(device_id)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
+
+    if IntegrationRegistry.is_integration(device.protocol):
+        provider_id = device.protocol
+        provider = IntegrationRegistry.get(provider_id)
+        intg = (device.config or {}).get("integration") or {}
+        if provider and getattr(provider, "SUPPORTS_COMMANDS", False):
+            account_label = intg.get("account_label", "")
+            remote_id = intg.get("remote_id") or device.imei
+
+            async with db.get_session() as session:
+                query = select(IntegrationAccount).where(
+                    IntegrationAccount.provider_id == provider_id,
+                    IntegrationAccount.is_active == True,
+                )
+                if not (caller.is_admin or caller.is_company_admin):
+                    query = query.where(IntegrationAccount.user_id == caller.id)
+                if account_label:
+                    query = query.where(IntegrationAccount.account_label == account_label)
+                result = await session.execute(query)
+                account = result.scalar_one_or_none()
+
+            if account:
+                credentials = account.get_decrypted_credentials()
+                auth_ctx = await _get_auth(account.user_id, provider_id, account.account_label, credentials)
+                if auth_ctx:
+                    support_info = await provider.get_command_support(auth_ctx, remote_id)
+                    support_info["protocol"] = device.protocol
+                    return support_info
+
+        return {
+            "supports_commands": getattr(provider, "SUPPORTS_COMMANDS", False) if provider else False,
+            "available_commands": ["custom"] if (provider and getattr(provider, "SUPPORTS_COMMANDS", False)) else [],
+            "protocol": device.protocol,
+            "command_info": {},
+            "saved_commands": [],
+        }
 
     decoder = ProtocolRegistry.get_decoder(device.protocol)
     if not decoder:
@@ -330,6 +380,25 @@ async def check_command_support(
 
 def _command_support_for_protocol(protocol: str) -> dict:
     from protocols import ProtocolRegistry
+    from integrations.registry import IntegrationRegistry
+
+    if IntegrationRegistry.is_integration(protocol):
+        provider = IntegrationRegistry.get(protocol)
+        supports = getattr(provider, "SUPPORTS_COMMANDS", False) if provider else False
+        return {
+            "supports_commands": supports,
+            "available_commands": ["custom"] if supports else [],
+            "protocol": protocol,
+            "command_info": {
+                "custom": {
+                    "description": "Send custom command via integration",
+                    "example": "YOUR_COMMAND_DATA",
+                    "requires_params": True,
+                }
+            } if supports else {},
+            "saved_commands": [],
+        }
+
     decoder = ProtocolRegistry.get_decoder(protocol)
     if not decoder:
         return {"supports_commands": False, "available_commands": [], "protocol": protocol, "command_info": {}}

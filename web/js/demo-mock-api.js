@@ -839,7 +839,7 @@
             }
             return json({ detail: 'Invalid credentials' }, 401);
         }
-        if (path.endsWith('/health/ready')) return json({ ok: true, checks: { database: { ok: true, latency_ms: 2, database_type: 'mock' }, redis: { ok: true, optional: true, mode: 'in_process' }, runtime: { ok: true, app_version: 'demo', python_version: 'n/a', uptime_seconds: 3600 } } });
+        if (path.endsWith('/health/ready')) return json({ ok: true, checks: { database: { ok: true, latency_ms: 2, database_type: 'mock', storage_bytes: 5898240, storage_human: '5.62 MB' }, redis: { ok: true, optional: true, mode: 'in_process' }, runtime: { ok: true, app_version: 'demo', python_version: 'n/a', uptime_seconds: 3600 } } });
         if (path.includes('/branding/')) return json({ app_name: 'Routario Demo', branding_version: 1, icon_url: null });
         if (!path.includes('/api/')) return null;
 

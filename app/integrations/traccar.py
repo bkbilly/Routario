@@ -37,12 +37,20 @@ _KNOTS_TO_KPH = 1.852
 _last_seen: dict[tuple, datetime] = {}
 
 
+def _normalize_url(url: str) -> str:
+    u = (url or "").strip()
+    if u and not u.startswith(("http://", "https://")):
+        u = f"http://{u}"
+    return u.rstrip("/")
+
+
 @IntegrationRegistry.register("traccar")
 class TraccarIntegration(BaseIntegration):
 
     PROVIDER_ID           = "traccar"
     DISPLAY_NAME          = "Traccar"
     POLL_INTERVAL_SECONDS = 30
+    SUPPORTS_COMMANDS     = True
 
     FIELDS = [
         IntegrationField(
@@ -71,21 +79,32 @@ class TraccarIntegration(BaseIntegration):
     # ── Auth ──────────────────────────────────────────────────────────────────
 
     async def authenticate(self, credentials: dict) -> AuthContext:
-        base = credentials["server_url"].rstrip("/")
+        base = _normalize_url(credentials.get("server_url", ""))
         auth = (credentials["username"], credentials["password"])
 
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                f"{base}/api/session",
-                data={
-                    "email":    credentials["username"],
-                    "password": credentials["password"],
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-            resp.raise_for_status()
-            user = resp.json()
-            cookies = dict(resp.cookies)
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.post(
+                    f"{base}/api/session",
+                    data={
+                        "email":    credentials["username"],
+                        "password": credentials["password"],
+                    },
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+                resp.raise_for_status()
+                user = resp.json()
+                cookies = dict(resp.cookies)
+        except httpx.ConnectError as e:
+            logger.error(f"Traccar connection error to '{base}': {e}")
+            raise Exception(f"Cannot resolve or connect to Traccar server at '{base}'. Please verify your Server URL (DNS / network issue).") from e
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (401, 403):
+                raise Exception("Traccar authentication failed: Invalid username or password.") from e
+            raise Exception(f"Traccar server HTTP error ({e.response.status_code}): {e.response.text}") from e
+        except Exception as e:
+            logger.error(f"Traccar auth error: {e}")
+            raise
 
         return AuthContext(
             data={
@@ -292,3 +311,153 @@ class TraccarIntegration(BaseIntegration):
         except Exception as e:
             logger.error(f"Traccar: list_remote_devices error: {e}")
             return []
+
+    # ── Commands ──────────────────────────────────────────────────────────────
+
+    async def get_command_support(self, auth_ctx: AuthContext, remote_id: str) -> dict:
+        base    = auth_ctx.data["base_url"]
+        auth    = auth_ctx.data["auth"]
+        cookies = auth_ctx.data["cookies"]
+
+        saved_commands = []
+        available_commands = ["custom"]
+        command_info = {
+            "custom": {
+                "description": "Send a custom text command to the device via Traccar",
+                "example": "YOUR_COMMAND_DATA",
+                "requires_params": True,
+            }
+        }
+
+        dev_id = int(remote_id) if str(remote_id).isdigit() else remote_id
+
+        try:
+            async with httpx.AsyncClient(timeout=15, auth=auth, cookies=cookies) as client:
+                raw_saved = []
+                # Try GET /api/commands?deviceId=... and GET /api/commands/send?deviceId=...
+                for endpoint in [f"{base}/api/commands", f"{base}/api/commands/send"]:
+                    try:
+                        resp_saved = await client.get(endpoint, params={"deviceId": dev_id})
+                        if resp_saved.status_code == 200:
+                            data = resp_saved.json()
+                            if isinstance(data, list) and len(data) > 0:
+                                raw_saved = data
+                                break
+                    except Exception:
+                        pass
+
+                # Fallback: try GET /api/commands without deviceId param
+                if not raw_saved:
+                    try:
+                        resp_all = await client.get(f"{base}/api/commands")
+                        if resp_all.status_code == 200:
+                            data = resp_all.json()
+                            if isinstance(data, list):
+                                raw_saved = data
+                    except Exception:
+                        pass
+
+                seen_ids = set()
+                for item in raw_saved:
+                    if not isinstance(item, dict):
+                        continue
+                    cmd_id = item.get("id")
+                    if cmd_id is None or cmd_id in seen_ids:
+                        continue
+                    seen_ids.add(cmd_id)
+                    cmd_type = item.get("type", "custom")
+                    name = item.get("description") or f"Saved Command #{cmd_id} ({cmd_type})"
+                    saved_commands.append({
+                        "id": cmd_id,
+                        "name": name,
+                        "type": cmd_type,
+                        "description": f"Traccar saved command: {name}",
+                        "attributes": item.get("attributes", {}),
+                    })
+                    saved_key = f"saved:{cmd_id}"
+                    available_commands.append(saved_key)
+                    command_info[saved_key] = {
+                        "description": f"Traccar saved command: {name}",
+                        "example": f"Saved command #{cmd_id}",
+                        "requires_params": False,
+                    }
+
+                # Fetch supported command types for device
+                try:
+                    resp_types = await client.get(f"{base}/api/commands/types", params={"deviceId": dev_id})
+                    if resp_types.status_code == 200:
+                        raw_types = resp_types.json()
+                        if isinstance(raw_types, list):
+                            for item in raw_types:
+                                ctype = item.get("type") if isinstance(item, dict) else str(item)
+                                if ctype and ctype != "custom" and ctype not in available_commands:
+                                    available_commands.append(ctype)
+                                    command_info[ctype] = {
+                                        "description": f"Traccar standard command: {ctype}",
+                                        "example": ctype,
+                                        "requires_params": False,
+                                    }
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.error(f"Traccar: get_command_support error for remote_id {remote_id}: {e}")
+
+        return {
+            "supports_commands": True,
+            "available_commands": available_commands,
+            "command_info": command_info,
+            "saved_commands": saved_commands,
+        }
+
+    async def send_command(
+        self,
+        auth_ctx: AuthContext,
+        remote_id: str,
+        command_type: str,
+        payload: str = "",
+        saved_command_id: int | None = None,
+        attributes: dict | None = None,
+    ) -> dict:
+        base    = auth_ctx.data["base_url"]
+        auth    = auth_ctx.data["auth"]
+        cookies = auth_ctx.data["cookies"]
+
+        dev_id = int(remote_id) if str(remote_id).isdigit() else remote_id
+        body: dict = {"deviceId": dev_id}
+
+        if saved_command_id is not None:
+            body["id"] = int(saved_command_id)
+        elif command_type.startswith("saved:"):
+            try:
+                body["id"] = int(command_type.split(":", 1)[1])
+            except ValueError:
+                body["type"] = command_type
+        elif command_type == "custom":
+            body["type"] = "custom"
+            body["attributes"] = {"data": payload}
+        else:
+            body["type"] = command_type
+            if payload:
+                body["attributes"] = {"data": payload}
+
+        if attributes:
+            body.setdefault("attributes", {}).update(attributes)
+
+        async with httpx.AsyncClient(timeout=15, auth=auth, cookies=cookies) as client:
+            resp = await client.post(f"{base}/api/commands/send", json=body)
+            if resp.status_code >= 400:
+                err_msg = resp.text
+                try:
+                    err_json = resp.json()
+                    err_msg = err_json.get("message") or err_msg
+                except Exception:
+                    pass
+                raise Exception(f"Traccar error ({resp.status_code}): {err_msg}")
+
+            if resp.status_code == 204 or not resp.content:
+                return {"status": "sent", "message": "Command executed successfully on Traccar"}
+            try:
+                return resp.json()
+            except Exception:
+                return {"status": "sent", "message": resp.text}
+

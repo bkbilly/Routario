@@ -1100,11 +1100,22 @@ class DatabaseService:
                         state.last_ignition_on = device_time
                         state.trip_odometer   = prev_trip.distance_km
                         return
+            start_addr = None
+            try:
+                from core.config import get_settings
+                if get_settings().geocoding_enabled and position.latitude is not None and position.longitude is not None:
+                    from services.geocoding import get_geocoding_service
+                    geo_svc = get_geocoding_service()
+                    start_addr = await geo_svc.reverse_geocode(position.latitude, position.longitude)
+            except Exception as _geo_err:
+                logger.warning("Trip start geocode skip: %s", _geo_err)
+
             trip = Trip(
                 device_id=device.id,
                 start_time=device_time,
                 start_latitude=position.latitude,
                 start_longitude=position.longitude,
+                start_address=start_addr,
                 distance_km=0.0,
                 driver_id=state.current_driver_id,
             )
@@ -1120,6 +1131,15 @@ class DatabaseService:
                 trip.end_time        = device_time
                 trip.end_latitude    = position.latitude
                 trip.end_longitude   = position.longitude
+                try:
+                    from core.config import get_settings
+                    if get_settings().geocoding_enabled and position.latitude is not None and position.longitude is not None:
+                        from services.geocoding import get_geocoding_service
+                        geo_svc = get_geocoding_service()
+                        trip.end_address = await geo_svc.reverse_geocode(position.latitude, position.longitude)
+                except Exception as _geo_err:
+                    logger.warning("Trip end geocode skip: %s", _geo_err)
+
                 trip.distance_km     = state.trip_odometer
                 start = trip.start_time
                 if start.tzinfo and not device_time.tzinfo:

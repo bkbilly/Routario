@@ -117,6 +117,29 @@ async def trip_rows(
         dr = await session.execute(select(Driver).where(Driver.id.in_(driver_ids)))
         driver_map = {d.id: d for d in dr.scalars().all()}
 
+    # Lazy-geocode missing start/end addresses for trips
+    try:
+        from core.config import get_settings
+        if get_settings().geocoding_enabled:
+            from services.geocoding import get_geocoding_service
+            geo_svc = get_geocoding_service()
+            updated_any = False
+            for trip in trips:
+                if not trip.start_address and trip.start_latitude is not None and trip.start_longitude is not None:
+                    addr = await geo_svc.reverse_geocode(trip.start_latitude, trip.start_longitude)
+                    if addr:
+                        trip.start_address = addr
+                        updated_any = True
+                if not trip.end_address and trip.end_latitude is not None and trip.end_longitude is not None:
+                    addr = await geo_svc.reverse_geocode(trip.end_latitude, trip.end_longitude)
+                    if addr:
+                        trip.end_address = addr
+                        updated_any = True
+            if updated_any:
+                await session.commit()
+    except Exception:
+        pass
+
     rows = []
     for trip in trips:
         dev = device_map.get(trip.device_id)

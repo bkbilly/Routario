@@ -1780,6 +1780,7 @@ function rtpHealthDetails(row) {
         const metrics = [
             ...rtpLatencyMetrics(row),
             ['DB', row.database_type || '-'],
+            ['Storage', row.storage_human || '-'],
             ['Pool', row.pool_class || '-'],
             ['Pool size', row.pool_size ?? row.size ?? '-'],
             ['In pool', row.connections_in_pool ?? row.checkedin ?? '-'],
@@ -1794,14 +1795,16 @@ function rtpHealthDetails(row) {
         const worst = Math.max(...(row.paths || []).map(p => Number(p.used_percent) || 0), 0);
         const metrics = [
             ['Writable', row.ok ? 'yes' : 'no', row.ok ? 'ok' : 'danger'],
+            ['Uploads size', row.uploads_size_human || '-'],
             ['Worst usage', `${worst}%`, worst >= 95 ? 'danger' : worst >= 85 ? 'warn' : 'ok'],
         ];
         const lines = (row.paths || []).map(p => {
             const used = p.used_percent == null ? '?' : `${p.used_percent}%`;
             const free = p.free_bytes == null ? '-' : rtpFormatBytes(p.free_bytes);
+            const folderSize = p.dir_size_human ? `, size ${p.dir_size_human}` : '';
             const state = p.ok ? (p.degraded ? 'degraded' : 'ok') : 'critical';
             const error = p.error ? `; ${p.error}` : '';
-            return [p.label || p.path, `${state}, used ${used}, free ${free}${error}`];
+            return [p.label || p.path, `${state}${folderSize}, used ${used}, free ${free}${error}`];
         });
         if (row.error) lines.unshift(['Error', row.error]);
         return rtpHealthBox(metrics, lines, row.error ? 'danger' : '');

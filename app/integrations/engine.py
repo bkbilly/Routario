@@ -201,7 +201,7 @@ async def _run_poll_cycle(
             account_label = intg.get("account_label", "")
             remote_id     = intg.get("remote_id", "")
 
-            if not provider_id:
+            if not provider_id or not IntegrationRegistry.is_integration(device.protocol):
                 continue
             # Providers that don't browse remote devices (e.g. GPS simulator)
             # identify devices by IMEI rather than a remote ID.
