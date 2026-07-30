@@ -444,6 +444,30 @@ async def _check_ingestion_freshness() -> dict:
     }
 
 
+def _check_geocoding() -> dict:
+    settings = get_settings()
+    enabled = bool(settings.geocoding_enabled)
+    provider = settings.geocoding_provider or "nominatim"
+
+    from services.geocoding import geocoding_service
+    is_active = geocoding_service is not None if enabled else False
+
+    return {
+        "ok": True if not enabled else is_active,
+        "optional": True,
+        "enabled": enabled,
+        "provider": provider,
+        "initialized": is_active,
+        "message": (
+            f"Geocoding service is active using '{provider}'."
+            if enabled and is_active
+            else "Geocoding is disabled in configuration."
+            if not enabled
+            else f"Geocoding enabled ('{provider}') but service not initialized."
+        ),
+    }
+
+
 @router.get("/health/live")
 async def live():
     return {"status": "ok"}
@@ -490,6 +514,7 @@ async def ready(response: Response):
         "disk": disk_check,
         "redis": redis_check,
         "valhalla": valhalla_check,
+        "geocoding": _check_geocoding(),
         "protocol_listeners": await _check_protocol_listeners(),
         "background_tasks": _check_background_tasks(),
         "ingestion": await _check_ingestion_freshness(),

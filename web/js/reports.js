@@ -1719,6 +1719,12 @@ function _healthDetails(row) {
         if (row.error) lines.push(['Error', row.error]);
         return _healthBox(metrics, lines, row.degraded ? 'warn' : '');
     }
+    if (row.name === 'geocoding') {
+        const enabled = row.enabled !== false;
+        const metrics = [['Enabled', enabled ? 'yes' : 'no', enabled ? 'ok' : 'info'], ['Provider', row.provider || 'nominatim', 'info'], ['Active', row.initialized ? 'yes' : 'no', row.initialized ? 'ok' : 'danger']];
+        const lines = [['State', row.message || (enabled ? 'active' : 'disabled')]];
+        return _healthBox(metrics, lines);
+    }
     if (row.error) return _healthBox([], [['Error', row.error]], 'danger');
     if (row.name === 'protocol_listeners') {
         const metrics = [['Active', row.active_protocols?.length || 0], ['Expected', row.expected_listeners?.length || 0], ['Running', row.running_listeners?.filter(l => l.running)?.length || 0]];

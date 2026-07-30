@@ -35,8 +35,13 @@ async def send_command(
     """Queue or send a command for a GPS device."""
     db = get_db()
     device = await db.get_device_by_id(device_id)
-    if not device:
-        raise HTTPException(status_code=404, detail="Device not found")
+    if command.command_type.startswith("user_cmd:"):
+        cmd_id = command.command_type.split(":", 1)[1]
+        user_cmds = (device.config or {}).get("user_commands", [])
+        matched = next((c for c in user_cmds if str(c.get("id")) == str(cmd_id)), None)
+        if matched:
+            command.payload = matched.get("payload", "")
+            command.command_type = "custom"
 
     if IntegrationRegistry.is_integration(device.protocol):
         provider_id = device.protocol
@@ -149,6 +154,18 @@ async def preview_command(
     device = await db.get_device_by_id(device_id)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
+
+    command_type = command_data.get("command_type", "")
+    payload = command_data.get("payload", "")
+    if command_type.startswith("user_cmd:"):
+        cmd_id = command_type.split(":", 1)[1]
+        user_cmds = (device.config or {}).get("user_commands", [])
+        matched = next((c for c in user_cmds if str(c.get("id")) == str(cmd_id)), None)
+        if matched:
+            payload = matched.get("payload", "")
+            command_type = "custom"
+            command_data["payload"] = payload
+            command_data["command_type"] = "custom"
 
     if IntegrationRegistry.is_integration(device.protocol):
         provider_id = device.protocol

@@ -962,8 +962,12 @@
                         <!-- Custom Command Box (default) -->
                         <div id="customCommandBox" class="form-group">
                             <label class="form-label">Custom Command Payload</label>
-                            <input type="text" class="form-input" id="customCommandInput" placeholder="Enter raw command text or hex string" onkeydown="if(event.key==='Enter'){ event.preventDefault(); sendCommand(); }">
-                            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.35rem;">Enter plain text or hex string (converted to bytes)</div>
+                            <div style="display:flex;gap:0.5rem;">
+                                <input type="text" class="form-input" id="customCommandInput" placeholder="Enter raw command text or hex string" style="flex:1;" onkeydown="if(event.key==='Enter'){ event.preventDefault(); sendCommand(); }">
+                                <button type="button" class="btn btn-secondary" id="saveUserCmdBtn" onclick="saveCustomCommand()" title="Save for this device"><i class="mdi mdi-content-save"></i> Save</button>
+                                <button type="button" class="btn btn-outline-danger" id="deleteUserCmdBtn" style="display:none;" onclick="deleteSelectedUserCommand()" title="Delete saved command"><i class="mdi mdi-delete"></i> Delete</button>
+                            </div>
+                            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.35rem;" id="customCommandHelpText">Enter plain text or hex string (converted to bytes). Click Save to store for this device.</div>
                         </div>
 
                         <!-- Predefined Command Info & Params (shown when predefined command selected) -->

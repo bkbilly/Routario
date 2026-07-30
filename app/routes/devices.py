@@ -331,12 +331,14 @@ async def check_command_support(
                 result = await session.execute(query)
                 account = result.scalar_one_or_none()
 
+            user_cmds = (device.config or {}).get("user_commands", [])
             if account:
                 credentials = account.get_decrypted_credentials()
                 auth_ctx = await _get_auth(account.user_id, provider_id, account.account_label, credentials)
                 if auth_ctx:
                     support_info = await provider.get_command_support(auth_ctx, remote_id)
                     support_info["protocol"] = device.protocol
+                    support_info["user_commands"] = user_cmds
                     return support_info
 
         return {
@@ -345,11 +347,18 @@ async def check_command_support(
             "protocol": device.protocol,
             "command_info": {},
             "saved_commands": [],
+            "user_commands": (device.config or {}).get("user_commands", []),
         }
 
     decoder = ProtocolRegistry.get_decoder(device.protocol)
     if not decoder:
-        return {"supports_commands": False, "available_commands": [], "protocol": device.protocol, "command_info": {}}
+        return {
+            "supports_commands": False,
+            "available_commands": [],
+            "protocol": device.protocol,
+            "command_info": {},
+            "user_commands": (device.config or {}).get("user_commands", []),
+        }
 
     available_commands = []
     command_info = {}
@@ -375,7 +384,75 @@ async def check_command_support(
         "available_commands": available_commands,
         "protocol": device.protocol,
         "command_info": command_info,
+        "user_commands": (device.config or {}).get("user_commands", []),
     }
+
+
+@router.post("/{device_id}/user-commands")
+async def add_user_command(
+    device_id: int,
+    cmd_data: dict,
+    caller: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("send_commands")),
+):
+    import time
+    from sqlalchemy.orm.attributes import flag_modified
+
+    db = get_db()
+    name = (cmd_data.get("name") or "").strip()
+    payload = (cmd_data.get("payload") or "").strip()
+    if not payload:
+        raise HTTPException(status_code=400, detail="Payload cannot be empty")
+    if not name:
+        name = payload
+
+    cmd_id = f"cmd_{int(time.time() * 1000)}"
+    new_cmd = {"id": cmd_id, "name": name, "payload": payload}
+
+    async with db.get_session() as session:
+        result = await session.execute(select(Device).where(Device.id == device_id))
+        device = result.scalar_one_or_none()
+        if not device:
+            raise HTTPException(status_code=404, detail="Device not found")
+
+        current_config = dict(device.config or {})
+        user_cmds = list(current_config.get("user_commands") or [])
+        user_cmds.append(new_cmd)
+        current_config["user_commands"] = user_cmds
+
+        device.config = current_config
+        flag_modified(device, "config")
+        await session.flush()
+
+    return {"user_commands": user_cmds, "added": new_cmd}
+
+
+@router.delete("/{device_id}/user-commands/{cmd_id}")
+async def delete_user_command(
+    device_id: int,
+    cmd_id: str,
+    caller: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("send_commands")),
+):
+    from sqlalchemy.orm.attributes import flag_modified
+
+    db = get_db()
+    async with db.get_session() as session:
+        result = await session.execute(select(Device).where(Device.id == device_id))
+        device = result.scalar_one_or_none()
+        if not device:
+            raise HTTPException(status_code=404, detail="Device not found")
+
+        current_config = dict(device.config or {})
+        user_cmds = list(current_config.get("user_commands") or [])
+        new_user_cmds = [c for c in user_cmds if str(c.get("id")) != str(cmd_id)]
+        current_config["user_commands"] = new_user_cmds
+
+        device.config = current_config
+        flag_modified(device, "config")
+        await session.flush()
+
+    return {"user_commands": new_user_cmds, "deleted_id": cmd_id}
 
 
 def _command_support_for_protocol(protocol: str) -> dict:

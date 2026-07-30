@@ -118,6 +118,7 @@ class DeviceConfig(BaseModel):
     sensors:     Dict[str, str] = Field(default_factory=dict)
     maintenance: Dict[str, int] = Field(default_factory=dict)
     integration: Optional[Dict[str, Any]] = Field(None)
+    user_commands: List[Dict[str, Any]] = Field(default_factory=list)
     has_camera:        bool = False
     auto_clear_driver: bool = False
 

@@ -1836,6 +1836,19 @@ function rtpHealthDetails(row) {
         return rtpHealthBox(metrics, lines, row.degraded ? 'warn' : '');
     }
 
+    if (row.name === 'geocoding') {
+        const enabled = row.enabled !== false;
+        const metrics = [
+            ['Enabled', enabled ? 'yes' : 'no', enabled ? 'ok' : 'info'],
+            ['Provider', row.provider || 'nominatim', 'info'],
+            ['Active', row.initialized ? 'yes' : 'no', row.initialized ? 'ok' : 'danger'],
+        ];
+        const lines = [
+            ['State', row.message || (enabled ? 'active' : 'disabled')],
+        ];
+        return rtpHealthBox(metrics, lines);
+    }
+
     if (row.error) return rtpHealthBox([], [['Error', row.error]], 'danger');
 
     if (row.name === 'protocol_listeners') {

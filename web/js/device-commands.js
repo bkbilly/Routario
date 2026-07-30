@@ -2,6 +2,7 @@
 let currentCommandDeviceId = null;
 let currentCommandDevice = null;
 let availableCommands = [];
+let userCommands = [];
 let commandInfo = {};
 let commandHistoryInterval = null;
 
@@ -77,12 +78,27 @@ async function loadAvailableCommands() {
         
         const data = await response.json();
         availableCommands = data.available_commands || [];
+        userCommands = data.user_commands || [];
         commandInfo = data.command_info || {};
         
         const select = document.getElementById('commandTypeSelect');
         if (select) {
             select.innerHTML = '';
 
+            // 1. User Defined Commands
+            if (userCommands.length > 0) {
+                const userGroup = document.createElement('optgroup');
+                userGroup.label = 'User Defined Commands';
+                userCommands.forEach(uc => {
+                    const opt = document.createElement('option');
+                    opt.value = `user_cmd:${uc.id}`;
+                    opt.textContent = uc.name;
+                    userGroup.appendChild(opt);
+                });
+                select.appendChild(userGroup);
+            }
+
+            // 2. Integration Saved Commands
             const savedCmds = data.saved_commands || [];
             if (savedCmds.length > 0) {
                 const savedGroup = document.createElement('optgroup');
@@ -96,6 +112,7 @@ async function loadAvailableCommands() {
                 select.appendChild(savedGroup);
             }
 
+            // 3. Standard Protocol Commands
             const standardCmds = availableCommands.filter(cmd => cmd !== 'custom' && !cmd.startsWith('saved:'));
             if (standardCmds.length > 0) {
                 const stdGroup = document.createElement('optgroup');
@@ -109,10 +126,11 @@ async function loadAvailableCommands() {
                 select.appendChild(stdGroup);
             }
 
+            // 4. Custom Command Option
             const customOpt = document.createElement('option');
             customOpt.value = 'custom';
             customOpt.textContent = 'Custom Command';
-            if (savedCmds.length === 0 && standardCmds.length === 0) {
+            if (userCommands.length === 0 && savedCmds.length === 0 && standardCmds.length === 0) {
                 customOpt.selected = true;
             }
             select.appendChild(customOpt);
@@ -131,11 +149,36 @@ function onCommandSelect() {
     const commandType = select ? select.value : 'custom';
     
     const customBox = document.getElementById('customCommandBox');
+    const customInput = document.getElementById('customCommandInput');
+    const saveBtn = document.getElementById('saveUserCmdBtn');
+    const deleteBtn = document.getElementById('deleteUserCmdBtn');
+    const helpText = document.getElementById('customCommandHelpText');
     const infoBox = document.getElementById('commandInfoBox');
     const paramsBox = document.getElementById('commandParamsBox');
     const previewBox = document.getElementById('commandPreviewBox');
 
     if (previewBox) previewBox.style.display = 'none';
+
+    if (commandType.startsWith('user_cmd:')) {
+        const cmdId = commandType.split(':', 1)[1] || commandType.replace('user_cmd:', '');
+        const matched = userCommands.find(c => String(c.id) === String(cmdId));
+        if (customBox) customBox.style.display = 'block';
+        if (customInput) {
+            customInput.value = matched ? (matched.payload || '') : '';
+            customInput.readOnly = true;
+        }
+        if (saveBtn) saveBtn.style.display = 'none';
+        if (deleteBtn) deleteBtn.style.display = 'inline-block';
+        if (helpText) helpText.textContent = 'Saved User Defined Command payload (Read-Only).';
+        if (infoBox) infoBox.style.display = 'none';
+        if (paramsBox) paramsBox.style.display = 'none';
+        return;
+    }
+
+    if (customInput) customInput.readOnly = false;
+    if (saveBtn) saveBtn.style.display = 'inline-block';
+    if (deleteBtn) deleteBtn.style.display = 'none';
+    if (helpText) helpText.textContent = 'Enter plain text or hex string (converted to bytes). Click Save to store for this device.';
 
     if (commandType === 'custom' || !commandType) {
         if (customBox) customBox.style.display = 'block';
@@ -188,6 +231,10 @@ async function previewCommand() {
             showAlert('Please enter a custom command payload', 'warning');
             return;
         }
+    } else if (commandType.startsWith('user_cmd:')) {
+        const cmdId = commandType.split(':', 1)[1] || commandType.replace('user_cmd:', '');
+        const matched = userCommands.find(c => String(c.id) === String(cmdId));
+        payload = matched ? matched.payload : (document.getElementById('customCommandInput')?.value.trim() || '');
     } else if (commandType.startsWith('saved:')) {
         payload = select?.options[select.selectedIndex]?.textContent || commandType;
     } else {
@@ -253,6 +300,7 @@ async function sendCommand() {
     if (_checkProtocolUnsaved()) return;
     const select = document.getElementById('commandTypeSelect');
     const commandType = select?.value || 'custom';
+    let commandLabel = '';
     let payload = '';
 
     if (commandType === 'custom') {
@@ -261,8 +309,15 @@ async function sendCommand() {
             showAlert('Please enter a custom command payload', 'warning');
             return;
         }
+        commandLabel = payload;
+    } else if (commandType.startsWith('user_cmd:')) {
+        const cmdId = commandType.split(':', 1)[1] || commandType.replace('user_cmd:', '');
+        const matched = userCommands.find(c => String(c.id) === String(cmdId));
+        commandLabel = matched ? matched.name : (select?.options[select.selectedIndex]?.textContent || 'User Command');
+        payload = matched ? matched.payload : (document.getElementById('customCommandInput')?.value.trim() || '');
     } else if (commandType.startsWith('saved:')) {
-        payload = select?.options[select.selectedIndex]?.textContent || commandType;
+        commandLabel = select?.options[select.selectedIndex]?.textContent || commandType;
+        payload = commandLabel;
     } else {
         const params = document.getElementById('commandParams')?.value.trim() || '';
         const info = commandInfo[commandType] || {};
@@ -270,11 +325,12 @@ async function sendCommand() {
             showAlert('This command requires parameters', 'warning');
             return;
         }
+        commandLabel = select?.options[select.selectedIndex]?.textContent || commandType;
         payload = info.requires_params && params ? `${commandType} ${params}` : commandType;
     }
 
     const deviceName = currentCommandDevice?.name || 'device';
-    if (!confirm(`Send "${payload}" command to ${deviceName}?`)) {
+    if (!confirm(`Send "${commandLabel}" command to ${deviceName}?`)) {
         return;
     }
 
@@ -391,7 +447,12 @@ function renderCommandHistory(commands) {
             statusBadge = `<span class="command-status pending" title="Queued in database"><i class="mdi mdi-arrow-up-bold"></i> Pending</span>`;
         }
 
-        const cmdType = cmd.command_type || (isReceived ? 'response' : '');
+        let cmdType = cmd.command_type || (isReceived ? 'response' : '');
+        if (cmdType.startsWith('user_cmd:')) {
+            const cmdId = cmdType.split(':', 1)[1] || cmdType.replace('user_cmd:', '');
+            const matched = userCommands.find(c => String(c.id) === String(cmdId));
+            cmdType = matched ? matched.name : 'User Command';
+        }
         const displayData = escape(cmd.payload || cmd.response || '-');
         
         const showCancel = (!isReceived && (statusStr === 'pending' || statusStr === 'sent'));
@@ -445,6 +506,74 @@ async function deleteCommandHistory(commandId) {
         }
     } catch {
         showAlert('Failed to delete command history entry.', 'error');
+    }
+}
+
+// Save custom command as a User Defined Command for the current device
+async function saveCustomCommand() {
+    if (!currentCommandDeviceId) {
+        showAlert('Please select a saved device first', 'warning');
+        return;
+    }
+    const payloadInput = document.getElementById('customCommandInput');
+    const payload = payloadInput?.value.trim() || '';
+    if (!payload) {
+        showAlert('Please enter a custom command payload first', 'warning');
+        return;
+    }
+    const name = prompt('Enter a name/description for this user defined command:', payload);
+    if (name === null) return; // User cancelled
+
+    const cmdName = name.trim() || payload;
+    try {
+        const response = await apiFetch(`${API_BASE}/devices/${currentCommandDeviceId}/user-commands`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: cmdName, payload: payload })
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to save user-defined command');
+        }
+        const resData = await response.json();
+        showAlert('User-defined command saved successfully!', 'success');
+        await loadAvailableCommands();
+        if (resData.added?.id) {
+            const select = document.getElementById('commandTypeSelect');
+            if (select) select.value = `user_cmd:${resData.added.id}`;
+            onCommandSelect();
+        }
+    } catch (err) {
+        console.error('Error saving user command:', err);
+        showAlert(err.message || 'Failed to save user command', 'error');
+    }
+}
+
+// Delete selected User Defined Command from the current device
+async function deleteSelectedUserCommand() {
+    if (!currentCommandDeviceId) return;
+    const select = document.getElementById('commandTypeSelect');
+    const commandType = select?.value || '';
+    if (!commandType.startsWith('user_cmd:')) return;
+
+    const cmdId = commandType.split(':', 1)[1] || commandType.replace('user_cmd:', '');
+    if (!confirm('Are you sure you want to delete this user-defined command?')) return;
+
+    try {
+        const response = await apiFetch(`${API_BASE}/devices/${currentCommandDeviceId}/user-commands/${cmdId}`, {
+            method: 'DELETE'
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to delete user-defined command');
+        }
+        showAlert('User-defined command deleted!', 'success');
+        await loadAvailableCommands();
+        if (select) select.value = 'custom';
+        onCommandSelect();
+    } catch (err) {
+        console.error('Error deleting user command:', err);
+        showAlert(err.message || 'Failed to delete user command', 'error');
     }
 }
 
