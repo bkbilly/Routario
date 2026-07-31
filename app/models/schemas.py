@@ -587,6 +587,7 @@ class FuelLogCreate(BaseModel):
     date: datetime
     liters: float = Field(..., gt=0)
     odometer_km: Optional[float] = None
+    trip_distance_km: Optional[float] = None
     price_per_liter: Optional[float] = None
     full_tank: bool = True
     notes: Optional[str] = None
@@ -595,6 +596,7 @@ class FuelLogUpdate(BaseModel):
     date: Optional[datetime] = None
     liters: Optional[float] = Field(None, gt=0)
     odometer_km: Optional[float] = None
+    trip_distance_km: Optional[float] = None
     price_per_liter: Optional[float] = None
     full_tank: Optional[bool] = None
     notes: Optional[str] = None
@@ -605,7 +607,8 @@ class FuelLogResponse(BaseModel):
     device_id: int
     date: datetime
     liters: float
-    odometer_km: Optional[float]
+    odometer_km: Optional[float] = None
+    trip_distance_km: Optional[float] = None
     price_per_liter: Optional[float]
     currency: str = "EUR"
     exchange_rate: float = 1.0

@@ -98,16 +98,17 @@ class LogbookReport(Report):
                 prev = prev_log_map.get(log.device_id)
                 dist = None
                 cons = None
-                if prev and prev.odometer_km is not None and log.odometer_km is not None:
+
+                if log.trip_distance_km is not None and log.trip_distance_km > 0:
+                    dist = round_value(log.trip_distance_km, 1)
+                    if log.liters and log.liters > 0:
+                        cons = round_value((log.liters / log.trip_distance_km) * 100, 1)
+                elif prev and prev.odometer_km is not None and log.odometer_km is not None:
                     d = log.odometer_km - prev.odometer_km
                     if d > 0:
                         dist = round_value(d, 1)
-
-                last_full = last_full_map.get(log.device_id)
-                if log.full_tank and last_full and last_full.odometer_km is not None and log.odometer_km is not None:
-                    full_d = log.odometer_km - last_full.odometer_km
-                    if full_d > 0:
-                        cons = round_value((log.liters / full_d) * 100, 1)
+                        if log.full_tank and log.liters:
+                            cons = round_value((log.liters / d) * 100, 1)
 
                 if log.full_tank:
                     last_full_map[log.device_id] = log
@@ -256,9 +257,8 @@ class LogbookReport(Report):
                 {"key": "distance_km", "label": "Distance", "type": "number", "decimals": 0, "suffix": " km"},
                 {"key": "liters", "label": "Liters", "type": "number", "decimals": 1},
                 {"key": "cost", "label": "Cost", "type": "number", "decimals": 2},
-                {"key": "price_per_liter", "label": "Price/L", "type": "number", "decimals": 3},
+                {"key": "price_per_liter", "label": "Price/L", "type": "number", "decimals": 2},
                 {"key": "l_100km", "label": "L/100km", "type": "number", "decimals": 1},
-                {"key": "status", "label": "Status", "type": "text", "empty": "-"},
                 {"key": "notes", "label": "Notes", "type": "text", "max_width": 260},
             ]
         else:

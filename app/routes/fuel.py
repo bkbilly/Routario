@@ -47,6 +47,7 @@ async def create_fuel_log(
             date=data.date.replace(tzinfo=None) if data.date.tzinfo else data.date,
             liters=data.liters,
             odometer_km=data.odometer_km,
+            trip_distance_km=data.trip_distance_km,
             price_per_liter=data.price_per_liter,
             currency=currency,
             exchange_rate=exchange_rate,
@@ -77,6 +78,8 @@ async def update_fuel_log(
             log.liters = data.liters
         if data.odometer_km is not None:
             log.odometer_km = data.odometer_km
+        if data.trip_distance_km is not None:
+            log.trip_distance_km = data.trip_distance_km
         if data.price_per_liter is not None:
             log.price_per_liter = data.price_per_liter
             log.currency = currency

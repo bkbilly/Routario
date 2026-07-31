@@ -168,6 +168,7 @@ class DatabaseService:
             "ALTER TABLE users ADD COLUMN currency VARCHAR(3) DEFAULT 'EUR'",
             "ALTER TABLE fuel_logs ADD COLUMN currency VARCHAR(3) DEFAULT 'EUR'",
             "ALTER TABLE fuel_logs ADD COLUMN exchange_rate FLOAT DEFAULT 1.0",
+            "ALTER TABLE fuel_logs ADD COLUMN trip_distance_km FLOAT",
             "ALTER TABLE logbook_entries ADD COLUMN currency VARCHAR(3) DEFAULT 'EUR'",
             "ALTER TABLE logbook_entries ADD COLUMN exchange_rate FLOAT DEFAULT 1.0",
             "ALTER TABLE users ADD COLUMN company_id INTEGER",

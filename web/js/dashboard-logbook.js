@@ -57,7 +57,7 @@ window.addEventListener('routario:currencychange', () => {
     }
     if (document.getElementById('lbFuelModal')?.classList.contains('active')) {
         const log = _editingFuelLogId ? _fuelLogs.find(l => l.id === _editingFuelLogId) : null;
-        if (log?.price_per_liter != null) document.getElementById('lbFuelPrice').value = _lbMoneyInput(log.price_per_liter, 3);
+        if (log?.price_per_liter != null) document.getElementById('lbFuelPrice').value = _lbMoneyInput(log.price_per_liter, 2);
     }
 });
 
@@ -356,7 +356,7 @@ function _renderFuelTable() {
     if (!tbody) return;
 
     if (_fuelLogs.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" style="padding:2rem;text-align:center;color:var(--text-muted);">No fill-ups recorded. Click <strong>Add Fill-up</strong> to start.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="padding:2rem;text-align:center;color:var(--text-muted);">No fill-ups recorded. Click <strong>Add Fill-up</strong> to start.</td></tr>`;
         if (summary) summary.textContent = '';
         return;
     }
@@ -365,24 +365,23 @@ function _renderFuelTable() {
     const sorted = [..._fuelLogs].sort((a, b) => new Date(a.date) - new Date(b.date));
     const consumption = {};
     const distances = {};
-    let lastFull = null;
     let prevLog = null;
     let totalDist = 0;
 
     for (const log of sorted) {
-        if (prevLog && prevLog.odometer_km != null && log.odometer_km != null) {
+        let dist = log.trip_distance_km;
+        if ((dist == null || dist <= 0) && prevLog && prevLog.odometer_km != null && log.odometer_km != null) {
             const d = log.odometer_km - prevLog.odometer_km;
-            if (d > 0) {
-                distances[log.id] = d;
-                totalDist += d;
-            }
+            if (d > 0) dist = d;
         }
 
-        if (log.full_tank && lastFull && lastFull.odometer_km != null && log.odometer_km != null) {
-            const dist = log.odometer_km - lastFull.odometer_km;
-            if (dist > 0) consumption[log.id] = (log.liters / dist * 100).toFixed(1);
+        if (dist != null && dist > 0) {
+            distances[log.id] = dist;
+            totalDist += dist;
+            if (log.liters > 0) {
+                consumption[log.id] = (log.liters / dist * 100).toFixed(1);
+            }
         }
-        if (log.full_tank) lastFull = log;
         prevLog = log;
     }
 
@@ -405,17 +404,12 @@ function _renderFuelTable() {
             const cons     = consumption[log.id] ? `${consumption[log.id]}` : '—';
             const distStr  = distances[log.id] ? `+${Math.round(distances[log.id]).toLocaleString()} km` : '—';
             const total    = log.price_per_liter ? _lbMoneySnapshot(log.liters * log.price_per_liter, log) : '—';
-            const fullIcon = log.full_tank
-                ? `<i class="mdi mdi-check-circle" style="color:var(--accent-success);" title="Full tank"></i>`
-                : `<i class="mdi mdi-minus" style="color:var(--text-muted);" title="Partial fill"></i>`;
             return `<tr class="lb-row" ondblclick="openFuelLogModal(${log.id})">
                 <td style="white-space:nowrap;">${date}<br><span style="color:var(--text-muted);font-size:0.8rem;">${time}</span></td>
                 <td style="text-align:right;font-family:var(--font-mono);">${log.liters.toFixed(2)}</td>
-                <td style="text-align:right;font-family:var(--font-mono);color:var(--text-secondary);">${log.odometer_km != null ? Math.round(log.odometer_km).toLocaleString() : '—'}</td>
                 <td style="text-align:right;font-family:var(--font-mono);color:var(--accent-primary);">${distStr}</td>
-                <td style="text-align:right;color:var(--text-secondary);">${log.price_per_liter != null ? _lbMoneySnapshot(log.price_per_liter, log, 3) : '—'}</td>
+                <td style="text-align:right;color:var(--text-secondary);">${log.price_per_liter != null ? _lbMoneySnapshot(log.price_per_liter, log, 2) : '—'}</td>
                 <td style="text-align:right;color:var(--text-secondary);">${total}</td>
-                <td style="text-align:center;">${fullIcon}</td>
                 <td style="text-align:right;font-family:var(--font-mono);">${cons}</td>
                 <td style="text-align:right;">
                     <button class="btn btn-secondary lb-tbl-btn" onclick="openFuelLogModal(${log.id})"><i class="mdi mdi-pencil"></i> Edit</button>
@@ -431,55 +425,11 @@ function openFuelLogModal(logId = null) {
 
     document.getElementById('lbFuelModalTitle').textContent = isNew ? 'Add Fill-up' : 'Edit Fill-up';
     _lbApplyCurrencyLabels();
-    document.getElementById('lbFuelLogId').value      = log?.id || '';
-    document.getElementById('lbFuelLiters').value     = log?.liters ?? '';
-    document.getElementById('lbFuelPrice').value      = log?.price_per_liter != null ? _lbMoneyInput(log.price_per_liter, 3) : '';
-    document.getElementById('lbFuelFullTank').checked = log?.full_tank ?? true;
-    document.getElementById('lbFuelNotes').value      = log?.notes || '';
-
-    // Determine previous odometer reference for trip calculation
-    const sortedLogs = [..._fuelLogs].sort((a, b) => new Date(a.date) - new Date(b.date));
-    let prevLog = null;
-    if (isNew) {
-        prevLog = sortedLogs.length ? sortedLogs[sortedLogs.length - 1] : null;
-    } else {
-        const logDate = new Date(log.date);
-        const priorLogs = sortedLogs.filter(l => l.id !== log.id && new Date(l.date) <= logDate);
-        prevLog = priorLogs.length ? priorLogs[priorLogs.length - 1] : null;
-    }
-
-    const device = devices.find(d => d.id === _logbookDeviceId);
-    const deviceOdo = isNew ? _lbCurrentOdometer(device) : null;
-
-    _fuelPrevOdometer = prevLog?.odometer_km != null ? prevLog.odometer_km : (deviceOdo != null && deviceOdo !== '' ? parseFloat(deviceOdo) : null);
-
-    const prevEl = document.getElementById('lbFuelPrevOdometer');
-    if (prevEl) {
-        prevEl.textContent = _fuelPrevOdometer != null ? `Prev: ${Math.round(_fuelPrevOdometer).toLocaleString()} km` : 'Prev: —';
-    }
-
-    const currentOdoInput = document.getElementById('lbFuelOdometer');
-    const tripInput = document.getElementById('lbFuelTripDistance');
-
-    if (!isNew && log?.odometer_km != null) {
-        currentOdoInput.value = log.odometer_km;
-        if (_fuelPrevOdometer != null && log.odometer_km >= _fuelPrevOdometer) {
-            tripInput.value = (log.odometer_km - _fuelPrevOdometer).toFixed(1);
-        } else {
-            tripInput.value = '';
-        }
-    } else if (isNew) {
-        const defaultOdo = deviceOdo != null && deviceOdo !== '' ? Math.round(deviceOdo) : '';
-        currentOdoInput.value = defaultOdo;
-        if (defaultOdo !== '' && _fuelPrevOdometer != null && defaultOdo >= _fuelPrevOdometer) {
-            tripInput.value = (defaultOdo - _fuelPrevOdometer).toFixed(1);
-        } else {
-            tripInput.value = '';
-        }
-    } else {
-        currentOdoInput.value = '';
-        tripInput.value = '';
-    }
+    document.getElementById('lbFuelLogId').value        = log?.id || '';
+    document.getElementById('lbFuelLiters').value       = log?.liters ?? '';
+    document.getElementById('lbFuelPrice').value        = log?.price_per_liter != null ? _lbMoneyInput(log.price_per_liter, 2) : '';
+    document.getElementById('lbFuelTripDistance').value = log?.trip_distance_km ?? '';
+    document.getElementById('lbFuelNotes').value        = log?.notes || '';
 
     const dt = log?.date
         ? new Date(log.date).toISOString().slice(0, 16)
@@ -491,37 +441,14 @@ function openFuelLogModal(logId = null) {
     document.getElementById('lbFuelModal').classList.add('active');
 }
 
-function _onFuelOdometerChange() {
-    const odo = parseFloat(document.getElementById('lbFuelOdometer').value);
-    const tripInput = document.getElementById('lbFuelTripDistance');
-    if (!isNaN(odo) && _fuelPrevOdometer != null && odo >= _fuelPrevOdometer) {
-        tripInput.value = (odo - _fuelPrevOdometer).toFixed(1);
-    } else if (isNaN(odo)) {
-        tripInput.value = '';
-    }
-    _calcFuelModalLive();
-}
-
-function _onFuelTripDistanceChange() {
-    const trip = parseFloat(document.getElementById('lbFuelTripDistance').value);
-    const odoInput = document.getElementById('lbFuelOdometer');
-    if (!isNaN(trip) && trip >= 0 && _fuelPrevOdometer != null) {
-        odoInput.value = (_fuelPrevOdometer + trip).toFixed(1);
-    } else if (isNaN(trip)) {
-        odoInput.value = '';
-    }
-    _calcFuelModalLive();
-}
-
 function _calcFuelModalLive() {
     const litres = parseFloat(document.getElementById('lbFuelLiters').value);
-    const odo = parseFloat(document.getElementById('lbFuelOdometer').value);
+    const tripDist = parseFloat(document.getElementById('lbFuelTripDistance').value);
     const previewEl = document.getElementById('lbFuelCalcPreview');
     if (!previewEl) return;
 
-    if (litres > 0 && odo > 0 && _fuelPrevOdometer != null && odo > _fuelPrevOdometer) {
-        const dist = odo - _fuelPrevOdometer;
-        const cons = ((litres / dist) * 100).toFixed(1);
+    if (litres > 0 && tripDist > 0) {
+        const cons = ((litres / tripDist) * 100).toFixed(1);
         previewEl.textContent = `⚡ ~${cons} L/100km`;
     } else {
         previewEl.textContent = '';
@@ -540,13 +467,14 @@ async function saveFuelLog() {
     const dateVal = document.getElementById('lbFuelDate').value;
     if (!dateVal) { document.getElementById('lbFuelDate').focus(); return; }
 
+    const tripDistVal = parseFloat(document.getElementById('lbFuelTripDistance').value);
+
     const payload = {
-        date:            new Date(dateVal).toISOString(),
+        date:             new Date(dateVal).toISOString(),
         liters,
-        odometer_km:     parseFloat(document.getElementById('lbFuelOdometer').value) || null,
-        price_per_liter: _lbMoneyFromInput('lbFuelPrice'),
-        full_tank:       document.getElementById('lbFuelFullTank').checked,
-        notes:           document.getElementById('lbFuelNotes').value.trim() || null,
+        trip_distance_km: !isNaN(tripDistVal) && tripDistVal > 0 ? tripDistVal : null,
+        price_per_liter:  _lbMoneyFromInput('lbFuelPrice'),
+        notes:            document.getElementById('lbFuelNotes').value.trim() || null,
     };
 
     try {
