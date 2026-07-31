@@ -112,15 +112,21 @@ async function loadAvailableCommands() {
                 select.appendChild(savedGroup);
             }
 
-            // 3. Standard Protocol Commands
+            // 3. Flespi Settings & Commands
             const standardCmds = availableCommands.filter(cmd => cmd !== 'custom' && !cmd.startsWith('saved:'));
             if (standardCmds.length > 0) {
                 const stdGroup = document.createElement('optgroup');
-                stdGroup.label = 'Standard Commands';
+                stdGroup.label = 'Flespi Device Settings & Commands';
                 standardCmds.forEach(cmd => {
                     const opt = document.createElement('option');
                     opt.value = cmd;
-                    opt.textContent = cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/_/g, ' ');
+                    if (cmd.startsWith('setting:')) {
+                        const rawName = cmd.replace('setting:', '');
+                        const labelText = rawName.charAt(0).toUpperCase() + rawName.slice(1).replace(/_/g, ' ');
+                        opt.textContent = `${labelText}`;
+                    } else {
+                        opt.textContent = `${cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/_/g, ' ')}`;
+                    }
                     stdGroup.appendChild(opt);
                 });
                 select.appendChild(stdGroup);
@@ -156,6 +162,10 @@ function onCommandSelect() {
     const infoBox = document.getElementById('commandInfoBox');
     const paramsBox = document.getElementById('commandParamsBox');
     const previewBox = document.getElementById('commandPreviewBox');
+    const dynamicContainer = document.getElementById('dynamicCommandFields');
+    const paramsInput = document.getElementById('commandParams');
+    const paramsLabel = document.getElementById('commandParamsLabel');
+    const paramsHelp = document.getElementById('commandParamsHelp');
 
     if (previewBox) previewBox.style.display = 'none';
 
@@ -204,19 +214,121 @@ function onCommandSelect() {
         infoBox.style.display = 'block';
     }
     
+    const hasFields = info.fields && Array.isArray(info.fields) && info.fields.length > 0;
     const requiresParams = info.requires_params || false;
+
     if (paramsBox) {
-        paramsBox.style.display = requiresParams ? 'block' : 'none';
-        if (requiresParams) {
-            const paramsInput = document.getElementById('commandParams');
-            if (info.example && info.example.includes(' ')) {
-                const paramsPart = info.example.split(' ').slice(1).join(' ');
-                paramsInput.placeholder = `e.g., ${paramsPart}`;
-            } else {
-                paramsInput.placeholder = 'Enter parameters here';
+        paramsBox.style.display = (requiresParams || hasFields) ? 'block' : 'none';
+        if (hasFields) {
+            if (paramsInput) paramsInput.style.display = 'none';
+            if (paramsLabel) paramsLabel.textContent = 'Command Configuration Fields';
+            if (paramsHelp) paramsHelp.textContent = 'Configure the parameters for this command/alarm below:';
+            if (dynamicContainer) {
+                dynamicContainer.innerHTML = '';
+                dynamicContainer.style.display = 'flex';
+                info.fields.forEach(field => {
+                    const fieldGroup = document.createElement('div');
+                    fieldGroup.style.display = 'flex';
+                    fieldGroup.style.flexDirection = 'column';
+                    fieldGroup.style.gap = '0.25rem';
+
+                    const label = document.createElement('label');
+                    label.className = 'form-label';
+                    label.style.fontSize = '0.85rem';
+                    label.style.fontWeight = '600';
+                    label.textContent = field.label + (field.required ? ' *' : '');
+
+                    let input;
+                    if (field.type === 'select') {
+                        input = document.createElement('select');
+                        input.className = 'form-select dynamic-cmd-field';
+                        (field.options || []).forEach(opt => {
+                            const option = document.createElement('option');
+                            const valStr = (typeof opt.value === 'object' && opt.value !== null) ? JSON.stringify(opt.value) : String(opt.value ?? '');
+                            const lblStr = (typeof opt.label === 'object' && opt.label !== null) ? JSON.stringify(opt.label) : String(opt.label || valStr);
+                            option.value = valStr;
+                            option.textContent = lblStr;
+                            if (String(valStr) === String(field.default)) option.selected = true;
+                            input.appendChild(option);
+                        });
+                    } else {
+                        input = document.createElement('input');
+                        input.className = 'form-input dynamic-cmd-field';
+                        input.type = field.type === 'number' ? 'number' : 'text';
+                        if (field.placeholder) input.placeholder = field.placeholder;
+                        if (field.default !== undefined && field.default !== null) {
+                            input.value = (typeof field.default === 'object') ? JSON.stringify(field.default) : field.default;
+                        }
+                    }
+                    input.dataset.key = field.key;
+                    input.dataset.required = field.required ? 'true' : 'false';
+
+                    fieldGroup.appendChild(label);
+                    fieldGroup.appendChild(input);
+
+                    if (field.help_text) {
+                        const help = document.createElement('div');
+                        help.style.fontSize = '0.78rem';
+                        help.style.color = 'var(--text-muted)';
+                        help.textContent = field.help_text;
+                        fieldGroup.appendChild(help);
+                    }
+
+                    dynamicContainer.appendChild(fieldGroup);
+                });
+            }
+        } else {
+            if (paramsInput) paramsInput.style.display = 'block';
+            if (paramsLabel) paramsLabel.textContent = 'Parameters';
+            if (paramsHelp) paramsHelp.textContent = 'Parameters will be appended after the command with a space';
+            if (dynamicContainer) {
+                dynamicContainer.innerHTML = '';
+                dynamicContainer.style.display = 'none';
+            }
+            if (requiresParams && paramsInput) {
+                if (info.example && info.example.includes(' ')) {
+                    const paramsPart = info.example.split(' ').slice(1).join(' ');
+                    paramsInput.placeholder = `e.g., ${paramsPart}`;
+                } else {
+                    paramsInput.placeholder = 'Enter parameters here';
+                }
             }
         }
     }
+}
+
+// Extract command payload based on command type and dynamic fields
+function _buildPayloadForSelectedCommand(commandType) {
+    const info = commandInfo[commandType] || {};
+
+    if (info.fields && Array.isArray(info.fields) && info.fields.length > 0) {
+        const payloadObj = {};
+        const inputs = document.querySelectorAll('.dynamic-cmd-field');
+        let missingRequired = false;
+        inputs.forEach(input => {
+            const key = input.dataset.key;
+            let val = input.value;
+            if (input.dataset.required === 'true' && (val === undefined || val === null || String(val).trim() === '')) {
+                missingRequired = true;
+            }
+            if (input.type === 'number') {
+                val = val !== '' ? Number(val) : null;
+            }
+            if (val !== null && val !== undefined) payloadObj[key] = val;
+        });
+        if (missingRequired) {
+            showAlert('Please fill in all required command fields', 'warning');
+            return null;
+        }
+        return JSON.stringify(payloadObj);
+    }
+
+    const params = document.getElementById('commandParams')?.value.trim() || '';
+    if (info.requires_params && !params) {
+        showAlert('This command requires parameters', 'warning');
+        return null;
+    }
+    return info.requires_params && params ? `${commandType} ${params}` : commandType;
 }
 
 // Preview Command
@@ -238,13 +350,9 @@ async function previewCommand() {
     } else if (commandType.startsWith('saved:')) {
         payload = select?.options[select.selectedIndex]?.textContent || commandType;
     } else {
-        const params = document.getElementById('commandParams')?.value.trim() || '';
-        const info = commandInfo[commandType] || {};
-        if (info.requires_params && !params) {
-            showAlert('This command requires parameters', 'warning');
-            return;
-        }
-        payload = info.requires_params && params ? `${commandType} ${params}` : commandType;
+        const calculated = _buildPayloadForSelectedCommand(commandType);
+        if (calculated === null) return;
+        payload = calculated;
     }
 
     try {
@@ -319,14 +427,10 @@ async function sendCommand() {
         commandLabel = select?.options[select.selectedIndex]?.textContent || commandType;
         payload = commandLabel;
     } else {
-        const params = document.getElementById('commandParams')?.value.trim() || '';
-        const info = commandInfo[commandType] || {};
-        if (info.requires_params && !params) {
-            showAlert('This command requires parameters', 'warning');
-            return;
-        }
+        const calculated = _buildPayloadForSelectedCommand(commandType);
+        if (calculated === null) return;
+        payload = calculated;
         commandLabel = select?.options[select.selectedIndex]?.textContent || commandType;
-        payload = info.requires_params && params ? `${commandType} ${params}` : commandType;
     }
 
     const deviceName = currentCommandDevice?.name || 'device';

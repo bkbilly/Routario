@@ -983,9 +983,10 @@
                             <div id="commandExample" style="font-family:var(--font-mono);background:var(--bg-tertiary);padding:0.5rem;border-radius:6px;margin-top:0.25rem;"></div>
                         </div>
                         <div id="commandParamsBox" class="form-group" style="display:none;">
-                            <label class="form-label">Parameters</label>
+                            <label class="form-label" id="commandParamsLabel">Parameters</label>
                             <input type="text" class="form-input" id="commandParams" placeholder="Enter parameters here" onkeydown="if(event.key==='Enter'){ event.preventDefault(); sendCommand(); }">
-                            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.35rem;">Parameters will be appended after the command with a space</div>
+                            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.35rem;" id="commandParamsHelp">Parameters will be appended after the command with a space</div>
+                            <div id="dynamicCommandFields" style="margin-top:0.5rem;display:none;flex-direction:column;gap:0.75rem;"></div>
                         </div>
 
                         <!-- Command Preview Box -->

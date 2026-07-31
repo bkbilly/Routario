@@ -72,6 +72,7 @@ class FlespiIntegration(BaseIntegration):
     PROVIDER_ID           = "flespi_cloud"
     DISPLAY_NAME          = "Flespi Cloud"
     POLL_INTERVAL_SECONDS = 30
+    SUPPORTS_COMMANDS     = True
 
     FIELDS = [
         IntegrationField(
@@ -402,3 +403,287 @@ class FlespiIntegration(BaseIntegration):
         except Exception as e:
             logger.error(f"Flespi Cloud: parse error for {imei}: {e}", exc_info=True)
             return None
+
+    # ── Command & Setting support ─────────────────────────────────────────────
+
+    async def get_command_support(self, auth_ctx: AuthContext, remote_id: str) -> dict:
+        """
+        Return available commands for a Flespi device.
+        Dynamically fetches all available settings and commands directly from Flespi API.
+        Only 'custom' is included by default; no static fallbacks.
+        """
+        token = auth_ctx.data.get("token", "")
+        headers = {"Authorization": f"FlespiToken {token}"}
+
+        command_info: dict = {
+            "custom": {
+                "description": "Send a custom text or JSON command payload to Flespi device",
+                "example": '{"action": "get_status"}',
+                "requires_params": True,
+            }
+        }
+
+        # 1. Dynamically fetch settings from Flespi API: GET /gw/devices/{remote_id}/settings/all (with schema fields)
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                for settings_endpoint in [
+                    f"{_BASE_URL}/gw/devices/{remote_id}/settings/all?fields=name,title,description,schema,value,properties,current",
+                    f"{_BASE_URL}/gw/devices/{remote_id}/settings/all",
+                    f"{_BASE_URL}/gw/devices/{remote_id}/settings",
+                ]:
+                    resp = await client.get(settings_endpoint, headers=headers)
+                    logger.info(f"Flespi Cloud: GET {settings_endpoint} for device {remote_id} status={resp.status_code}")
+                    if resp.status_code == 403:
+                        logger.warning(
+                            f"Flespi Cloud: Token rejected access to device {remote_id} settings (HTTP 403 Forbidden). "
+                            f"To view and configure Flespi settings/alarms, grant your Flespi Token ACL permissions for 'gw/devices/*/settings'."
+                        )
+                        break
+                    if resp.status_code == 200:
+                        raw_result = resp.json().get("result")
+                        if isinstance(raw_result, dict):
+                            settings_list = []
+                            for k, v in raw_result.items():
+                                if isinstance(v, dict):
+                                    item = dict(v)
+                                    item.setdefault("name", k)
+                                    settings_list.append(item)
+                                else:
+                                    settings_list.append({"name": str(k), "value": v})
+                        elif isinstance(raw_result, list):
+                            settings_list = raw_result
+                        else:
+                            settings_list = []
+
+                        logger.info(
+                            f"Flespi Cloud: Loaded {len(settings_list)} settings from {settings_endpoint} for device {remote_id}: "
+                            f"{[s.get('name') for s in settings_list if isinstance(s, dict)][:10]}"
+                        )
+
+                        for setting in settings_list:
+                            if not isinstance(setting, dict):
+                                continue
+                            sname = setting.get("name") or setting.get("setting") or setting.get("id")
+                            if not sname:
+                                continue
+
+                            if sname == "sleep_mode":
+                                logger.info(f"Flespi Cloud DEBUG sleep_mode raw setting: {json.dumps(setting)}")
+
+                            stitle = setting.get("title") or str(sname).replace("_", " ").title()
+                            sdesc = setting.get("description") or f"Flespi setting: {stitle}"
+
+                            schema = setting.get("schema") or {}
+                            current_value = setting.get("value") if setting.get("value") is not None else setting.get("current")
+
+                            # Extract properties schema or infer from current_value
+                            properties = {}
+                            if isinstance(schema, dict):
+                                if isinstance(schema.get("properties"), dict) and schema["properties"]:
+                                    properties = schema["properties"]
+                                elif any(k in schema for k in ("enum", "oneOf", "anyOf", "options", "type")):
+                                    properties = {"value": schema}
+
+                            if not properties and isinstance(setting.get("properties"), dict) and setting["properties"]:
+                                properties = setting["properties"]
+
+                            # Infer properties from current_value dictionary if properties dict is empty
+                            if not properties and isinstance(current_value, dict) and current_value:
+                                for vk, vv in current_value.items():
+                                    if isinstance(vv, bool):
+                                        properties[vk] = {"type": "boolean", "title": str(vk).replace("_", " ").title(), "default": vv}
+                                    elif isinstance(vv, (int, float)):
+                                        properties[vk] = {"type": "number", "title": str(vk).replace("_", " ").title(), "default": vv}
+                                    else:
+                                        properties[vk] = {"type": "string", "title": str(vk).replace("_", " ").title(), "default": vv or ""}
+
+                            # Fallback if properties is still empty and current_value is a non-null primitive
+                            if not properties and current_value is not None and not isinstance(current_value, (dict, list)):
+                                if isinstance(current_value, bool):
+                                    properties["value"] = {"type": "boolean", "title": "Setting Status / Value", "default": current_value}
+                                elif isinstance(current_value, (int, float)):
+                                    properties["value"] = {"type": "number", "title": "Setting Value", "default": current_value}
+                                elif isinstance(current_value, str) and current_value:
+                                    properties["value"] = {"type": "string", "title": "Setting Value", "default": current_value}
+
+                            required_list = schema.get("required") if isinstance(schema, dict) else []
+                            if not isinstance(required_list, list):
+                                required_list = []
+
+                            fields = []
+                            for pkey, pval in properties.items():
+                                if not isinstance(pval, dict):
+                                    continue
+                                ptype = pval.get("type", "string")
+                                ptitle = pval.get("title") or str(pkey).replace("_", " ").title()
+                                pdesc = pval.get("description") or ""
+
+                                default_raw = pval.get("default")
+                                if default_raw is None and isinstance(current_value, dict):
+                                    default_raw = current_value.get(pkey)
+                                elif default_raw is None and pkey == "value" and current_value is not None:
+                                    default_raw = current_value
+
+                                # Extract select options if available (enum, options, oneOf, anyOf)
+                                select_options = None
+                                if ptype == "boolean":
+                                    field_type = "select"
+                                    select_options = [
+                                        {"value": "true", "label": "Enabled"},
+                                        {"value": "false", "label": "Disabled"}
+                                    ]
+                                    default_val = "true" if default_raw in (True, "true", 1) else "false"
+                                else:
+                                    # Check for enum / options / oneOf / anyOf in pval or pval['schema']
+                                    extracted = None
+                                    pval_sources = [pval]
+                                    if isinstance(pval.get("schema"), dict):
+                                        pval_sources.append(pval["schema"])
+
+                                    for src in pval_sources:
+                                        for opt_key in ("enum", "options", "oneOf", "anyOf"):
+                                            if opt_key in src and isinstance(src[opt_key], list):
+                                                opts = []
+                                                for item in src[opt_key]:
+                                                    if isinstance(item, dict):
+                                                        val = item.get("const") if "const" in item else (item.get("value") if "value" in item else (item.get("id") if "id" in item else item))
+                                                        lbl = item.get("title") if "title" in item else (item.get("label") if "label" in item else (item.get("name") if "name" in item else val))
+                                                        if isinstance(val, (dict, list)):
+                                                            val = json.dumps(val)
+                                                        if isinstance(lbl, (dict, list)):
+                                                            lbl = json.dumps(lbl)
+                                                        opts.append({"value": str(val), "label": str(lbl).replace("_", " ").title()})
+                                                    else:
+                                                        opts.append({"value": str(item), "label": str(item).replace("_", " ").title()})
+                                                if opts:
+                                                    extracted = opts
+                                                    break
+                                        if extracted:
+                                            break
+
+                                    if extracted:
+                                        field_type = "select"
+                                        select_options = extracted
+                                        if isinstance(default_raw, (dict, list)):
+                                            default_val = json.dumps(default_raw)
+                                        else:
+                                            default_val = str(default_raw if default_raw is not None else extracted[0]["value"])
+                                    else:
+                                        field_type = "number" if ptype in ("integer", "number") else "text"
+                                        if isinstance(default_raw, (dict, list)):
+                                            default_val = json.dumps(default_raw)
+                                        elif default_raw is not None:
+                                            default_val = default_raw
+                                        else:
+                                            default_val = ""
+
+                                field_dict = {
+                                    "key": pkey,
+                                    "label": ptitle,
+                                    "type": field_type,
+                                    "required": pkey in required_list,
+                                    "default": default_val,
+                                    "help_text": pdesc
+                                }
+                                if select_options:
+                                    field_dict["options"] = select_options
+                                fields.append(field_dict)
+
+                            cmd_key = f"setting:{sname}"
+                            command_info[cmd_key] = {
+                                "description": f"{stitle} — {sdesc}",
+                                "example": f"Update Flespi setting '{sname}'",
+                                "requires_params": len(fields) > 0,
+                                "fields": fields,
+                                "is_setting": True,
+                            }
+                        if settings_list:
+                            break
+        except Exception as e:
+            logger.warning(f"Flespi Cloud: failed to fetch settings for device {remote_id}: {e}", exc_info=True)
+
+        available_commands = list(command_info.keys())
+
+        return {
+            "supports_commands": True,
+            "available_commands": available_commands,
+            "command_info": command_info,
+            "saved_commands": [],
+        }
+
+    async def send_command(
+        self,
+        auth_ctx: AuthContext,
+        remote_id: str,
+        command_type: str,
+        payload: str = "",
+        saved_command_id: int | None = None,
+        attributes: dict | None = None,
+    ) -> dict:
+        token = auth_ctx.data.get("token", "")
+        if not token:
+            raise ValueError("Flespi Cloud token missing")
+
+        headers = {
+            "Authorization": f"FlespiToken {token}",
+            "Content-Type": "application/json",
+        }
+
+        # Build properties object
+        props: dict = {}
+        if attributes:
+            props.update(attributes)
+        elif payload:
+            if payload.startswith("{") and payload.endswith("}"):
+                try:
+                    props.update(json.loads(payload))
+                except Exception:
+                    props["data"] = payload
+            else:
+                props["data"] = payload
+
+        # Type conversion for boolean/numeric strings
+        for k, v in list(props.items()):
+            if isinstance(v, str):
+                if v.lower() == "true":
+                    props[k] = True
+                elif v.lower() == "false":
+                    props[k] = False
+                elif v.isdigit():
+                    props[k] = int(v)
+
+        async with httpx.AsyncClient(timeout=20) as client:
+            if command_type.startswith("setting:"):
+                setting_name = command_type.split(":", 1)[1]
+                url = f"{_BASE_URL}/gw/devices/{remote_id}/settings/{setting_name}"
+                body = [{"properties": props}] if props else [{}]
+                resp = await client.put(url, headers=headers, json=body)
+            elif command_type == "custom":
+                url = f"{_BASE_URL}/gw/devices/{remote_id}/commands"
+                body = [{"name": "custom", "properties": props if props else {"text": payload}}]
+                resp = await client.post(url, headers=headers, json=body)
+            else:
+                url = f"{_BASE_URL}/gw/devices/{remote_id}/commands"
+                body = [{"name": command_type, "properties": props}]
+                resp = await client.post(url, headers=headers, json=body)
+
+            if resp.status_code >= 400:
+                err_text = resp.text
+                try:
+                    err_json = resp.json()
+                    errors = err_json.get("errors") or []
+                    if errors:
+                        err_text = "; ".join(str(e.get("reason") or e) for e in errors)
+                    elif err_json.get("message"):
+                        err_text = err_json["message"]
+                except Exception:
+                    pass
+                raise Exception(f"Flespi API error ({resp.status_code}): {err_text}")
+
+            res = resp.json()
+            return {
+                "status": "sent",
+                "message": f"Flespi operation '{command_type}' executed for device {remote_id}",
+                "result": res.get("result", []),
+            }
+
