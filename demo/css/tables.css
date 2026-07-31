@@ -1,0 +1,132 @@
+/* Shared table and table-search styling. */
+
+.devices-table-wrap {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+    margin-bottom: 1.5rem;
+}
+
+.devices-search-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.search-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 0.6rem 1rem;
+    flex: 1;
+    max-width: 480px;
+    transition: border-color var(--transition-base);
+}
+.search-input-wrap:focus-within {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.search-icon { font-size: 1rem; flex-shrink: 0; }
+
+.search-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-family: var(--font-display);
+    font-size: 0.9375rem;
+    width: 100%;
+}
+.search-input::placeholder { color: var(--text-muted); }
+
+.devices-count {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.devices-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+.devices-table th,
+.devices-table td {
+    padding: 0.875rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+.devices-table thead th {
+    background: var(--bg-tertiary);
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    white-space: nowrap;
+}
+.devices-table tbody tr:last-child td { border-bottom: none; }
+.devices-table tbody tr.device-row,
+.devices-table tbody tr.table-row {
+    transition: background var(--transition-base);
+    cursor: pointer;
+}
+.devices-table tbody tr.device-row:hover td,
+.devices-table tbody tr.table-row:hover td {
+    background: var(--bg-hover);
+}
+
+.devices-table th[data-sort],
+.devices-table th[onclick] {
+    cursor: pointer;
+    user-select: none;
+}
+.devices-table th[data-sort]:hover,
+.devices-table th[onclick]:hover {
+    color: var(--text-primary);
+}
+.devices-table .sort-arrow {
+    font-size: 0.7rem;
+    margin-left: 0.2rem;
+}
+.devices-table th[data-sort-dir="asc"]::after {
+    content: ' ▼';
+    color: var(--accent-primary);
+    font-size: 0.75em;
+}
+.devices-table th[data-sort-dir="desc"]::after {
+    content: ' ▲';
+    color: var(--accent-primary);
+    font-size: 0.75em;
+}
+
+.devices-table .total-row td {
+    font-weight: 700;
+    border-top: 2px solid var(--border-color);
+    color: var(--accent-primary);
+}
+
+@media (max-width: 700px) {
+    .devices-table th,
+    .devices-table td {
+        padding: 0.625rem 0.5rem;
+        font-size: 0.8rem;
+    }
+}
