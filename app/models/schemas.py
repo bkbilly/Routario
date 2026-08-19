@@ -347,7 +347,7 @@ class PositionHistoryRequest(BaseModel):
     device_id: int
     start_time: datetime
     end_time: datetime
-    max_points: int = Field(1000, ge=1, le=10000)
+    max_points: int = Field(2000, ge=1, le=100000)
     offset: int = Field(0, ge=0)
     order: str = Field("asc", pattern="^(asc|desc)$")
 

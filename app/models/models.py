@@ -610,3 +610,13 @@ class RouteStop(Base):
     notes:       Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     route: Mapped["PlannedRoute"] = relationship(back_populates="stops")
+
+
+class SystemSetting(Base):
+    __tablename__ = 'system_settings'
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+

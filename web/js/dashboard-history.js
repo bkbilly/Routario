@@ -19,8 +19,23 @@ const SENSOR_COLORS = [
 
 const tripColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#84cc16'];
 
+async function syncPublicSystemSettings() {
+    try {
+        const res = await apiFetch(`${API_BASE}/system-settings/public`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.history_batch_size && typeof data.history_batch_size === 'number') {
+                HISTORY_BATCH_SIZE = data.history_batch_size;
+            }
+        }
+    } catch (e) {
+        console.warn('Public settings sync skipped:', e);
+    }
+}
+
 // --- HISTORY MODAL ---
 function openHistoryModal(deviceId) {
+    syncPublicSystemSettings();
     document.getElementById('historyModal').dataset.deviceId = String(deviceId);
 
     // Reset all cycle buttons to their first option
@@ -208,10 +223,12 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
     });
 
     try {
+        await syncPublicSystemSettings();
+        const batchSize = HISTORY_BATCH_SIZE || 2000;
         const response = await apiFetch(`${API_BASE}/positions/history`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device_id: deviceId, start_time: startTime.toISOString(), end_time: endTime.toISOString(), max_points: HISTORY_BATCH_SIZE, offset: historyBatchOffset })
+            body: JSON.stringify({ device_id: deviceId, start_time: startTime.toISOString(), end_time: endTime.toISOString(), max_points: batchSize, offset: historyBatchOffset })
         });
         const data = await response.json();
         historyHasNext = data.truncated;
@@ -466,20 +483,49 @@ function _updateBatchNav() {
     if (!nav) return;
 
     nav.style.display = (hasPrev || hasNext) ? 'flex' : 'none';
-    document.getElementById('historyPrevBatch').style.visibility = hasPrev ? 'visible' : 'hidden';
-    document.getElementById('historyNextBatch').style.visibility = hasNext ? 'visible' : 'hidden';
+    const prevBtn = document.getElementById('historyPrevBatch');
+    const nextBtn = document.getElementById('historyNextBatch');
+    if (prevBtn) prevBtn.style.visibility = hasPrev ? 'visible' : 'hidden';
+    if (nextBtn) nextBtn.style.visibility = hasNext ? 'visible' : 'hidden';
 
-    const page = Math.floor(historyBatchOffset / HISTORY_BATCH_SIZE) + 1;
-    document.getElementById('historyBatchLabel').textContent = `Batch ${page}`;
-
+    const batchSize = HISTORY_BATCH_SIZE || 2000;
+    const page = Math.floor(historyBatchOffset / batchSize) + 1;
+    const labelEl = document.getElementById('historyBatchLabel');
+    if (labelEl) labelEl.textContent = `Batch ${page}`;
 }
 
 async function loadHistoryBatch(direction) {
-    const newOffset = historyBatchOffset + direction * HISTORY_BATCH_SIZE;
-    if (newOffset < 0) return;
-    const start = new Date(document.getElementById('historyStart').value);
-    const end   = new Date(document.getElementById('historyEnd').value);
-    await loadHistory(historyDeviceId, start, end, newOffset);
+    const prevBtn = document.getElementById('historyPrevBatch');
+    const nextBtn = document.getElementById('historyNextBatch');
+    const clickedBtn = direction === -1 ? prevBtn : nextBtn;
+
+    if (prevBtn?.disabled || nextBtn?.disabled) return;
+
+    if (prevBtn) prevBtn.disabled = true;
+    if (nextBtn) nextBtn.disabled = true;
+
+    if (clickedBtn) {
+        clickedBtn.innerHTML = `<i class="mdi mdi-loading mdi-spin"></i> Loading...`;
+    }
+
+    try {
+        const batchSize = HISTORY_BATCH_SIZE || 2000;
+        const newOffset = historyBatchOffset + direction * batchSize;
+        if (newOffset < 0) return;
+        const start = new Date(document.getElementById('historyStart').value);
+        const end   = new Date(document.getElementById('historyEnd').value);
+        await loadHistory(historyDeviceId, start, end, newOffset);
+    } finally {
+        if (prevBtn) {
+            prevBtn.disabled = false;
+            prevBtn.innerHTML = '<i class="mdi mdi-chevron-left"></i> Prev';
+        }
+        if (nextBtn) {
+            nextBtn.disabled = false;
+            nextBtn.innerHTML = 'Next <i class="mdi mdi-chevron-right"></i>';
+        }
+        _updateBatchNav();
+    }
 }
 
 function togglePlayback() { if (playbackInterval) stopPlayback(); else startPlayback(); }

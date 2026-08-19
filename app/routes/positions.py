@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
 from core.database import get_db
+from core.config import get_settings
 from core.auth import get_current_user, verify_device_access, require_permission
 from core.spatial import calculate_distance_km
 from models import User, Driver
@@ -23,14 +24,17 @@ async def get_position_history(
     db = get_db()
     await verify_device_access(request.device_id, current_user)
 
+    settings_obj = get_settings()
+    requested_points = min(request.max_points, settings_obj.history_max_api_limit)
+
     # Fetch positions and trips for the requested time range in parallel
     positions = await db.get_position_history(
         request.device_id, request.start_time, request.end_time,
-        request.max_points, request.offset, request.order
+        requested_points + 1, request.offset, request.order
     )
-    truncated = len(positions) > request.max_points
+    truncated = len(positions) > requested_points
     if truncated:
-        positions = positions[:request.max_points]
+        positions = positions[:requested_points]
 
     trips = await db.get_device_trips(
         request.device_id, request.start_time, request.end_time

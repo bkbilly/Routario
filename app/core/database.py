@@ -1146,10 +1146,16 @@ class DatabaseService:
                 start = trip.start_time
                 if start.tzinfo and not device_time.tzinfo:
                     start = start.replace(tzinfo=None)
-                mins = int((device_time - start).total_seconds() / 60)
+                total_seconds = int((device_time - start).total_seconds())
+                mins = int(total_seconds / 60)
                 trip.duration_minutes = mins
                 if mins > 0:
                     trip.avg_speed = (trip.distance_km / mins) * 60
+
+                from core.config import get_settings
+                st = get_settings()
+                if trip.distance_km < st.trip_min_distance_km or total_seconds < st.trip_min_duration_seconds:
+                    await session.delete(trip)
             handle_ignition_off(state)
             state.last_trip_id     = state.active_trip_id
             state.active_trip_id   = None

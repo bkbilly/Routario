@@ -4,7 +4,7 @@ from .models import (
     Driver, FuelLog, VoiceMessage, VoiceMessageRead, ScheduledReport,
     ScheduledReportRun, AuditLog, ApiKey, BillingPlan, UsageEvent,
     BillingInvoice, CurrencyRate, SupportTicket, SupportTicketComment,
-    PlannedRoute, RouteStop, UserPasskey,
+    PlannedRoute, RouteStop, UserPasskey, SystemSetting,
 )
 from .schemas import (
     NormalizedPosition, DeviceCreate, DeviceResponse, DeviceStateResponse,

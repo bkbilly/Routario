@@ -138,6 +138,7 @@
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('webhooks')" id="settingsTabWebhooks"><i class="mdi mdi-link-variant"></i> Webhooks</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('apiKeys')" id="settingsTabApiKeys" style="display:none;"><i class="mdi mdi-key-variant"></i> API Keys</button>
             <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('backups')" id="settingsTabBackups" style="display:none;"><i class="mdi mdi-database-arrow-down"></i> Backups</button>
+            <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('system')" id="settingsTabSystem" style="display:none;"><i class="mdi mdi-tune-vertical"></i> System Settings</button>
         </div>
 
         <div>
@@ -365,7 +366,41 @@
                     </div>
                 </div>
             </div>
+
+            <!-- System Settings (Superuser only) -->
+            <div class="settings-section" id="settings-section-system" style="display: none;">
+                <div style="margin-bottom:1.25rem;">
+                    <h2 style="font-size:1.2rem; font-weight:700; margin:0 0 0.25rem 0; display:flex; align-items:center; gap:0.5rem;">
+                        <i class="mdi mdi-tune-vertical" style="color:var(--accent-primary);"></i> System Configuration
+                    </h2>
+                    <p class="settings-section-description" style="margin:0;">
+                        Platform-wide system parameters, feature flags, single sign-on (SSO), geocoding, and engine parameters. Accessible to Super Users only.
+                    </p>
+                </div>
+
+                <div class="devices-search-bar" style="margin-bottom:1.25rem;">
+                    <div class="search-input-wrap">
+                        <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                        <input type="text" id="systemSettingsSearch" class="search-input" placeholder="Search settings by key, label, description, or category..." oninput="filterSystemSettings()">
+                    </div>
+                    <span class="devices-count" id="systemSettingsCount"></span>
+                </div>
+
+                <div id="systemSettingsContainer" class="system-settings-grid">
+                    <div style="grid-column: 1 / -1; text-align:center; padding:3rem; color:var(--text-muted);">
+                        <div class="loading" style="margin:0 auto 1rem;"></div>
+                        Loading system settings...
+                    </div>
+                </div>
+            </div>
         </div>
+    </div>
+
+    <!-- Floating Save Button (Bottom Right) -->
+    <div id="systemSaveFloatingBubble" class="system-save-bubble" style="display: none;">
+        <button type="button" class="btn btn-primary system-save-bubble-btn" id="systemSaveBtn" onclick="saveSystemSettings()">
+            <i class="mdi mdi-content-save"></i> Save
+        </button>
     </div>
 
     <div class="toast-container" id="toastContainer"></div>

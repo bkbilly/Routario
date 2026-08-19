@@ -410,6 +410,16 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
 
     await init_database(settings.database_url)
+
+    try:
+        from routes.system_settings import load_system_settings_from_db_session
+        db = get_db()
+        async with db.get_session() as session:
+            await load_system_settings_from_db_session(session)
+        logger.info("System settings loaded from database.")
+    except Exception as exc:
+        logger.warning("Could not load system settings from database: %s", exc)
+
     await load_currency_rates()
 
     # Create default admin on first run

@@ -14,7 +14,7 @@ let notificationSort = { col: 'name', dir: 1 };
 let webhookSort = { col: 'url', dir: 1 };
 let settingsApiKeySort = { col: 'name', dir: 1 };
 let currentSettingsTab = 'profile';
-const SETTINGS_TABS = ['profile', 'users', 'tickets', 'webhooks', 'apiKeys', 'backups'].map(name => ({
+const SETTINGS_TABS = ['profile', 'users', 'tickets', 'webhooks', 'apiKeys', 'backups', 'system'].map(name => ({
     name,
     panelId: `settings-section-${name}`,
     tabId: 'settingsTab' + name.charAt(0).toUpperCase() + name.slice(1),
@@ -78,9 +78,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (IS_ADMIN) {
         const ch = document.getElementById('userCompanyHeader');
         if (ch) ch.style.display = '';
+        const sysTab = document.getElementById('settingsTabSystem');
+        if (sysTab) sysTab.style.display = '';
     }
     const hash = normalizeSettingsTab(RoutarioTabs.hashValue());
-    switchSettingsTab(['profile', 'users', 'tickets', 'webhooks', 'apiKeys', 'backups'].includes(hash) ? hash : currentSettingsTab, false);
+    switchSettingsTab(['profile', 'users', 'tickets', 'webhooks', 'apiKeys', 'backups', 'system'].includes(hash) ? hash : currentSettingsTab, false);
 });
 
 document.addEventListener('keydown', e => {
@@ -98,17 +100,23 @@ document.addEventListener('keydown', e => {
 function switchSettingsTab(name, pushState = true) {
     name = normalizeSettingsTab(name);
     const fallback = 'profile';
-    const sections = ['profile', 'tickets', 'webhooks', 'apiKeys', 'backups'];
+    const sections = ['profile', 'tickets', 'webhooks', 'apiKeys', 'backups', 'system'];
     if (!sections.includes(name)) name = fallback;
     if (name === 'tickets' && !hasPermission('manage_tickets')) name = fallback;
     if (name === 'backups' && !((IS_ADMIN || IS_COMPANY_ADMIN) && hasPermission('manage_backups'))) name = fallback;
     if (name === 'apiKeys' && !hasPermission('manage_api_keys')) name = fallback;
+    if (name === 'system' && !IS_ADMIN) name = fallback;
     currentSettingsTab = name;
     RoutarioTabs.activate(SETTINGS_TABS, name);
     if (pushState) RoutarioTabs.replaceHash(name);
     if (name === 'profile') initProfileSection();
     if (name === 'tickets') rtpInitTickets();
     if (name === 'apiKeys') initSettingsApiKeys();
+    if (name === 'system') loadSystemSettings();
+    if (name !== 'system') {
+        const bubble = document.getElementById('systemSaveFloatingBubble');
+        if (bubble) bubble.style.display = 'none';
+    }
     updateSettingsGearAction(name);
 }
 
@@ -123,6 +131,8 @@ function applySettingsPermissions() {
     if (apiTab) apiTab.style.display = hasPermission('manage_api_keys') ? '' : 'none';
     const backupTab = document.getElementById('settingsTabBackups');
     if (backupTab) backupTab.style.display = ((IS_ADMIN || IS_COMPANY_ADMIN) && hasPermission('manage_backups')) ? '' : 'none';
+    const sysTab = document.getElementById('settingsTabSystem');
+    if (sysTab) sysTab.style.display = IS_ADMIN ? '' : 'none';
 }
 
 function closeSettingsGearMenu() {
@@ -902,6 +912,326 @@ async function revokeSettingsApiKey(id) {
         await loadSettingsApiKeys();
         showAlert('API key deleted', 'success');
     } catch (e) {
-        showAlert(e.message, 'error');
+        showAlert('API key failed: ' + e.message, 'error');
+    }
+}
+
+/* ── System Settings (Superuser only) ────────────────────────────── */
+let systemSettingsCategories = {};
+
+const SYSTEM_DEPENDENCIES = {
+    sso_enabled: ['sso_provider_name', 'sso_issuer_url', 'sso_client_id', 'sso_client_secret', 'sso_redirect_uri', 'sso_scopes', 'sso_allowed_domains', 'sso_require_verified_email'],
+    valhalla_enabled: ['valhalla_url'],
+    geocoding_enabled: ['geocoding_provider'],
+};
+
+const SYSTEM_MASTER_TOGGLES = {};
+for (const [masterKey, deps] of Object.entries(SYSTEM_DEPENDENCIES)) {
+    deps.forEach(depKey => {
+        SYSTEM_MASTER_TOGGLES[depKey] = masterKey;
+    });
+}
+
+function toggleSystemDependencies(masterKey, isEnabled) {
+    const deps = SYSTEM_DEPENDENCIES[masterKey];
+    if (!deps) return;
+    deps.forEach(depKey => {
+        const itemEl = document.getElementById(`sys_item_${depKey}`);
+        if (itemEl) {
+            itemEl.style.display = isEnabled ? '' : 'none';
+        }
+    });
+}
+
+async function loadSystemSettings() {
+    const container = document.getElementById('systemSettingsContainer');
+    if (!container) return;
+    container.innerHTML = `<div style="grid-column: 1 / -1; text-align:center; padding:3rem; color:var(--text-muted);"><div class="loading" style="margin:0 auto 1rem;"></div>Loading system settings...</div>`;
+
+    try {
+        const res = await apiFetch(`${API_BASE}/system-settings`);
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || 'Failed to load system settings');
+        }
+        const data = await res.json();
+        systemSettingsCategories = data.categories || {};
+        renderSystemSettings();
+    } catch (error) {
+        console.error('System settings load error:', error);
+        container.innerHTML = `<div style="grid-column: 1 / -1; padding:2rem; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:8px; color:var(--accent-danger); text-align:center;">Failed to load system settings: ${settingsEsc(error.message)}</div>`;
+        showAlert(error.message, 'error');
+    }
+}
+
+function renderSystemSettings() {
+    const container = document.getElementById('systemSettingsContainer');
+    const searchInput = document.getElementById('systemSettingsSearch');
+    const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+    if (!container) return;
+
+    const categoryIcons = {
+        'Feature Flags': 'mdi-flag-outline',
+        'Geocoding & Maps': 'mdi-map-marker-radius',
+        'Routing & Speed Limits': 'mdi-routes',
+        'Single Sign-On (SSO)': 'mdi-shield-account',
+        'Alerts & Engine': 'mdi-bell-ring-outline',
+        'Push Notifications': 'mdi-cellphone-arrow-down',
+        'Security & Tokens': 'mdi-key-chain',
+        'History & Tracking Limits': 'mdi-map-clock-outline',
+        'Fleet & Trip Rules': 'mdi-car-speed-limiter',
+        'Infrastructure': 'mdi-server-network',
+    };
+
+    // Calculate master toggle states for conditional hiding
+    const masterStateMap = {};
+    for (const [catName, settingsList] of Object.entries(systemSettingsCategories)) {
+        for (const item of settingsList) {
+            if (SYSTEM_DEPENDENCIES[item.key]) {
+                masterStateMap[item.key] = item.value === true || String(item.value).toLowerCase() === 'true' || item.value === 1;
+            }
+        }
+    }
+
+    let totalCount = 0;
+    let cardHtmls = [];
+
+    for (const [catName, settingsList] of Object.entries(systemSettingsCategories)) {
+        const filteredList = settingsList.filter(item => {
+            if (!query) return true;
+            return item.key.toLowerCase().includes(query) ||
+                (item.label && item.label.toLowerCase().includes(query)) ||
+                (item.description && item.description.toLowerCase().includes(query)) ||
+                catName.toLowerCase().includes(query);
+        });
+
+        if (filteredList.length === 0) continue;
+        totalCount += filteredList.length;
+
+        const icon = categoryIcons[catName] || 'mdi-tune';
+
+        let itemsHtml = filteredList.map(item => {
+            let controlHtml = '';
+
+            if (item.readonly) {
+                controlHtml = `<input type="text" value="${settingsEsc(item.value)}" class="form-input" disabled style="opacity:0.65; cursor:not-allowed;">`;
+            } else if (item.type === 'bool') {
+                const isChecked = item.value === true || String(item.value).toLowerCase() === 'true' || item.value === 1;
+                const hasDeps = Boolean(SYSTEM_DEPENDENCIES[item.key]);
+                controlHtml = `
+                    <label class="ticket-switch">
+                        <input type="checkbox" id="sys_${item.key}" data-key="${item.key}" data-type="bool" data-has-deps="${hasDeps}" ${isChecked ? 'checked' : ''}>
+                        <span class="ticket-switch-track"></span>
+                        <span class="ticket-switch-status" style="font-size:0.82rem; color:var(--text-secondary);">${isChecked ? 'Enabled' : 'Disabled'}</span>
+                    </label>
+                `;
+            } else if (item.options && Array.isArray(item.options)) {
+                const optionsHtml = item.options.map(opt => `<option value="${settingsEsc(opt)}" ${String(item.value) === String(opt) ? 'selected' : ''}>${settingsEsc(opt)}</option>`).join('');
+                controlHtml = `<select id="sys_${item.key}" data-key="${item.key}" data-type="str" class="form-input">${optionsHtml}</select>`;
+            } else if (item.type === 'int' || item.type === 'float') {
+                const step = item.type === 'float' ? '0.01' : '1';
+                controlHtml = `<input type="number" step="${step}" id="sys_${item.key}" data-key="${item.key}" data-type="${item.type}" value="${item.value !== null && item.value !== undefined ? item.value : ''}" class="form-input">`;
+            } else if (item.secret) {
+                const placeholderText = item.has_value ? 'Leave blank to keep existing secret' : 'Enter secret key';
+                controlHtml = `<input type="password" id="sys_${item.key}" data-key="${item.key}" data-type="str" value="" placeholder="${placeholderText}" class="form-input" autocomplete="new-password">`;
+            } else {
+                controlHtml = `<input type="text" id="sys_${item.key}" data-key="${item.key}" data-type="str" value="${settingsEsc(item.value)}" class="form-input">`;
+            }
+
+            let badges = '';
+            if (item.secret) {
+                badges += item.has_value
+                    ? `<span class="system-setting-badge system-setting-badge-secret" title="Secret key is configured">Secret (Configured)</span>`
+                    : `<span class="system-setting-badge system-setting-badge-secret">Secret</span>`;
+            }
+            if (item.readonly) badges += `<span class="system-setting-badge system-setting-badge-readonly">Read Only</span>`;
+
+            const masterKey = SYSTEM_MASTER_TOGGLES[item.key];
+            const isVisible = masterKey ? Boolean(masterStateMap[masterKey]) : true;
+            const displayStyle = isVisible ? '' : 'display: none;';
+
+            return `
+                <div class="system-setting-item" id="sys_item_${item.key}" style="${displayStyle}">
+                    <div class="system-setting-label-row">
+                        <span class="system-setting-label">${settingsEsc(item.label || item.key)}</span>
+                        ${badges ? `<div style="display:flex; gap:0.35rem;">${badges}</div>` : ''}
+                    </div>
+                    <div class="system-setting-desc">${settingsEsc(item.description || '')}</div>
+                    <div style="margin-top:0.35rem;">${controlHtml}</div>
+                </div>
+            `;
+        }).join('');
+
+        cardHtmls.push(`
+            <div class="system-category-card">
+                <div class="system-category-header">
+                    <div class="system-category-icon"><i class="mdi ${icon}"></i></div>
+                    <div class="system-category-title">${settingsEsc(catName)}</div>
+                </div>
+                <div>${itemsHtml}</div>
+            </div>
+        `);
+    }
+
+    const countEl = document.getElementById('systemSettingsCount');
+    if (countEl) countEl.textContent = `${totalCount} setting${totalCount === 1 ? '' : 's'}`;
+
+    if (cardHtmls.length === 0) {
+        container.innerHTML = `<div style="grid-column: 1 / -1; text-align:center; padding:3rem; color:var(--text-muted);">No system settings match your filter.</div>`;
+    } else {
+        container.innerHTML = cardHtmls.join('');
+    }
+
+    if (container && !container._dirtyListenerAttached) {
+        container.addEventListener('change', (e) => {
+            if (e.target && e.target.matches('input[type="checkbox"][data-key]')) {
+                const key = e.target.getAttribute('data-key');
+                const hasDeps = e.target.getAttribute('data-has-deps') === 'true';
+                const statusSpan = e.target.parentNode.querySelector('.ticket-switch-status');
+                if (statusSpan) {
+                    statusSpan.textContent = e.target.checked ? 'Enabled' : 'Disabled';
+                }
+                if (hasDeps) {
+                    toggleSystemDependencies(key, e.target.checked);
+                }
+            }
+            checkSystemSettingsDirty();
+        });
+        container.addEventListener('input', checkSystemSettingsDirty);
+        container._dirtyListenerAttached = true;
+    }
+
+    checkSystemSettingsDirty();
+}
+
+function checkSystemSettingsDirty() {
+    const bubble = document.getElementById('systemSaveFloatingBubble');
+    if (!bubble) return false;
+
+    let isDirty = false;
+
+    for (const [catName, settingsList] of Object.entries(systemSettingsCategories)) {
+        for (const item of settingsList) {
+            if (item.readonly) continue;
+            const input = document.getElementById(`sys_${item.key}`);
+            if (!input) continue;
+
+            if (item.type === 'bool') {
+                const isChecked = input.checked;
+                const origBool = item.value === true || String(item.value).toLowerCase() === 'true' || item.value === 1;
+                if (isChecked !== origBool) {
+                    isDirty = true;
+                    break;
+                }
+            } else if (item.type === 'int' || item.type === 'float') {
+                const val = input.value.trim();
+                const numVal = val !== '' ? (item.type === 'float' ? parseFloat(val) : parseInt(val, 10)) : 0;
+                const origNum = item.value !== null && item.value !== undefined ? (item.type === 'float' ? parseFloat(item.value) : parseInt(item.value, 10)) : 0;
+                if (numVal !== origNum) {
+                    isDirty = true;
+                    break;
+                }
+            } else if (item.secret) {
+                const val = input.value.trim();
+                if (val !== '') {
+                    isDirty = true;
+                    break;
+                }
+            } else {
+                const val = input.value;
+                const origStr = item.value !== null && item.value !== undefined ? String(item.value) : '';
+                if (val !== origStr) {
+                    isDirty = true;
+                    break;
+                }
+            }
+        }
+        if (isDirty) break;
+    }
+
+    bubble.style.display = isDirty ? 'flex' : 'none';
+    return isDirty;
+}
+
+function filterSystemSettings() {
+    renderSystemSettings();
+}
+
+async function saveSystemSettings() {
+    const saveBtn = document.getElementById('systemSaveBtn');
+    const originalText = saveBtn ? saveBtn.innerHTML : '';
+
+    const payload = {};
+
+    for (const [catName, settingsList] of Object.entries(systemSettingsCategories)) {
+        for (const item of settingsList) {
+            if (item.readonly) continue;
+            const input = document.getElementById(`sys_${item.key}`);
+            if (!input) continue;
+
+            if (item.type === 'bool') {
+                const isChecked = input.checked;
+                const origBool = item.value === true || String(item.value).toLowerCase() === 'true' || item.value === 1;
+                if (isChecked !== origBool) {
+                    payload[item.key] = isChecked;
+                }
+            } else if (item.type === 'int' || item.type === 'float') {
+                const val = input.value.trim();
+                const numVal = val !== '' ? (item.type === 'float' ? parseFloat(val) : parseInt(val, 10)) : 0;
+                const origNum = item.value !== null && item.value !== undefined ? (item.type === 'float' ? parseFloat(item.value) : parseInt(item.value, 10)) : 0;
+                if (numVal !== origNum) {
+                    payload[item.key] = numVal;
+                }
+            } else if (item.secret) {
+                const val = input.value.trim();
+                if (val !== '') {
+                    payload[item.key] = val;
+                }
+            } else {
+                const val = input.value;
+                const origStr = item.value !== null && item.value !== undefined ? String(item.value) : '';
+                if (val !== origStr) {
+                    payload[item.key] = val;
+                }
+            }
+        }
+    }
+
+    if (Object.keys(payload).length === 0) {
+        showAlert('No settings were changed.', 'info');
+        checkSystemSettingsDirty();
+        return;
+    }
+
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `<i class="mdi mdi-loading mdi-spin"></i> Saving...`;
+    }
+
+    try {
+        const res = await apiFetch(`${API_BASE}/system-settings`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ settings: payload }),
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || 'Failed to save system settings');
+        }
+
+        const data = await res.json();
+        showAlert(data.message || 'System settings saved successfully!', 'success');
+        await loadSystemSettings();
+        checkSystemSettingsDirty();
+    } catch (error) {
+        console.error('System settings save error:', error);
+        showAlert(error.message, 'error');
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = originalText;
+        }
     }
 }
