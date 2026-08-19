@@ -1247,7 +1247,9 @@ function addSelectedAlert() {
                 },
                 channels: [],
                 schedule: null,
+                duration: null,
                 notify_user_ids: [_curUid],
+                send_push: true,
             });
         } catch(e) {
             console.error('Failed to parse native event def', e);
@@ -1262,7 +1264,7 @@ function addSelectedAlert() {
     const params = {};
     (def.fields || []).forEach(f => { params[f.key] = f.default; });
     const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
-    alertRows.push({ uid: nextUid(), alertKey: val, params, channels: [], schedule: null, notify_user_ids: [currentUserId] });
+    alertRows.push({ uid: nextUid(), alertKey: val, params, channels: [], schedule: null, notify_user_ids: [currentUserId], send_push: true });
     renderAlertsTable();
     sel.value = '';
 }
@@ -1283,7 +1285,7 @@ function addCustomRule() {
         return;
     }
     const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
-    alertRows.push({ uid: nextUid(), alertKey: '__custom__', name, rule, channels: [], schedule: null, duration: null, notify_user_ids: [currentUserId] });
+    alertRows.push({ uid: nextUid(), alertKey: '__custom__', name, rule, channels: [], schedule: null, duration: null, notify_user_ids: [currentUserId], send_push: true });
     nameEl.value = '';
     ruleEl.value = '';
     // Reset dropdown and hide custom fields
@@ -1424,8 +1426,17 @@ function renderAlertsTable() {
                 : `<span style="color:var(--text-muted);font-size:0.8rem;">—</span>`;
         }
 
-        const chHtml = (row.channels || []).length
-            ? row.channels.map(c => `<span class="channel-pill active" style="pointer-events:none;">${_esc(c)}</span>`).join('')
+        const activePills = [];
+        if (row.send_push !== false) {
+            activePills.push(`<span class="channel-pill active" title="Web Push Notification Enabled" style="pointer-events:none;"><i class="mdi mdi-cellphone-arrow-down"></i> Push</span>`);
+        }
+        if (Array.isArray(row.channels)) {
+            row.channels.forEach(c => {
+                activePills.push(`<span class="channel-pill active" style="pointer-events:none;">${_esc(c)}</span>`);
+            });
+        }
+        const chHtml = activePills.length
+            ? activePills.join('')
             : `<span style="color:var(--text-muted);font-size:0.8rem;">None</span>`;
 
         const sched    = row.schedule;
@@ -1640,13 +1651,20 @@ async function openAlertEditor(uid) {
     const hourEndOpts = Array.from({ length: 24 }, (_, h) =>
         `<option value="${h}"${h === hourEnd ? ' selected' : ''}>${pad(h)}:59</option>`).join('');
 
-    const chHtml = userChannels.length
-        ? userChannels.map(c => `
-            <label class="channel-pill${(row.channels || []).includes(c.name) ? ' active' : ''}">
-                <input type="checkbox" class="editor-channel-cb" value="${_esc(c.name)}"${(row.channels || []).includes(c.name) ? ' checked' : ''}>
-                ${_esc(c.name)}
-            </label>`).join('')
-        : '<span style="color:var(--text-muted);font-size:0.875rem;">No notification channels configured.</span>';
+    const pushPillHtml = `
+        <label class="channel-pill${row.send_push !== false ? ' active' : ''}">
+            <input type="checkbox" id="editor-send-push" ${row.send_push !== false ? 'checked' : ''}>
+            <i class="mdi mdi-cellphone-arrow-down"></i> Push
+        </label>
+    `;
+
+    const userChannelPills = userChannels.map(c => `
+        <label class="channel-pill${(row.channels || []).includes(c.name) ? ' active' : ''}">
+            <input type="checkbox" class="editor-channel-cb" value="${_esc(c.name)}"${(row.channels || []).includes(c.name) ? ' checked' : ''}>
+            ${_esc(c.name)}
+        </label>`).join('');
+
+    const chHtml = pushPillHtml + userChannelPills;
 
     let notifyUsersHtml = '';
     if (hasAdminAccess && editingDeviceId) {
@@ -1714,7 +1732,7 @@ async function openAlertEditor(uid) {
             </div>
             <div class="alert-editor-right">
                 <div class="form-group">
-                    <label class="form-label">Notify Via</label>
+                    <label class="form-label">Notify Via Channels</label>
                     <div style="display:flex;flex-wrap:wrap;gap:0.4rem;">${chHtml}</div>
                 </div>
                 ${notifyUsersHtml}
@@ -1830,6 +1848,11 @@ function saveAlertFromEditor() {
                 row.params[key] = input.value;
             }
         });
+    }
+
+    const sendPushCb = document.getElementById('editor-send-push');
+    if (sendPushCb) {
+        row.send_push = sendPushCb.checked;
     }
 
     row.channels = [];

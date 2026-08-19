@@ -118,8 +118,10 @@ class AlertEngine:
 
                 results = await alert_cls().check_many(position, device, state, params)
                 notify_ids = row.get('notify_user_ids')
-                if notify_ids is not None:
-                    for r in results:
+                send_push = row.get('send_push', True)
+                for r in results:
+                    r.setdefault('send_push', send_push)
+                    if notify_ids is not None:
                         r.setdefault('notify_user_ids', notify_ids)
                 alerts.extend(results)
 
@@ -198,6 +200,7 @@ class AlertEngine:
         try:
             metadata = alert_data.get('alert_metadata', {})
             selected_names = None
+            send_push = alert_data.get('send_push', True)
 
             # 1. Determine which channel names are selected
             if 'selected_channels' in metadata:
@@ -221,15 +224,16 @@ class AlertEngine:
                 active_channels = []
 
             if not active_channels:
-                push = get_push_service()
-                await push.notify_user(
-                    db_service=get_db(),
-                    user_id=user.id,
-                    alert_type=alert_data['type'].value,
-                    message=alert_data['message'],
-                    severity=alert_data.get('severity', 'info'),
-                    device_name=device.name,
-                )
+                if send_push:
+                    push = get_push_service()
+                    await push.notify_user(
+                        db_service=get_db(),
+                        user_id=user.id,
+                        alert_type=alert_data['type'].value,
+                        message=alert_data['message'],
+                        severity=alert_data.get('severity', 'info'),
+                        device_name=device.name,
+                    )
                 await self._send_alert_webhooks(user, device, alert_data)
                 return
 
@@ -246,15 +250,16 @@ class AlertEngine:
             )
 
             # 4. Push notification (browser/PWA)
-            push = get_push_service()
-            await push.notify_user(
-                db_service=get_db(),
-                user_id=user.id,
-                alert_type=alert_data['type'].value,
-                message=alert_data['message'],
-                severity=alert_data.get('severity', 'info'),
-                device_name=device.name,
-            )
+            if send_push:
+                push = get_push_service()
+                await push.notify_user(
+                    db_service=get_db(),
+                    user_id=user.id,
+                    alert_type=alert_data['type'].value,
+                    message=alert_data['message'],
+                    severity=alert_data.get('severity', 'info'),
+                    device_name=device.name,
+                )
 
             # 5. Alert webhooks
             await self._send_alert_webhooks(user, device, alert_data)

@@ -96,6 +96,7 @@ class AlertRow(BaseModel):
     schedule:        Optional[AlertSchedule] = None
     duration:        Optional[int]           = Field(None, ge=1)  # seconds; None = disabled
     notify_user_ids: Optional[List[int]]     = None
+    send_push:       bool                    = True
 
 
 class CustomRule(BaseModel):
