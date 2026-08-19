@@ -436,6 +436,8 @@ function openAddDeviceModal() {
     renderAlertsTable();
     populateAddAlertDropdown();
     populateAlertProfileDeviceSelect();
+    const exportBtnAdd = document.getElementById('exportDeviceProfileBtn');
+    if (exportBtnAdd) exportBtnAdd.style.display = 'none';
     switchModalTab('general');
     document.getElementById('deviceModal').classList.add('active');
 }
@@ -450,6 +452,8 @@ function openDeviceModal(deviceId, startTab = 'general') {
     document.getElementById('submitText').textContent        = 'Save';
     document.getElementById('submitIcon').className         = 'mdi mdi-content-save';
     document.getElementById('deleteDeviceBtn').style.display = hasAdminAccess ? 'inline-flex' : 'none';
+    const exportBtnEdit = document.getElementById('exportDeviceProfileBtn');
+    if (exportBtnEdit) exportBtnEdit.style.display = 'inline-flex';
     const usersTabBtnEdit = document.getElementById('usersTabBtn');
     if (usersTabBtnEdit) usersTabBtnEdit.style.display = ((isCompanyAdmin || (isAdmin && d.company_id)) && hasPermission('manage_users')) ? '' : 'none';
     const commandsTabBtnEdit = document.getElementById('commandsTabBtn');
@@ -1243,26 +1247,225 @@ function copyAlertsFromDeviceId(sourceId) {
     openAlertProfileMergeChoice(rows, source.name || `Device ${source.id}`, closeAlertProfileDevicePicker);
 }
 
-async function exportAlertProfile() {
+async function exportDeviceProfile() {
     closeAlertProfileMenu();
-    const deviceName = document.getElementById('deviceName')?.value?.trim() || 'device';
+    const d = editingDeviceId ? devices.find(x => x.id === editingDeviceId) : null;
+
+    const deviceName = document.getElementById('deviceName')?.value?.trim() || d?.name || 'device';
+    const imei = document.getElementById('deviceImei')?.value?.trim() || d?.imei || null;
+    const protocol = document.getElementById('deviceProtocol')?.value || d?.protocol || DEFAULT_PROTOCOL;
+    const vehicleType = document.getElementById('vehicleType')?.value || d?.vehicle_type || DEFAULT_TYPE;
+    const licensePlate = document.getElementById('licensePlate')?.value?.trim() || d?.license_plate || null;
+    const customAttributes = readCustomAttributes();
+
+    const companyIdEl = document.getElementById('deviceCompany');
+    const companyId = companyIdEl ? (parseInt(companyIdEl.value, 10) || null) : (d?.company_id || null);
+    const companyObj = companyId ? (companies || []).find(c => c.id === companyId) : null;
+    const companyName = companyObj ? companyObj.name : null;
+
+    const currentOdoVal = document.getElementById('currentOdometer')?.value;
+    const currentOdoDist = (currentOdoVal != null && currentOdoVal !== '') ? fromDisplayDist(parseFloat(currentOdoVal) || 0) : (d?.state?.total_odometer ?? 0.0);
+
+    const existingConfig = d?.config || {};
+
     const profile = {
-        type: 'routario-alert-profile',
-        version: 1,
+        type: 'routario-device-profile',
+        version: 2,
         exported_at: new Date().toISOString(),
-        source_device: deviceName,
-        alert_rows: await _alertRowsForExport(),
+        device: {
+            name: deviceName,
+            imei: imei,
+            protocol: protocol,
+            company_id: companyId,
+            company_name: companyName,
+            vehicle_type: vehicleType,
+            license_plate: licensePlate,
+            odometer: currentOdoDist,
+            custom_attributes: customAttributes,
+        },
+        config: {
+            offline_timeout_hours: parseInt(document.getElementById('offlineTimeoutHours')?.value) || existingConfig.offline_timeout_hours || 24,
+            trip_merge_gap_minutes: parseInt(document.getElementById('tripMergeGapMinutes')?.value) || existingConfig.trip_merge_gap_minutes || 0,
+            has_camera: document.getElementById('deviceHasCamera')?.checked ?? (existingConfig.has_camera || false),
+            speed_tolerance: existingConfig.speed_tolerance ?? null,
+            speed_duration_seconds: existingConfig.speed_duration_seconds ?? 30,
+            idle_timeout_minutes: existingConfig.idle_timeout_minutes ?? null,
+            towing_threshold_meters: existingConfig.towing_threshold_meters ?? null,
+            integration: existingConfig.integration || null,
+            sensors: existingConfig.sensors || {},
+            maintenance: existingConfig.maintenance || {},
+            user_commands: existingConfig.user_commands || [],
+            alert_rows: await _alertRowsForExport(),
+        }
     };
-    const blob = new Blob([JSON.stringify(profile, null, 2)], { type: 'application/json' });
+
+    const jsonStr = JSON.stringify(profile, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
     const link = document.createElement('a');
     const safeName = deviceName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'device';
     const url = URL.createObjectURL(blob);
     link.href = url;
-    link.download = `${safeName}-alerts.json`;
+    link.download = `${safeName}-device-profile.json`;
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+    showAlert({ title: 'Profile Exported', message: `Exported complete device profile for "${deviceName}".`, type: 'success' });
+}
+
+function triggerImportDeviceJson() {
+    let input = document.getElementById('importDeviceJsonFileInput');
+    if (!input) {
+        input = document.createElement('input');
+        input.type = 'file';
+        input.id = 'importDeviceJsonFileInput';
+        input.accept = 'application/json,.json';
+        input.style.display = 'none';
+        input.onchange = handleImportDeviceJsonFile;
+        document.body.appendChild(input);
+    }
+    input.click();
+}
+
+async function handleImportDeviceJsonFile(event) {
+    const input = event.target;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+        try {
+            const rawData = reader.result;
+            const parsed = JSON.parse(rawData);
+
+            let profiles = [];
+            if (Array.isArray(parsed)) {
+                profiles = parsed;
+            } else if (Array.isArray(parsed.devices)) {
+                profiles = parsed.devices;
+            } else if (parsed && typeof parsed === 'object') {
+                profiles = [parsed];
+            }
+
+            if (!profiles.length) {
+                showAlert({ title: 'Import Failed', message: 'No valid device profiles found in the JSON file.', type: 'error' });
+                return;
+            }
+
+            // Extract & normalize devices to be imported
+            const itemsToImport = [];
+            for (let i = 0; i < profiles.length; i++) {
+                const item = profiles[i];
+                const dev = item.device || item;
+                const cfg = item.config || dev.config || {};
+
+                const name = (dev.name || dev.device_name || `Imported Device #${i + 1}`).trim();
+                const imei = (dev.imei || dev.device_imei || '').trim();
+                const protocol = dev.protocol || dev.provider || DEFAULT_PROTOCOL;
+                const vehicleType = dev.vehicle_type || DEFAULT_TYPE;
+                const licensePlate = dev.license_plate || null;
+                const customAttributes = dev.custom_attributes || {};
+                const companyId = dev.company_id || null;
+
+                if (!imei) {
+                    showAlert({ title: 'Import Failed', message: `Device "${name}" (item #${i + 1}) is missing a required IMEI identifier. No devices were added.`, type: 'error' });
+                    return;
+                }
+
+                itemsToImport.push({
+                    name,
+                    imei,
+                    protocol,
+                    vehicle_type: vehicleType,
+                    license_plate: licensePlate,
+                    custom_attributes: customAttributes,
+                    company_id: companyId,
+                    config: cfg,
+                });
+            }
+
+            // Check for duplicates within the file itself
+            const fileImeiSet = new Set();
+            for (const item of itemsToImport) {
+                const lowerImei = item.imei.toLowerCase();
+                if (fileImeiSet.has(lowerImei)) {
+                    showAlert({ title: 'Import Failed', message: `The import file contains duplicate IMEI "${item.imei}". No devices were added.`, type: 'error' });
+                    return;
+                }
+                fileImeiSet.add(lowerImei);
+            }
+
+            // Check against existing devices in the system
+            const existingImeis = new Map();
+            (devices || []).forEach(d => {
+                if (d.imei) existingImeis.set(String(d.imei).trim().toLowerCase(), d);
+            });
+
+            const conflictingDevices = [];
+            for (const item of itemsToImport) {
+                const match = existingImeis.get(item.imei.toLowerCase());
+                if (match) {
+                    conflictingDevices.push({ imei: item.imei, name: item.name, existingName: match.name });
+                }
+            }
+
+            if (conflictingDevices.length > 0) {
+                const conflictList = conflictingDevices.map(c => `• "${c.name}" (IMEI: ${c.imei})`).join('\n');
+                showAlert({
+                    title: 'Import Cancelled: Devices Already Exist',
+                    message: `The following device(s) are already registered in the system:\n${conflictList}\n\nNo devices were added. Please remove existing devices or edit the JSON before importing.`,
+                    type: 'error',
+                    duration: 15000,
+                });
+                return;
+            }
+
+            // Create all devices via API
+            let importedCount = 0;
+            for (const item of itemsToImport) {
+                const payload = {
+                    name: item.name,
+                    imei: item.imei,
+                    protocol: item.protocol,
+                    vehicle_type: item.vehicle_type,
+                    license_plate: item.license_plate,
+                    custom_attributes: item.custom_attributes,
+                    config: item.config,
+                };
+                if (item.company_id && isAdmin) payload.company_id = item.company_id;
+
+                const res = await apiFetch(`${API_BASE}/devices`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || `Failed to create device "${item.name}"`);
+                }
+                importedCount++;
+            }
+
+            await loadDevices();
+            showAlert({
+                title: 'Import Successful',
+                message: `Successfully imported ${importedCount} device(s).`,
+                type: 'success',
+            });
+        } catch (e) {
+            console.error('Failed to import devices from JSON:', e);
+            showAlert({ title: 'Import Failed', message: e.message || 'An error occurred while importing devices.', type: 'error' });
+        } finally {
+            input.value = '';
+        }
+    };
+
+    reader.onerror = () => {
+        showAlert({ title: 'Import Failed', message: 'Failed to read the selected file.', type: 'error' });
+        input.value = '';
+    };
+    reader.readAsText(file);
 }
 
 function importAlertProfileFile(event) {
@@ -1275,15 +1478,46 @@ function importAlertProfileFile(event) {
     reader.onload = async () => {
         try {
             const parsed = JSON.parse(reader.result);
+
+            // 1. If general options exist in profile, apply them to the form inputs
+            if (parsed.vehicle_type && document.getElementById('vehicleType')) {
+                document.getElementById('vehicleType').value = parsed.vehicle_type;
+            }
+            if (parsed.license_plate !== undefined && document.getElementById('licensePlate')) {
+                document.getElementById('licensePlate').value = parsed.license_plate || '';
+            }
+            if (parsed.custom_attributes && typeof parsed.custom_attributes === 'object') {
+                renderCustomAttributes(parsed.custom_attributes);
+            }
+
+            const cfg = parsed.config || parsed;
+            if (cfg.offline_timeout_hours != null && document.getElementById('offlineTimeoutHours')) {
+                document.getElementById('offlineTimeoutHours').value = cfg.offline_timeout_hours;
+            }
+            if (cfg.trip_merge_gap_minutes != null && document.getElementById('tripMergeGapMinutes')) {
+                document.getElementById('tripMergeGapMinutes').value = cfg.trip_merge_gap_minutes;
+            }
+            if (cfg.has_camera != null && document.getElementById('deviceHasCamera')) {
+                document.getElementById('deviceHasCamera').checked = Boolean(cfg.has_camera);
+            }
+
+            // 2. Extract alert_rows
             const rows = Array.isArray(parsed)
                 ? parsed
                 : Array.isArray(parsed.alert_rows)
                 ? parsed.alert_rows
-                : _alertProfileFromConfig(parsed.config || parsed);
+                : Array.isArray(cfg.alert_rows)
+                ? cfg.alert_rows
+                : _alertProfileFromConfig(cfg);
+
             const resolvedRows = await _resolveImportedAlertProfileUsers(rows);
-            openAlertProfileMergeChoice(resolvedRows, file.name);
+
+            openAlertProfileMergeChoice(resolvedRows, parsed.device_name || file.name, () => {
+                showAlert({ title: 'Profile Imported', message: `Device profile loaded successfully from ${file.name}.`, type: 'success' });
+            });
         } catch (e) {
-            showAlert({ title: 'Import failed', message: 'Choose a valid Routario alert profile JSON file.', type: 'error' });
+            console.error('Import error:', e);
+            showAlert({ title: 'Import failed', message: 'Choose a valid Routario device profile JSON file.', type: 'error' });
         } finally {
             input.value = '';
         }

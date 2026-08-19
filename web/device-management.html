@@ -82,6 +82,11 @@
 
                 <!-- TAB: GENERAL -->
                 <div class="modal-tab-content active" id="tab-general">
+                    <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">
+                        <button type="button" id="exportDeviceProfileBtn" onclick="exportDeviceProfile()" style="font-size:0.8rem;color:var(--primary-color);background:none;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem;padding:0;font-family:inherit;" title="Export full device configuration to JSON">
+                            <i class="mdi mdi-download"></i> Export Profile
+                        </button>
+                    </div>
                     <div class="form-main-layout">
                         <div class="form-column">
                             <div class="form-group">
@@ -164,8 +169,6 @@
                                     <div class="alert-profile-menu" id="alertProfileMenu">
                                         <button type="button" class="alert-profile-menu-item" onclick="openAlertProfileDevicePicker()"><i class="mdi mdi-content-copy"></i> Copy from device</button>
                                         <button type="button" class="alert-profile-menu-item" onclick="exportAlertProfile()"><i class="mdi mdi-download"></i> Export profile</button>
-                                        <button type="button" class="alert-profile-menu-item" onclick="document.getElementById('alertProfileImportInput').click()"><i class="mdi mdi-upload"></i> Import profile</button>
-                                        <input type="file" id="alertProfileImportInput" accept="application/json,.json" style="display:none;" onchange="importAlertProfileFile(event)">
                                     </div>
                                 </div>
                             </div>

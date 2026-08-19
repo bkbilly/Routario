@@ -54,14 +54,21 @@ function showAlert(messageOrData, type = 'info', duration = 3000) {
     let title = null, message, resolvedType = type, resolvedDuration = duration;
 
     if (messageOrData && typeof messageOrData === 'object') {
-        message         = messageOrData.message || '';
-        title           = messageOrData.title   || null;
-        resolvedType    = messageOrData.type     || type;
+        message          = messageOrData.message || '';
+        title            = messageOrData.title   || null;
+        resolvedType     = messageOrData.type    || type;
         resolvedDuration = messageOrData.duration || duration;
     } else if (Array.isArray(messageOrData)) {
-        message = messageOrData.map(e => e.msg || JSON.stringify(e)).join(', ');
+        message = messageOrData.map(e => (typeof e === 'object' ? (e.msg || JSON.stringify(e)) : String(e))).join('\n');
     } else {
         message = String(messageOrData ?? '');
+    }
+
+    // Auto-scale display duration for long or multi-line messages so users have time to read
+    let finalDuration = resolvedDuration;
+    if (message.includes('\n') || message.length > 80) {
+        const calculated = Math.max(8000, Math.min(25000, message.length * 50));
+        finalDuration = resolvedDuration === 3000 ? calculated : Math.max(resolvedDuration, calculated);
     }
 
     const icons = { success: 'mdi-check-circle', error: 'mdi-close-circle', warning: 'mdi-alert', info: 'mdi-information' };
@@ -70,23 +77,19 @@ function showAlert(messageOrData, type = 'info', duration = 3000) {
     const container = document.getElementById('toastContainer');
     if (!container) return;
 
+    const safeTitle = title ? String(title).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').trim() : null;
+    const safeMsg   = String(message).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').trim().replace(/\n/g, '<br>');
+
     const toast = document.createElement('div');
     toast.className = `toast toast-${resolvedType}`;
-    toast.innerHTML = `
-        <div class="toast-icon"><i class="mdi ${icon}"></i></div>
-        <div class="toast-content">
-            ${title ? `<div class="toast-title">${title}</div>` : ''}
-            <div class="toast-message">${message}</div>
-        </div>
-        <button class="toast-close" onclick="this.closest('.toast').remove()" aria-label="Dismiss"><i class="mdi mdi-close"></i></button>
-    `;
+    toast.innerHTML = `<div class="toast-icon"><i class="mdi ${icon}"></i></div><div class="toast-content">${safeTitle ? `<div class="toast-title">${safeTitle}</div>` : ''}<div class="toast-message">${safeMsg}</div></div><button class="toast-close" onclick="this.closest('.toast').remove()" aria-label="Dismiss"><i class="mdi mdi-close"></i></button>`;
     container.appendChild(toast);
 
     setTimeout(() => {
         if (!toast.isConnected) return;
         toast.style.animation = 'slideInRight 0.3s reverse forwards';
         setTimeout(() => toast.remove(), 300);
-    }, resolvedDuration);
+    }, finalDuration);
 }
 
 function hasPermission(perm) {
