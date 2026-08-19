@@ -599,9 +599,6 @@ async function handleSubmit(event) {
         sendCommand();
         return;
     }
-    if (activeTab && activeTab !== 'general') {
-        return;
-    }
 
     const submitBtn  = document.getElementById('submitBtn');
     const submitText = document.getElementById('submitText');
@@ -761,6 +758,128 @@ async function deleteCurrentDevice() {
             showAlert(err.detail || 'Failed to delete device', 'error');
         }
     } catch (e) { showAlert('Failed to delete device', 'error'); }
+}
+
+const deviceCommandSupportCache = {};
+
+async function fetchDeviceCommandSupport(deviceId) {
+    if (!deviceId) return { supports_commands: false, available_commands: [] };
+    if (deviceCommandSupportCache[deviceId]) {
+        return deviceCommandSupportCache[deviceId];
+    }
+    try {
+        const res = await apiFetch(`${API_BASE}/devices/${deviceId}/command-support`);
+        if (!res.ok) return { supports_commands: false, available_commands: [] };
+        const data = await res.json();
+        deviceCommandSupportCache[deviceId] = data;
+        return data;
+    } catch (e) {
+        console.error('Failed to fetch command support:', e);
+        return { supports_commands: false, available_commands: [] };
+    }
+}
+
+function formatCommandLabel(cmdKey, supportData = {}) {
+    if (!cmdKey || cmdKey === 'disabled') return 'Disabled';
+    if (cmdKey.startsWith('user_cmd:')) {
+        const id = cmdKey.split(':')[1];
+        const u = (supportData.user_commands || []).find(c => String(c.id) === String(id));
+        return u ? u.name : `User Cmd #${id}`;
+    }
+    if (cmdKey.startsWith('saved:')) {
+        const id = cmdKey.split(':')[1];
+        const s = (supportData.saved_commands || []).find(c => String(c.id) === String(id));
+        return s ? s.name : `Saved Cmd #${id}`;
+    }
+    if (cmdKey.startsWith('setting:')) {
+        const rawName = cmdKey.replace('setting:', '');
+        return rawName.charAt(0).toUpperCase() + rawName.slice(1).replace(/_/g, ' ');
+    }
+    const knownLabels = {
+        cut_engine: 'Cut Engine',
+        resume_engine: 'Resume Engine',
+        engine_stop: 'Engine Stop',
+        engine_resume: 'Engine Resume',
+        reboot: 'Reboot Device',
+        reset: 'Reset Device',
+        interval: 'Change Tracking Interval',
+        custom: 'Custom Command',
+    };
+    if (knownLabels[cmdKey]) return knownLabels[cmdKey];
+    return cmdKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function populateAlertEditorCommandSelect(selectEl, supportData, currentVal) {
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+
+    const disabledOpt = document.createElement('option');
+    disabledOpt.value = 'disabled';
+    disabledOpt.textContent = 'Disabled';
+    if (!currentVal || currentVal === 'disabled') disabledOpt.selected = true;
+    selectEl.appendChild(disabledOpt);
+
+    if (!supportData || !supportData.supports_commands) return;
+
+    // 1. User Defined Commands
+    const userCmds = supportData.user_commands || [];
+    if (userCmds.length > 0) {
+        const userGrp = document.createElement('optgroup');
+        userGrp.label = 'User Defined Commands';
+        userCmds.forEach(uc => {
+            const val = `user_cmd:${uc.id}`;
+            const opt = document.createElement('option');
+            opt.value = val;
+            opt.textContent = uc.name;
+            if (currentVal === val) opt.selected = true;
+            userGrp.appendChild(opt);
+        });
+        selectEl.appendChild(userGrp);
+    }
+
+    // 2. Integration Saved Commands
+    const savedCmds = supportData.saved_commands || [];
+    if (savedCmds.length > 0) {
+        const savedGrp = document.createElement('optgroup');
+        savedGrp.label = 'Saved Commands';
+        savedCmds.forEach(sc => {
+            const val = `saved:${sc.id}`;
+            const opt = document.createElement('option');
+            opt.value = val;
+            opt.textContent = sc.name;
+            if (currentVal === val) opt.selected = true;
+            savedGrp.appendChild(opt);
+        });
+        selectEl.appendChild(savedGrp);
+    }
+
+    // 3. Standard / Protocol Commands & Settings
+    const available = supportData.available_commands || [];
+    const standardCmds = available.filter(cmd => cmd !== 'custom' && !cmd.startsWith('saved:'));
+    if (standardCmds.length > 0) {
+        const stdGrp = document.createElement('optgroup');
+        stdGrp.label = 'Device Settings & Commands';
+        standardCmds.forEach(cmd => {
+            const opt = document.createElement('option');
+            opt.value = cmd;
+            opt.textContent = formatCommandLabel(cmd, supportData);
+            if (currentVal === cmd) opt.selected = true;
+            stdGrp.appendChild(opt);
+        });
+        selectEl.appendChild(stdGrp);
+    }
+
+    // 4. Custom Command Option
+    if (available.includes('custom') || (!userCmds.length && !savedCmds.length && !standardCmds.length)) {
+        const customGrp = document.createElement('optgroup');
+        customGrp.label = 'Custom Command';
+        const customOpt = document.createElement('option');
+        customOpt.value = 'custom';
+        customOpt.textContent = 'Custom Command';
+        if (currentVal === 'custom') customOpt.selected = true;
+        customGrp.appendChild(customOpt);
+        selectEl.appendChild(customGrp);
+    }
 }
 
 // ================================================================
@@ -1435,6 +1554,11 @@ function renderAlertsTable() {
                 activePills.push(`<span class="channel-pill active" style="pointer-events:none;">${_esc(c)}</span>`);
             });
         }
+        if (row.action_command && row.action_command !== 'disabled') {
+            const cachedSupport = editingDeviceId ? deviceCommandSupportCache[editingDeviceId] : null;
+            const cmdLabel = formatCommandLabel(row.action_command, cachedSupport || {});
+            activePills.push(`<span class="channel-pill active" title="Automated Device Command" style="pointer-events:none; border-color:rgba(99,102,241,0.5);"><i class="mdi mdi-console"></i> ${_esc(cmdLabel)}</span>`);
+        }
         const chHtml = activePills.length
             ? activePills.join('')
             : `<span style="color:var(--text-muted);font-size:0.8rem;">None</span>`;
@@ -1480,6 +1604,63 @@ function renderAlertsTable() {
             </td>`;
         tbody.appendChild(tr);
     });
+}
+
+function renderAlertEditorCommandOptions(cmdKey, supportData, currentPayload = '') {
+    const box = document.getElementById('editor-command-params-box');
+    if (!box) return;
+
+    if (!cmdKey || cmdKey === 'disabled') {
+        box.style.display = 'none';
+        box.innerHTML = '';
+        return;
+    }
+
+    const info = (supportData?.command_info || {})[cmdKey] || {};
+    const hasFields = info.fields && Array.isArray(info.fields) && info.fields.length > 0;
+    const requiresParams = info.requires_params || cmdKey === 'custom' || cmdKey.startsWith('setting:');
+
+    if (!requiresParams && !hasFields) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+        return;
+    }
+
+    box.style.display = 'block';
+    if (hasFields) {
+        let fieldsHtml = `<div style="font-size:0.82rem;font-weight:600;margin-bottom:0.5rem;color:var(--text-secondary);">Command Options & Parameters</div>`;
+        info.fields.forEach(f => {
+            let val = f.default ?? '';
+            if (currentPayload) {
+                try {
+                    const parsed = JSON.parse(currentPayload);
+                    if (parsed && typeof parsed === 'object' && parsed[f.key] !== undefined) {
+                        val = parsed[f.key];
+                    } else {
+                        val = currentPayload;
+                    }
+                } catch(e) {
+                    val = currentPayload;
+                }
+            }
+            fieldsHtml += `
+                <div style="margin-bottom:0.5rem;">
+                    <label class="form-label" style="font-size:0.78rem;">${_esc(f.label || f.key)}${f.required ? ' *' : ''}</label>
+                    <input type="text" class="form-input editor-cmd-param-field" data-key="${_esc(f.key)}" value="${_esc(String(val))}" placeholder="${_esc(f.placeholder || '')}">
+                    ${f.help_text ? `<div class="form-help" style="font-size:0.75rem;">${_esc(f.help_text)}</div>` : ''}
+                </div>
+            `;
+        });
+        box.innerHTML = fieldsHtml;
+    } else {
+        box.innerHTML = `
+            <div style="margin-top:0.5rem;">
+                <label class="form-label" style="font-size:0.82rem;">Command Payload / Parameters</label>
+                <input type="text" id="editor-action-command-payload" class="form-input" value="${_esc(currentPayload || '')}" placeholder="Enter command parameters or payload string">
+                ${info.description ? `<div class="form-help" style="font-size:0.75rem;">${_esc(info.description)}</div>` : ''}
+            </div>
+        `;
+    }
 }
 
 // ── Alert Editor ──────────────────────────────────────────────────
@@ -1736,6 +1917,15 @@ async function openAlertEditor(uid) {
                     <div style="display:flex;flex-wrap:wrap;gap:0.4rem;">${chHtml}</div>
                 </div>
                 ${notifyUsersHtml}
+                <div class="form-group" id="editor-command-group" style="margin-top:1.25rem; display:none;">
+                    <label class="form-label"><i class="mdi mdi-console"></i> Execute Device Command</label>
+                    <select class="form-input" id="editor-action-command">
+                        <option value="disabled"${!row.action_command || row.action_command === 'disabled' ? ' selected' : ''}>Disabled</option>
+                        <option value="" disabled>Loading commands...</option>
+                    </select>
+                    <div id="editor-command-params-box" style="display:none; margin-top:0.75rem;"></div>
+                    <div class="form-help" style="margin-top:0.25rem;">Automatically send this command to the device when this alert triggers.</div>
+                </div>
                 <div class="form-group" style="margin-top:1.25rem;">
                     <label class="form-label">Schedule
                         <span style="font-weight:400;color:var(--text-muted);"> (no days = always active)</span>
@@ -1757,6 +1947,28 @@ async function openAlertEditor(uid) {
                 </div>
             </div>
         </div>`;
+
+    if (editingDeviceId) {
+        fetchDeviceCommandSupport(editingDeviceId).then(supportData => {
+            const group = document.getElementById('editor-command-group');
+            const select = document.getElementById('editor-action-command');
+            if (!group || !select) return;
+
+            if (supportData && supportData.supports_commands) {
+                group.style.display = '';
+                populateAlertEditorCommandSelect(select, supportData, row.action_command);
+
+                const updateParamsUI = () => {
+                    renderAlertEditorCommandOptions(select.value, supportData, row.action_command_payload);
+                };
+
+                select.onchange = updateParamsUI;
+                updateParamsUI();
+            } else {
+                group.style.display = 'none';
+            }
+        });
+    }
 
     const durCb  = document.getElementById('editor-duration-enabled');
     const durInp = document.getElementById('editor-duration-input');
@@ -1853,6 +2065,26 @@ function saveAlertFromEditor() {
     const sendPushCb = document.getElementById('editor-send-push');
     if (sendPushCb) {
         row.send_push = sendPushCb.checked;
+    }
+
+    const actionCmdSel = document.getElementById('editor-action-command');
+    if (actionCmdSel) {
+        const val = actionCmdSel.value;
+        row.action_command = (val && val !== 'disabled') ? val : null;
+
+        const payloadInp = document.getElementById('editor-action-command-payload');
+        const paramFields = document.querySelectorAll('.editor-cmd-param-field');
+        if (paramFields.length > 0) {
+            const paramsObj = {};
+            paramFields.forEach(inp => {
+                if (inp.dataset.key) paramsObj[inp.dataset.key] = inp.value;
+            });
+            row.action_command_payload = JSON.stringify(paramsObj);
+        } else if (payloadInp) {
+            row.action_command_payload = payloadInp.value.trim() || null;
+        } else {
+            row.action_command_payload = null;
+        }
     }
 
     row.channels = [];

@@ -298,7 +298,6 @@ async def assign_user_to_device(
 async def check_command_support(
     device_id: int,
     caller: User = Depends(verify_device_access),
-    _: User = Depends(require_permission("send_commands")),
 ):
     from protocols import ProtocolRegistry
     from integrations.registry import IntegrationRegistry

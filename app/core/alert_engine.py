@@ -119,8 +119,14 @@ class AlertEngine:
                 results = await alert_cls().check_many(position, device, state, params)
                 notify_ids = row.get('notify_user_ids')
                 send_push = row.get('send_push', True)
+                action_cmd = row.get('action_command')
+                action_cmd_payload = row.get('action_command_payload')
                 for r in results:
                     r.setdefault('send_push', send_push)
+                    if action_cmd and action_cmd != 'disabled':
+                        r.setdefault('action_command', action_cmd)
+                        if action_cmd_payload:
+                            r.setdefault('action_command_payload', action_cmd_payload)
                     if notify_ids is not None:
                         r.setdefault('notify_user_ids', notify_ids)
                 alerts.extend(results)
@@ -137,11 +143,35 @@ class AlertEngine:
         except Exception as e:
             logger.error(f"Alert processing error: {e}")
 
+    async def _execute_alert_command(self, device: Device, command_type: str, payload: Optional[str], users: List[User]):
+        """Execute an automated device command triggered by an alert."""
+        try:
+            from routes.commands import send_command, CommandCreate
+            db = get_db()
+            executor = None
+            if users:
+                executor = users[0]
+            else:
+                db_users = await db.get_all_users()
+                executor = next((u for u in db_users if u.is_admin), db_users[0] if db_users else None)
+            if not executor:
+                logger.warning("No user context available to execute alert command '%s' for device %s", command_type, device.id)
+                return
+            cmd_payload = CommandCreate(device_id=device.id, command_type=command_type, payload=payload or "")
+            await send_command(device_id=device.id, command=cmd_payload, caller=executor, _=executor)
+            logger.info("Successfully executed alert action command '%s' (payload: '%s') for device %s", command_type, payload or "", device.name)
+        except Exception as e:
+            logger.error("Failed to execute alert action command '%s' for device %s: %s", command_type, device.name, e)
+
     async def _dispatch_alert(self, users: List[User], device: Device, alert_data: Dict[str, Any]):
         """
         Handles database creation, real-time broadcasting, and external notifications.
         Ensures WebSocket broadcast only happens ONCE per alert event.
         """
+        action_cmd = alert_data.get("action_command")
+        if action_cmd and action_cmd != "disabled":
+            action_payload = alert_data.get("action_command_payload")
+            asyncio.create_task(self._execute_alert_command(device, action_cmd, action_payload, users))
         alert_type = alert_data.get("type")
         alert_type_value = alert_type.value if hasattr(alert_type, "value") else str(alert_type or "")
         try:
@@ -337,6 +367,10 @@ async def periodic_alert_task():
                         if result:
                             result.setdefault('latitude',  state.last_latitude)
                             result.setdefault('longitude', state.last_longitude)
+                            result.setdefault('send_push', row.get('send_push', True))
+                            action_cmd = row.get('action_command')
+                            if action_cmd and action_cmd != 'disabled':
+                                result.setdefault('action_command', action_cmd)
                             notify_ids = row.get('notify_user_ids')
                             if notify_ids is not None:
                                 result.setdefault('notify_user_ids', notify_ids)
