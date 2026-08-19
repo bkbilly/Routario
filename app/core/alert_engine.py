@@ -224,9 +224,10 @@ class AlertEngine:
                 broadcasted = True
                 
             # 3. External notifications (Email, Telegram, SIP call, etc. per user)
-            await self._send_notification(user, device, alert_data)
+            await self._send_notification(user, device, alert_data, alert_id=alert.id)
 
-    async def _send_notification(self, user: User, device: Device, alert_data: Dict[str, Any]):
+    async def _send_notification(self, user: User, device: Device, alert_data: Dict[str, Any], alert_id: Optional[int] = None):
+        channel_status = []
         try:
             metadata = alert_data.get('alert_metadata', {})
             selected_names = None
@@ -249,14 +250,56 @@ class AlertEngine:
 
             # 2. Filter channels by selected names
             if selected_names is not None:
-                active_channels = [c for c in user_ch if c['name'] in selected_names and c.get('url')]
+                active_channels = [
+                    c for c in user_ch
+                    if isinstance(c, dict) and c.get('name') in selected_names and c.get('url')
+                ]
+                found_names = {c['name'] for c in active_channels}
+                missing_names = [n for n in selected_names if n not in found_names]
+
+                # Fallback: if selected channel was created by admin/superadmin and not in target user's channels
+                if missing_names:
+                    db = get_db()
+                    additional_channels = await db.get_notification_channels_by_names(
+                        names=missing_names,
+                        company_id=device.company_id,
+                    )
+                    active_channels.extend(additional_channels)
             else:
                 active_channels = []
 
-            if not active_channels:
-                if send_push:
+            # 3. Dispatch each URL to the matching channel handler
+            if active_channels:
+                rule_title = alert_data.get('alert_metadata', {}).get('rule_name')
+                alert_label = rule_title if rule_title else alert_data['type'].value.upper()
+                title = f"🚗 {device.name} - {alert_label}"
+                message = alert_data['message']
+
+                async def _send_single(c):
+                    c_name = c.get('name', 'Channel')
+                    url = c.get('url', '')
+                    ch = get_channel(url)
+                    if not ch:
+                        return {"name": c_name, "status": "failed", "error": "Unsupported channel type"}
+                    try:
+                        ok = await ch.send(url, title, message)
+                        return {"name": c_name, "status": "sent" if ok else "failed"}
+                    except Exception as err:
+                        return {"name": c_name, "status": "failed", "error": str(err)}
+
+                results = await asyncio.gather(
+                    *[_send_single(c) for c in active_channels],
+                    return_exceptions=True
+                )
+                for r in results:
+                    if isinstance(r, dict):
+                        channel_status.append(r)
+
+            # 4. Push notification (browser/PWA)
+            if send_push:
+                try:
                     push = get_push_service()
-                    await push.notify_user(
+                    ok = await push.notify_user(
                         db_service=get_db(),
                         user_id=user.id,
                         alert_type=alert_data['type'].value,
@@ -264,43 +307,30 @@ class AlertEngine:
                         severity=alert_data.get('severity', 'info'),
                         device_name=device.name,
                     )
-                await self._send_alert_webhooks(user, device, alert_data)
-                return
-
-            # 3. Dispatch each URL to the matching channel handler
-            title = f"🚗 {device.name} - {alert_data['type'].value.upper()}"
-            message = f"{device.name}. {alert_data['message']}"
-            await asyncio.gather(
-                *[
-                    ch.send(c['url'], title, message)
-                    for c in active_channels
-                    if (ch := get_channel(c['url'])) is not None
-                ],
-                return_exceptions=True
-            )
-
-            # 4. Push notification (browser/PWA)
-            if send_push:
-                push = get_push_service()
-                await push.notify_user(
-                    db_service=get_db(),
-                    user_id=user.id,
-                    alert_type=alert_data['type'].value,
-                    message=alert_data['message'],
-                    severity=alert_data.get('severity', 'info'),
-                    device_name=device.name,
-                )
+                    if ok:
+                        channel_status.append({"name": "Web Push", "status": "sent"})
+                    else:
+                        channel_status.append({"name": "Web Push", "status": "failed", "error": "No active browser subscription or push disabled"})
+                except Exception as e:
+                    channel_status.append({"name": "Web Push", "status": "failed", "error": str(e)})
 
             # 5. Alert webhooks
-            await self._send_alert_webhooks(user, device, alert_data)
+            wh_status = await self._send_alert_webhooks(user, device, alert_data)
+            if wh_status is not None:
+                channel_status.append({"name": "Webhooks", "status": "sent" if wh_status else "failed"})
+
+            # 6. Save channel_status into AlertHistory record if alert_id is provided
+            if alert_id and channel_status:
+                db = get_db()
+                await db.update_alert_channel_status(alert_id, channel_status)
 
         except Exception as e:
             logger.error(f"Notify error: {e}")
 
-    async def _send_alert_webhooks(self, user: User, device: Device, alert_data: Dict[str, Any]):
+    async def _send_alert_webhooks(self, user: User, device: Device, alert_data: Dict[str, Any]) -> Optional[bool]:
         urls = user.webhook_urls or []
         if not urls:
-            return
+            return None
         payload = {
             "event":         "alert",
             "device_id":     device.id,
@@ -319,12 +349,16 @@ class AlertEngine:
             "timestamp":     datetime.now(timezone.utc).isoformat(),
             "metadata":      alert_data.get('alert_metadata', {}),
         }
+        any_success = False
         async with httpx.AsyncClient(timeout=5) as client:
             for url in urls:
                 try:
-                    await client.post(url, json=payload)
+                    res = await client.post(url, json=payload)
+                    if res.is_success:
+                        any_success = True
                 except Exception as exc:
                     logger.warning("Alert webhook failed %s: %s", url, exc)
+        return any_success
     
 
 

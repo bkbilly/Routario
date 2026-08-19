@@ -703,6 +703,18 @@ function _formatValue(value, col = {}, row = {}) {
     if (col.type === 'bool_on') return `<span style="color:${value ? 'var(--accent-success)' : 'var(--text-muted)'};">${value ? 'On' : 'Off'}</span>`;
     if (col.type === 'bool_active') return `<span style="color:${value ? 'var(--accent-success)' : 'var(--text-muted)'};font-weight:${value ? '600' : '400'};">${value ? 'Active' : 'Missing'}</span>`;
     if (col.type === 'read_status') return value ? '<span style="color:var(--text-muted);">Read</span>' : '<span style="color:var(--accent-primary);font-weight:600;">Unread</span>';
+    if (col.type === 'channel_status') {
+        if (!value || !Array.isArray(value) || value.length === 0) {
+            return '<span style="color:var(--text-muted);font-size:0.78rem;">—</span>';
+        }
+        return value.map(ch => {
+            const isOk = ch.status === 'sent' || ch.status === 'delivered' || ch.status === 'success';
+            const icon = isOk ? 'mdi-check-circle' : 'mdi-alert-circle';
+            const color = isOk ? 'var(--accent-success, #10b981)' : 'var(--accent-danger, #ef4444)';
+            const titleText = ch.error ? `${ch.name}: Failed (${ch.error})` : `${ch.name}: ${ch.status}`;
+            return `<span title="${_esc(titleText)}" style="display:inline-flex;align-items:center;gap:0.25rem;font-size:0.72rem;padding:0.12rem 0.4rem;border-radius:4px;background:rgba(255,255,255,0.06);color:${color};margin:0.1rem;font-weight:600;"><i class="mdi ${icon}"></i>${_esc(ch.name)}</span>`;
+        }).join(' ');
+    }
     if (col.type === 'severity') {
         const colors = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#3b82f6', info: 'var(--text-muted)' };
         return `<span style="color:${colors[value] || 'var(--text-muted)'};font-weight:600;text-transform:capitalize;">${_esc(value)}</span>`;
@@ -798,6 +810,10 @@ function _plainValue(value, col = {}) {
     if (col.type === 'bool_on') return value ? 'On' : 'Off';
     if (col.type === 'bool_active') return value ? 'Active' : 'Missing';
     if (col.type === 'read_status') return value ? 'Read' : 'Unread';
+    if (col.type === 'channel_status') {
+        if (!value || !Array.isArray(value) || value.length === 0) return '—';
+        return value.map(ch => `${ch.name}: ${ch.status}`).join('; ');
+    }
     if (Array.isArray(value)) return value.join('; ');
     let valStr = String(value);
     if (valStr.length >= 16 && valStr.includes('T') && /^\d{4}-\d{2}-\d{2}/.test(valStr)) {

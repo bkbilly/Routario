@@ -180,12 +180,26 @@ function _buildAlertItem(alert, { dimmed = false, clickable = true, dismissable 
         });
     }
 
+    const channelStatusList = alert.alert_metadata?.channel_status || alert.channel_status || [];
+    const channelStatusHtml = Array.isArray(channelStatusList) && channelStatusList.length > 0
+        ? `<div class="alert-channels-status" style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-top:0.3rem;">
+            ${channelStatusList.map(ch => {
+                const isOk = ch.status === 'sent' || ch.status === 'delivered' || ch.status === 'success';
+                const icon = isOk ? 'mdi-check-circle' : 'mdi-alert-circle';
+                const color = isOk ? '#10b981' : '#ef4444';
+                const titleText = ch.error ? `${ch.name}: Failed (${ch.error})` : `${ch.name}: ${ch.status}`;
+                return `<span title="${_esc(titleText)}" style="display:inline-flex;align-items:center;gap:0.25rem;font-size:0.68rem;padding:0.1rem 0.35rem;border-radius:4px;background:rgba(255,255,255,0.06);color:${color};font-weight:600;"><i class="mdi ${icon}"></i>${_esc(ch.name)}</span>`;
+            }).join('')}
+           </div>`
+        : '';
+
     item.innerHTML = `
         <div class="alert-icon">${icon}</div>
         <div class="alert-content">
             ${vehicleTag}
             <div class="alert-title">${title}</div>
             <div class="alert-message">${messageText}</div>
+            ${channelStatusHtml}
             <div class="alert-time">${formatDateToLocal(alert.created_at)}</div>
             ${jumpHint}
         </div>

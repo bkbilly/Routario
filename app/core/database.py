@@ -770,6 +770,35 @@ class DatabaseService:
             result = await session.execute(select(User).where(User.id.in_(ids)))
             return result.scalars().all()
 
+    async def get_notification_channels_by_names(
+        self, names: List[str], company_id: Optional[int] = None
+    ) -> List[Dict[str, str]]:
+        """Look up notification channels by name across superadmins and company users."""
+        if not names:
+            return []
+        name_set = set(names)
+        found_channels: List[Dict[str, str]] = []
+        found_names: set[str] = set()
+
+        async with self.get_session() as session:
+            conditions = [User.is_admin == True]
+            if company_id is not None:
+                conditions.append(User.company_id == company_id)
+            stmt = select(User).where(or_(*conditions))
+            result = await session.execute(stmt)
+            users = result.scalars().all()
+
+            for user in users:
+                channels = user.notification_channels or []
+                for ch in channels:
+                    if isinstance(ch, dict) and ch.get("name") in name_set and ch.get("url"):
+                        ch_name = ch["name"]
+                        if ch_name not in found_names:
+                            found_channels.append(ch)
+                            found_names.add(ch_name)
+
+        return found_channels
+
     async def get_user_by_username(self, username: str) -> Optional[User]:
         async with self.get_session() as session:
             result = await session.execute(
@@ -1265,6 +1294,18 @@ class DatabaseService:
             session.add(alert)
             await session.flush()
             return alert
+
+    async def update_alert_channel_status(self, alert_id: int, channel_statuses: List[Dict[str, Any]]) -> None:
+        """Update channel_status in alert_metadata for an AlertHistory record."""
+        async with self.get_session() as session:
+            stmt = select(AlertHistory).where(AlertHistory.id == alert_id)
+            result = await session.execute(stmt)
+            alert = result.scalar_one_or_none()
+            if alert:
+                meta = dict(alert.alert_metadata or {})
+                meta["channel_status"] = channel_statuses
+                alert.alert_metadata = meta
+                await session.flush()
 
     async def get_user_alerts(
         self,

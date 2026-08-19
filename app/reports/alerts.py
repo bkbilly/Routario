@@ -68,6 +68,8 @@ class AlertsReport(Report):
                 "is_read": a.is_read,
                 "username": username,
                 "device_name": device_name,
+                "alert_metadata": a.alert_metadata or {},
+                "channel_status": (a.alert_metadata or {}).get("channel_status", []),
             }
             for a, username, device_name in result.all()
         ]
@@ -84,6 +86,7 @@ class AlertsReport(Report):
             {"key": "alert_type", "label": "Type", "type": "text"},
             {"key": "severity", "label": "Severity", "type": "severity"},
             {"key": "message", "label": "Message", "type": "text", "max_width": 260},
+            {"key": "channel_status", "label": "Channels", "type": "channel_status"},
             {"key": "is_read", "label": "Status", "type": "read_status"},
         ]
         if not (current_user.is_admin or current_user.is_company_admin):
