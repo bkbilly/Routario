@@ -83,6 +83,8 @@ class Settings(BaseSettings):
     # History & Tracking Limits
     history_batch_size: int = 2000
     history_max_api_limit: int = 10000
+    history_retention_enabled: bool = False
+    history_retention_days: int = 90
 
     # Fleet & Trip Rules
     trip_min_distance_km: float = 0.1
@@ -148,6 +150,8 @@ SYSTEM_SETTINGS_METADATA = {
     # History & Tracking Limits
     "history_batch_size": {"type": "int", "category": "History & Tracking Limits", "label": "History Batch Size (Map Points)", "description": "Number of GPS history points loaded per map page/batch", "secret": False},
     "history_max_api_limit": {"type": "int", "category": "History & Tracking Limits", "label": "History Max API Limit", "description": "Maximum GPS history points allowed in a single API query", "secret": False},
+    "history_retention_enabled": {"type": "bool", "category": "History & Tracking Limits", "label": "Auto Truncation Enabled", "description": "Automatically purge old historical position data past retention period", "secret": False},
+    "history_retention_days": {"type": "int", "category": "History & Tracking Limits", "label": "History Retention (Days)", "description": "Number of days to keep historical position records before truncation", "secret": False},
 
     # Fleet & Trip Rules
     "trip_min_distance_km": {"type": "float", "category": "Fleet & Trip Rules", "label": "Trip Min Distance (km)", "description": "Minimum distance threshold to classify a movement as a valid trip (filters GPS drift)", "secret": False},

@@ -923,6 +923,7 @@ const SYSTEM_DEPENDENCIES = {
     sso_enabled: ['sso_provider_name', 'sso_issuer_url', 'sso_client_id', 'sso_client_secret', 'sso_redirect_uri', 'sso_scopes', 'sso_allowed_domains', 'sso_require_verified_email'],
     valhalla_enabled: ['valhalla_url'],
     geocoding_enabled: ['geocoding_provider'],
+    history_retention_enabled: ['history_retention_days'],
 };
 
 const SYSTEM_MASTER_TOGGLES = {};
@@ -943,10 +944,53 @@ function toggleSystemDependencies(masterKey, isEnabled) {
     });
 }
 
-async function loadSystemSettings() {
+async function triggerManualHistoryPurge() {
+    const daysInput = document.getElementById('sys_history_retention_days');
+    const days = daysInput ? parseInt(daysInput.value, 10) : 90;
+    if (isNaN(days) || days <= 0) {
+        showAlert('Please enter a valid number of retention days.', 'warning');
+        return;
+    }
+    if (!confirm(`Are you sure you want to permanently purge all position history records older than ${days} days? This action cannot be undone.`)) {
+        return;
+    }
+    try {
+        const res = await apiFetch(`${API_BASE}/system-settings/purge-history?days=${days}`, { method: 'POST' });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || 'History purge failed');
+        }
+        const data = await res.json();
+        showAlert(data.message || 'History purge completed successfully!', 'success');
+    } catch (e) {
+        showAlert('History purge error: ' + e.message, 'error');
+    }
+}
+
+function getSystemSettingsScrollPos() {
+    return window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+}
+
+function restoreSystemSettingsScrollPos(pos) {
+    if (typeof pos === 'number') {
+        requestAnimationFrame(() => {
+            window.scrollTo({ top: pos, behavior: 'instant' });
+        });
+    }
+}
+
+async function loadSystemSettings(preserveScroll = true) {
     const container = document.getElementById('systemSettingsContainer');
     if (!container) return;
-    container.innerHTML = `<div style="grid-column: 1 / -1; text-align:center; padding:3rem; color:var(--text-muted);"><div class="loading" style="margin:0 auto 1rem;"></div>Loading system settings...</div>`;
+
+    const scrollPos = preserveScroll ? getSystemSettingsScrollPos() : 0;
+
+    // Lock min-height during reload to prevent container height collapse & scroll jump
+    if (container.offsetHeight > 0) {
+        container.style.minHeight = `${container.offsetHeight}px`;
+    } else {
+        container.innerHTML = `<div style="grid-column: 1 / -1; text-align:center; padding:3rem; color:var(--text-muted);"><div class="loading" style="margin:0 auto 1rem;"></div>Loading system settings...</div>`;
+    }
 
     try {
         const res = await apiFetch(`${API_BASE}/system-settings`);
@@ -956,20 +1000,24 @@ async function loadSystemSettings() {
         }
         const data = await res.json();
         systemSettingsCategories = data.categories || {};
-        renderSystemSettings();
+        renderSystemSettings(preserveScroll ? scrollPos : null);
     } catch (error) {
         console.error('System settings load error:', error);
         container.innerHTML = `<div style="grid-column: 1 / -1; padding:2rem; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:8px; color:var(--accent-danger); text-align:center;">Failed to load system settings: ${settingsEsc(error.message)}</div>`;
         showAlert(error.message, 'error');
+    } finally {
+        container.style.minHeight = '';
     }
 }
 
-function renderSystemSettings() {
+function renderSystemSettings(restoreScrollPos = null) {
     const container = document.getElementById('systemSettingsContainer');
     const searchInput = document.getElementById('systemSettingsSearch');
     const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
 
     if (!container) return;
+
+    const savedScroll = restoreScrollPos !== null ? restoreScrollPos : getSystemSettingsScrollPos();
 
     const categoryIcons = {
         'Feature Flags': 'mdi-flag-outline',
@@ -1047,6 +1095,17 @@ function renderSystemSettings() {
             }
             if (item.readonly) badges += `<span class="system-setting-badge system-setting-badge-readonly">Read Only</span>`;
 
+            let extraActions = '';
+            if (item.key === 'history_retention_days') {
+                extraActions = `
+                    <div style="margin-top:0.5rem;">
+                        <button type="button" class="btn btn-secondary" onclick="triggerManualHistoryPurge()" style="font-size:0.78rem; padding:0.35rem 0.75rem; border-color:rgba(239,68,68,0.4); color:var(--accent-danger);">
+                            <i class="mdi mdi-delete-sweep"></i> Purge History Now
+                        </button>
+                    </div>
+                `;
+            }
+
             const masterKey = SYSTEM_MASTER_TOGGLES[item.key];
             const isVisible = masterKey ? Boolean(masterStateMap[masterKey]) : true;
             const displayStyle = isVisible ? '' : 'display: none;';
@@ -1059,6 +1118,7 @@ function renderSystemSettings() {
                     </div>
                     <div class="system-setting-desc">${settingsEsc(item.description || '')}</div>
                     <div style="margin-top:0.35rem;">${controlHtml}</div>
+                    ${extraActions}
                 </div>
             `;
         }).join('');
@@ -1103,6 +1163,10 @@ function renderSystemSettings() {
     }
 
     checkSystemSettingsDirty();
+
+    if (restoreScrollPos !== null) {
+        restoreSystemSettingsScrollPos(savedScroll);
+    }
 }
 
 function checkSystemSettingsDirty() {

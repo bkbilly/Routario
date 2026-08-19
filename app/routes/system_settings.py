@@ -188,3 +188,24 @@ async def update_system_settings(
         "updated_keys": updated_keys,
         "message": f"Successfully updated {len(updated_keys)} system settings.",
     }
+
+
+@router.post("/purge-history", response_model=Dict[str, Any])
+async def trigger_history_purge(
+    days: int = None,
+    current_user: User = Depends(require_admin),
+) -> Dict[str, Any]:
+    """Manually trigger truncation of historical position data older than specified or configured days."""
+    from core.retention import purge_old_positions
+    settings_obj = get_settings()
+    target_days = days if days is not None else settings_obj.history_retention_days
+
+    if target_days <= 0:
+        raise HTTPException(status_code=400, detail="Retention days must be greater than 0")
+
+    count = await purge_old_positions(target_days)
+    return {
+        "success": True,
+        "deleted_records": count,
+        "message": f"Successfully truncated {count} position records older than {target_days} days.",
+    }
