@@ -202,12 +202,18 @@ async function rtpLoadTickets() {
 }
 
 function rtpOpenCreateTicketModal() {
-    document.getElementById('ticketCreateTitle').value = '';
-    document.getElementById('ticketCreateDescription').value = '';
-    document.getElementById('ticketCreateCategory').value = 'other';
-    document.getElementById('ticketCreatePriority').value = 'normal';
+    const title = document.getElementById('ticketCreateTitle');
+    if (title) title.value = '';
+    const desc = document.getElementById('ticketCreateDescription');
+    if (desc) desc.value = '';
+    const priority = document.getElementById('ticketCreatePriority');
+    if (priority) priority.value = 'normal';
+    const relType = document.getElementById('ticketCreateRelatedType');
+    if (relType) relType.value = '';
+    const relId = document.getElementById('ticketCreateRelatedId');
+    if (relId) relId.innerHTML = '<option value="">None</option>';
     rtpClearTicketFiles('ticketCreateAttachments', 'ticketCreateAttachmentSummary');
-    document.getElementById('ticketCreateModal').classList.add('active');
+    document.getElementById('ticketCreateModal')?.classList.add('active');
     setTimeout(() => document.getElementById('ticketCreateTitle')?.focus(), 50);
 }
 
@@ -232,6 +238,10 @@ async function rtpCreateTicket() {
         form.append('description', description);
         form.append('category', document.getElementById('ticketCreateCategory')?.value || 'other');
         form.append('priority', document.getElementById('ticketCreatePriority')?.value || 'normal');
+        const relType = document.getElementById('ticketCreateRelatedType')?.value || '';
+        const relId = document.getElementById('ticketCreateRelatedId')?.value || '';
+        if (relType) form.append('related_type', relType);
+        if (relId) form.append('related_id', relId);
         _rtpTicketCreateFiles.forEach(file => form.append('attachments', file));
         await rtpJson(`${API_BASE}/tickets`, {
             method: 'POST',
@@ -385,7 +395,7 @@ function rtpRenderTicketsTable() {
             <td>${rtpDateTimeSplit(row.updated_at)}</td>
             <td>
                 <div style="font-weight:700;color:var(--text-primary);">${rtpEsc(row.title)}</div>
-                <div style="color:var(--text-muted);font-size:0.78rem;">#${row.id} · ${rtpEsc(rtpTicketLabel(row.category, RTP_TICKET_CATEGORIES))}</div>
+                <div style="color:var(--text-muted);font-size:0.78rem;">#${row.id}</div>
             </td>
             <td><span class="proto-badge health-status ${rtpTicketBadgeClass(row.status, 'status')}">${rtpEsc(rtpTicketLabel(row.status, RTP_TICKET_STATUSES))}</span></td>
             <td><span class="proto-badge health-status ${rtpTicketBadgeClass(row.priority, 'priority')}">${rtpEsc(rtpTicketLabel(row.priority, RTP_TICKET_PRIORITIES))}</span></td>
@@ -406,6 +416,55 @@ function rtpFillTicketSelect(id, options, value) {
     el.value = value || options[0]?.[0] || '';
 }
 
+let _rtpCachedDevices = null;
+let _rtpCachedRoutes = null;
+let _rtpCachedDrivers = null;
+
+async function rtpPopulateRelatedEntitySelect(typeSelectId, targetSelectId, containerWrapId, selectedValue = '') {
+    const type = document.getElementById(typeSelectId)?.value || '';
+    const target = document.getElementById(targetSelectId);
+    const wrap = containerWrapId ? document.getElementById(containerWrapId) : null;
+    if (!target) return;
+
+    if (!type) {
+        target.innerHTML = '<option value="">None</option>';
+        target.value = '';
+        if (wrap) wrap.style.display = 'none';
+        return;
+    }
+
+    if (wrap) wrap.style.display = '';
+
+    target.innerHTML = '<option value="">Loading...</option>';
+
+    try {
+        let items = [];
+        if (type === 'device') {
+            if (!_rtpCachedDevices) _rtpCachedDevices = await rtpJson(`${API_BASE}/devices`).catch(() => []);
+            items = (_rtpCachedDevices || []).map(d => ({ id: d.id, name: d.name || `Device #${d.id}` }));
+        } else if (type === 'route') {
+            if (!_rtpCachedRoutes) _rtpCachedRoutes = await rtpJson(`${API_BASE}/routes`).catch(() => []);
+            items = (_rtpCachedRoutes || []).map(r => ({ id: r.id, name: r.name || `Route #${r.id}` }));
+        } else if (type === 'driver') {
+            if (!_rtpCachedDrivers) _rtpCachedDrivers = await rtpJson(`${API_BASE}/drivers`).catch(() => []);
+            items = (_rtpCachedDrivers || []).map(d => ({ id: d.id, name: d.name || `Driver #${d.id}` }));
+        }
+
+        if (items.length) {
+            target.innerHTML = '<option value="">Select item...</option>' + items.map(item => `
+                <option value="${item.id}" ${String(item.id) === String(selectedValue) ? 'selected' : ''}>
+                    ${rtpEsc(item.name)}
+                </option>
+            `).join('');
+            if (selectedValue) target.value = String(selectedValue);
+        } else {
+            target.innerHTML = '<option value="">No items available</option>';
+        }
+    } catch (e) {
+        target.innerHTML = '<option value="">Failed to load items</option>';
+    }
+}
+
 async function rtpOpenTicketModal(id) {
     _rtpEditingTicketId = id;
     const ticket = await rtpJson(`${API_BASE}/tickets/${id}`).catch(err => {
@@ -416,10 +475,22 @@ async function rtpOpenTicketModal(id) {
     _rtpCurrentTicket = ticket;
     _rtpEditingCommentId = null;
     _rtpEditingTicketField = null;
+
+    // Header Badges & Title
+    const statusBadge = document.getElementById('ticketModalBadgeStatus');
+    if (statusBadge) {
+        statusBadge.className = `proto-badge health-status ${rtpTicketBadgeClass(ticket.status, 'status')}`;
+        statusBadge.textContent = rtpTicketLabel(ticket.status, RTP_TICKET_STATUSES);
+    }
+    const priorityBadge = document.getElementById('ticketModalBadgePriority');
+    if (priorityBadge) {
+        priorityBadge.className = `proto-badge health-status ${rtpTicketBadgeClass(ticket.priority, 'priority')}`;
+        priorityBadge.textContent = rtpTicketLabel(ticket.priority, RTP_TICKET_PRIORITIES);
+    }
+
     document.getElementById('ticketModalTitle').textContent = ticket.title || `Ticket #${ticket.id}`;
     rtpFillTicketSelect('ticketStatus', RTP_TICKET_STATUSES, ticket.status);
     rtpFillTicketSelect('ticketPriority', RTP_TICKET_PRIORITIES, ticket.priority);
-    rtpFillTicketSelect('ticketCategory', RTP_TICKET_CATEGORIES, ticket.category);
     const assignee = document.getElementById('ticketAssignee');
     if (assignee) {
         assignee.innerHTML = '<option value="">Unassigned</option>' + _rtpTicketAssignees.map(user => {
@@ -428,110 +499,168 @@ async function rtpOpenTicketModal(id) {
         }).join('');
         assignee.value = ticket.assigned_to ? String(ticket.assigned_to) : '';
     }
+
+    const relType = document.getElementById('ticketRelatedType');
+    if (relType) {
+        relType.value = ticket.related_type || '';
+        await rtpPopulateRelatedEntitySelect('ticketRelatedType', 'ticketRelatedId', 'ticketRelatedIdWrap', ticket.related_id);
+    }
+
+    // Sidebar Metadata
+    const metaId = document.getElementById('ticketMetaId');
+    if (metaId) metaId.textContent = `#${ticket.id}`;
+    const metaCreated = document.getElementById('ticketMetaCreated');
+    if (metaCreated) metaCreated.textContent = rtpDateTime(ticket.created_at);
+    const metaUpdated = document.getElementById('ticketMetaUpdated');
+    if (metaUpdated) metaUpdated.textContent = rtpDateTime(ticket.updated_at);
+    const metaRelated = document.getElementById('ticketMetaRelated');
+    if (metaRelated) {
+        let relLabel = ticket.related_type && ticket.related_id ? `${ticket.related_type} #${ticket.related_id}` : 'None';
+        if (ticket.related_type === 'device' && _rtpCachedDevices) {
+            const dev = _rtpCachedDevices.find(d => d.id === ticket.related_id);
+            if (dev) relLabel = dev.name;
+        } else if (ticket.related_type === 'route' && _rtpCachedRoutes) {
+            const r = _rtpCachedRoutes.find(x => x.id === ticket.related_id);
+            if (r) relLabel = r.name;
+        } else if (ticket.related_type === 'driver' && _rtpCachedDrivers) {
+            const dr = _rtpCachedDrivers.find(x => x.id === ticket.related_id);
+            if (dr) relLabel = dr.name;
+        }
+        metaRelated.textContent = relLabel;
+    }
+
     rtpRenderTicketDetail(ticket);
     document.getElementById('ticketCommentBody').value = '';
     rtpClearTicketFiles('ticketCommentAttachments', 'ticketCommentAttachmentSummary');
     document.getElementById('ticketCommentInternal').checked = false;
+
+    const internalWrap = document.getElementById('ticketCommentInternalWrap');
+    if (internalWrap) {
+        const isStaff = localStorage.getItem('is_admin') === 'true' || localStorage.getItem('is_company_admin') === 'true';
+        internalWrap.style.display = isStaff ? 'inline-flex' : 'none';
+    }
+
     document.getElementById('ticketModal').classList.add('active');
 }
 
 function rtpRenderTicketDetail(ticket) {
     _rtpCurrentTicket = ticket;
-    const el = document.getElementById('ticketDetailBody');
-    if (!el) return;
     const currentUserId = parseInt(localStorage.getItem('user_id') || '0', 10);
     const isTicketAdmin = localStorage.getItem('is_admin') === 'true' || localStorage.getItem('is_company_admin') === 'true';
     const canManageTicketAttachments = isTicketAdmin || Number(ticket.created_by) === currentUserId;
     const canDeleteTicketAttachments = _rtpEditingTicketField === 'description' && canManageTicketAttachments;
-    const related = ticket.related_type && ticket.related_id ? `${ticket.related_type} #${ticket.related_id}` : 'None';
-    const titleBlock = _rtpEditingTicketField === 'title'
-        ? `
-            <div class="stack-item-title" style="display:flex;gap:0.5rem;align-items:center;">
-                <input id="ticketTitleEdit" class="form-input" value="${rtpEsc(ticket.title)}" style="font-weight:700;">
-                <button class="btn btn-primary btn-small" onclick="rtpSaveTicketField('title')"><i class="mdi mdi-content-save"></i> Save</button>
-                <button class="btn btn-secondary btn-small" onclick="rtpCancelTicketFieldEdit()">Cancel</button>
-            </div>
-        `
-        : `
-            <div class="stack-item-title" style="display:flex;align-items:center;gap:0.5rem;">
-                <span>${rtpEsc(ticket.title)}</span>
-                <button class="btn btn-secondary btn-small ticket-edit-btn" onclick="rtpStartTicketFieldEdit('title')" style="margin-left:auto;"><i class="mdi mdi-pencil"></i> <span>Edit</span></button>
-            </div>
-        `;
-    const descriptionBlock = _rtpEditingTicketField === 'description'
-        ? `
-            <div style="display:grid;gap:0.5rem;">
-                <textarea id="ticketDescriptionEdit" class="form-input" rows="5">${rtpEsc(ticket.description)}</textarea>
-                ${rtpTicketAttachmentsHtml(ticket.attachments, { kind: 'ticket', canDelete: canDeleteTicketAttachments })}
-                <div class="ticket-file-picker">
-                    <input type="file" id="ticketEditAttachments" class="ticket-file-input" multiple onchange="rtpAddTicketFiles('ticketEditAttachments','ticketEditAttachmentSummary')">
-                    <button type="button" class="btn btn-secondary btn-small" onclick="document.getElementById('ticketEditAttachments').click()"><i class="mdi mdi-paperclip"></i> Attach files</button>
-                    <span id="ticketEditAttachmentSummary" class="ticket-file-summary">No files selected</span>
-                </div>
-                <div style="display:flex;gap:0.5rem;">
-                    <button class="btn btn-primary btn-small" onclick="rtpSaveTicketField('description')"><i class="mdi mdi-content-save"></i> Save</button>
-                    <button class="btn btn-secondary btn-small" onclick="rtpCancelTicketFieldEdit()">Cancel</button>
-                </div>
-            </div>
-        `
-        : `
-            <div style="display:flex;align-items:flex-start;gap:0.5rem;">
-                <div style="white-space:pre-wrap;color:var(--text-secondary);line-height:1.5;flex:1;">${rtpEsc(ticket.description)}</div>
-                <button class="btn btn-secondary btn-small ticket-edit-btn" onclick="rtpStartTicketFieldEdit('description')"><i class="mdi mdi-pencil"></i> <span>Edit</span></button>
-            </div>
-        `;
-    const comments = (ticket.comments || []).map(comment => {
-        const canEdit = Number(comment.author_id) === currentUserId;
-        const editing = _rtpEditingCommentId === comment.id;
-        if (editing) {
-            const canDeleteCommentAttachments = isTicketAdmin || canEdit;
-            return `
-                <div class="stack-item" style="margin-top:0.65rem;">
-                    <div class="stack-item-title">Edit comment</div>
-                    <textarea id="ticketCommentEditBody" class="form-input" rows="4">${rtpEsc(comment.body)}</textarea>
-                    ${rtpTicketAttachmentsHtml(comment.attachments, { kind: 'comment', commentId: comment.id, canDelete: canDeleteCommentAttachments })}
-                    <div class="ticket-file-picker">
-                        <input type="file" id="ticketCommentEditAttachments" class="ticket-file-input" multiple onchange="rtpAddTicketFiles('ticketCommentEditAttachments','ticketCommentEditAttachmentSummary')">
-                        <button type="button" class="btn btn-secondary btn-small" onclick="document.getElementById('ticketCommentEditAttachments').click()"><i class="mdi mdi-paperclip"></i> Attach files</button>
-                        <span id="ticketCommentEditAttachmentSummary" class="ticket-file-summary">No files selected</span>
-                    </div>
-                    <label class="ticket-switch" style="margin-top:0.65rem;${localStorage.getItem('is_admin') === 'true' || localStorage.getItem('is_company_admin') === 'true' ? '' : 'display:none;'}">
-                        <input type="checkbox" id="ticketCommentEditInternal" ${comment.is_internal ? 'checked' : ''}>
-                        <span class="ticket-switch-track"></span>
-                        <span>Internal note</span>
-                    </label>
-                    <div style="display:flex;gap:0.5rem;margin-top:0.75rem;">
-                        <button class="btn btn-primary btn-small" onclick="rtpSaveTicketComment(${Number(comment.id)})"><i class="mdi mdi-content-save"></i> Save</button>
-                        <button class="btn btn-secondary btn-small" onclick="rtpCancelTicketCommentEdit()">Cancel</button>
+
+    // Title Container Rendering (Title + Badges in same line, double-click to edit)
+    const titleContainer = document.getElementById('ticketModalTitleContainer');
+    if (titleContainer) {
+        if (_rtpEditingTicketField === 'title') {
+            titleContainer.innerHTML = `
+                <div class="ticket-title-edit-wrap">
+                    <input id="ticketTitleEdit" class="form-input" value="${rtpEsc(ticket.title)}" style="font-weight:700;font-size:1.05rem;flex:1;min-width:180px;">
+                    <div class="ticket-title-edit-actions">
+                        <button class="btn btn-primary tbl-btn" onclick="rtpSaveTicketField('title')"><i class="mdi mdi-content-save"></i> Save</button>
+                        <button class="btn btn-secondary tbl-btn" onclick="rtpCancelTicketFieldEdit()">Cancel</button>
                     </div>
                 </div>
             `;
-        }
-        return `
-            <div class="stack-item" style="margin-top:0.65rem;">
-                <div class="stack-item-title">
-                    ${rtpEsc(comment.author_name || 'Unknown')}
-                    ${comment.is_internal ? '<span class="proto-badge health-status health-status-degraded">internal</span>' : ''}
-                    ${canEdit ? `<button class="btn btn-secondary btn-small ticket-edit-btn" onclick="rtpStartTicketCommentEdit(${Number(comment.id)})" style="margin-left:auto;"><i class="mdi mdi-pencil"></i> <span>Edit</span></button>` : ''}
+        } else {
+            titleContainer.innerHTML = `
+                <h2 class="modal-title" id="ticketModalTitle" ondblclick="rtpStartTicketFieldEdit('title')" style="font-size:1.2rem;font-weight:700;word-break:break-word;cursor:pointer;" title="Double-click to edit title">${rtpEsc(ticket.title || `Ticket #${ticket.id}`)}</h2>
+                <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">
+                    <span id="ticketModalBadgeStatus" class="proto-badge health-status ${rtpTicketBadgeClass(ticket.status, 'status')}">${rtpEsc(rtpTicketLabel(ticket.status, RTP_TICKET_STATUSES))}</span>
+                    <span id="ticketModalBadgePriority" class="proto-badge health-status ${rtpTicketBadgeClass(ticket.priority, 'priority')}">${rtpEsc(rtpTicketLabel(ticket.priority, RTP_TICKET_PRIORITIES))}</span>
                 </div>
-                <div style="color:var(--text-muted);font-size:0.75rem;margin-bottom:0.35rem;">${rtpDateTime(comment.created_at)}</div>
-                <div style="white-space:pre-wrap;color:var(--text-secondary);line-height:1.45;">${rtpEsc(comment.body)}</div>
-                ${rtpTicketAttachmentsHtml(comment.attachments, { kind: 'comment', commentId: comment.id, canDelete: false })}
-            </div>
-        `;
-    }).join('');
-    el.innerHTML = `
-        <div class="stack-item">
-            ${titleBlock}
-            <div style="color:var(--text-muted);font-size:0.78rem;margin-bottom:0.5rem;">
-                Created by ${rtpEsc(ticket.creator_name || '-')} · ${rtpDateTime(ticket.created_at)} · Related: ${rtpEsc(related)}
-            </div>
-            ${descriptionBlock}
-            ${_rtpEditingTicketField === 'description' ? '' : rtpTicketAttachmentsHtml(ticket.attachments, { kind: 'ticket', canDelete: false })}
-        </div>
-        <div style="margin-top:1rem;font-weight:700;color:var(--text-primary);">Comments</div>
-        ${comments || '<div style="color:var(--text-muted);padding:0.8rem 0;">No comments yet.</div>'}
-    `;
+            `;
+        }
+    }
+
+    // 1. Author & Created Info
+    const authorEl = document.getElementById('ticketAuthorName');
+    if (authorEl) authorEl.textContent = ticket.creator_name || 'Unknown User';
+    const createdEl = document.getElementById('ticketCreatedMeta');
+    if (createdEl) createdEl.textContent = `Opened on ${rtpDateTime(ticket.created_at)}`;
+
+    // 2. Description Block
+    const descEl = document.getElementById('ticketDescriptionBody');
+    if (descEl) {
+        if (_rtpEditingTicketField === 'description') {
+            descEl.innerHTML = `
+                <div style="display:grid;gap:0.75rem;">
+                    <textarea id="ticketDescriptionEdit" class="form-input" rows="5">${rtpEsc(ticket.description)}</textarea>
+                    ${rtpTicketAttachmentsHtml(ticket.attachments, { kind: 'ticket', canDelete: canDeleteTicketAttachments })}
+                    <div class="ticket-file-picker">
+                        <input type="file" id="ticketEditAttachments" class="ticket-file-input" multiple onchange="rtpAddTicketFiles('ticketEditAttachments','ticketEditAttachmentSummary')">
+                        <button type="button" class="btn btn-secondary tbl-btn" onclick="document.getElementById('ticketEditAttachments').click()"><i class="mdi mdi-paperclip"></i> Attach files</button>
+                        <span id="ticketEditAttachmentSummary" class="ticket-file-summary">No files selected</span>
+                    </div>
+                    <div style="display:flex;gap:0.5rem;">
+                        <button class="btn btn-primary tbl-btn" onclick="rtpSaveTicketField('description')"><i class="mdi mdi-content-save"></i> Save</button>
+                        <button class="btn btn-secondary tbl-btn" onclick="rtpCancelTicketFieldEdit()">Cancel</button>
+                    </div>
+                </div>
+            `;
+        } else {
+            descEl.innerHTML = rtpEsc(ticket.description || 'No description provided.');
+        }
+    }
+
+    // 3. Attachments List
+    const attachEl = document.getElementById('ticketAttachmentsList');
+    if (attachEl) {
+        attachEl.innerHTML = _rtpEditingTicketField === 'description' ? '' : rtpTicketAttachmentsHtml(ticket.attachments, { kind: 'ticket', canDelete: false });
+    }
+
+    // 4. Comments Timeline
+    const commentsContainer = document.getElementById('ticketCommentsList');
+    if (commentsContainer) {
+        const comments = (ticket.comments || []).map(comment => {
+            const canEdit = Number(comment.author_id) === currentUserId;
+            const editing = _rtpEditingCommentId === comment.id;
+            if (editing) {
+                const canDeleteCommentAttachments = isTicketAdmin || canEdit;
+                return `
+                    <div class="ticket-comment-card">
+                        <div class="ticket-comment-header">
+                            <strong style="font-size:0.88rem;">Edit Comment</strong>
+                        </div>
+                        <textarea id="ticketCommentEditBody" class="form-input" rows="4" style="margin-bottom:0.6rem;">${rtpEsc(comment.body)}</textarea>
+                        ${rtpTicketAttachmentsHtml(comment.attachments, { kind: 'comment', commentId: comment.id, canDelete: canDeleteCommentAttachments })}
+                        <div class="ticket-file-picker" style="margin-top:0.5rem;">
+                            <input type="file" id="ticketCommentEditAttachments" class="ticket-file-input" multiple onchange="rtpAddTicketFiles('ticketCommentEditAttachments','ticketCommentEditAttachmentSummary')">
+                            <button type="button" class="btn btn-secondary tbl-btn" onclick="document.getElementById('ticketCommentEditAttachments').click()"><i class="mdi mdi-paperclip"></i> Attach files</button>
+                            <span id="ticketCommentEditAttachmentSummary" class="ticket-file-summary">No files selected</span>
+                        </div>
+                        <label class="ticket-switch" style="margin-top:0.65rem;${isTicketAdmin ? '' : 'display:none;'}">
+                            <input type="checkbox" id="ticketCommentEditInternal" ${comment.is_internal ? 'checked' : ''}>
+                            <span class="ticket-switch-track"></span>
+                            <span>Internal note</span>
+                        </label>
+                        <div style="display:flex;gap:0.5rem;margin-top:0.75rem;">
+                            <button class="btn btn-primary tbl-btn" onclick="rtpSaveTicketComment(${Number(comment.id)})"><i class="mdi mdi-content-save"></i> Save</button>
+                            <button class="btn btn-secondary tbl-btn" onclick="rtpCancelTicketCommentEdit()">Cancel</button>
+                        </div>
+                    </div>
+                `;
+            }
+            return `
+                <div class="ticket-comment-card ${comment.is_internal ? 'internal' : ''}">
+                    <div class="ticket-comment-header">
+                        <div style="display:flex;align-items:center;gap:0.5rem;">
+                            <strong style="font-size:0.88rem;color:var(--text-primary);">${rtpEsc(comment.author_name || 'Unknown')}</strong>
+                            ${comment.is_internal ? '<span class="proto-badge health-status health-status-degraded" style="font-size:0.7rem;">internal note</span>' : ''}
+                        </div>
+                        <div style="display:flex;align-items:center;gap:0.5rem;">
+                            <span style="color:var(--text-muted);font-size:0.75rem;">${rtpDateTime(comment.created_at)}</span>
+                            ${canEdit ? `<button class="btn btn-secondary tbl-btn ticket-edit-btn" onclick="rtpStartTicketCommentEdit(${Number(comment.id)})" title="Edit comment"><i class="mdi mdi-pencil"></i></button>` : ''}
+                        </div>
+                    </div>
+                    <div style="white-space:pre-wrap;color:var(--text-secondary);line-height:1.5;font-size:0.88rem;">${rtpEsc(comment.body)}</div>
+                    ${rtpTicketAttachmentsHtml(comment.attachments, { kind: 'comment', commentId: comment.id, canDelete: false })}
+                </div>
+            `;
+        }).join('');
+        commentsContainer.innerHTML = comments || '<div style="color:var(--text-muted);padding:1rem;text-align:center;background:var(--bg-secondary);border-radius:12px;border:1px solid var(--border-color);font-size:0.88rem;">No responses yet. Use the form below to send a reply.</div>';
+    }
 }
 
 function rtpCloseTicketModal() {
@@ -547,11 +676,14 @@ function rtpCloseTicketModal() {
 async function rtpSaveTicket() {
     if (!_rtpEditingTicketId) return;
     const assigned = document.getElementById('ticketAssignee')?.value || '';
+    const relType = document.getElementById('ticketRelatedType')?.value || '';
+    const relId = document.getElementById('ticketRelatedId')?.value || '';
     const payload = {
         status: document.getElementById('ticketStatus')?.value,
         priority: document.getElementById('ticketPriority')?.value,
-        category: document.getElementById('ticketCategory')?.value,
         assigned_to: assigned ? Number(assigned) : null,
+        related_type: relType || null,
+        related_id: relId ? Number(relId) : null,
     };
     await rtpJson(`${API_BASE}/tickets/${_rtpEditingTicketId}`, {
         method: 'PATCH',

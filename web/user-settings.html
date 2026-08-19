@@ -406,40 +406,120 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <div class="modal" id="ticketModal">
-        <div class="modal-content wide" style="max-width:920px;height:auto;max-height:90vh;">
-            <div class="modal-header">
-                <h2 class="modal-title" id="ticketModalTitle">Ticket</h2>
+        <div class="modal-content wide" style="max-width:960px;height:auto;max-height:92vh;">
+            <div class="modal-header" style="border-bottom:1px solid var(--border-color);padding:1.25rem 1.75rem;">
+                <div style="flex:1;min-width:0;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;" id="ticketModalTitleContainer">
+                    <h2 class="modal-title" id="ticketModalTitle" ondblclick="rtpStartTicketFieldEdit('title')" style="font-size:1.2rem;font-weight:700;word-break:break-word;cursor:pointer;" title="Double-click to edit title">Ticket Details</h2>
+                    <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">
+                        <span id="ticketModalBadgeStatus" class="proto-badge"></span>
+                        <span id="ticketModalBadgePriority" class="proto-badge"></span>
+                    </div>
+                </div>
                 <button type="button" class="modal-close" onclick="rtpCloseTicketModal()"><i class="mdi mdi-close"></i></button>
             </div>
-            <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
-                <div class="form-grid">
-                    <label><span>Status</span><select id="ticketStatus" class="form-input"></select></label>
-                    <label><span>Priority</span><select id="ticketPriority" class="form-input"></select></label>
-                    <label><span>Category</span><select id="ticketCategory" class="form-input"></select></label>
-                    <label><span>Assigned To</span><select id="ticketAssignee" class="form-input"></select></label>
-                </div>
-                <div id="ticketDetailBody" style="margin-top:1rem;"></div>
-                <div style="margin-top:1rem;">
-                    <label class="form-label">Reply</label>
-                    <textarea id="ticketCommentBody" class="form-input" rows="4" placeholder="Write a reply or internal note..."></textarea>
-                    <label class="form-label" style="margin-top:0.75rem;">Attachments</label>
-                    <div class="ticket-file-picker">
-                        <input type="file" id="ticketCommentAttachments" class="ticket-file-input" multiple onchange="rtpAddTicketFiles('ticketCommentAttachments','ticketCommentAttachmentSummary')">
-                        <button type="button" class="btn btn-secondary btn-small" onclick="document.getElementById('ticketCommentAttachments').click()"><i class="mdi mdi-paperclip"></i> Attach files</button>
-                        <span id="ticketCommentAttachmentSummary" class="ticket-file-summary">No files selected</span>
+            <div class="modal-scrollable" style="padding:1.5rem;background:var(--bg-primary,#0b0f17);">
+                <div id="ticketDetailLayout" class="ticket-detail-grid">
+                    <!-- Left Column: Description, Timeline & Reply -->
+                    <div class="ticket-detail-main">
+                        <div class="ticket-card" id="ticketMainCard">
+                            <div class="ticket-card-header">
+                                <div class="ticket-author-info">
+                                    <i class="mdi mdi-account-circle ticket-author-avatar"></i>
+                                    <div>
+                                        <div class="ticket-author-name" id="ticketAuthorName"></div>
+                                        <div class="ticket-author-meta" id="ticketCreatedMeta"></div>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-secondary tbl-btn ticket-edit-btn" id="ticketEditDescBtn" onclick="rtpStartTicketFieldEdit('description')"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Edit</span></button>
+                            </div>
+                            <div id="ticketDescriptionBody" class="ticket-card-body"></div>
+                            <div id="ticketAttachmentsList" style="margin-top:0.75rem;"></div>
+                        </div>
+
+                        <div style="margin-top:1.5rem;">
+                            <h3 class="ticket-section-title"><i class="mdi mdi-forum-outline"></i> Activity & Discussion</h3>
+                            <div id="ticketCommentsList" class="ticket-comments-timeline"></div>
+                        </div>
+
+                        <div class="ticket-reply-card">
+                            <h4 style="font-size:0.9rem;font-weight:700;color:var(--text-primary);margin-bottom:0.75rem;display:flex;align-items:center;gap:0.4rem;">
+                                <i class="mdi mdi-reply" style="color:var(--accent-primary);"></i> Write a Reply
+                            </h4>
+                            <textarea id="ticketCommentBody" class="form-input" rows="4" placeholder="Write a response or note..."></textarea>
+                            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;margin-top:0.85rem;">
+                                <div class="ticket-file-picker">
+                                    <input type="file" id="ticketCommentAttachments" class="ticket-file-input" multiple onchange="rtpAddTicketFiles('ticketCommentAttachments','ticketCommentAttachmentSummary')">
+                                    <button type="button" class="btn btn-secondary tbl-btn" onclick="document.getElementById('ticketCommentAttachments').click()"><i class="mdi mdi-paperclip"></i> Attach files</button>
+                                    <span id="ticketCommentAttachmentSummary" class="ticket-file-summary">No files selected</span>
+                                </div>
+                                <label class="ticket-switch" id="ticketCommentInternalWrap" style="margin:0;">
+                                    <input type="checkbox" id="ticketCommentInternal">
+                                    <span class="ticket-switch-track"></span>
+                                    <span>Internal note (staff only)</span>
+                                </label>
+                            </div>
+                            <div style="display:flex;justify-content:flex-end;margin-top:1rem;">
+                                <button type="button" class="btn btn-primary" onclick="rtpAddTicketComment()"><i class="mdi mdi-send"></i> Send Reply</button>
+                            </div>
+                        </div>
                     </div>
-                    <label class="ticket-switch" style="margin-top:0.65rem;">
-                        <input type="checkbox" id="ticketCommentInternal">
-                        <span class="ticket-switch-track"></span>
-                        <span>Internal note</span>
-                    </label>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="rtpAddTicketComment()"><i class="mdi mdi-comment-plus-outline"></i> Add Comment</button>
-                <div style="display:flex;gap:0.75rem;margin-left:auto;">
-                    <button type="button" class="btn btn-secondary" onclick="rtpCloseTicketModal()">Close</button>
-                    <button type="button" class="btn btn-primary" onclick="rtpSaveTicket()"><i class="mdi mdi-content-save"></i> Save</button>
+
+                    <!-- Right Column: Ticket Attributes & Metadata Sidebar -->
+                    <div class="ticket-detail-sidebar">
+                        <div class="ticket-sidebar-box">
+                            <h4 class="ticket-sidebar-title"><i class="mdi mdi-tune"></i> Ticket Attributes</h4>
+                            <div class="form-group" style="margin-bottom:0.85rem;">
+                                <label class="form-label" style="font-size:0.78rem;">Status</label>
+                                <select id="ticketStatus" class="form-input" style="font-size:0.85rem;padding:0.45rem 0.75rem;"></select>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0.85rem;">
+                                <label class="form-label" style="font-size:0.78rem;">Priority</label>
+                                <select id="ticketPriority" class="form-input" style="font-size:0.85rem;padding:0.45rem 0.75rem;"></select>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0.85rem;">
+                                <label class="form-label" style="font-size:0.78rem;">Assigned To</label>
+                                <select id="ticketAssignee" class="form-input" style="font-size:0.85rem;padding:0.45rem 0.75rem;"></select>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0.85rem;">
+                                <label class="form-label" style="font-size:0.78rem;">Related Item Type</label>
+                                <select id="ticketRelatedType" class="form-input" style="font-size:0.85rem;padding:0.45rem 0.75rem;" onchange="rtpPopulateRelatedEntitySelect('ticketRelatedType', 'ticketRelatedId', 'ticketRelatedIdWrap')">
+                                    <option value="">None</option>
+                                    <option value="device">Device / Vehicle</option>
+                                    <option value="route">Route</option>
+                                    <option value="driver">Driver</option>
+                                    <option value="alert">Alert Profile</option>
+                                    <option value="maintenance">Maintenance</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="ticketRelatedIdWrap" style="margin-bottom:0.85rem;display:none;">
+                                <label class="form-label" style="font-size:0.78rem;">Related Item</label>
+                                <select id="ticketRelatedId" class="form-input" style="font-size:0.85rem;padding:0.45rem 0.75rem;">
+                                    <option value="">None</option>
+                                </select>
+                            </div>
+                            <button type="button" class="btn btn-primary" onclick="rtpSaveTicket()" style="width:100%;margin-top:0.5rem;"><i class="mdi mdi-content-save"></i> Save Attributes</button>
+                        </div>
+
+                        <div class="ticket-sidebar-box" style="margin-top:1rem;">
+                            <h4 class="ticket-sidebar-title"><i class="mdi mdi-information-outline"></i> Metadata</h4>
+                            <div class="ticket-meta-row">
+                                <span class="ticket-meta-label">Ticket ID</span>
+                                <span class="ticket-meta-value vp-mono" id="ticketMetaId"></span>
+                            </div>
+                            <div class="ticket-meta-row">
+                                <span class="ticket-meta-label">Created</span>
+                                <span class="ticket-meta-value" id="ticketMetaCreated" style="font-size:0.75rem;text-align:right;"></span>
+                            </div>
+                            <div class="ticket-meta-row">
+                                <span class="ticket-meta-label">Last Updated</span>
+                                <span class="ticket-meta-value" id="ticketMetaUpdated" style="font-size:0.75rem;text-align:right;"></span>
+                            </div>
+                            <div class="ticket-meta-row">
+                                <span class="ticket-meta-label">Related Item</span>
+                                <span class="ticket-meta-value" id="ticketMetaRelated"></span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -454,21 +534,22 @@
             <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
                 <div class="form-grid">
                     <label><span>Title <b style="color:var(--accent-danger);font-weight:600;">*</b></span><input id="ticketCreateTitle" class="form-input" placeholder="Short issue summary"></label>
-                    <label><span>Category</span><select id="ticketCreateCategory" class="form-input">
-                        <option value="device">Device</option>
-                        <option value="route">Route</option>
-                        <option value="driver">Driver</option>
-                        <option value="billing">Billing</option>
-                        <option value="alert">Alert</option>
-                        <option value="maintenance">Maintenance</option>
-                        <option value="access">Access</option>
-                        <option value="other" selected>Other</option>
-                    </select></label>
                     <label><span>Priority</span><select id="ticketCreatePriority" class="form-input">
                         <option value="low">Low</option>
                         <option value="normal" selected>Normal</option>
                         <option value="high">High</option>
                         <option value="urgent">Urgent</option>
+                    </select></label>
+                    <label><span>Related Item Type</span><select id="ticketCreateRelatedType" class="form-input" onchange="rtpPopulateRelatedEntitySelect('ticketCreateRelatedType', 'ticketCreateRelatedId', 'ticketCreateRelatedIdWrap')">
+                        <option value="" selected>None</option>
+                        <option value="device">Device / Vehicle</option>
+                        <option value="route">Route</option>
+                        <option value="driver">Driver</option>
+                        <option value="alert">Alert Profile</option>
+                        <option value="maintenance">Maintenance</option>
+                    </select></label>
+                    <label id="ticketCreateRelatedIdWrap" style="display:none;"><span>Related Item</span><select id="ticketCreateRelatedId" class="form-input">
+                        <option value="">None</option>
                     </select></label>
                     <label style="grid-column:1 / -1;"><span>Description <b style="color:var(--accent-danger);font-weight:600;">*</b></span><textarea id="ticketCreateDescription" class="form-input" rows="6" placeholder="Describe what happened and what you expected."></textarea></label>
                     <label style="grid-column:1 / -1;"><span>Attachments</span>
