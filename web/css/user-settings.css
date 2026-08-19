@@ -628,11 +628,11 @@ h1 {
 }
 
 .btn-danger {
-    background: rgba(239, 68, 68, 0.1);
+    background: rgba(239, 68, 68, 0.12);
     color: var(--accent-danger);
-    border: 1px solid var(--accent-danger);
-    padding: 0.4rem 0.8rem;
-    font-size: 0.75rem
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    padding: 0.75rem 1.25rem;
+    font-size: 0.9rem;
 }
 
 .btn-danger:hover {
@@ -1138,6 +1138,16 @@ h1 {
     margin-bottom: 0;
 }
 
+.tbl-btn {
+    padding: 0.55rem 0.85rem !important;
+    font-size: 0.82rem !important;
+    line-height: 1.25;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0 1px;
+}
+
 .modal-footer {
     display: flex;
     align-items: center;
@@ -1147,6 +1157,14 @@ h1 {
     background: var(--bg-secondary);
     flex-shrink: 0;
     gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.modal-footer > div {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+    align-items: center;
 }
 
 #userModalBody {
@@ -1157,6 +1175,21 @@ h1 {
 }
 
 @media (max-width: 640px) {
+    .modal-footer {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem 1.25rem;
+        gap: 0.5rem;
+    }
+    .modal-footer > div {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        gap: 0.5rem;
+        margin-left: auto;
+    }
     #userModalBody { grid-template-columns: 1fr; }
     #userModal .modal-content { max-width: 95vw; }
 }

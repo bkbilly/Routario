@@ -1061,6 +1061,14 @@
             }
             return json(apiKeys);
         }
+        if (apiPath.match(/^\/api-keys\/\d+$/) && method === 'PUT') {
+            const id = Number(apiPath.split('/')[2]);
+            const target = apiKeys.find(key => key.id === id);
+            if (!target) return json({ detail: 'API key not found' }, 404);
+            if (body.name) target.name = body.name;
+            if (body.scopes) target.scopes = body.scopes;
+            return json(target);
+        }
         if (apiPath.match(/^\/api-keys\/\d+$/) && method === 'DELETE') {
             const id = Number(apiPath.split('/')[2]);
             apiKeys = apiKeys.map(key => key.id === id ? { ...key, is_active: false, revoked_at: iso(0) } : key);

@@ -821,6 +821,8 @@ async function initSettingsApiKeys() {
     }
 }
 
+let editingApiKeyId = null;
+
 async function loadSettingsApiKeys() {
     const body = document.getElementById('settingsApiKeyTableBody');
     if (!body) return;
@@ -847,13 +849,13 @@ function renderSettingsApiKeys() {
         dir: settingsApiKeySort.dir === 1 ? 'asc' : 'desc',
     });
     body.innerHTML = rows.length ? rows.map(k => `
-        <tr class="device-row">
+        <tr class="device-row" ondblclick="openEditApiKeyModal(${k.id})" style="cursor:pointer;">
             <td><span class="device-row-name">${settingsEsc(k.name)}</span></td>
             <td style="font-family:var(--font-mono);font-size:0.82rem;">${settingsEsc(k.key_prefix)}...</td>
             <td style="font-size:0.82rem;color:var(--text-secondary);">${(k.scopes || []).map(settingsEsc).join(', ') || 'no scopes'}</td>
-            <td style="white-space:nowrap;color:var(--text-secondary);font-size:0.82rem;">${k.last_used_at ? new Date(k.last_used_at).toLocaleString() : 'Never'}</td>
-            <td style="text-align:right;">
-                <button type="button" class="btn btn-danger btn-small" onclick="revokeSettingsApiKey(${k.id})"><i class="mdi mdi-key-remove"></i> Revoke</button>
+            <td style="white-space:nowrap;">${k.last_used_at ? formatDateToLocalSplit(k.last_used_at) : 'Never'}</td>
+            <td style="text-align:right;white-space:nowrap;">
+                <button type="button" class="btn btn-secondary tbl-btn" onclick="openEditApiKeyModal(${k.id})"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Edit</span></button>
             </td>
         </tr>
     `).join('') : RoutarioTables.stateRow('No active API keys found.', 5);
@@ -905,14 +907,66 @@ async function createSettingsApiKey() {
     }
 }
 
-async function revokeSettingsApiKey(id) {
-    if (!confirm('Delete this API key? It will stop working immediately.')) return;
+async function openEditApiKeyModal(id) {
+    const key = settingsApiKeys.find(k => k.id === id);
+    if (!key) return;
+    editingApiKeyId = id;
     try {
-        await settingsJson(`${API_BASE}/api-keys/${id}`, { method: 'DELETE' });
-        await loadSettingsApiKeys();
-        showAlert('API key deleted', 'success');
+        await ensureSettingsApiKeyScopes();
     } catch (e) {
-        showAlert('API key failed: ' + e.message, 'error');
+        showAlert(e.message, 'error');
+        return;
+    }
+    document.getElementById('editSettingsApiKeyName').value = key.name || '';
+    document.getElementById('editSettingsApiKeyPrefix').value = (key.key_prefix || '') + '...';
+
+    const scopesData = await settingsJson(`${API_BASE}/api-keys/scopes`).catch(() => ({ scopes: [] }));
+    const currentScopes = new Set(key.scopes || []);
+    document.getElementById('editSettingsApiKeyScopes').innerHTML = (scopesData.scopes || []).map(s => `
+        <label class="scope-option">
+            <input type="checkbox" value="${settingsEsc(s)}" ${currentScopes.has(s) ? 'checked' : ''}>
+            <span>${settingsEsc(s)}</span>
+        </label>
+    `).join('');
+
+    document.getElementById('editApiKeyModal').classList.add('active');
+    setTimeout(() => document.getElementById('editSettingsApiKeyName')?.focus(), 50);
+}
+
+function closeEditApiKeyModal() {
+    editingApiKeyId = null;
+    document.getElementById('editApiKeyModal')?.classList.remove('active');
+}
+
+async function saveSettingsApiKey() {
+    if (!editingApiKeyId) return;
+    try {
+        const name = document.getElementById('editSettingsApiKeyName').value.trim();
+        const scopes = [...document.querySelectorAll('#editSettingsApiKeyScopes input:checked')].map(o => o.value);
+        if (!name) throw new Error('Key name is required');
+        if (!scopes.length) throw new Error('Select at least one API scope');
+        await settingsJson(`${API_BASE}/api-keys/${editingApiKeyId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name, scopes }),
+        });
+        closeEditApiKeyModal();
+        await loadSettingsApiKeys();
+        showAlert('API key scopes updated', 'success');
+    } catch (e) {
+        showAlert(e.message, 'error');
+    }
+}
+
+async function revokeSettingsApiKeyFromModal() {
+    if (!editingApiKeyId) return;
+    if (!confirm('Revoke this API key? It will stop working immediately.')) return;
+    try {
+        await settingsJson(`${API_BASE}/api-keys/${editingApiKeyId}`, { method: 'DELETE' });
+        closeEditApiKeyModal();
+        await loadSettingsApiKeys();
+        showAlert('API key revoked', 'success');
+    } catch (e) {
+        showAlert('Revoke failed: ' + e.message, 'error');
     }
 }
 

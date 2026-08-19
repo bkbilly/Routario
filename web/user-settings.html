@@ -558,6 +558,36 @@
         </div>
     </div>
 
+    <div class="modal" id="editApiKeyModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Edit API Key</h2>
+                <button type="button" class="modal-close" onclick="closeEditApiKeyModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="modal-scrollable">
+                <div class="form-group">
+                    <label class="form-label">Key Name</label>
+                    <input type="text" id="editSettingsApiKeyName" class="form-input" placeholder="Automation key">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Key Prefix</label>
+                    <input type="text" id="editSettingsApiKeyPrefix" class="form-input" readonly style="opacity:0.75;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Scopes</label>
+                    <div id="editSettingsApiKeyScopes" class="scope-grid"></div>
+                </div>
+            </div>
+            <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;">
+                <button type="button" class="btn btn-danger" onclick="revokeSettingsApiKeyFromModal()"><i class="mdi mdi-key-remove"></i> Revoke Key</button>
+                <div style="display:flex;gap:0.5rem;flex-wrap:nowrap;margin-left:auto;">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditApiKeyModal()">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveSettingsApiKey()"><i class="mdi mdi-content-save"></i> Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script src="js/config.js"></script>
     <script src="js/units.js"></script>

@@ -18,8 +18,12 @@ let companyAdminUserIds    = new Set();
 
 function formatDate(str) {
     if (!str) return '—';
-    if (!str.includes('Z') && !str.includes('+')) str += 'Z';
-    return new Date(str).toLocaleDateString();
+    const raw = !str.includes('Z') && !str.includes('+') ? str + 'Z' : str;
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return str;
+    const dateStr = d.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+    const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return `<div style="font-weight:600;">${dateStr}</div><div style="font-size:0.75rem;color:var(--text-muted);">${timeStr}</div>`;
 }
 
 let _cmpSectionInitialized = false;

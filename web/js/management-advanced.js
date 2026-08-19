@@ -50,6 +50,15 @@ function rtpDateTime(value) {
     return date.toLocaleString();
 }
 
+function rtpDateTimeSplit(value) {
+    if (!value) return '-';
+    const date = rtpDate(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    const dateStr = date.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+    const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return `<div style="font-weight:600;">${dateStr}</div><div style="font-size:0.75rem;color:var(--text-muted);">${timeStr}</div>`;
+}
+
 function rtpDate(value) {
     if (!value) return new Date(NaN);
     if (typeof value === 'string' && !value.includes('Z') && !value.includes('+')) {
@@ -373,7 +382,7 @@ function rtpRenderTicketsTable() {
     rtpUpdateSortHeaders('section-tickets', _rtpTicketSort);
     tbody.innerHTML = rows.length ? rows.map(row => `
         <tr class="device-row" ondblclick="rtpOpenTicketModal(${Number(row.id)})">
-            <td>${rtpDateTime(row.updated_at)}</td>
+            <td>${rtpDateTimeSplit(row.updated_at)}</td>
             <td>
                 <div style="font-weight:700;color:var(--text-primary);">${rtpEsc(row.title)}</div>
                 <div style="color:var(--text-muted);font-size:0.78rem;">#${row.id} · ${rtpEsc(rtpTicketLabel(row.category, RTP_TICKET_CATEGORIES))}</div>
@@ -383,8 +392,8 @@ function rtpRenderTicketsTable() {
             <td>${(row.comments || []).length}</td>
             <td>${rtpEsc(row.creator_name || '-')}</td>
             <td>${rtpEsc(row.assignee_name || 'Unassigned')}</td>
-            <td style="text-align:center;">
-                <button class="btn btn-secondary btn-small" onclick="rtpOpenTicketModal(${Number(row.id)})"><i class="mdi mdi-pencil"></i> Open</button>
+            <td style="text-align:right;white-space:nowrap;">
+                <button class="btn btn-secondary tbl-btn" onclick="rtpOpenTicketModal(${Number(row.id)})"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Open</span></button>
             </td>
         </tr>
     `).join('') : RoutarioTables.stateRow('No tickets match.', 8);
@@ -1178,8 +1187,8 @@ async function rtpOpenRouteDetails(id) {
                 <td>${rtpEsc(stop.name || `Point ${idx + 1}`)}</td>
                 <td>${rtpEsc(stop.stop_kind || 'stop')}</td>
                 <td><span class="proto-badge">${rtpEsc(stop.status || 'pending')}</span></td>
-                <td>${rtpEsc(rtpDateTime(stop.arrived_at))}</td>
-                <td>${rtpEsc(rtpDateTime(stop.completed_at))}</td>
+                <td>${rtpDateTimeSplit(stop.arrived_at)}</td>
+                <td>${rtpDateTimeSplit(stop.completed_at)}</td>
                 <td>${Number(stop.arrival_radius_m || 50)}m</td>
                 <td>${Number(stop.dwell_seconds || 0)}s</td>
                 <td>${Number(stop.latitude).toFixed(6)}, ${Number(stop.longitude).toFixed(6)}</td>
@@ -1709,7 +1718,7 @@ function rtpRenderAuditTable() {
     rtpUpdateSortHeaders('section-audit', _rtpAuditSort);
     body.innerHTML = rows.length ? rows.map(l => `
         <tr>
-            <td style="white-space:nowrap;">${new Date(l.created_at).toLocaleString()}</td>
+            <td style="white-space:nowrap;">${rtpDateTimeSplit(l.created_at)}</td>
             <td>${rtpEsc(l.action)}</td>
             <td>${rtpEsc(l.actor_username || 'system')}${l.actor_user_id ? `<div class="stack-item-meta">#${l.actor_user_id}</div>` : ''}</td>
             <td>${rtpEsc(l.company_name || '-')}${l.company_id ? `<div class="stack-item-meta">#${l.company_id}</div>` : ''}</td>

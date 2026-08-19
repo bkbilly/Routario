@@ -339,7 +339,7 @@ function renderDeviceTable(list) {
 
     tbody.innerHTML = list.map(d => {
         const icon        = (VEHICLE_ICONS[d.vehicle_type] || VEHICLE_ICONS['other']).emoji;
-        const lastSeen    = d.state?.last_update ? formatDateToLocal(d.state.last_update) : '—';
+        const lastSeen    = d.state?.last_update ? formatDateToLocalSplit(d.state.last_update) : '—';
         const odometer    = d.state?.total_odometer != null ? fmtOdometer(d.state.total_odometer) : '—';
         const plate       = d.license_plate || '—';
         const cmds        = d.supports_commands !== false && hasPermission('send_commands');
@@ -355,7 +355,7 @@ function renderDeviceTable(list) {
             <td>${protoBadgeHtml(d.protocol)}</td>
             <td>${_esc(plate)}</td>
             <td class="company-col" style="font-size:0.85rem;color:var(--text-secondary);">${_esc(companyName)}</td>
-            <td style="font-size:0.85rem;color:var(--text-secondary);">${lastSeen}</td>
+            <td style="font-size:0.85rem;color:var(--text-secondary);white-space:nowrap;">${lastSeen}</td>
             <td style="font-family:var(--font-mono);font-size:0.85rem;">${odometer}</td>
             <td style="text-align:right;white-space:nowrap;">
                 ${cmds ? `<button class="btn btn-secondary tbl-btn" onclick="openDeviceModal(${d.id},'commands')" title="Commands"><i class="mdi mdi-antenna"></i></button>` : ''}
@@ -2609,13 +2609,13 @@ function renderRawDataPage() {
             })
             .join(' | ');
 
-        const gpsTime    = formatDateToLocal(p.time);
-        const serverTime = p.server_time ? formatDateToLocal(p.server_time) : '—';
+        const gpsTime    = formatDateToLocalSplit(p.time);
+        const serverTime = p.server_time ? formatDateToLocalSplit(p.server_time) : '—';
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td style="white-space:nowrap;">${gpsTime}</td>
-            <td style="white-space:nowrap;color:var(--text-muted);font-size:0.8em;">${serverTime}</td>
+            <td style="white-space:nowrap;">${serverTime}</td>
             <td>${coords[1].toFixed(5)}</td>
             <td>${coords[0].toFixed(5)}</td>
             <td>${p.speed != null ? fmtSpeed(p.speed) : '—'}</td>

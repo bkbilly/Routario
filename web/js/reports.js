@@ -1414,7 +1414,7 @@ async function _fetchAndShowRuns(schedId) {
                            </button>`
                         : '—';
                     return `<tr>
-                        <td style="white-space:nowrap;font-family:var(--font-mono);font-size:0.8rem;">${_fmtDatetime(r.run_at)}</td>
+                        <td style="white-space:nowrap;">${_fmtDatetimeSplit(r.run_at)}</td>
                         <td>${statusHtml}</td>
                         <td>${actions}</td>
                     </tr>`;
@@ -1597,7 +1597,7 @@ function renderRuntimeLogs() {
     }
     body.innerHTML = rows.length ? rows.map(row => `
         <tr>
-            <td style="white-space:nowrap;font-family:var(--font-mono);font-size:0.78rem;">${_esc(_logTime(row.timestamp))}</td>
+            <td style="white-space:nowrap;">${_logTime(row.timestamp)}</td>
             <td><span class="proto-badge health-status ${_logLevelClass(row.level)}">${_esc(row.level || '-')}</span></td>
             <td>
                 <div style="font-weight:700;color:var(--text-primary);">${_esc(row.logger || '-')}</div>
@@ -1650,7 +1650,7 @@ function renderRuntimeLogSummary() {
 function _logTime(value) {
     if (!value) return '-';
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
+    return Number.isNaN(date.getTime()) ? '-' : _fmtDatetimeSplit(value);
 }
 
 function _logLevelClass(level) {

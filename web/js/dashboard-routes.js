@@ -55,6 +55,15 @@ function dashboardRouteDateTime(value) {
     return date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : '-';
 }
 
+function dashboardRouteDateTimeSplit(value) {
+    const date = dashboardRouteDate(value);
+    if (!date || Number.isNaN(date.getTime())) return '-';
+    const iso = date.toISOString();
+    const d = iso.slice(0, 10);
+    const t = iso.slice(11, 19);
+    return `<div style="font-weight:600;">${d}</div><div style="font-size:0.75rem;color:var(--text-muted);">${t}</div>`;
+}
+
 function routeCanManage() {
     return typeof hasPermission === 'function' && hasPermission('manage_routes');
 }
@@ -1113,8 +1122,8 @@ async function openDashboardRouteDetails(routeId) {
                         <td>${routeEsc(stop.name || `Point ${index + 1}`)}</td>
                         <td>${routeEsc(dashboardRouteStopKindLabel(stop))}</td>
                         <td>${routeEsc(routeStatusLabel(stop.status || 'pending'))}</td>
-                        <td>${routeEsc(dashboardRouteDateTime(stop.arrived_at))}</td>
-                        <td>${routeEsc(dashboardRouteDateTime(stop.completed_at))}</td>
+                        <td>${dashboardRouteDateTimeSplit(stop.arrived_at)}</td>
+                        <td>${dashboardRouteDateTimeSplit(stop.completed_at)}</td>
                         <td>${Number(stop.arrival_radius_m || 50)}m</td>
                         <td>${Number(stop.latitude).toFixed(6)}, ${Number(stop.longitude).toFixed(6)}</td>
                     </tr>

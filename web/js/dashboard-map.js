@@ -238,13 +238,19 @@ function updateDeviceMarker(deviceId, state) {
     const satellites = state.satellites ?? (state.sensors || {}).last_known_satellites ?? '—';
     const altitude   = state.last_altitude ?? 0;
 
-    // Format last_update to local time
+    // Format last_update to local time (2 lines: Date & Time)
     let lastGpsTimeStr = '—';
     const rawGpsTime = (state.sensors || {}).last_gps_time;
     if (rawGpsTime) {
         const raw = rawGpsTime.endsWith('Z') ? rawGpsTime : rawGpsTime + 'Z';
         const d = new Date(raw);
-        lastGpsTimeStr = isNaN(d.getTime()) ? rawGpsTime : d.toLocaleString();
+        if (!isNaN(d.getTime())) {
+            const dateStr = d.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+            const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            lastGpsTimeStr = `<div style="text-align:right;"><div style="font-weight:600;color:#e5e7eb;">${dateStr}</div><div style="font-size:0.72rem;color:#9ca3af;">${timeStr}</div></div>`;
+        } else {
+            lastGpsTimeStr = rawGpsTime;
+        }
     }
 
     // Build sensors rows
