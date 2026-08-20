@@ -33,8 +33,15 @@ class GeminiProvider(BaseLLMProvider):
             key="model_name",
             label="Model",
             field_type="select",
-            default="gemini-3.6-flash",
-            options=["gemini-3.6-flash", "gemini-flash-latest", "gemini-3-flash-preview", "gemini-2.5-flash-lite"],
+            default="gemini-2.5-flash-lite",
+            options=[
+                "gemini-2.5-flash-lite",
+                "gemini-2.5-flash",
+                "gemini-3.5-flash-lite",
+                "gemini-3.5-flash",
+                "gemini-flash-lite-latest",
+                "gemini-flash-latest",
+            ],
             help_text="Select Gemini model version.",
         ),
         LLMField(
@@ -52,6 +59,7 @@ class GeminiProvider(BaseLLMProvider):
         prompt: str,
         system_instruction: str = "",
         config: dict[str, Any] = None,
+        history: Optional[list[dict[str, str]]] = None,
     ) -> str:
         config = config or {}
         api_key = config.get("api_key") or ""
@@ -64,13 +72,27 @@ class GeminiProvider(BaseLLMProvider):
         except (ValueError, TypeError):
             temperature = 0.2
 
+        contents: list[dict[str, Any]] = []
+
+        if history and isinstance(history, list):
+            for item in history:
+                if isinstance(item, dict):
+                    role = item.get("role", "user")
+                    gemini_role = "model" if role in ("assistant", "bot", "model") else "user"
+                    txt = item.get("content", "")
+                    if txt:
+                        contents.append({
+                            "role": gemini_role,
+                            "parts": [{"text": txt}],
+                        })
+
+        contents.append({
+            "role": "user",
+            "parts": [{"text": prompt}],
+        })
+
         body: dict[str, Any] = {
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [{"text": prompt}],
-                }
-            ],
+            "contents": contents,
             "generationConfig": {
                 "temperature": temperature,
             },
@@ -82,9 +104,9 @@ class GeminiProvider(BaseLLMProvider):
             }
 
         async with httpx.AsyncClient(timeout=60.0) as client:
-            # Try requested model, with fallback to gemini-3.6-flash or gemini-flash-latest if 404
+            # Try requested model, with fallbacks if 404
             models_to_try = [model_name]
-            for fallback in ["gemini-3.6-flash", "gemini-flash-latest"]:
+            for fallback in ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-lite-latest", "gemini-flash-latest"]:
                 if fallback not in models_to_try:
                     models_to_try.append(fallback)
 

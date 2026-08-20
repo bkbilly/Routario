@@ -47,23 +47,30 @@ Ensure tables use valid Markdown table syntax (`| Header 1 | Header 2 |`) so the
 
 async def get_llm_settings(session) -> tuple[bool, str, dict[str, Any]]:
     """Returns (enabled, active_provider, provider_config)."""
-    keys = ["llm_enabled", "llm_active_provider", "llm_gemini_api_key", "llm_gemini_model", "llm_temperature"]
-    stmt = select(SystemSetting).where(SystemSetting.key.in_(keys))
+    stmt = select(SystemSetting).where(SystemSetting.key.like("llm_%"))
     res = await session.execute(stmt)
     db_settings = {row.key: row.value for row in res.scalars().all()}
 
     enabled_val = db_settings.get("llm_enabled", "false")
     enabled = str(enabled_val).lower() in ("true", "1", "yes", "on")
 
-    active_provider = db_settings.get("llm_active_provider", "gemini")
+    active_provider = str(db_settings.get("llm_active_provider", "gemini"))
 
-    provider_config = {
-        "api_key": db_settings.get("llm_gemini_api_key", ""),
-        "model_name": db_settings.get("llm_gemini_model", "gemini-1.5-flash"),
-        "temperature": db_settings.get("llm_temperature", 0.2),
-    }
+    provider_config: dict[str, Any] = {}
+    prefix = f"llm_{active_provider}_"
 
-    return enabled, str(active_provider), provider_config
+    for k, v in db_settings.items():
+        if k.startswith(prefix):
+            field_key = k[len(prefix):]
+            provider_config[field_key] = v
+
+    if "temperature" not in provider_config and "llm_temperature" in db_settings:
+        try:
+            provider_config["temperature"] = float(db_settings["llm_temperature"])
+        except (ValueError, TypeError):
+            provider_config["temperature"] = 0.2
+
+    return enabled, active_provider, provider_config
 
 
 async def build_fleet_context(session, user: Any, max_devices: int = 50) -> str:
@@ -244,6 +251,7 @@ async def execute_llm_chat(session, user: Any, prompt: str, history: Optional[li
         prompt=full_prompt,
         system_instruction=SYSTEM_COPILOT_INSTRUCTION,
         config=config,
+        history=history,
     )
 
 

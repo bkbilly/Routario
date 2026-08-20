@@ -427,6 +427,13 @@ function _getReportControlValue(key) {
     return el ? el.value : undefined;
 }
 
+function _cleanMarkdownFromText(str) {
+    if (!str) return '';
+    return str.replace(/\*\*(.*?)\*\*/g, '$1')
+              .replace(/\*(.*?)\*/g, '$1')
+              .replace(/`(.*?)`/g, '$1');
+}
+
 function _parseMarkdownTablesToReportPayload(text) {
     if (!text) return null;
     const lines = text.split('\n');
@@ -448,18 +455,27 @@ function _parseMarkdownTablesToReportPayload(text) {
 
     const columns = headers.map((h, idx) => ({
         key: `col_${idx}`,
-        label: h || `Column ${idx + 1}`
+        label: _cleanMarkdownFromText(h) || `Column ${idx + 1}`
     }));
 
     const rows = dataRows.map(row => {
         const rowObj = {};
         columns.forEach((col, idx) => {
-            rowObj[col.key] = row[idx] !== undefined ? row[idx] : '';
+            rowObj[col.key] = row[idx] !== undefined ? _cleanMarkdownFromText(row[idx]) : '';
         });
         return rowObj;
     });
 
     return { columns, rows };
+}
+
+function _formatAiTableCellContent(str) {
+    if (!str) return '';
+    let html = _esc(str);
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    html = html.replace(/`(.*?)`/g, '<code style="background:var(--bg-secondary);padding:2px 4px;border-radius:3px;font-family:monospace;font-size:0.85em;">$1</code>');
+    return html;
 }
 
 let _aiReportTableCache = [];
@@ -468,9 +484,9 @@ function _buildAiReportHtmlTable(rows) {
     let header = rows[0];
     let body = rows.slice(1);
 
-    let ths = header.map(h => `<th style="padding:0.6rem 0.85rem;border:1px solid var(--border-color);background:var(--bg-secondary);text-align:left;font-weight:600;font-size:0.85rem;">${_esc(h)}</th>`).join('');
+    let ths = header.map(h => `<th style="padding:0.6rem 0.85rem;border:1px solid var(--border-color);background:var(--bg-secondary);text-align:left;font-weight:600;font-size:0.85rem;">${_formatAiTableCellContent(h)}</th>`).join('');
     let trs = body.map(row => {
-        let tds = row.map(c => `<td style="padding:0.5rem 0.85rem;border:1px solid var(--border-color);font-size:0.86rem;">${_esc(c)}</td>`).join('');
+        let tds = row.map(c => `<td style="padding:0.5rem 0.85rem;border:1px solid var(--border-color);font-size:0.86rem;">${_formatAiTableCellContent(c)}</td>`).join('');
         return `<tr>${tds}</tr>`;
     }).join('');
 
@@ -558,7 +574,9 @@ function _renderAiReportMarkdown(reportText) {
         return _aiReportTableCache[idx] || '';
     });
 
-    html = html.replace(/\n/g, '<br>');
+    // Clean up newlines around block-level HTML elements
+    html = html.replace(/\n?(<\/?(h[1-6]|ul|ol|li|blockquote|pre|table|thead|tbody|tr|th|td|div|hr)[^>]*>)\n?/gi, '$1');
+    html = html.replace(/\n+/g, '<br>');
 
     if (card) {
         card.style.display = '';

@@ -37,6 +37,7 @@ class BaseLLMProvider(ABC):
         prompt: str,
         system_instruction: str = "",
         config: dict[str, Any] = None,
+        history: Optional[list[dict[str, str]]] = None,
     ) -> str:
-        """Generate text response from prompt and optional system instructions."""
+        """Generate text response from prompt, system instructions, and optional chat history."""
         pass

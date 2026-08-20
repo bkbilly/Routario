@@ -978,7 +978,7 @@ const SYSTEM_DEPENDENCIES = {
     valhalla_enabled: ['valhalla_url'],
     geocoding_enabled: ['geocoding_provider'],
     history_retention_enabled: ['history_retention_days'],
-    llm_enabled: ['llm_active_provider', 'llm_gemini_api_key', 'llm_gemini_model', 'llm_temperature'],
+    llm_enabled: ['llm_active_provider', 'llm_gemini_api_key', 'llm_gemini_model', 'llm_openai_api_key', 'llm_openai_model', 'llm_anthropic_api_key', 'llm_anthropic_model', 'llm_ollama_base_url', 'llm_ollama_model', 'llm_ollama_api_key', 'llm_temperature'],
 };
 
 const SYSTEM_MASTER_TOGGLES = {};
@@ -996,6 +996,30 @@ function toggleSystemDependencies(masterKey, isEnabled) {
         if (itemEl) {
             itemEl.style.display = isEnabled ? '' : 'none';
         }
+    });
+    if (masterKey === 'llm_enabled' && isEnabled) {
+        updateLlmProviderFieldsVisibility();
+    }
+}
+
+function updateLlmProviderFieldsVisibility() {
+    const activeEl = document.getElementById('sys_llm_active_provider');
+    const provider = activeEl ? activeEl.value : 'gemini';
+
+    const providerFields = {
+        gemini: ['llm_gemini_api_key', 'llm_gemini_model'],
+        openai: ['llm_openai_api_key', 'llm_openai_model'],
+        anthropic: ['llm_anthropic_api_key', 'llm_anthropic_model'],
+        ollama: ['llm_ollama_base_url', 'llm_ollama_model', 'llm_ollama_api_key'],
+    };
+
+    Object.entries(providerFields).forEach(([pKey, fieldKeys]) => {
+        fieldKeys.forEach(fKey => {
+            const el = document.getElementById(`sys_item_${fKey}`);
+            if (el) {
+                el.style.display = (pKey === provider) ? '' : 'none';
+            }
+        });
     });
 }
 
@@ -1212,12 +1236,16 @@ function renderSystemSettings(restoreScrollPos = null) {
                     toggleSystemDependencies(key, e.target.checked);
                 }
             }
+            if (e.target && e.target.id === 'sys_llm_active_provider') {
+                updateLlmProviderFieldsVisibility();
+            }
             checkSystemSettingsDirty();
         });
         container.addEventListener('input', checkSystemSettingsDirty);
         container._dirtyListenerAttached = true;
     }
 
+    updateLlmProviderFieldsVisibility();
     checkSystemSettingsDirty();
 
     if (restoreScrollPos !== null) {
@@ -1234,6 +1262,8 @@ function checkSystemSettingsDirty() {
     for (const [catName, settingsList] of Object.entries(systemSettingsCategories)) {
         for (const item of settingsList) {
             if (item.readonly) continue;
+            const itemEl = document.getElementById(`sys_item_${item.key}`);
+            if (itemEl && itemEl.style.display === 'none') continue;
             const input = document.getElementById(`sys_${item.key}`);
             if (!input) continue;
 
@@ -1287,6 +1317,8 @@ async function saveSystemSettings() {
     for (const [catName, settingsList] of Object.entries(systemSettingsCategories)) {
         for (const item of settingsList) {
             if (item.readonly) continue;
+            const itemEl = document.getElementById(`sys_item_${item.key}`);
+            if (itemEl && itemEl.style.display === 'none') continue;
             const input = document.getElementById(`sys_${item.key}`);
             if (!input) continue;
 

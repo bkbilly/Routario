@@ -77,6 +77,8 @@ async def get_system_settings(
         is_readonly = meta.get("readonly", False)
 
         raw_val = getattr(settings_obj, key, None)
+        if raw_val is None and "default" in meta:
+            raw_val = meta["default"]
 
         if is_secret:
             display_val = _mask_secret(raw_val)

@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     llm_enabled: bool = False
     llm_active_provider: str = "gemini"
     llm_gemini_api_key: Optional[str] = None
-    llm_gemini_model: str = "gemini-3.6-flash"
+    llm_gemini_model: str = "gemini-2.5-flash-lite"
     llm_temperature: float = 0.2
     
     # Feature Flags
@@ -139,9 +139,24 @@ SYSTEM_SETTINGS_METADATA = {
 
     # AI & LLM Configuration
     "llm_enabled": {"type": "bool", "category": "AI & LLM Integration", "label": "LLM Enabled", "description": "Enable or disable platform-wide AI Copilot and custom LLM reports", "secret": False, "default": False},
-    "llm_active_provider": {"type": "str", "category": "AI & LLM Integration", "label": "Active LLM Provider", "description": "Active LLM provider plugin", "secret": False, "options": ["gemini"], "default": "gemini"},
+    "llm_active_provider": {"type": "str", "category": "AI & LLM Integration", "label": "Active LLM Provider", "description": "Active LLM provider plugin", "secret": False, "options": ["gemini", "openai", "anthropic", "ollama"], "default": "gemini"},
+
+    # Gemini
     "llm_gemini_api_key": {"type": "str", "category": "AI & LLM Integration", "label": "Gemini API Key", "description": "Google AI Studio API key (starts with AIzaSy...)", "secret": True, "default": ""},
-    "llm_gemini_model": {"type": "str", "category": "AI & LLM Integration", "label": "Gemini Model", "description": "Select Gemini model version", "secret": False, "options": ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3-flash-preview"], "default": "gemini-3.6-flash"},
+    "llm_gemini_model": {"type": "str", "category": "AI & LLM Integration", "label": "Gemini Model", "description": "Select Gemini model version", "secret": False, "options": ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-lite-latest", "gemini-flash-latest"], "default": "gemini-2.5-flash-lite"},
+
+    # OpenAI
+    "llm_openai_api_key": {"type": "str", "category": "AI & LLM Integration", "label": "OpenAI API Key", "description": "OpenAI API secret key (starts with sk-proj-...)", "secret": True, "default": ""},
+    "llm_openai_model": {"type": "str", "category": "AI & LLM Integration", "label": "OpenAI Model", "description": "Select OpenAI model version", "secret": False, "options": ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "o3-mini"], "default": "gpt-4o-mini"},
+
+    # Anthropic Claude
+    "llm_anthropic_api_key": {"type": "str", "category": "AI & LLM Integration", "label": "Anthropic API Key", "description": "Anthropic API key (starts with sk-ant-...)", "secret": True, "default": ""},
+    "llm_anthropic_model": {"type": "str", "category": "AI & LLM Integration", "label": "Anthropic Model", "description": "Select Claude model version", "secret": False, "options": ["claude-3-5-haiku-latest", "claude-3-5-sonnet-latest", "claude-3-opus-latest"], "default": "claude-3-5-haiku-latest"},
+
+    # Ollama / Local LLM
+    "llm_ollama_base_url": {"type": "str", "category": "AI & LLM Integration", "label": "Ollama Base URL", "description": "Base URL of local Ollama or OpenAI-compatible server", "secret": False, "default": "http://localhost:11434"},
+    "llm_ollama_model": {"type": "str", "category": "AI & LLM Integration", "label": "Ollama Model Name", "description": "Model name (e.g. llama3.2, mistral, qwen2.5)", "secret": False, "default": "llama3.2"},
+    "llm_ollama_api_key": {"type": "str", "category": "AI & LLM Integration", "label": "Ollama API Key (Optional)", "description": "Optional bearer authorization key", "secret": True, "default": ""},
     "llm_temperature": {"type": "float", "category": "AI & LLM Integration", "label": "Temperature", "description": "Controls output randomness (0.0 to 1.0)", "secret": False, "default": 0.2},
 
     # Alert Engine & System
