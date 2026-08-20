@@ -93,6 +93,11 @@ document.addEventListener('keydown', (e) => {
         'geofenceModal',
     ];
 
+    if (document.getElementById('aiCopilotModal')?.classList.contains('active')) {
+        closeAiCopilotModal();
+        return;
+    }
+
     if (document.getElementById('pttModal')?.classList.contains('active')) {
         pttCloseModal();
         return;

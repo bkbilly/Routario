@@ -33,9 +33,66 @@ async function syncPublicSystemSettings() {
     }
 }
 
+function pushModalState(modalName) {
+    try {
+        if (!window.history.state || window.history.state.routarioModal !== modalName) {
+            window.history.pushState({ routarioModal: modalName }, '');
+        }
+    } catch (e) {
+        console.warn('pushState failed:', e);
+    }
+}
+
+function popModalState(modalName) {
+    try {
+        if (window.history.state && window.history.state.routarioModal === modalName) {
+            window.history.back();
+        }
+    } catch (e) {
+        console.warn('popState failed:', e);
+    }
+}
+
+window.addEventListener('popstate', (e) => {
+    // 1. History Playback
+    const footer = document.getElementById('historyControls');
+    if (footer && footer.style.display !== 'none') {
+        if (typeof exitHistoryMode === 'function') {
+            exitHistoryMode(true);
+            return;
+        }
+    }
+
+    // 2. History Filter Modal
+    const historyModal = document.getElementById('historyModal');
+    if (historyModal && historyModal.classList.contains('active')) {
+        if (typeof closeHistoryModal === 'function') {
+            closeHistoryModal(true);
+            return;
+        }
+    }
+
+    // 3. AI Copilot Modal
+    const aiModal = document.getElementById('aiCopilotModal');
+    if (aiModal && aiModal.classList.contains('active')) {
+        if (typeof closeAiCopilotModal === 'function') {
+            closeAiCopilotModal(true);
+            return;
+        }
+    }
+
+    // 4. Any generic active modal
+    const activeModal = document.querySelector('.modal.active');
+    if (activeModal) {
+        activeModal.classList.remove('active');
+        return;
+    }
+});
+
 // --- HISTORY MODAL ---
 function openHistoryModal(deviceId) {
     syncPublicSystemSettings();
+    pushModalState('history_modal');
     document.getElementById('historyModal').dataset.deviceId = String(deviceId);
 
     // Reset all cycle buttons to their first option
@@ -55,9 +112,12 @@ function openHistoryModal(deviceId) {
     _setActiveQuickBtn(defaultBtn);
 }
 
-function closeHistoryModal() {
+function closeHistoryModal(fromPopState = false) {
     document.getElementById('historyModal').classList.remove('active');
     _setActiveQuickBtn(null);
+    if (!fromPopState) {
+        popModalState('history_modal');
+    }
 }
 
 const toLocalISO = (date) => {
@@ -257,6 +317,7 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
 
         const footer = document.getElementById('historyControls');
         if (footer) footer.style.display = 'flex';
+        pushModalState('history_playback');
         _updateLineModeBtn();
         _updateSpeedBtn();
         _updateSliderGradient();
@@ -416,7 +477,7 @@ function _updateLineModeBtn() {
     btn.title = isAnt ? 'Switch to static lines' : 'Switch to animated lines';
 }
 
-function exitHistoryMode() {
+function exitHistoryMode(fromPopState = false) {
     stopPlayback();
     _clearAlertHighlight();
     historyDeviceId = null;
@@ -474,6 +535,10 @@ function exitHistoryMode() {
     if (tripList) tripList.innerHTML = '';
     document.getElementById('sidebarDeviceList').style.display = 'block';
     document.getElementById('sidebarHistoryDetails').style.display = 'none';
+
+    if (!fromPopState) {
+        popModalState('history_playback');
+    }
 }
 
 function _updateBatchNav() {

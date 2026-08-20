@@ -5,14 +5,27 @@ let _copilotCodeBlockCache = [];
 function openAiCopilotModal() {
     const modal = document.getElementById('aiCopilotModal');
     if (modal) {
+        if (typeof pushModalState === 'function') pushModalState('ai_copilot_modal');
         modal.classList.add('active');
         setTimeout(() => document.getElementById('aiCopilotInput')?.focus(), 50);
     }
 }
 
-function closeAiCopilotModal() {
+function closeAiCopilotModal(fromPopState = false) {
     document.getElementById('aiCopilotModal')?.classList.remove('active');
+    if (!fromPopState && typeof popModalState === 'function') {
+        popModalState('ai_copilot_modal');
+    }
 }
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const aiModal = document.getElementById('aiCopilotModal');
+        if (aiModal && aiModal.classList.contains('active')) {
+            closeAiCopilotModal();
+        }
+    }
+});
 
 function sendAiCopilotChip(promptText) {
     const input = document.getElementById('aiCopilotInput');
