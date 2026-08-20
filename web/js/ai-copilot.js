@@ -7,7 +7,10 @@ function openAiCopilotModal() {
     if (modal) {
         if (typeof pushModalState === 'function') pushModalState('ai_copilot_modal');
         modal.classList.add('active');
-        setTimeout(() => document.getElementById('aiCopilotInput')?.focus(), 50);
+        const isMobile = window.matchMedia('(max-width: 768px)').matches || ('ontouchstart' in window && navigator.maxTouchPoints > 0);
+        if (!isMobile) {
+            setTimeout(() => document.getElementById('aiCopilotInput')?.focus(), 50);
+        }
     }
 }
 
@@ -79,7 +82,7 @@ async function sendAiCopilotMessage() {
     const loadingId = 'aiLoading_' + Date.now();
     thread.insertAdjacentHTML('beforeend', `
         <div id="${loadingId}" class="ai-chat-msg ai-msg-bot" style="display:flex;gap:0.6rem;align-items:flex-start;">
-            <div style="width:32px;height:32px;border-radius:50%;background:rgba(99,102,241,0.15);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">
+            <div class="ai-bot-avatar" style="width:32px;height:32px;border-radius:50%;background:rgba(99,102,241,0.15);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">
                 <i class="mdi mdi-robot-excited"></i>
             </div>
             <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:0.75rem 1rem;font-size:0.88rem;color:var(--text-muted);">
@@ -120,7 +123,7 @@ async function sendAiCopilotMessage() {
 
         thread.insertAdjacentHTML('beforeend', `
             <div class="ai-chat-msg ai-msg-bot" style="display:flex;gap:0.6rem;align-items:flex-start;">
-                <div style="width:32px;height:32px;border-radius:50%;background:rgba(99,102,241,0.15);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">
+                <div class="ai-bot-avatar" style="width:32px;height:32px;border-radius:50%;background:rgba(99,102,241,0.15);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">
                     <i class="mdi mdi-robot-excited"></i>
                 </div>
                 <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:0.75rem 1rem;font-size:0.88rem;color:var(--text-primary);max-width:85%;line-height:1.5;">
@@ -134,7 +137,7 @@ async function sendAiCopilotMessage() {
 
         thread.insertAdjacentHTML('beforeend', `
             <div class="ai-chat-msg ai-msg-bot" style="display:flex;gap:0.6rem;align-items:flex-start;">
-                <div style="width:32px;height:32px;border-radius:50%;background:rgba(239,68,68,0.15);color:var(--accent-danger);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">
+                <div class="ai-bot-avatar" style="width:32px;height:32px;border-radius:50%;background:rgba(239,68,68,0.15);color:var(--accent-danger);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">
                     <i class="mdi mdi-alert-circle"></i>
                 </div>
                 <div style="background:var(--bg-card);border:1px solid var(--accent-danger);border-radius:12px;padding:0.75rem 1rem;font-size:0.88rem;color:var(--accent-danger);max-width:85%;line-height:1.5;">

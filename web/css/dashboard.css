@@ -3278,3 +3278,14 @@ body::before {
 @media (max-width: 550px) {
     #logbookBody { padding: 0.5rem 0.5rem 0.75rem !important; }
 }
+
+/* ── AI Copilot Mobile Styles ── */
+@media (max-width: 576px) {
+    .ai-bot-avatar {
+        display: none !important;
+    }
+    .ai-msg-bot > div:last-child,
+    .ai-msg-user > div {
+        max-width: 100% !important;
+    }
+}
