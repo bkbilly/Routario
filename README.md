@@ -30,6 +30,7 @@ Routario connects directly to your GPS hardware over TCP/UDP and gives you a liv
 | 🗺️ | **Live map** — real-time positions with smooth movement and heading rotation | |
 | 🕒 | **History & playback** — scrub through routes, replay trips, graph any sensor over time | |
 | 📊 | **Fleet reports** — backend-defined reports for summary, trips, daily aggregates, drivers, users, alerts, logbook, geofences, sensors, billing, time, route, and alert-triggered schedules, audit logs, health checks, and CSV export | |
+| 🤖 | **AI Copilot & LLM engine** — natural language fleet assistant and custom AI report generator | |
 | 🔔 | **Smart alerts** — speeding, geofence, idling, towing, low battery, maintenance, and custom rules | |
 | 📣 | **Notifications** — Telegram, Discord, Email, Slack, browser push, and SIP voice calls. Route each alert to specific channels, schedule alerts by day and hour | |
 | 🚗 | **Driver management** — create driver profiles, assign to vehicles, track who drove which trip | |

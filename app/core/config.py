@@ -58,6 +58,13 @@ class Settings(BaseSettings):
     geocoding_provider: str = "nominatim"  # nominatim, google, mapbox
     geocoding_api_key: Optional[str] = None
     
+    # AI & LLM Integration
+    llm_enabled: bool = False
+    llm_active_provider: str = "gemini"
+    llm_gemini_api_key: Optional[str] = None
+    llm_gemini_model: str = "gemini-3.6-flash"
+    llm_temperature: float = 0.2
+    
     # Feature Flags
     enable_websockets: bool = True
     enable_notifications: bool = True
@@ -129,6 +136,13 @@ SYSTEM_SETTINGS_METADATA = {
     "sso_scopes": {"type": "str", "category": "Single Sign-On (SSO)", "label": "Requested Scopes", "description": "OIDC scopes requested", "secret": False},
     "sso_allowed_domains": {"type": "str", "category": "Single Sign-On (SSO)", "label": "Allowed Email Domains", "description": "Comma-separated list of allowed email domains", "secret": False},
     "sso_require_verified_email": {"type": "bool", "category": "Single Sign-On (SSO)", "label": "Require Verified Email", "description": "Enforce verified email check from OIDC provider", "secret": False},
+
+    # AI & LLM Configuration
+    "llm_enabled": {"type": "bool", "category": "AI & LLM Integration", "label": "LLM Enabled", "description": "Enable or disable platform-wide AI Copilot and custom LLM reports", "secret": False, "default": False},
+    "llm_active_provider": {"type": "str", "category": "AI & LLM Integration", "label": "Active LLM Provider", "description": "Active LLM provider plugin", "secret": False, "options": ["gemini"], "default": "gemini"},
+    "llm_gemini_api_key": {"type": "str", "category": "AI & LLM Integration", "label": "Gemini API Key", "description": "Google AI Studio API key (starts with AIzaSy...)", "secret": True, "default": ""},
+    "llm_gemini_model": {"type": "str", "category": "AI & LLM Integration", "label": "Gemini Model", "description": "Select Gemini model version", "secret": False, "options": ["gemini-3.6-flash", "gemini-flash-latest", "gemini-3-flash-preview"], "default": "gemini-3.6-flash"},
+    "llm_temperature": {"type": "float", "category": "AI & LLM Integration", "label": "Temperature", "description": "Controls output randomness (0.0 to 1.0)", "secret": False, "default": 0.2},
 
     # Alert Engine & System
     "offline_check_interval_seconds": {"type": "int", "category": "Alerts & Engine", "label": "Offline Check Interval (s)", "description": "Offline device detection check frequency in seconds", "secret": False},

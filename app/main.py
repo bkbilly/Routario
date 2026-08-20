@@ -40,6 +40,8 @@ from routes import ROUTE_REGISTRY
 from routes.integrations import router as integrations_router
 from routes.share import page_router
 import integrations  # triggers autodiscover()
+import llm           # triggers autodiscover()
+llm.autodiscover()
 
 logger = logging.getLogger(__name__)
 

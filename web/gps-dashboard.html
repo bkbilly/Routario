@@ -332,6 +332,13 @@
                         <span class="map-ctrl-badge" id="routeCount"></span>
                     </button>
                 </div>
+
+                <!-- AI Copilot button (placed right below Routes) -->
+                <div class="map-ctrl-bar" id="dashboardAiCopilotWrap" style="display:none;">
+                    <button class="map-ctrl-btn" id="dashboardAiCopilotBtn" onclick="openAiCopilotModal()" title="AI Copilot">
+                        <i class="mdi mdi-robot-excited-outline" style="font-size:16px;color:#ffffff;"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- Geofence Edit Toolbar (shown when a geofence is selected) -->
@@ -998,6 +1005,44 @@
             }, 300);
         });
     </script>
+    <!-- AI Copilot Modal -->
+    <div class="modal" id="aiCopilotModal">
+        <div class="modal-content" style="max-width:760px;width:92vw;height:650px;max-height:85vh;display:flex;flex-direction:column;">
+            <div class="modal-header" style="border-bottom:1px solid var(--border-color);padding:1rem 1.25rem;">
+                <div style="display:flex;align-items:center;gap:0.6rem;">
+                    <i class="mdi mdi-robot-excited-outline" style="font-size:1.4rem;color:var(--accent-primary);"></i>
+                    <div>
+                        <h2 class="modal-title" style="font-size:1.05rem;margin:0;">AI Fleet Copilot</h2>
+                        <div style="font-size:0.75rem;color:var(--text-muted);">Ask questions about your vehicles, alerts & telemetry</div>
+                    </div>
+                </div>
+                <button type="button" class="modal-close" onclick="closeAiCopilotModal()" style="flex-shrink:0;width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;"><i class="mdi mdi-close"></i></button>
+            </div>
+            
+            <div class="modal-scrollable" id="aiCopilotChatThread" style="flex:1;padding:1rem;display:flex;flex-direction:column;gap:0.85rem;overflow-y:auto;background:var(--bg-secondary);">
+                <div class="ai-chat-msg ai-msg-bot" style="display:flex;gap:0.6rem;align-items:flex-start;">
+                    <div style="width:32px;height:32px;border-radius:50%;background:rgba(99,102,241,0.15);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">
+                        <i class="mdi mdi-robot-excited"></i>
+                    </div>
+                    <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:0.75rem 1rem;font-size:0.88rem;color:var(--text-primary);max-width:85%;line-height:1.5;">
+                        Hello! I'm your AI Fleet Copilot. How can I help you analyze your fleet telemetry today?
+                        <div class="ai-chip-group" style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.75rem;">
+                            <button class="btn btn-secondary tbl-btn" onclick="sendAiCopilotChip('Which vehicles spent > 30 mins idling today?')" style="font-size:0.78rem;">🚚 Idling Summary</button>
+                            <button class="btn btn-secondary tbl-btn" onclick="sendAiCopilotChip('Show all speeding alerts from this week')" style="font-size:0.78rem;">⚠️ Speeding Alerts</button>
+                            <button class="btn btn-secondary tbl-btn" onclick="sendAiCopilotChip('List active drivers and vehicle assignments')" style="font-size:0.78rem;">👤 Drivers & Vehicles</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="padding:0.85rem 1rem;border-top:1px solid var(--border-color);background:var(--bg-card);display:flex;gap:0.5rem;align-items:flex-end;">
+                <textarea id="aiCopilotInput" class="form-input" rows="1" placeholder="Ask a question about your fleet..." oninput="autoResizeAiCopilotInput(this)" onkeydown="onAiCopilotInputKeyDown(event)" style="font-size:0.88rem;resize:none;overflow-y:hidden;line-height:1.4;max-height:140px;min-height:38px;padding:0.45rem 0.75rem;flex:1;"></textarea>
+                <button class="btn btn-primary" id="aiCopilotSendBtn" onclick="sendAiCopilotMessage()" style="padding:0.55rem 1rem;height:38px;flex-shrink:0;"><i class="mdi mdi-send"></i></button>
+            </div>
+        </div>
+    </div>
+
+<script src="js/ai-copilot.js"></script>
 <script src="js/voice-ptt.js"></script>
 </body>
 </html>

@@ -978,6 +978,7 @@ const SYSTEM_DEPENDENCIES = {
     valhalla_enabled: ['valhalla_url'],
     geocoding_enabled: ['geocoding_provider'],
     history_retention_enabled: ['history_retention_days'],
+    llm_enabled: ['llm_active_provider', 'llm_gemini_api_key', 'llm_gemini_model', 'llm_temperature'],
 };
 
 const SYSTEM_MASTER_TOGGLES = {};
@@ -1078,6 +1079,7 @@ function renderSystemSettings(restoreScrollPos = null) {
         'Geocoding & Maps': 'mdi-map-marker-radius',
         'Routing & Speed Limits': 'mdi-routes',
         'Single Sign-On (SSO)': 'mdi-shield-account',
+        'AI & LLM Integration': 'mdi-robot-excited-outline',
         'Alerts & Engine': 'mdi-bell-ring-outline',
         'Push Notifications': 'mdi-cellphone-arrow-down',
         'Security & Tokens': 'mdi-key-chain',

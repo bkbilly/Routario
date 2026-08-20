@@ -165,14 +165,34 @@ async function _loadDrivers() {
 async function _loadReportTypes() {
     try {
         const res = await apiFetch(`${API_BASE}/reports/types`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) return;
         _reportDefs = await res.json();
+
+        // Add AI Custom Report definition if user has llm permission
+        try {
+            const perms = JSON.parse(localStorage.getItem('user_permissions') || '[]');
+            const isAdmin = localStorage.getItem('is_admin') === 'true';
+            if (isAdmin || perms.includes('llm')) {
+                _reportDefs.push({
+                    key: 'ai_custom',
+                    label: '✨ AI Custom Report',
+                    description: 'Generate an AI-driven customized analytics report using your specified query prompt.',
+                    supports_vehicle_filter: true,
+                    needs_date_range: true,
+                });
+            }
+        } catch (err) {}
+
+        _reportDefMap = Object.fromEntries(_reportDefs.map(d => [d.key, d]));
+        _populateReportSelect('reportType', _reportDefs);
+        _populateReportSelect('sfType', _reportDefs.filter(d => d.schedule_supported !== false));
+        _syncReportFilters();
+        _updateDescription();
     } catch (e) {
         console.error(e);
         _reportDefs = [];
         showAlert('Failed to load report types.', 'error');
     }
-    _reportDefMap = Object.fromEntries(_reportDefs.map(d => [d.key, d]));
     _populateReportSelect('reportType', _reportDefs);
     _populateReportSelect('sfType', _reportDefs.filter(d => d.schedule_supported !== false));
     _syncReportFilters();
@@ -376,6 +396,9 @@ function _syncReportFilters() {
     _renderReportControls(def.controls || []);
     const dailyDrivers = _isDailyDriverMode();
 
+    const aiGroup = document.getElementById('aiReportPromptGroup');
+    if (aiGroup) aiGroup.style.display = (type === 'ai_custom') ? '' : 'none';
+
     document.getElementById('historyCheckGroup').style.display = def.supports_historical_toggle ? '' : 'none';
     document.getElementById('vehicleSelectGroup').style.display = (def.supports_vehicle_filter === false || dailyDrivers) ? 'none' : '';
     document.getElementById('dateFromGroup').style.display = def.needs_date_range === false && !document.getElementById('historyCheck').checked ? 'none' : '';
@@ -389,6 +412,165 @@ function _renderReportControls(controls) {
     if (!wrap) return;
     const current = _getReportControlValues();
     wrap.innerHTML = _renderControlInputs(controls, current, 'report-control', 'onReportControlChange()');
+}
+
+function _getReportControlValues() {
+    const values = {};
+    document.querySelectorAll('.report-control').forEach(el => {
+        values[el.dataset.key] = el.value;
+    });
+    return values;
+}
+
+function _getReportControlValue(key) {
+    const el = document.querySelector(`.report-control[data-key="${CSS.escape(key)}"]`);
+    return el ? el.value : undefined;
+}
+
+function _parseMarkdownTablesToReportPayload(text) {
+    if (!text) return null;
+    const lines = text.split('\n');
+    let tableRows = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].trim();
+        if (line.startsWith('|') && line.endsWith('|')) {
+            if (line.replace(/[\s|:-]/g, '') === '') continue;
+            let cells = line.split('|').slice(1, -1).map(c => c.trim());
+            tableRows.push(cells);
+        }
+    }
+
+    if (tableRows.length < 2) return null;
+
+    const headers = tableRows[0];
+    const dataRows = tableRows.slice(1);
+
+    const columns = headers.map((h, idx) => ({
+        key: `col_${idx}`,
+        label: h || `Column ${idx + 1}`
+    }));
+
+    const rows = dataRows.map(row => {
+        const rowObj = {};
+        columns.forEach((col, idx) => {
+            rowObj[col.key] = row[idx] !== undefined ? row[idx] : '';
+        });
+        return rowObj;
+    });
+
+    return { columns, rows };
+}
+
+let _aiReportTableCache = [];
+function _buildAiReportHtmlTable(rows) {
+    if (!rows.length) return '';
+    let header = rows[0];
+    let body = rows.slice(1);
+
+    let ths = header.map(h => `<th style="padding:0.6rem 0.85rem;border:1px solid var(--border-color);background:var(--bg-secondary);text-align:left;font-weight:600;font-size:0.85rem;">${_esc(h)}</th>`).join('');
+    let trs = body.map(row => {
+        let tds = row.map(c => `<td style="padding:0.5rem 0.85rem;border:1px solid var(--border-color);font-size:0.86rem;">${_esc(c)}</td>`).join('');
+        return `<tr>${tds}</tr>`;
+    }).join('');
+
+    let tableHtml = `<div style="overflow-x:auto;margin:1rem 0;"><table style="width:100%;border-collapse:collapse;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-card);"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
+    let key = `__AI_REPORT_TABLE_${_aiReportTableCache.length}__`;
+    _aiReportTableCache.push(tableHtml);
+    return key;
+}
+
+function _renderAiReportMarkdown(reportText) {
+    const table = document.getElementById('reportTable');
+    const noData = document.getElementById('noData');
+    const summary = document.getElementById('summaryBar');
+    const exportWrap = document.getElementById('exportMenuWrap');
+    const card = document.getElementById('aiReportResultCard');
+
+    if (noData) noData.style.display = 'none';
+    if (summary) summary.style.display = 'none';
+
+    const parsedPayload = _parseMarkdownTablesToReportPayload(reportText);
+
+    if (parsedPayload && parsedPayload.rows.length > 0) {
+        _reportPayload = {
+            columns: parsedPayload.columns,
+            rows: parsedPayload.rows,
+            type: 'ai_custom',
+            csv_filename: 'ai_custom_report.csv'
+        };
+        _reportData = parsedPayload.rows;
+        _viewingRunData = true;
+        _renderReport();
+    } else {
+        if (table) table.style.display = 'none';
+        if (exportWrap) exportWrap.style.display = 'none';
+    }
+
+    _aiReportTableCache = [];
+    let lines = (reportText || '').split('\n');
+    let out = [];
+    let inTable = false;
+    let tableRows = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].trim();
+        if (line.startsWith('|') && line.endsWith('|')) {
+            if (line.replace(/[\s|:-]/g, '') === '') {
+                continue;
+            }
+            inTable = true;
+            let cells = line.split('|').slice(1, -1).map(c => c.trim());
+            tableRows.push(cells);
+        } else {
+            if (inTable) {
+                out.push(_buildAiReportHtmlTable(tableRows));
+                inTable = false;
+                tableRows = [];
+            }
+            out.push(line);
+        }
+    }
+    if (inTable && tableRows.length) {
+        out.push(_buildAiReportHtmlTable(tableRows));
+    }
+
+    let html = out.join('\n');
+    html = _esc(html);
+
+    // Headers
+    html = html.replace(/^### (.*$)/gim, '<h3 style="font-size:1.1rem;color:var(--accent-primary);margin-top:1.25rem;margin-bottom:0.5rem;">$1</h3>');
+    html = html.replace(/^## (.*$)/gim, '<h2 style="font-size:1.25rem;color:var(--text-primary);margin-top:1.5rem;margin-bottom:0.75rem;border-bottom:1px solid var(--border-color);padding-bottom:0.4rem;">$1</h2>');
+    html = html.replace(/^# (.*$)/gim, '<h1 style="font-size:1.4rem;color:var(--text-primary);margin-bottom:1rem;">$1</h1>');
+
+    // Bold & Italics
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+    // Bullet points
+    html = html.replace(/^\s*-\s+(.*$)/gim, '• $1<br>');
+
+    // Code blocks
+    html = html.replace(/`(.*?)`/g, '<code style="background:var(--bg-secondary);padding:2px 5px;border-radius:4px;font-family:monospace;font-size:0.85em;">$1</code>');
+
+    // Restore table placeholders
+    html = html.replace(/__AI_REPORT_TABLE_(\d+)__/g, (match, idx) => {
+        return _aiReportTableCache[idx] || '';
+    });
+
+    html = html.replace(/\n/g, '<br>');
+
+    if (card) {
+        card.style.display = '';
+        card.innerHTML = `
+            <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:1.75rem 2.25rem;text-align:left;max-width:960px;margin:0 auto;line-height:1.6;font-size:0.92rem;color:var(--text-primary);box-shadow:0 4px 12px rgba(0,0,0,0.05);">
+                <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;color:var(--accent-primary);font-weight:600;font-size:0.95rem;">
+                    <i class="mdi mdi-sparkles"></i> AI Fleet Custom Analysis & Recommendations
+                </div>
+                ${html}
+            </div>
+        `;
+    }
 }
 
 function _renderControlInputs(controls, current, className, onchange) {
@@ -442,6 +624,8 @@ function onReportTypeChange() {
     _sensorsHistoryMode = false;
     document.getElementById('reportTable').style.display = 'none';
     document.getElementById('noData').style.display = 'none';
+    const card = document.getElementById('aiReportResultCard');
+    if (card) card.style.display = 'none';
     document.getElementById('summaryBar').style.display = 'none';
     document.getElementById('exportMenuWrap').style.display = 'none';
     closeExportMenus();
@@ -485,6 +669,58 @@ async function generateReport() {
     const needsRange = def.needs_date_range !== false || historical;
     const start = document.getElementById('startDate').value;
     const end   = document.getElementById('endDate').value;
+
+    if (type === 'ai_custom') {
+        const prompt = document.getElementById('aiReportPrompt')?.value.trim();
+        if (!prompt) { showAlert('Please enter an AI Report Prompt.', 'warning'); return; }
+        const card = document.getElementById('aiReportResultCard');
+        const noData = document.getElementById('noData');
+        const table = document.getElementById('reportTable');
+        const summary = document.getElementById('summaryBar');
+        const exportWrap = document.getElementById('exportMenuWrap');
+
+        if (table) table.style.display = 'none';
+        if (noData) noData.style.display = 'none';
+        if (summary) summary.style.display = 'none';
+        if (exportWrap) exportWrap.style.display = 'none';
+        if (card) card.style.display = 'none';
+
+        try {
+            _setReportLoading(true);
+            await _nextFrame();
+            const res = await apiFetch(`${API_BASE}/llm/report`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    prompt: prompt,
+                    device_ids: _selectedIds.size ? [..._selectedIds] : null,
+                    start_time: start ? `${start}T00:00:00` : null,
+                    end_time: end ? `${end}T23:59:59` : null,
+                }),
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.detail || `Server returned HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            _renderAiReportMarkdown(data.report);
+        } catch (e) {
+            console.error('AI Report Error:', e);
+            showAlert(e.message || 'Error generating AI report.', 'error');
+            if (card) {
+                card.style.display = '';
+                card.innerHTML = `
+                    <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:12px;padding:1.5rem 2rem;max-width:850px;margin:0 auto;text-align:center;color:var(--accent-danger);">
+                        <i class="mdi mdi-alert-circle-outline" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>
+                        <strong style="font-size:1.05rem;">AI Report Generation Failed</strong>
+                        <p style="margin:0.5rem 0 0 0;font-size:0.9rem;opacity:0.9;">${_esc(e.message)}</p>
+                    </div>
+                `;
+            }
+        } finally {
+            _setReportLoading(false);
+        }
+        return;
+    }
     if (needsRange && (!start || !end)) { showAlert('Please select a date range.', 'warning'); return; }
 
     const params = new URLSearchParams();

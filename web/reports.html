@@ -694,6 +694,10 @@
                         <button type="button" onclick="exportPdf(); closeExportMenus();"><i class="mdi mdi-file-pdf-box"></i> PDF</button>
                     </div>
                 </div>
+                <div class="form-group" id="aiReportPromptGroup" style="display:none;width:100%;flex-basis:100%;margin-top:0.5rem;">
+                    <label class="form-label" style="font-weight:600;color:var(--accent-primary);"><i class="mdi mdi-sparkles"></i> AI Custom Prompt</label>
+                    <textarea id="aiReportPrompt" class="form-input" rows="3" style="width:100%;font-size:0.88rem;" placeholder="e.g. Analyze fleet fuel efficiency and idling times across all Athens vehicles over the past month and list top 3 recommendations..."></textarea>
+                </div>
             </div>
             <p id="reportDescription" style="margin:-0.75rem 0 1.25rem;font-size:0.85rem;color:var(--text-muted);"></p>
         </div>
@@ -707,6 +711,7 @@
             </table>
         </div>
         <div class="no-data" id="noData" style="display:none;">No data found for the selected period.</div>
+        <div id="aiReportResultCard" style="display:none;margin-top:1rem;"></div>
 
     </div><!-- /panelReports -->
 

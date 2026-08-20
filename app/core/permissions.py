@@ -12,6 +12,7 @@ ALL_PERMISSIONS: List[str] = [
     "manage_geofences",
     "view_history",
     "view_reports",
+    "llm",
     "manage_drivers",
     "manage_fuel",
     "manage_maintenance",
@@ -46,6 +47,7 @@ PERMISSION_GROUPS = [
             ("manage_geofences", "Manage Geofences"),
             ("view_history",  "View History"),
             ("view_reports",  "View Reports"),
+            ("llm",           "AI Copilot & LLM Reports"),
         ],
     },
     {

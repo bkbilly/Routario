@@ -38,9 +38,7 @@ async def load_system_settings_from_db_session(session) -> None:
 
 
 @router.get("/public", response_model=Dict[str, Any])
-async def get_public_system_settings(
-    current_user: User = Depends(get_current_user),
-) -> Dict[str, Any]:
+async def get_public_system_settings() -> Dict[str, Any]:
     """Retrieve public non-secret client settings for all authenticated users."""
     settings_obj = get_settings()
     return {
@@ -48,6 +46,7 @@ async def get_public_system_settings(
         "history_max_api_limit": getattr(settings_obj, "history_max_api_limit", 10000),
         "trip_min_distance_km": getattr(settings_obj, "trip_min_distance_km", 0.1),
         "trip_min_duration_seconds": getattr(settings_obj, "trip_min_duration_seconds", 60),
+        "llm_enabled": getattr(settings_obj, "llm_enabled", False),
     }
 
 
