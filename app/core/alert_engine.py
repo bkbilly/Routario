@@ -314,7 +314,35 @@ class AlertEngine:
                 except Exception as e:
                     channel_status.append({"name": "Web Push", "status": "failed", "error": str(e)})
 
-            # 5. Alert webhooks
+            # 5. System Email notification
+            send_email = alert_data.get('send_email', False)
+            if send_email and getattr(user, 'email', None) and user.email.strip():
+                try:
+                    from core.email import send_email_async
+                    rule_title = alert_data.get('alert_metadata', {}).get('rule_name')
+                    alert_type_label = alert_data['type'].value.upper() if hasattr(alert_data['type'], 'value') else str(alert_data['type']).upper()
+                    alert_label = rule_title if rule_title else alert_type_label
+                    subject = f"⚠️ Alert: {device.name} - {alert_label}"
+                    body = (
+                        f"Hello {user.username},\n\n"
+                        f"An alert was triggered for vehicle '{device.name}':\n\n"
+                        f"- Vehicle: {device.name}\n"
+                        f"- Alert Type: {alert_label}\n"
+                        f"- Severity: {alert_data.get('severity', 'info')}\n"
+                        f"- Message: {alert_data['message']}\n"
+                        f"- Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n"
+                        f"Best regards,\n"
+                        f"Routario Telematics Platform"
+                    )
+                    ok = await send_email_async([user.email], subject, body)
+                    if ok:
+                        channel_status.append({"name": "System Email", "status": "sent"})
+                    else:
+                        channel_status.append({"name": "System Email", "status": "skipped", "error": "Email disabled or SMTP not configured"})
+                except Exception as e:
+                    channel_status.append({"name": "System Email", "status": "failed", "error": str(e)})
+
+            # 6. Alert webhooks
             wh_status = await self._send_alert_webhooks(user, device, alert_data)
             if wh_status is not None:
                 channel_status.append({"name": "Webhooks", "status": "sent" if wh_status else "failed"})

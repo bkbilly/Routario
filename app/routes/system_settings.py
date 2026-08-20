@@ -47,6 +47,7 @@ async def get_public_system_settings() -> Dict[str, Any]:
         "trip_min_distance_km": getattr(settings_obj, "trip_min_distance_km", 0.1),
         "trip_min_duration_seconds": getattr(settings_obj, "trip_min_duration_seconds", 60),
         "llm_enabled": getattr(settings_obj, "llm_enabled", False),
+        "smtp_enabled": getattr(settings_obj, "smtp_enabled", False),
     }
 
 

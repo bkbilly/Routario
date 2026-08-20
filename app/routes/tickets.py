@@ -474,6 +474,7 @@ async def update_ticket(
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket not found")
 
+        old_assigned_to = ticket.assigned_to
         for field in ("title", "description", "category", "priority", "status", "assigned_to", "related_type", "related_id"):
             if field not in data.model_fields_set:
                 continue
@@ -482,6 +483,9 @@ async def update_ticket(
                 value = value.strip()
             setattr(ticket, field, value)
 
+        new_assigned_to = ticket.assigned_to
+        assigned_changed = ("assigned_to" in data.model_fields_set) and (new_assigned_to != old_assigned_to) and (new_assigned_to is not None)
+
         ticket.updated_at = datetime.utcnow()
         if "status" in data.model_fields_set:
             ticket.closed_at = datetime.utcnow() if ticket.status in CLOSED_STATUSES else None
@@ -489,6 +493,30 @@ async def update_ticket(
             ticket.attachments = list(ticket.attachments or _ticket_file_fallback(ticket.id, "ticket")) + await _store_ticket_uploads(ticket.id, uploads, "ticket")
 
         await session.flush()
+
+        if assigned_changed:
+            try:
+                from core.email import send_email_async
+                assignee = await session.get(User, new_assigned_to)
+                if assignee and assignee.email:
+                    subject = f"[Routario Ticket #{ticket.id}] Assigned to you: {ticket.title}"
+                    body = (
+                        f"Hello {assignee.username},\n\n"
+                        f"Support ticket #{ticket.id} (\"{ticket.title}\") has been assigned to you by {current_user.username}.\n\n"
+                        f"Ticket Details:\n"
+                        f"- ID: #{ticket.id}\n"
+                        f"- Title: {ticket.title}\n"
+                        f"- Priority: {ticket.priority}\n"
+                        f"- Status: {ticket.status}\n"
+                        f"- Category: {ticket.category}\n"
+                        f"- Assigned By: {current_user.username}\n\n"
+                        f"Best regards,\n"
+                        f"Routario Telematics Platform"
+                    )
+                    asyncio.create_task(send_email_async([assignee.email], subject, body))
+            except Exception as err:
+                logger.error("Failed to trigger ticket assignment email: %s", err)
+
         await session.refresh(ticket)
         updated_id = ticket.id
 

@@ -24,6 +24,7 @@ async function syncPublicSystemSettings() {
         const res = await apiFetch(`${API_BASE}/system-settings/public`);
         if (res.ok) {
             const data = await res.json();
+            window.smtpEnabled = data.smtp_enabled === true;
             if (data.history_batch_size && typeof data.history_batch_size === 'number') {
                 HISTORY_BATCH_SIZE = data.history_batch_size;
             }

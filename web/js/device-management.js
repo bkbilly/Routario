@@ -448,6 +448,11 @@ function openDeviceModal(deviceId, startTab = 'general') {
     editingDeviceId = d.id;
     deviceAlertUsers = [];
 
+    if (typeof syncPublicSystemSettings === 'function') {
+        syncPublicSystemSettings().then(() => {
+            if (typeof renderAlertsTable === 'function') renderAlertsTable();
+        });
+    }
     setDeviceModalTitle(d);
     document.getElementById('submitText').textContent        = 'Save';
     document.getElementById('submitIcon').className         = 'mdi mdi-content-save';
@@ -1783,6 +1788,9 @@ function renderAlertsTable() {
         if (row.send_push !== false) {
             activePills.push(`<span class="channel-pill active" title="Web Push Notification Enabled" style="pointer-events:none;"><i class="mdi mdi-cellphone-arrow-down"></i> Push</span>`);
         }
+        if (row.send_email === true) {
+            activePills.push(`<span class="channel-pill active" title="System Email Notification Enabled" style="pointer-events:none;"><i class="mdi mdi-email-outline"></i> Email</span>`);
+        }
         if (Array.isArray(row.channels)) {
             row.channels.forEach(c => {
                 activePills.push(`<span class="channel-pill active" style="pointer-events:none;">${_esc(c)}</span>`);
@@ -1899,6 +1907,9 @@ function renderAlertEditorCommandOptions(cmdKey, supportData, currentPayload = '
 
 // ── Alert Editor ──────────────────────────────────────────────────
 async function openAlertEditor(uid) {
+    if (typeof syncPublicSystemSettings === 'function') {
+        await syncPublicSystemSettings();
+    }
     const row = alertRows.find(r => r.uid === uid);
     if (!row) return;
     editingAlertUid = uid;
@@ -2073,13 +2084,20 @@ async function openAlertEditor(uid) {
         </label>
     `;
 
+    const emailPillHtml = `
+        <label class="channel-pill${row.send_email === true ? ' active' : ''}">
+            <input type="checkbox" id="editor-send-email" ${row.send_email === true ? 'checked' : ''}>
+            <i class="mdi mdi-email-outline"></i> Email
+        </label>
+    `;
+
     const userChannelPills = userChannels.map(c => `
         <label class="channel-pill${(row.channels || []).includes(c.name) ? ' active' : ''}">
             <input type="checkbox" class="editor-channel-cb" value="${_esc(c.name)}"${(row.channels || []).includes(c.name) ? ' checked' : ''}>
             ${_esc(c.name)}
         </label>`).join('');
 
-    const chHtml = pushPillHtml + userChannelPills;
+    const chHtml = pushPillHtml + emailPillHtml + userChannelPills;
 
     let notifyUsersHtml = '';
     if (hasAdminAccess && editingDeviceId) {
@@ -2299,6 +2317,11 @@ function saveAlertFromEditor() {
     const sendPushCb = document.getElementById('editor-send-push');
     if (sendPushCb) {
         row.send_push = sendPushCb.checked;
+    }
+
+    const sendEmailCb = document.getElementById('editor-send-email');
+    if (sendEmailCb) {
+        row.send_email = sendEmailCb.checked;
     }
 
     const actionCmdSel = document.getElementById('editor-action-command');

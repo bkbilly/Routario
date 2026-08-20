@@ -979,6 +979,7 @@ const SYSTEM_DEPENDENCIES = {
     geocoding_enabled: ['geocoding_provider'],
     history_retention_enabled: ['history_retention_days'],
     llm_enabled: ['llm_active_provider', 'llm_gemini_api_key', 'llm_gemini_model', 'llm_openai_api_key', 'llm_openai_model', 'llm_anthropic_api_key', 'llm_anthropic_model', 'llm_ollama_base_url', 'llm_ollama_model', 'llm_ollama_api_key', 'llm_temperature'],
+    smtp_enabled: ['smtp_host', 'smtp_port', 'smtp_username', 'smtp_password', 'smtp_use_tls', 'smtp_from_email', 'smtp_from_name'],
 };
 
 const SYSTEM_MASTER_TOGGLES = {};
@@ -1079,6 +1080,13 @@ async function loadSystemSettings(preserveScroll = true) {
         }
         const data = await res.json();
         systemSettingsCategories = data.categories || {};
+        for (const list of Object.values(systemSettingsCategories)) {
+            for (const item of list) {
+                if (item.key === 'smtp_enabled') {
+                    window.smtpEnabled = item.value === true || String(item.value).toLowerCase() === 'true' || item.value === 1;
+                }
+            }
+        }
         renderSystemSettings(preserveScroll ? scrollPos : null);
     } catch (error) {
         console.error('System settings load error:', error);
@@ -1099,17 +1107,16 @@ function renderSystemSettings(restoreScrollPos = null) {
     const savedScroll = restoreScrollPos !== null ? restoreScrollPos : getSystemSettingsScrollPos();
 
     const categoryIcons = {
-        'Feature Flags': 'mdi-flag-outline',
-        'Geocoding & Maps': 'mdi-map-marker-radius',
-        'Routing & Speed Limits': 'mdi-routes',
+        'Core System & Operations': 'mdi-tune-variant',
+        'Email & SMTP Notifications': 'mdi-email-outline',
+        'AI Copilot & LLM Engine': 'mdi-robot-excited-outline',
+        'Web Push Notifications': 'mdi-cellphone-arrow-down',
+        'Telematics & Trip Rules': 'mdi-car-speed-limiter',
+        'Maps, Geocoding & Routing': 'mdi-map-marker-radius',
+        'History Data & Retention': 'mdi-map-clock-outline',
+        'Security & Token Policies': 'mdi-key-chain',
         'Single Sign-On (SSO)': 'mdi-shield-account',
-        'AI & LLM Integration': 'mdi-robot-excited-outline',
-        'Alerts & Engine': 'mdi-bell-ring-outline',
-        'Push Notifications': 'mdi-cellphone-arrow-down',
-        'Security & Tokens': 'mdi-key-chain',
-        'History & Tracking Limits': 'mdi-map-clock-outline',
-        'Fleet & Trip Rules': 'mdi-car-speed-limiter',
-        'Infrastructure': 'mdi-server-network',
+        'Infrastructure Diagnostics': 'mdi-server-network',
     };
 
     // Calculate master toggle states for conditional hiding
