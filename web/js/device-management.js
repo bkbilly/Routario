@@ -223,10 +223,10 @@ async function loadAvailableProtocols() {
     }
 }
 
-async function loadUserChannels() {
+async function loadUserChannels(forceRefresh = false) {
     try {
         const userId = localStorage.getItem('user_id') || 1;
-        if (typeof permissionsReady !== 'undefined') {
+        if (!forceRefresh && typeof permissionsReady !== 'undefined') {
             const currentUser = await permissionsReady;
             if (_sameId(currentUser?.id, userId)) {
                 userChannels = currentUser.notification_channels || [];
@@ -237,8 +237,23 @@ async function loadUserChannels() {
         if (!res.ok) throw new Error();
         const user   = await res.json();
         userChannels = user.notification_channels || [];
+        if (typeof permissionsReady !== 'undefined') {
+            permissionsReady.then(u => { if (u) u.notification_channels = userChannels; }).catch(() => {});
+        }
     } catch (e) { console.error('Error loading channels:', e); }
 }
+
+window.addEventListener('routario:notification-channels-updated', (evt) => {
+    if (Array.isArray(evt.detail)) {
+        userChannels = evt.detail;
+        if (typeof permissionsReady !== 'undefined') {
+            permissionsReady.then(u => { if (u) u.notification_channels = userChannels; }).catch(() => {});
+        }
+        if (typeof renderAlertsTable === 'function') {
+            renderAlertsTable();
+        }
+    }
+});
 
 async function loadDevices() {
     try {
@@ -1316,7 +1331,7 @@ async function exportDeviceProfile() {
         }
     };
 
-    const jsonStr = JSON.stringify(profile, null, 2);
+    const jsonStr = JSON.stringify([profile], null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const link = document.createElement('a');
     const safeName = deviceName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'device';
@@ -1496,18 +1511,24 @@ function importAlertProfileFile(event) {
         try {
             const parsed = JSON.parse(reader.result);
 
+            const item = (Array.isArray(parsed) && parsed.length > 0 && (parsed[0].device || parsed[0].config))
+                ? parsed[0]
+                : parsed;
+
+            const dev = item.device || item;
+            const cfg = item.config || dev.config || item;
+
             // 1. If general options exist in profile, apply them to the form inputs
-            if (parsed.vehicle_type && document.getElementById('vehicleType')) {
-                document.getElementById('vehicleType').value = parsed.vehicle_type;
+            if (dev.vehicle_type && document.getElementById('vehicleType')) {
+                document.getElementById('vehicleType').value = dev.vehicle_type;
             }
-            if (parsed.license_plate !== undefined && document.getElementById('licensePlate')) {
-                document.getElementById('licensePlate').value = parsed.license_plate || '';
+            if (dev.license_plate !== undefined && document.getElementById('licensePlate')) {
+                document.getElementById('licensePlate').value = dev.license_plate || '';
             }
-            if (parsed.custom_attributes && typeof parsed.custom_attributes === 'object') {
-                renderCustomAttributes(parsed.custom_attributes);
+            if (dev.custom_attributes && typeof dev.custom_attributes === 'object') {
+                renderCustomAttributes(dev.custom_attributes);
             }
 
-            const cfg = parsed.config || parsed;
             if (cfg.offline_timeout_hours != null && document.getElementById('offlineTimeoutHours')) {
                 document.getElementById('offlineTimeoutHours').value = cfg.offline_timeout_hours;
             }
@@ -1519,17 +1540,17 @@ function importAlertProfileFile(event) {
             }
 
             // 2. Extract alert_rows
-            const rows = Array.isArray(parsed)
-                ? parsed
-                : Array.isArray(parsed.alert_rows)
-                ? parsed.alert_rows
+            const rows = Array.isArray(item.alert_rows)
+                ? item.alert_rows
                 : Array.isArray(cfg.alert_rows)
                 ? cfg.alert_rows
+                : (Array.isArray(parsed) && parsed.every(r => r.alertKey || r.alert_type))
+                ? parsed
                 : _alertProfileFromConfig(cfg);
 
             const resolvedRows = await _resolveImportedAlertProfileUsers(rows);
 
-            openAlertProfileMergeChoice(resolvedRows, parsed.device_name || file.name, () => {
+            openAlertProfileMergeChoice(resolvedRows, dev.name || item.device_name || file.name, () => {
                 showAlert({ title: 'Profile Imported', message: `Device profile loaded successfully from ${file.name}.`, type: 'success' });
             });
         } catch (e) {
@@ -1805,7 +1826,9 @@ function renderAlertsTable() {
         }
         if (Array.isArray(row.channels)) {
             row.channels.forEach(c => {
-                activePills.push(`<span class="channel-pill active" style="pointer-events:none;">${_esc(c)}</span>`);
+                const found = userChannels.find(uc => uc.id === c || uc.name === c);
+                const displayName = found ? found.name : c;
+                activePills.push(`<span class="channel-pill active" style="pointer-events:none;">${_esc(displayName)}</span>`);
             });
         }
         if (row.action_command && row.action_command !== 'disabled') {
@@ -2103,11 +2126,16 @@ async function openAlertEditor(uid) {
         </label>
     `;
 
-    const userChannelPills = userChannels.map(c => `
-        <label class="channel-pill${(row.channels || []).includes(c.name) ? ' active' : ''}">
-            <input type="checkbox" class="editor-channel-cb" value="${_esc(c.name)}"${(row.channels || []).includes(c.name) ? ' checked' : ''}>
+    const selectedCh = row.channels || [];
+    const userChannelPills = userChannels.map(c => {
+        const key = c.id || c.name;
+        const isChecked = selectedCh.includes(key) || (c.name && selectedCh.includes(c.name));
+        return `
+        <label class="channel-pill${isChecked ? ' active' : ''}">
+            <input type="checkbox" class="editor-channel-cb" value="${_esc(key)}"${isChecked ? ' checked' : ''}>
             ${_esc(c.name)}
-        </label>`).join('');
+        </label>`;
+    }).join('');
 
     const chHtml = pushPillHtml + emailPillHtml + userChannelPills;
 

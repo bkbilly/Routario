@@ -286,6 +286,12 @@ async function dismissAlert(alertId) {
         const res = await apiFetch(`${API_BASE}/alerts/${alertId}/read`, { method: 'POST' });
         if (res.ok) {
             await loadAlerts();
+            if (historyVisible) {
+                historyOffset = 0;
+                const list = document.getElementById('alertsHistoryList');
+                if (list) list.innerHTML = '';
+                await loadAlertHistory();
+            }
             devices.forEach(d => updateSidebarCard(d.id));
         }
     } catch (e) {}
@@ -301,6 +307,12 @@ async function clearAllAlerts() {
     ));
 
     await loadAlerts();
+    if (historyVisible) {
+        historyOffset = 0;
+        const list = document.getElementById('alertsHistoryList');
+        if (list) list.innerHTML = '';
+        await loadAlertHistory();
+    }
     devices.forEach(d => updateSidebarCard(d.id));
     showAlert({ title: 'Success', message: 'All alerts cleared', type: 'success' });
 }

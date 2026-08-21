@@ -104,6 +104,7 @@ async def get_alerts_report(
 @router.get("", response_model=List[AlertResponse])
 async def get_alerts(
     unread_only: bool = Query(False),
+    read_only: bool = Query(False),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
@@ -111,6 +112,8 @@ async def get_alerts(
     db = get_db()
     if unread_only:
         return await db.get_user_alerts(current_user.id, unread_only=True, limit=limit, offset=offset)
+    if read_only:
+        return await db.get_user_alerts(current_user.id, read_only=True, limit=limit, offset=offset)
     return await db.get_user_alerts(current_user.id, limit=limit, offset=offset)
 
 

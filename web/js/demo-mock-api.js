@@ -39,8 +39,8 @@
         currency: 'EUR',
         timezone: 'Europe/Athens',
         notification_channels: [
-            { name: 'Ops Email', url: 'mailto:ops@example.com' },
-            { name: 'Dispatch Slack', url: 'slack://demo/webhook' },
+            { id: 'nc_ops_email', name: 'Ops Email', url: 'mailto:ops@example.com' },
+            { id: 'nc_dispatch_slack', name: 'Dispatch Slack', url: 'slack://demo/webhook' },
         ],
         webhook_urls: [
             'https://demo.routario.com/api/webhooks/telematics',

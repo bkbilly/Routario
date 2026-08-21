@@ -36,8 +36,10 @@ async function syncPublicSystemSettings() {
 
 function pushModalState(modalName) {
     try {
-        if (!window.history.state || window.history.state.routarioModal !== modalName) {
+        if (!window.history.state || !window.history.state.routarioModal) {
             window.history.pushState({ routarioModal: modalName }, '');
+        } else if (window.history.state.routarioModal !== modalName) {
+            window.history.replaceState({ routarioModal: modalName }, '');
         }
     } catch (e) {
         console.warn('pushState failed:', e);
@@ -253,8 +255,8 @@ async function handleHistorySubmit(e) {
         const modalDeviceId = parseInt(document.getElementById('historyModal').dataset.deviceId || '', 10);
         const start = new Date(document.getElementById('historyStart').value);
         const end = new Date(document.getElementById('historyEnd').value);
+        closeHistoryModal(true);
         await loadHistory(modalDeviceId, start, end);
-        closeHistoryModal();
     } finally {
         btn.disabled = false;
         btn.textContent = origText;

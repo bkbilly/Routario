@@ -248,20 +248,29 @@ class AlertEngine:
 
             user_ch = user.notification_channels or []
 
-            # 2. Filter channels by selected names
+            # 2. Filter channels by selected IDs / names
             if selected_names is not None:
+                selected_keys = set(selected_names)
                 active_channels = [
                     c for c in user_ch
-                    if isinstance(c, dict) and c.get('name') in selected_names and c.get('url')
+                    if isinstance(c, dict) and c.get('url') and (
+                        (c.get('id') and c.get('id') in selected_keys) or
+                        (c.get('name') and c.get('name') in selected_keys)
+                    )
                 ]
-                found_names = {c['name'] for c in active_channels}
-                missing_names = [n for n in selected_names if n not in found_names]
+                found_keys = set()
+                for c in active_channels:
+                    if c.get('id'):
+                        found_keys.add(c['id'])
+                    if c.get('name'):
+                        found_keys.add(c['name'])
+                missing_keys = [k for k in selected_names if k not in found_keys]
 
                 # Fallback: if selected channel was created by admin/superadmin and not in target user's channels
-                if missing_names:
+                if missing_keys:
                     db = get_db()
                     additional_channels = await db.get_notification_channels_by_names(
-                        names=missing_names,
+                        names=missing_keys,
                         company_id=device.company_id,
                     )
                     active_channels.extend(additional_channels)

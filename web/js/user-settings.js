@@ -4,6 +4,7 @@ const IS_ADMIN         = localStorage.getItem('is_admin') === 'true';
 const IS_COMPANY_ADMIN = localStorage.getItem('is_company_admin') === 'true';
 const MY_COMPANY_ID    = parseInt(localStorage.getItem('company_id') || '0') || null;
 let channels = [];
+let editingChannelIndex = -1;
 let webhooks = [];
 let profileUser = null;
 let passkeys = [];
@@ -196,7 +197,11 @@ async function loadSettings() {
         webhooks = user.webhook_urls || [];
         renderWebhooks();
 
-        channels = user.notification_channels || [];
+        channels = (user.notification_channels || []).map(ch => ({
+            id: ch.id || generateChannelId(),
+            name: ch.name || '',
+            url: ch.url || ''
+        }));
         renderChannels();
 
     } catch (error) {
@@ -593,15 +598,18 @@ function renderChannels() {
         const index = channels.indexOf(channel);
         const tr = document.createElement('tr');
         tr.className = 'device-row';
+        tr.style.cursor = 'pointer';
+        tr.title = 'Double-click to edit channel';
+        tr.ondblclick = () => openChannelModal(index);
         tr.innerHTML = `
             <td class="channel-name-cell"><span class="device-row-name">${settingsEsc(channel.name)}</span></td>
             <td class="channel-url-cell">${settingsEsc(channel.url)}</td>
             <td style="text-align: right;">
-                <button type="button" class="btn btn-secondary btn-small" id="channelTestBtn${index}" onclick="testChannel(${index})">
-                    <i class="mdi mdi-send-check"></i> Test
+                <button type="button" class="btn btn-secondary btn-small" onclick="openChannelModal(${index}); event.stopPropagation();">
+                    <i class="mdi mdi-pencil"></i> Edit
                 </button>
-                <button type="button" class="btn btn-danger btn-small" onclick="removeChannel(${index})">
-                    <i class="mdi mdi-delete"></i> Remove
+                <button type="button" class="btn btn-secondary btn-small" id="channelTestBtn${index}" onclick="testChannel(${index}); event.stopPropagation();">
+                    <i class="mdi mdi-send-check"></i> Test
                 </button>
             </td>
         `;
@@ -617,6 +625,10 @@ async function saveChannels() {
             body: JSON.stringify({ notification_channels: channels }),
         });
         if (res.ok) {
+            if (typeof permissionsReady !== 'undefined') {
+                permissionsReady.then(u => { if (u) u.notification_channels = channels; }).catch(() => {});
+            }
+            window.dispatchEvent(new CustomEvent('routario:notification-channels-updated', { detail: channels }));
             showAlert('Channel saved', 'success');
         } else {
             const err = await res.json();
@@ -629,21 +641,42 @@ async function saveChannels() {
     }
 }
 
-async function addChannel() {
+async function saveChannelFromModal() {
     const nameInput = document.getElementById('newChannelName');
     const urlInput  = document.getElementById('newChannelUrl');
     
-    const name = nameInput.value.trim();
-    const url  = urlInput.value.trim();
+    const name = nameInput ? nameInput.value.trim() : '';
+    const url  = urlInput ? urlInput.value.trim() : '';
     
     if (!name || !url) {
         showAlert('Please provide both name and URL', 'error');
         return;
     }
     
-    channels.push({ name, url });
-    nameInput.value = '';
-    urlInput.value  = '';
+    if (editingChannelIndex >= 0 && editingChannelIndex < channels.length) {
+        const existingId = channels[editingChannelIndex].id || generateChannelId();
+        channels[editingChannelIndex] = { id: existingId, name, url };
+    } else {
+        channels.push({ id: generateChannelId(), name, url });
+    }
+
+    if (nameInput) nameInput.value = '';
+    if (urlInput) urlInput.value  = '';
+    renderChannels();
+
+    await saveChannels();
+    closeChannelModal();
+}
+
+async function addChannel() {
+    await saveChannelFromModal();
+}
+
+async function deleteChannelFromModal() {
+    if (editingChannelIndex < 0 || editingChannelIndex >= channels.length) return;
+    if (!confirm('Are you sure you want to remove this notification channel?')) return;
+
+    channels.splice(editingChannelIndex, 1);
     renderChannels();
 
     await saveChannels();
@@ -651,6 +684,7 @@ async function addChannel() {
 }
 
 async function removeChannel(index) {
+    if (!confirm('Are you sure you want to remove this notification channel?')) return;
     channels.splice(index, 1);
     renderChannels();
 
@@ -690,14 +724,38 @@ async function testChannel(index) {
     }
 }
 
-function openChannelModal() {
-    document.getElementById('newChannelName').value = '';
-    document.getElementById('newChannelUrl').value = '';
-    document.getElementById('notificationChannelModal').classList.add('active');
-    setTimeout(() => document.getElementById('newChannelName')?.focus(), 50);
+function openChannelModal(index = -1) {
+    editingChannelIndex = typeof index === 'number' ? index : -1;
+    const modalTitle = document.getElementById('notificationChannelModalTitle');
+    const nameInput = document.getElementById('newChannelName');
+    const urlInput = document.getElementById('newChannelUrl');
+    const deleteBtn = document.getElementById('deleteChannelBtn');
+    const saveLabel = document.getElementById('saveChannelLabel');
+    const saveIcon = document.getElementById('saveChannelIcon');
+
+    if (editingChannelIndex >= 0 && channels[editingChannelIndex]) {
+        const channel = channels[editingChannelIndex];
+        if (modalTitle) modalTitle.textContent = 'Edit Notification Channel';
+        if (nameInput) nameInput.value = channel.name || '';
+        if (urlInput) urlInput.value = channel.url || '';
+        if (saveLabel) saveLabel.textContent = 'Save Channel';
+        if (saveIcon) saveIcon.className = 'mdi mdi-content-save';
+        if (deleteBtn) deleteBtn.style.display = 'inline-flex';
+    } else {
+        if (modalTitle) modalTitle.textContent = 'Add Notification Channel';
+        if (nameInput) nameInput.value = '';
+        if (urlInput) urlInput.value = '';
+        if (saveLabel) saveLabel.textContent = 'Add Channel';
+        if (saveIcon) saveIcon.className = 'mdi mdi-plus';
+        if (deleteBtn) deleteBtn.style.display = 'none';
+    }
+
+    document.getElementById('notificationChannelModal')?.classList.add('active');
+    setTimeout(() => nameInput?.focus(), 50);
 }
 
 function closeChannelModal() {
+    editingChannelIndex = -1;
     document.getElementById('notificationChannelModal')?.classList.remove('active');
 }
 

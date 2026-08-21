@@ -571,7 +571,7 @@
     <div class="modal" id="notificationChannelModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 class="modal-title">Add Notification Channel</h2>
+                <h2 class="modal-title" id="notificationChannelModalTitle">Add Notification Channel</h2>
                 <button type="button" class="modal-close" onclick="closeChannelModal()"><i class="mdi mdi-close"></i></button>
             </div>
             <div class="modal-scrollable">
@@ -585,9 +585,10 @@
                 </div>
             </div>
             <div class="modal-footer">
+                <button type="button" class="btn btn-danger" id="deleteChannelBtn" onclick="deleteChannelFromModal()" style="display:none;"><i class="mdi mdi-delete"></i> Remove</button>
                 <div style="display:flex;gap:0.75rem;margin-left:auto;">
                     <button type="button" class="btn btn-secondary" onclick="closeChannelModal()">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="addChannel()"><i class="mdi mdi-plus"></i> Add Channel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveChannelFromModal()"><i class="mdi mdi-plus" id="saveChannelIcon"></i> <span id="saveChannelLabel">Add Channel</span></button>
                 </div>
             </div>
         </div>

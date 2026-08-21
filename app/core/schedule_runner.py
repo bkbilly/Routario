@@ -914,9 +914,18 @@ async def _send_schedule_notification(session, schedule: ScheduledReport, user: 
         return
     channels = [
         c for c in (user.notification_channels or [])
-        if isinstance(c, dict) and c.get("name") in selected and c.get("url")
+        if isinstance(c, dict) and c.get("url") and (
+            (c.get("id") and c.get("id") in selected) or
+            (c.get("name") and c.get("name") in selected)
+        )
     ]
-    missing_selected = [n for n in selected if n not in {c.get("name") for c in channels if isinstance(c, dict)}]
+    found_keys = set()
+    for c in channels:
+        if isinstance(c, dict):
+            if c.get("id"): found_keys.add(c["id"])
+            if c.get("name"): found_keys.add(c["name"])
+
+    missing_selected = [n for n in selected if n not in found_keys]
     if missing_selected:
         db = get_db()
         additional = await db.get_notification_channels_by_names(missing_selected, company_id=user.company_id)

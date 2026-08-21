@@ -157,10 +157,12 @@ async def test_user_notification_channel(
         raise HTTPException(status_code=404, detail="User not found")
 
     channels = user.notification_channels or []
+    payload_id = getattr(payload, "id", None)
     saved = next(
         (
             channel for channel in channels
-            if channel.get("name") == payload.name and channel.get("url") == payload.url
+            if (payload_id and channel.get("id") == payload_id)
+            or (channel.get("name") == payload.name and channel.get("url") == payload.url)
         ),
         None,
     )

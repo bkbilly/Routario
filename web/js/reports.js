@@ -2206,6 +2206,16 @@ function _buildSfUserList() {
     _updateSfUserLabel();
 }
 
+window.addEventListener('routario:notification-channels-updated', (evt) => {
+    if (Array.isArray(evt.detail)) {
+        _notificationChannels = evt.detail;
+        if (typeof _renderSfChannels === 'function') {
+            const selected = typeof _getSelectedScheduleChannels === 'function' ? _getSelectedScheduleChannels() : [];
+            _renderSfChannels(selected);
+        }
+    }
+});
+
 function _renderSfChannels(selected = []) {
     const list = document.getElementById('sfChannelList');
     if (!list) return;
@@ -2214,12 +2224,16 @@ function _renderSfChannels(selected = []) {
         return;
     }
     const selectedSet = new Set(selected || []);
-    list.innerHTML = _notificationChannels.map(channel => `
-        <label class="channel-pill${selectedSet.has(channel.name) ? ' active' : ''}">
-            <input type="checkbox" class="sf-channel-cb" value="${_esc(channel.name)}" ${selectedSet.has(channel.name) ? 'checked' : ''} onchange="onSfChannelChange(this)">
+    list.innerHTML = _notificationChannels.map(channel => {
+        const key = channel.id || channel.name;
+        const isChecked = selectedSet.has(key) || selectedSet.has(channel.name);
+        return `
+        <label class="channel-pill${isChecked ? ' active' : ''}">
+            <input type="checkbox" class="sf-channel-cb" value="${_esc(key)}" ${isChecked ? 'checked' : ''} onchange="onSfChannelChange(this)">
             <span>${_esc(channel.name)}</span>
         </label>
-    `).join('');
+    `;
+    }).join('');
 }
 
 function onSfChannelChange(cb) {

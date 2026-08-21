@@ -773,12 +773,12 @@ class DatabaseService:
     async def get_notification_channels_by_names(
         self, names: List[str], company_id: Optional[int] = None
     ) -> List[Dict[str, str]]:
-        """Look up notification channels by name across superadmins and company users."""
+        """Look up notification channels by ID or name across superadmins and company users."""
         if not names:
             return []
-        name_set = set(names)
+        key_set = set(names)
         found_channels: List[Dict[str, str]] = []
-        found_names: set[str] = set()
+        found_keys: set[str] = set()
 
         async with self.get_session() as session:
             conditions = [User.is_admin == True]
@@ -791,11 +791,18 @@ class DatabaseService:
             for user in users:
                 channels = user.notification_channels or []
                 for ch in channels:
-                    if isinstance(ch, dict) and ch.get("name") in name_set and ch.get("url"):
-                        ch_name = ch["name"]
-                        if ch_name not in found_names:
+                    if isinstance(ch, dict) and ch.get("url"):
+                        ch_id = ch.get("id")
+                        ch_name = ch.get("name")
+                        matched_key = None
+                        if ch_id and ch_id in key_set:
+                            matched_key = ch_id
+                        elif ch_name and ch_name in key_set:
+                            matched_key = ch_name
+
+                        if matched_key and matched_key not in found_keys:
                             found_channels.append(ch)
-                            found_names.add(ch_name)
+                            found_keys.add(matched_key)
 
         return found_channels
 
@@ -1311,6 +1318,7 @@ class DatabaseService:
         self,
         user_id: int,
         unread_only: bool = False,
+        read_only: bool = False,
         device_id: Optional[int] = None,
         limit: int = 50,
         offset: int = 0,
@@ -1319,6 +1327,8 @@ class DatabaseService:
             query = select(AlertHistory).where(AlertHistory.user_id == user_id)
             if unread_only:
                 query = query.where(AlertHistory.is_read == False)
+            elif read_only:
+                query = query.where(AlertHistory.is_read == True)
             if device_id:
                 query = query.where(AlertHistory.device_id == device_id)
             query = query.order_by(AlertHistory.created_at.desc()).limit(limit).offset(offset)
