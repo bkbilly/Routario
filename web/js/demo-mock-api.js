@@ -167,6 +167,24 @@
             { key: 'admin_username', label: 'Default Superuser Name', type: 'str', category: 'Security & Token Policies', description: 'Primary administrator username', secret: false, readonly: true, value: 'admin', has_value: true }
         ]
     };
+
+    const users = [
+        DEMO_USER,
+        { id: 2, username: 'dispatcher', email: 'dispatch@routario.local', is_admin: false, is_company_admin: false, company_id: 1, permissions: ['view_reports', 'view_devices'], units: 'metric', currency: 'EUR' },
+        {
+            id: 3,
+            username: 'fleetadmin',
+            email: 'fleetadmin@routario.local',
+            is_admin: false,
+            is_company_admin: true,
+            company_id: 1,
+            permissions: [
+                'view_management', 'view_devices', 'edit_devices', 'manage_alerts',
+                'manage_geofences', 'view_history', 'view_reports', 'manage_routes',
+                'manage_tickets', 'manage_users', 'send_commands', 'manage_drivers', 'manage_fuel',
+                'manage_maintenance', 'manage_logbook', 'live_share',
+            ],
+            units: 'metric',
             currency: 'EUR',
         },
     ];
