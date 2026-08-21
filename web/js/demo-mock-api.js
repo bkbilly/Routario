@@ -42,12 +42,17 @@
             { name: 'Ops Email', url: 'mailto:ops@example.com' },
             { name: 'Dispatch Slack', url: 'slack://demo/webhook' },
         ],
+        webhook_urls: [
+            'https://demo.routario.com/api/webhooks/telematics',
+            'https://hooks.slack.com/services/demo/telemetry',
+        ],
         permissions: [
-            'view_management', 'view_devices', 'edit_devices', 'manage_alerts',
-            'manage_geofences', 'view_history', 'view_reports', 'manage_routes',
-            'manage_tickets', 'manage_users', 'manage_integrations', 'send_commands', 'view_audit',
-            'view_health', 'manage_backups', 'manage_logbook', 'manage_fuel',
-            'manage_maintenance',
+            'view_dashboard', 'view_management', 'view_devices', 'edit_devices', 'send_commands',
+            'manage_alerts', 'manage_integrations', 'manage_geofences', 'view_history',
+            'manage_routes', 'manage_logbook', 'manage_fuel', 'manage_maintenance',
+            'voice_ptt', 'live_share', 'manage_users', 'manage_drivers', 'manage_mfa',
+            'view_reports', 'llm', 'view_health', 'view_audit',
+            'manage_api_keys', 'manage_tickets', 'manage_webhooks', 'manage_backups',
         ],
     };
 
@@ -116,23 +121,52 @@
         },
     ];
 
-    const users = [
-        DEMO_USER,
-        { id: 2, username: 'dispatcher', email: 'dispatch@routario.local', is_admin: false, is_company_admin: false, company_id: 1, permissions: ['view_reports', 'view_devices'], units: 'metric', currency: 'EUR' },
-        {
-            id: 3,
-            username: 'fleetadmin',
-            email: 'fleetadmin@routario.local',
-            is_admin: false,
-            is_company_admin: true,
-            company_id: 1,
-            permissions: [
-                'view_management', 'view_devices', 'edit_devices', 'manage_alerts',
-                'manage_geofences', 'view_history', 'view_reports', 'manage_routes',
-                'manage_tickets', 'manage_users', 'send_commands', 'manage_drivers', 'manage_fuel',
-                'manage_maintenance', 'manage_logbook', 'live_share',
-            ],
-            units: 'metric',
+    const demoSystemSettingsCategories = {
+        'Core System & Operations': [
+            { key: 'log_level', label: 'System Log Level', type: 'str', category: 'Core System & Operations', description: 'Global logging verbosity level', secret: false, readonly: false, value: 'INFO', has_value: true, options: ['DEBUG', 'INFO', 'WARNING', 'ERROR'] },
+            { key: 'offline_check_interval_seconds', label: 'Offline Check Interval (s)', type: 'int', category: 'Core System & Operations', description: 'Offline device detection check frequency in seconds', secret: false, readonly: false, value: 30, has_value: true },
+            { key: 'enable_websockets', label: 'WebSockets Enabled', type: 'bool', category: 'Core System & Operations', description: 'Enable live WebSocket connection server', secret: false, readonly: false, value: true, has_value: true },
+            { key: 'enable_notifications', label: 'Notifications Enabled', type: 'bool', category: 'Core System & Operations', description: 'Enable push notification delivery system', secret: false, readonly: false, value: true, has_value: true },
+            { key: 'enable_command_queue', label: 'Command Queue Enabled', type: 'bool', category: 'Core System & Operations', description: 'Enable background queueing for device commands', secret: false, readonly: false, value: true, has_value: true }
+        ],
+        'Email & SMTP Notifications': [
+            { key: 'smtp_enabled', label: 'SMTP Email Enabled', type: 'bool', category: 'Email & SMTP Notifications', description: 'Enable sending platform system emails for alerts and ticket assignments', secret: false, readonly: false, value: true, has_value: true },
+            { key: 'smtp_host', label: 'SMTP Server Host', type: 'str', category: 'Email & SMTP Notifications', description: 'SMTP server host address (e.g. smtp.gmail.com)', secret: false, readonly: false, value: 'smtp.gmail.com', has_value: true },
+            { key: 'smtp_port', label: 'SMTP Server Port', type: 'int', category: 'Email & SMTP Notifications', description: 'SMTP server port (usually 587 for TLS, 465 for SSL)', secret: false, readonly: false, value: 587, has_value: true },
+            { key: 'smtp_username', label: 'SMTP Username / Email', type: 'str', category: 'Email & SMTP Notifications', description: 'Authentication username or email address', secret: false, readonly: false, value: 'alerts@routario.local', has_value: true },
+            { key: 'smtp_password', label: 'SMTP Password', type: 'str', category: 'Email & SMTP Notifications', description: 'SMTP authentication password or app password', secret: true, readonly: false, value: '', has_value: true },
+            { key: 'smtp_use_tls', label: 'Use STARTTLS', type: 'bool', category: 'Email & SMTP Notifications', description: 'Enable TLS encryption for outgoing emails', secret: false, readonly: false, value: true, has_value: true },
+            { key: 'smtp_from_email', label: 'Sender Email (From)', type: 'str', category: 'Email & SMTP Notifications', description: 'Email address shown as the sender', secret: false, readonly: false, value: 'noreply@routario.local', has_value: true },
+            { key: 'smtp_from_name', label: 'Sender Name', type: 'str', category: 'Email & SMTP Notifications', description: 'Display name for sent emails', secret: false, readonly: false, value: 'Routario Telematics', has_value: true }
+        ],
+        'AI Copilot & LLM Engine': [
+            { key: 'llm_enabled', label: 'LLM Copilot Enabled', type: 'bool', category: 'AI Copilot & LLM Engine', description: 'Enable AI-driven custom reports and natural language queries', secret: false, readonly: false, value: true, has_value: true },
+            { key: 'llm_active_provider', label: 'Active LLM Provider', type: 'str', category: 'AI Copilot & LLM Engine', description: 'Selected LLM backend service', secret: false, readonly: false, value: 'gemini', has_value: true, options: ['gemini', 'openai', 'claude'] },
+            { key: 'llm_gemini_api_key', label: 'Gemini API Key', type: 'str', category: 'AI Copilot & LLM Engine', description: 'Google Gemini API key for AI custom report generation', secret: true, readonly: false, value: '', has_value: true },
+            { key: 'llm_gemini_model', label: 'Gemini Model Version', type: 'str', category: 'AI Copilot & LLM Engine', description: 'Gemini model identifier', secret: false, readonly: false, value: 'gemini-2.5-flash-lite', has_value: true }
+        ],
+        'Web Push Notifications': [
+            { key: 'vapid_public_key', label: 'VAPID Public Key', type: 'str', category: 'Web Push Notifications', description: 'Public key for browser push notifications', secret: false, readonly: false, value: 'BEl62iUYgUivxIkv69yViEuiBI788gY7U...', has_value: true },
+            { key: 'vapid_mailto', label: 'VAPID Contact Email', type: 'str', category: 'Web Push Notifications', description: 'Admin contact mailto for push service providers', secret: false, readonly: false, value: 'mailto:admin@routario.local', has_value: true }
+        ],
+        'Telematics & Trip Rules': [
+            { key: 'trip_min_distance_km', label: 'Min Trip Distance (km)', type: 'float', category: 'Telematics & Trip Rules', description: 'Minimum distance threshold to classify movement as a trip', secret: false, readonly: false, value: 0.1, has_value: true },
+            { key: 'trip_min_duration_seconds', label: 'Min Trip Duration (s)', type: 'int', category: 'Telematics & Trip Rules', description: 'Minimum duration threshold in seconds to record a trip', secret: false, readonly: false, value: 60, has_value: true }
+        ],
+        'Maps, Geocoding & Routing': [
+            { key: 'valhalla_enabled', label: 'Valhalla Routing Enabled', type: 'bool', category: 'Maps, Geocoding & Routing', description: 'Enable local Valhalla map routing and speed limit lookups', secret: false, readonly: false, value: true, has_value: true },
+            { key: 'valhalla_url', label: 'Valhalla Server URL', type: 'str', category: 'Maps, Geocoding & Routing', description: 'URL of Valhalla routing server instance', secret: false, readonly: false, value: 'http://localhost:8002', has_value: true }
+        ],
+        'History Data & Retention': [
+            { key: 'history_batch_size', label: 'History Batch Query Limit', type: 'int', category: 'History Data & Retention', description: 'Maximum position records retrieved per history query batch', secret: false, readonly: false, value: 2000, has_value: true },
+            { key: 'history_max_api_limit', label: 'History API Record Limit', type: 'int', category: 'History Data & Retention', description: 'Hard limit for max positions returned via API', secret: false, readonly: false, value: 10000, has_value: true },
+            { key: 'history_retention_enabled', label: 'History Retention Enabled', type: 'bool', category: 'History Data & Retention', description: 'Enable automatic purging of position records older than retention period', secret: false, readonly: false, value: false, has_value: true },
+            { key: 'history_retention_days', label: 'Data Retention Period (Days)', type: 'int', category: 'History Data & Retention', description: 'Number of days to keep historical telemetry position logs', secret: false, readonly: false, value: 90, has_value: true }
+        ],
+        'Security & Token Policies': [
+            { key: 'admin_username', label: 'Default Superuser Name', type: 'str', category: 'Security & Token Policies', description: 'Primary administrator username', secret: false, readonly: true, value: 'admin', has_value: true }
+        ]
+    };
             currency: 'EUR',
         },
     ];
@@ -844,9 +878,46 @@
         if (!path.includes('/api/')) return null;
 
         const apiPath = path.slice(path.indexOf('/api/') + 4);
-        if (apiPath === '/users/1') return json(DEMO_USER);
+        if (apiPath === '/system-settings/public') {
+            return json({
+                history_batch_size: 2000,
+                history_max_api_limit: 10000,
+                trip_min_distance_km: 0.1,
+                trip_min_duration_seconds: 60,
+                llm_enabled: true,
+                smtp_enabled: true,
+            });
+        }
+        if (apiPath === '/system-settings') {
+            if (method === 'POST' || method === 'PUT') {
+                const key = body.key;
+                const value = body.value;
+                for (const catList of Object.values(demoSystemSettingsCategories)) {
+                    const item = catList.find(i => i.key === key);
+                    if (item) {
+                        item.value = value;
+                        item.has_value = Boolean(value);
+                        break;
+                    }
+                }
+                return json({ status: 'ok', key: body.key, value: body.value });
+            }
+            return json({ categories: demoSystemSettingsCategories });
+        }
+        if (apiPath === '/users/me' || apiPath === '/users/1' || apiPath.match(/^\/users\/\d+$/)) {
+            const uid = apiPath === '/users/me' ? 1 : Number(apiPath.split('/').pop());
+            const targetUser = users.find(u => u.id === uid) || DEMO_USER;
+            if (method === 'PUT' || method === 'PATCH') {
+                if (Array.isArray(body.webhook_urls)) targetUser.webhook_urls = body.webhook_urls;
+                if (Array.isArray(body.notification_channels)) targetUser.notification_channels = body.notification_channels;
+                if (body.units !== undefined) targetUser.units = body.units;
+                if (body.currency !== undefined) targetUser.currency = body.currency;
+                if (body.email !== undefined) targetUser.email = body.email;
+                if (body.username !== undefined) targetUser.username = body.username;
+            }
+            return json(targetUser);
+        }
         if (apiPath === '/users') return json(users);
-        if (apiPath.match(/^\/users\/\d+$/)) return json(users.find(u => u.id === Number(apiPath.split('/').pop())) || DEMO_USER);
         if (apiPath === '/runtime-logs') {
             const limit = parseInt(url.searchParams.get('limit') || '1000', 10);
             return json(runtimeLogPayload(limit));
