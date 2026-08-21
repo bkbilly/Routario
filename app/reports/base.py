@@ -19,6 +19,7 @@ class ReportDefinition:
     supports_historical_toggle: bool = False
     super_admin_required: bool = False
     company_admin_required: bool = False
+    permission_required: Optional[str] = None
     schedule_supported: bool = True
     schedule_uses_device_filter: bool = True
     schedule_uses_user_filter: bool = False
@@ -26,9 +27,12 @@ class ReportDefinition:
     schedule_controls: tuple[dict[str, Any], ...] = ()
 
     def public(self, user: Any) -> Optional[dict[str, Any]]:
+        from core.permissions import user_has_permission
         if self.super_admin_required and not user.is_admin:
             return None
         if self.company_admin_required and not (user.is_admin or user.is_company_admin):
+            return None
+        if self.permission_required and not user_has_permission(user, self.permission_required):
             return None
         return {
             "key": self.key,
@@ -42,6 +46,7 @@ class ReportDefinition:
             "supports_historical_toggle": self.supports_historical_toggle,
             "super_admin_required": self.super_admin_required,
             "company_admin_required": self.company_admin_required,
+            "permission_required": self.permission_required,
             "schedule_supported": self.schedule_supported,
             "schedule_uses_device_filter": self.schedule_uses_device_filter,
             "schedule_uses_user_filter": self.schedule_uses_user_filter,

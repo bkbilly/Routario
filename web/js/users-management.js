@@ -19,12 +19,11 @@ let _usrAssignedDevices = new Set();
 
 // Permission groups definition (mirrors backend PERMISSION_GROUPS)
 const PERMISSION_GROUPS = [
-    { label: 'Devices & Integrations', perms: [['view_devices','View Devices'],['edit_devices','Edit Devices'],['send_commands','Send Commands'],['manage_integrations','Manage Integrations']] },
-    { label: 'Monitoring & Reports', perms: [['manage_alerts','Manage Alerts'],['manage_geofences','Manage Geofences'],['view_history','View History'],['view_reports','View Reports']] },
-    { label: 'Fleet Operations', perms: [['manage_drivers','Manage Drivers'],['manage_fuel','Manage Fuel'],['manage_maintenance','Manage Maintenance'],['manage_logbook','Manage Logbook'],['manage_routes','Manage Routes'],['manage_tickets','Manage Tickets']] },
-    { label: 'Communication & Sharing', perms: [['voice_ptt','Voice PTT'],['live_share','Live Share']] },
-    { label: 'Administration', perms: [['view_management','View Management'],['manage_users','Manage Users'],['view_audit','View Audit Log'],['view_health','View Health Checks']] },
-    { label: 'Account Tools', perms: [['manage_api_keys','Manage API Keys'],['manage_mfa',"Manage Users' MFA"],['manage_backups','Backup & Restore']] },
+    { label: 'Dashboard', perms: [['view_dashboard','View Dashboard'],['view_history','View History'],['manage_geofences','Manage Geofences'],['manage_routes','Manage Routes'],['manage_logbook','Manage Logbook'],['manage_fuel','Manage Fuel'],['manage_maintenance','Manage Maintenance'],['voice_ptt','Voice PTT'],['live_share','Live Share']] },
+    { label: 'Device Management', perms: [['view_devices','View Devices'],['edit_devices','Edit Devices'],['send_commands','Send Commands'],['manage_alerts','Manage Alerts'],['manage_integrations','Manage Integrations']] },
+    { label: 'Management', perms: [['view_management','View Management'],['manage_users','Manage Users'],['manage_drivers','Manage Drivers'],['manage_mfa',"Manage Users' MFA"]] },
+    { label: 'Fleet Reports', perms: [['view_reports','View Reports'],['llm','AI Copilot & LLM Reports'],['view_health','View Health Checks'],['view_audit','View Audit Log']] },
+    { label: 'User Settings', perms: [['manage_api_keys','Manage API Keys'],['manage_tickets','Manage Tickets'],['manage_webhooks','Manage Webhooks'],['manage_backups','Backup & Restore']] },
 ];
 const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap(g => g.perms.map(p => p[0]));
 
@@ -244,13 +243,23 @@ function _usrRenderPermissions() {
         hintEl.textContent = 'Limited to your own permissions';
     }
 
-    // Permissions that don't apply to regular users
-    const adminOnlyPerms = new Set(['manage_users', 'edit_devices', 'manage_integrations', 'view_management', 'manage_routes', 'manage_tickets', 'view_audit', 'view_health', 'manage_mfa', 'manage_backups']);
-    const isUserRole = role === 'user';
+    const superAdminOnlyPerms = new Set(['view_audit']);
+    const regularUserForbiddenPerms = new Set([
+        'manage_users',
+        'manage_mfa',
+        'view_health',
+        'manage_backups',
+        'manage_integrations',
+        'manage_routes',
+    ]);
 
     container.innerHTML = PERMISSION_GROUPS.map(group => {
         const rows = group.perms
-            .filter(([key]) => !(isUserRole && adminOnlyPerms.has(key)))
+            .filter(([key]) => {
+                if (superAdminOnlyPerms.has(key)) return false;
+                if (role === 'user' && regularUserForbiddenPerms.has(key)) return false;
+                return true;
+            })
             .map(([key, label]) => {
                 const canGrant  = callerPerms.has(key) && !isEditingSelf;
                 const isChecked = editPerms.has(key);

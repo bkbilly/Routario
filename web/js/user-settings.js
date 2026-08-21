@@ -103,6 +103,7 @@ function switchSettingsTab(name, pushState = true) {
     const sections = ['profile', 'tickets', 'webhooks', 'apiKeys', 'backups', 'system'];
     if (!sections.includes(name)) name = fallback;
     if (name === 'tickets' && !hasPermission('manage_tickets')) name = fallback;
+    if (name === 'webhooks' && !hasPermission('manage_webhooks')) name = fallback;
     if (name === 'backups' && !((IS_ADMIN || IS_COMPANY_ADMIN) && hasPermission('manage_backups'))) name = fallback;
     if (name === 'apiKeys' && !hasPermission('manage_api_keys')) name = fallback;
     if (name === 'system' && !IS_ADMIN) name = fallback;
@@ -127,6 +128,8 @@ function normalizeSettingsTab(name) {
 function applySettingsPermissions() {
     const ticketsTab = document.getElementById('settingsTabTickets');
     if (ticketsTab) ticketsTab.style.display = hasPermission('manage_tickets') ? '' : 'none';
+    const webhooksTab = document.getElementById('settingsTabWebhooks');
+    if (webhooksTab) webhooksTab.style.display = hasPermission('manage_webhooks') ? '' : 'none';
     const apiTab = document.getElementById('settingsTabApiKeys');
     if (apiTab) apiTab.style.display = hasPermission('manage_api_keys') ? '' : 'none';
     const backupTab = document.getElementById('settingsTabBackups');
@@ -144,11 +147,11 @@ function updateSettingsGearAction(name = currentSettingsTab) {
     const el = document.getElementById('snSettingsAction');
     if (!el) return;
     const actions = {
-        webhooks: {
+        webhooks: hasPermission('manage_webhooks') ? {
             label: 'Add Webhook',
             icon: 'mdi-link-plus',
             fn: 'openWebhookModal()',
-        },
+        } : null,
         tickets: {
             label: 'New Ticket',
             icon: 'mdi-ticket-confirmation-outline',

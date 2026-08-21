@@ -16,14 +16,21 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
-from core.auth import require_permission
+from core.auth import require_permission, get_current_user
 from core.database import get_db
+from core.permissions import user_has_permission
 from models import User
 from reports import get_report, get_report_definitions
 from reports.billing import billing_detail_payload
 from reports.common import parse_id_csv
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
+
+
+async def require_reports_access(current_user: User = Depends(get_current_user)) -> User:
+    if user_has_permission(current_user, "view_reports") or user_has_permission(current_user, "view_audit"):
+        return current_user
+    raise HTTPException(status_code=403, detail="Permission required: view_reports or view_audit")
 
 
 class ReportPdfPayload(BaseModel):
@@ -71,7 +78,7 @@ async def _run_report(
 
 
 @router.get("/types")
-async def report_types(current_user: User = Depends(require_permission("view_reports"))):
+async def report_types(current_user: User = Depends(require_reports_access)):
     return get_report_definitions(current_user)
 
 
@@ -267,7 +274,7 @@ async def report_pdf_by_key(
     user_ids: Optional[str] = Query(None),
     driver_ids: Optional[str] = Query(None),
     historical: bool = Query(False),
-    current_user: User = Depends(require_permission("view_reports")),
+    current_user: User = Depends(require_reports_access),
 ):
     from core.schedule_runner import _pdf_branding, _write_schedule_pdf
 
@@ -350,7 +357,7 @@ async def report_by_key(
     user_ids: Optional[str] = Query(None),
     driver_ids: Optional[str] = Query(None),
     historical: bool = Query(False),
-    current_user: User = Depends(require_permission("view_reports")),
+    current_user: User = Depends(require_reports_access),
 ):
     known_params = {"start_date", "end_date", "device_ids", "user_ids", "driver_ids", "historical"}
     options = {k: v for k, v in request.query_params.items() if k not in known_params and v != ""}

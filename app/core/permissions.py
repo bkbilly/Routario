@@ -4,6 +4,7 @@ if TYPE_CHECKING:
     from models import User
 
 ALL_PERMISSIONS: List[str] = [
+    "view_dashboard",
     "view_devices",
     "edit_devices",
     "send_commands",
@@ -26,63 +27,61 @@ ALL_PERMISSIONS: List[str] = [
     "view_audit",
     "view_health",
     "manage_api_keys",
+    "manage_webhooks",
     "manage_mfa",
     "manage_backups",
 ]
 
 PERMISSION_GROUPS = [
     {
-        "label": "Devices & Integrations",
+        "label": "Dashboard",
         "perms": [
-            ("view_devices",        "View Devices"),
-            ("edit_devices",        "Edit Devices"),
-            ("send_commands",       "Send Commands"),
+            ("view_dashboard",     "View Dashboard"),
+            ("view_history",       "View History"),
+            ("manage_geofences",   "Manage Geofences"),
+            ("manage_routes",      "Manage Routes"),
+            ("manage_logbook",     "Manage Logbook"),
+            ("manage_fuel",        "Manage Fuel"),
+            ("manage_maintenance", "Manage Maintenance"),
+            ("voice_ptt",          "Voice PTT"),
+            ("live_share",         "Live Share"),
+        ],
+    },
+    {
+        "label": "Device Management",
+        "perms": [
+            ("view_devices",       "View Devices"),
+            ("edit_devices",       "Edit Devices"),
+            ("send_commands",      "Send Commands"),
+            ("manage_alerts",      "Manage Alerts"),
             ("manage_integrations", "Manage Integrations"),
         ],
     },
     {
-        "label": "Monitoring & Reports",
+        "label": "Management",
         "perms": [
-            ("manage_alerts",    "Manage Alerts"),
-            ("manage_geofences", "Manage Geofences"),
-            ("view_history",  "View History"),
-            ("view_reports",  "View Reports"),
-            ("llm",           "AI Copilot & LLM Reports"),
-        ],
-    },
-    {
-        "label": "Fleet Operations",
-        "perms": [
+            ("view_management",    "View Management"),
+            ("manage_users",       "Manage Users"),
             ("manage_drivers",     "Manage Drivers"),
-            ("manage_fuel",        "Manage Fuel"),
-            ("manage_maintenance", "Manage Maintenance"),
-            ("manage_logbook",     "Manage Logbook"),
-            ("manage_routes",      "Manage Routes"),
-            ("manage_tickets",     "Manage Tickets"),
+            ("manage_mfa",         "Manage Users' MFA"),
         ],
     },
     {
-        "label": "Communication & Sharing",
+        "label": "Fleet Reports",
         "perms": [
-            ("voice_ptt",  "Voice PTT"),
-            ("live_share", "Live Share"),
-        ],
-    },
-    {
-        "label": "Administration",
-        "perms": [
-            ("view_management", "View Management"),
-            ("manage_users",    "Manage Users"),
-            ("view_audit",      "View Audit Log"),
-            ("view_health",     "View Health Checks"),
+            ("view_reports",       "View Reports"),
+            ("llm",                "AI Copilot & LLM Reports"),
+            ("view_health",        "View Health Checks"),
+            ("view_audit",         "View Audit Log"),
         ],
     },
     {
         "label": "User Settings",
         "perms": [
-            ("manage_api_keys", "Manage API Keys"),
-            ("manage_mfa",      "Manage Users' MFA"),
-            ("manage_backups",  "Backup & Restore"),
+            ("manage_api_keys",    "Manage API Keys"),
+            ("manage_tickets",     "Manage Tickets"),
+            ("manage_webhooks",    "Manage Webhooks"),
+            ("manage_backups",     "Backup & Restore"),
         ],
     },
 ]

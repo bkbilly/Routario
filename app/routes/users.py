@@ -30,7 +30,14 @@ from sqlalchemy import and_
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
-DELEGATED_ADMIN_PERMISSIONS = {"manage_mfa"}
+REGULAR_USER_FORBIDDEN_PERMISSIONS = {
+    "manage_users",
+    "manage_mfa",
+    "view_health",
+    "manage_backups",
+    "manage_integrations",
+    "manage_routes",
+}
 
 
 def _check_manage_users(caller: User):
@@ -54,9 +61,13 @@ def _strip_regular_user_admin_permissions(
     is_admin: bool,
     is_company_admin: bool,
 ) -> List[str] | None:
-    if permissions is None or is_admin or is_company_admin:
+    if permissions is None:
+        return None
+    if not is_admin:
+        permissions = [p for p in permissions if p != "view_audit"]
+    if is_admin or is_company_admin:
         return permissions
-    return [p for p in permissions if p not in DELEGATED_ADMIN_PERMISSIONS]
+    return [p for p in permissions if p not in REGULAR_USER_FORBIDDEN_PERMISSIONS]
 
 
 class NotificationTestRequest(BaseModel):

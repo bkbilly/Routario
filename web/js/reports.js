@@ -50,12 +50,15 @@ const _CAN_SEE_LOGS     = _IS_ADMIN;
 document.addEventListener('DOMContentLoaded', async () => {
     checkLogin();
     await permissionsReady;
-    if (!hasPermission('view_reports') && !hasPermission('view_health') && !_CAN_SEE_LOGS) {
-        window.location.href = 'gps-dashboard.html';
+    const canSeeReports = hasPermission('view_reports') || hasPermission('view_audit');
+    if (!canSeeReports && !hasPermission('view_health') && !_CAN_SEE_LOGS) {
+        if (hasPermission('view_dashboard')) { window.location.href = 'gps-dashboard.html'; }
+        else if (hasPermission('view_management')) { window.location.href = 'management.html'; }
+        else { window.location.href = 'user-settings.html'; }
         return;
     }
 
-    document.getElementById('tabReports').style.display = hasPermission('view_reports') ? '' : 'none';
+    document.getElementById('tabReports').style.display = canSeeReports ? '' : 'none';
     document.getElementById('tabSchedules').style.display = hasPermission('view_reports') ? '' : 'none';
     document.getElementById('tabHealth').style.display = hasPermission('view_health') ? '' : 'none';
     document.getElementById('tabLogs').style.display = _CAN_SEE_LOGS ? '' : 'none';
@@ -66,7 +69,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('endDate').value   = _fmtDate(now);
     document.getElementById('startDate').value = _fmtDate(start);
 
-    if (hasPermission('view_reports')) {
+    if (canSeeReports) {
         _notificationChannels = (await permissionsReady)?.notification_channels || [];
         await _loadDevices();
         if (_CAN_SEE_USERS) await _loadUsers();
@@ -77,7 +80,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     _injectNavScheduleAction();
     const hash = RoutarioTabs.hashValue();
-    switchTab(_validReportTab(hash) ? hash : hasPermission('view_reports') ? 'reports' : hasPermission('view_health') ? 'health' : 'logs', false);
+    switchTab(_validReportTab(hash) ? hash : canSeeReports ? 'reports' : hasPermission('view_health') ? 'health' : 'logs', false);
 
     window.addEventListener('hashchange', () => {
         const next = RoutarioTabs.hashValue();

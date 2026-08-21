@@ -17,11 +17,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     checkLogin();
     await permissionsReady;
 
+    if (!hasPermission('view_dashboard')) {
+        if (hasPermission('view_management')) {
+            window.location.replace('management.html');
+        } else if (hasPermission('view_reports') || hasPermission('view_audit') || hasPermission('view_health')) {
+            window.location.replace('reports.html');
+        } else {
+            window.location.replace('user-settings.html');
+        }
+        return;
+    }
+
     // Hide elements the current user has no permission to access
     if (!hasPermission('manage_geofences')) {
         document.getElementById('drawGeofenceBtn')?.style.setProperty('display', 'none', 'important');
     }
-    if (!hasPermission('view_reports')) {
+    if (!hasPermission('view_reports') && !hasPermission('view_audit')) {
         document.getElementById('dashReportsLink')?.remove();
     }
     if (!hasPermission('view_management')) {

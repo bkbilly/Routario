@@ -126,7 +126,7 @@ async function initDeviceSection() {
     _devSectionInitialized = true;
 
     document.querySelectorAll('button[onclick*="openAddDeviceModal"]').forEach(btn => {
-        btn.style.display = (hasAdminAccess && hasPermission('edit_devices')) ? '' : 'none';
+        btn.style.display = hasPermission('edit_devices') ? '' : 'none';
     });
 
     const usersTabBtn = document.getElementById('usersTabBtn');
@@ -344,6 +344,7 @@ function renderDeviceTable(list) {
         const plate       = d.license_plate || '—';
         const cmds        = d.supports_commands !== false && hasPermission('send_commands');
         const companyName = allCompanies.find(c => c.id === d.company_id)?.name || '—';
+        const canEdit     = hasPermission('edit_devices');
 
         return `
         <tr class="device-row" ondblclick="openDeviceModal(${d.id},'general')">
@@ -359,7 +360,7 @@ function renderDeviceTable(list) {
             <td style="font-family:var(--font-mono);font-size:0.85rem;">${odometer}</td>
             <td style="text-align:right;white-space:nowrap;">
                 ${cmds ? `<button class="btn btn-secondary tbl-btn" onclick="openDeviceModal(${d.id},'commands')" title="Commands"><i class="mdi mdi-antenna"></i></button>` : ''}
-                <button class="btn btn-secondary tbl-btn" onclick="openDeviceModal(${d.id},'general')"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Edit</span></button>
+                <button class="btn btn-secondary tbl-btn" onclick="openDeviceModal(${d.id},'general')"><i class="mdi mdi-${canEdit ? 'pencil' : 'eye'}"></i> <span class="drv-btn-label">${canEdit ? 'Edit' : 'View'}</span></button>
             </td>
         </tr>`;
     }).join('');
@@ -402,13 +403,14 @@ function setDeviceModalTitle(device = null) {
 }
 
 function openAddDeviceModal() {
-    if (!hasAdminAccess || !hasPermission('edit_devices')) return;
+    if (!hasPermission('edit_devices')) return;
     editingDeviceId = null;
 
     setDeviceModalTitle();
     document.getElementById('submitText').textContent        = 'Add Device';
     document.getElementById('submitIcon').className         = 'mdi mdi-plus';
     document.getElementById('deleteDeviceBtn').style.display = 'none';
+    document.getElementById('submitBtn').style.display       = '';
     const usersTabBtnAdd = document.getElementById('usersTabBtn');
     if (usersTabBtnAdd) usersTabBtnAdd.style.display = 'none';
     const commandsTabBtnAdd = document.getElementById('commandsTabBtn');
@@ -421,6 +423,11 @@ function openAddDeviceModal() {
     document.getElementById('deviceProtocol').value          = '';
     document.getElementById('currentOdometer').value         = '0.0';
     document.getElementById('offlineTimeoutHours').value     = '24';
+
+    ['deviceName', 'licensePlate', 'vehicleType', 'currentOdometer', 'offlineTimeoutHours', 'tripMergeGapMinutes', 'deviceHasCamera'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = false;
+    });
 
     populateVehicleTypeSelect(document.getElementById('vehicleType'), DEFAULT_TYPE);
 
@@ -453,10 +460,12 @@ function openDeviceModal(deviceId, startTab = 'general') {
             if (typeof renderAlertsTable === 'function') renderAlertsTable();
         });
     }
+    const canEditDevice = hasPermission('edit_devices');
     setDeviceModalTitle(d);
     document.getElementById('submitText').textContent        = 'Save';
     document.getElementById('submitIcon').className         = 'mdi mdi-content-save';
-    document.getElementById('deleteDeviceBtn').style.display = hasAdminAccess ? 'inline-flex' : 'none';
+    document.getElementById('deleteDeviceBtn').style.display = canEditDevice ? 'inline-flex' : 'none';
+    document.getElementById('submitBtn').style.display       = canEditDevice ? '' : 'none';
     const exportBtnEdit = document.getElementById('exportDeviceProfileBtn');
     if (exportBtnEdit) exportBtnEdit.style.display = 'inline-flex';
     const usersTabBtnEdit = document.getElementById('usersTabBtn');
@@ -486,15 +495,17 @@ function openDeviceModal(deviceId, startTab = 'general') {
 
     const imeiEl     = document.getElementById('deviceImei');
     const protocolEl = document.getElementById('deviceProtocol');
-    imeiEl.disabled     = !hasAdminAccess || !hasPermission('edit_devices');
-    protocolEl.disabled = !hasAdminAccess || !hasPermission('edit_devices');
+    imeiEl.disabled     = !canEditDevice;
+    protocolEl.disabled = !canEditDevice;
     // Lock protocol when it is an integration and the user can't manage integrations
     if (!hasPermission('manage_integrations') && integrationProviders.some(p => p.provider_id === d.protocol)) {
         protocolEl.disabled = true;
     }
 
-    document.getElementById('deleteDeviceBtn').style.display = (hasAdminAccess && hasPermission('edit_devices')) ? 'inline-flex' : 'none';
-    document.getElementById('submitBtn').style.display       = '';
+    ['deviceName', 'licensePlate', 'vehicleType', 'currentOdometer', 'offlineTimeoutHours', 'tripMergeGapMinutes', 'deviceHasCamera'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = !canEditDevice;
+    });
 
     populateVehicleTypeSelect(document.getElementById('vehicleType'), d.vehicle_type || DEFAULT_TYPE);
 
@@ -602,6 +613,7 @@ function readCustomAttributes() {
 // ── Form Submit ───────────────────────────────────────────────────
 async function handleSubmit(event) {
     if (event) event.preventDefault();
+    if (!hasPermission('edit_devices')) return;
 
     const activeTab = document.querySelector('.modal-tab.active')?.getAttribute('data-tab');
     if (activeTab === 'commands') {

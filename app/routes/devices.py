@@ -46,7 +46,7 @@ async def get_all_devices(caller: User = Depends(require_company_admin), _: User
 
 
 @router.get("", response_model=List[DeviceResponse])
-async def get_devices(current_user: User = Depends(require_permission("view_devices"))):
+async def get_devices(current_user: User = Depends(get_current_user)):
     """Return devices for the caller. Company admins see all company devices."""
     db = get_db()
     if current_user.is_admin:
@@ -71,12 +71,11 @@ async def create_device(
     device_data: DeviceCreate,
     request: Request,
     assign_to: Optional[int] = Query(None, description="User ID to assign device to"),
-    caller: User = Depends(require_company_admin),
-    _: User = Depends(require_permission("edit_devices")),
+    caller: User = Depends(require_permission("edit_devices")),
 ):
-    """Create a new device. Super admin or company admin."""
+    """Create a new device."""
     if not caller.is_admin:
-        device_data.company_id = caller.company_id  # force company for company admins
+        device_data.company_id = caller.company_id  # force company for non-super admins
 
     db = get_db()
     existing = await db.get_device_by_imei(device_data.imei)
@@ -112,6 +111,7 @@ async def update_device(
     request: Request,
     new_odometer: Optional[float] = Query(None),
     caller: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("edit_devices")),
 ):
     db = get_db()
     old_device = await db.get_device_by_id(device_id)
@@ -151,8 +151,8 @@ async def update_device(
 
 
 @router.delete("/{device_id}")
-async def delete_device(device_id: int, request: Request, admin: User = Depends(require_company_admin), _: User = Depends(require_permission("edit_devices"))):
-    """Delete a device and all associated data. Admin only."""
+async def delete_device(device_id: int, request: Request, caller: User = Depends(verify_device_access), _: User = Depends(require_permission("edit_devices"))):
+    """Delete a device and all associated data."""
     db = get_db()
 
     # Capture what we need before the CASCADE wipes it
@@ -170,7 +170,7 @@ async def delete_device(device_id: int, request: Request, admin: User = Depends(
     success = await db.delete_device(device_id)
     if not success:
         raise HTTPException(status_code=404, detail="Device not found")
-    await write_audit_log("device.deleted", actor=admin, company_id=device.company_id, target_type="device", target_id=device_id, request=request, metadata={"imei": imei})
+    await write_audit_log("device.deleted", actor=caller, company_id=device.company_id, target_type="device", target_id=device_id, request=request, metadata={"imei": imei})
 
     # Clear in-memory polling state for this IMEI
     clear_device_state(imei)

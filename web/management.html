@@ -1616,7 +1616,7 @@
     };
 
     const _sectionPermissions = {
-        devices:   null,
+        devices:   'view_devices',
         companies: null,
         users:     'manage_users',
         drivers:   'manage_drivers',
@@ -1631,6 +1631,10 @@
         if (name === 'companies') return localStorage.getItem('is_admin') === 'true';
         if (name === 'billing') return localStorage.getItem('is_admin') === 'true';
         return !perm || hasPermission(perm);
+    }
+
+    function _firstAccessibleSection() {
+        return SECTIONS.find(s => _canAccessSection(s)) || 'devices';
     }
 
     function _updateAddAction(name) {
@@ -1667,8 +1671,9 @@
     };
 
     function switchMgmtSection(name, pushState) {
-        if (!SECTIONS.includes(name)) name = 'devices';
-        if (!_canAccessSection(name)) name = 'devices';
+        if (!SECTIONS.includes(name) || !_canAccessSection(name)) {
+            name = _firstAccessibleSection();
+        }
         RoutarioTabs.activate(_sectionTabs, name);
         _updateAddAction(name);
         if (pushState !== false) RoutarioTabs.replaceHash(name);
@@ -1680,7 +1685,12 @@
     document.addEventListener('DOMContentLoaded', async () => {
         checkLogin();
         await permissionsReady;
-        if (!hasPermission('view_management')) { window.location.href = 'gps-dashboard.html'; return; }
+        if (!hasPermission('view_management')) {
+            if (hasPermission('view_dashboard')) { window.location.href = 'gps-dashboard.html'; }
+            else if (hasPermission('view_reports') || hasPermission('view_audit') || hasPermission('view_health')) { window.location.href = 'reports.html'; }
+            else { window.location.href = 'user-settings.html'; }
+            return;
+        }
         const isAdmin        = localStorage.getItem('is_admin') === 'true';
         const isCompanyAdmin = localStorage.getItem('is_company_admin') === 'true';
         if (isAdmin) {
@@ -1689,6 +1699,9 @@
             const ch = document.getElementById('userCompanyHeader');
             if (ch) ch.style.display = '';
         }
+        const deviceTab = document.getElementById('mgmtTabDevices');
+        if (deviceTab) deviceTab.style.display = hasPermission('view_devices') ? '' : 'none';
+
         const userTab = document.getElementById('mgmtTabUsers');
         if (userTab) userTab.style.display = hasPermission('manage_users') ? '' : 'none';
 
@@ -1700,12 +1713,12 @@
         }
 
         const hash = RoutarioTabs.hashValue();
-        switchMgmtSection(SECTIONS.includes(hash) ? hash : 'devices', false);
+        switchMgmtSection(SECTIONS.includes(hash) ? hash : _firstAccessibleSection(), false);
     });
 
     window.addEventListener('hashchange', () => {
         const hash = RoutarioTabs.hashValue();
-        switchMgmtSection(SECTIONS.includes(hash) ? hash : 'devices', false);
+        switchMgmtSection(SECTIONS.includes(hash) ? hash : _firstAccessibleSection(), false);
     });
 
     document.addEventListener('keydown', e => {

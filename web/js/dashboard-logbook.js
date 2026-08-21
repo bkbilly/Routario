@@ -105,11 +105,18 @@ function openLogbookModal(deviceId) {
     if (fuelTabBtn)    fuelTabBtn.style.display    = hasPermission('manage_fuel')        ? '' : 'none';
     if (maintTabBtn)   maintTabBtn.style.display   = hasPermission('manage_maintenance') ? '' : 'none';
 
+    const config    = device?.config || {};
+    const alertRows = Array.isArray(config.alert_rows) ? config.alert_rows : [];
+    const hasMaint  = alertRows.some(r => r.alertKey === 'maintenance_alert');
+
     // Open to the first available tab
     const firstTab = hasPermission('manage_logbook') ? 'entries'
                    : hasPermission('manage_fuel')    ? 'fuel'
-                   : 'maintenance';
-    switchLbTab(firstTab);
+                   : (hasPermission('manage_maintenance') && hasMaint) ? 'maintenance'
+                   : null;
+    if (firstTab) {
+        switchLbTab(firstTab);
+    }
     _lbUpdateMaintenanceTabVisibility(device);
 }
 
@@ -145,7 +152,7 @@ function _lbUpdateMaintenanceTabVisibility(device) {
     const alertRows = Array.isArray(config.alert_rows) ? config.alert_rows : [];
     const hasMaint  = alertRows.some(r => r.alertKey === 'maintenance_alert');
     const btn = document.getElementById('lbTabMaintenance');
-    if (btn) btn.style.display = hasMaint ? '' : 'none';
+    if (btn) btn.style.display = (hasPermission('manage_maintenance') && hasMaint) ? '' : 'none';
 }
 
 // ── Entry modal ───────────────────────────────────────────────────────────────

@@ -12,8 +12,8 @@ router = APIRouter(prefix="/api/audit-logs", tags=["audit"])
 
 
 def _require_audit_permission(user: User) -> None:
-    if not user.is_admin and "view_audit" not in (user.permissions or []):
-        raise HTTPException(status_code=403, detail="Permission required: view_audit")
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Super admin access required: view_audit")
 
 
 def _row(log: AuditLog, actor_username: Optional[str] = None, company_name: Optional[str] = None) -> dict:
