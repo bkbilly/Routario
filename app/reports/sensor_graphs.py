@@ -157,7 +157,7 @@ class SensorGraphsReport(Report):
             d = device_map.get(p.device_id)
             if not d:
                 continue
-            time_str = p.device_time.isoformat()
+            time_str = p.device_time.isoformat() + "Z" if p.device_time.tzinfo is None else p.device_time.isoformat()
             point_data: dict[str, Any] = {
                 "time": time_str,
             }

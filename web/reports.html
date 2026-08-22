@@ -937,6 +937,45 @@
 
 </div><!-- /container -->
 
+<!-- ── PDF Export Options Modal ─────────────────────────────────────────── -->
+<div class="modal" id="pdfExportModal">
+    <div class="modal-backdrop" onclick="closePdfExportModal()"></div>
+    <div class="modal-content" style="max-width:520px;">
+        <div class="modal-header">
+            <h3 class="modal-title" style="display:flex;align-items:center;gap:0.5rem;">
+                <i class="mdi mdi-file-pdf-box" style="color:var(--accent-primary);"></i> Export PDF Options
+            </h3>
+            <button class="modal-close" onclick="closePdfExportModal()">&times;</button>
+        </div>
+        <div class="modal-scrollable" style="padding:1.25rem;">
+            <p id="pdfExportRowCountMsg" style="font-size:0.92rem;color:var(--text-main);margin-bottom:1rem;"></p>
+            <div style="display:flex;flex-direction:column;gap:0.75rem;">
+                <button type="button" class="btn btn-primary" style="justify-content:flex-start;text-align:left;padding:0.75rem 1rem;" onclick="confirmPdfExport(true)">
+                    <div>
+                        <div style="font-weight:600;"><i class="mdi mdi-file-document-multiple-outline"></i> Export Full PDF (All Rows)</div>
+                        <div style="font-size:0.78rem;opacity:0.85;">Generates a multi-page PDF containing the entire dataset.</div>
+                    </div>
+                </button>
+                <button type="button" class="btn btn-secondary" style="justify-content:flex-start;text-align:left;padding:0.75rem 1rem;" onclick="confirmPdfExport(false)">
+                    <div>
+                        <div style="font-weight:600;"><i class="mdi mdi-file-document-outline"></i> Export First 500 Rows (Quick PDF)</div>
+                        <div style="font-size:0.78rem;color:var(--text-muted);">Generates a compact summary PDF capped at 500 rows.</div>
+                    </div>
+                </button>
+                <button type="button" class="btn btn-secondary" style="justify-content:flex-start;text-align:left;padding:0.75rem 1rem;" onclick="closePdfExportModal(); exportCsv();">
+                    <div>
+                        <div style="font-weight:600;"><i class="mdi mdi-file-delimited"></i> Export Full CSV Instead</div>
+                        <div style="font-size:0.78rem;color:var(--text-muted);">Fast, lightweight download with all rows and columns.</div>
+                    </div>
+                </button>
+            </div>
+        </div>
+        <div class="modal-footer" style="padding:0.75rem 1.25rem;display:flex;justify-content:flex-end;">
+            <button type="button" class="btn btn-secondary" onclick="closePdfExportModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <!-- ── Billing Detail Modal ─────────────────────────────────────────────── -->
 <div class="modal" id="billingDetailModal">
     <div class="modal-backdrop" onclick="closeBillingDetail()"></div>

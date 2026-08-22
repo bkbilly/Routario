@@ -1,8 +1,26 @@
-from datetime import datetime
+from datetime import datetime, timezone
+import zoneinfo
 from typing import Any, Optional
 
 from reports.base import Report, ReportDefinition
 from reports.common import round_value, table_payload, trip_rows
+
+
+def _trip_local_date(iso_str: str, tz_name: Optional[str]) -> str:
+    if not iso_str:
+        return ""
+    try:
+        dt = datetime.fromisoformat(iso_str.replace(" ", "T"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        if tz_name:
+            try:
+                dt = dt.astimezone(zoneinfo.ZoneInfo(tz_name))
+            except Exception:
+                pass
+        return dt.strftime("%Y-%m-%d")
+    except Exception:
+        return iso_str[:10]
 
 
 class DailyActivityReport(Report):
@@ -42,6 +60,7 @@ class DailyActivityReport(Report):
         group_by = (options or {}).get("group_by") or "fleet"
         trips = await trip_rows(session, current_user, start_date, end_date, device_ids)
         selected_drivers = set(driver_ids or [])
+        user_tz = getattr(current_user, "timezone", None) or getattr(current_user, "user_timezone", None)
         groups = {}
         for trip in trips:
             if group_by == "drivers":
@@ -49,7 +68,7 @@ class DailyActivityReport(Report):
                     continue
                 if selected_drivers and trip["driver_id"] not in selected_drivers:
                     continue
-            date = trip["start_time"][:10]
+            date = _trip_local_date(trip.get("start_time", ""), user_tz)
             key = date
             label = ""
             extra = ""

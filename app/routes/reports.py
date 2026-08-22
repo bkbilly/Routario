@@ -7,7 +7,7 @@ central report registry.
 import csv
 import io
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Optional
@@ -27,6 +27,14 @@ from reports.common import parse_id_csv
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 
+def _normalize_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 async def require_reports_access(current_user: User = Depends(get_current_user)) -> User:
     if user_has_permission(current_user, "view_reports") or user_has_permission(current_user, "view_audit"):
         return current_user
@@ -37,6 +45,8 @@ class ReportPdfPayload(BaseModel):
     title: Optional[str] = None
     report_type: str = "report"
     payload: dict[str, Any]
+    all_rows: bool = False
+    timezone: Optional[str] = None
 
 
 async def _run_report(
@@ -50,6 +60,8 @@ async def _run_report(
     options: Optional[dict] = None,
     historical: bool = False,
 ) -> dict:
+    start_date = _normalize_utc(start_date)
+    end_date = _normalize_utc(end_date)
     report = get_report(key)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -94,6 +106,9 @@ async def sensor_keys(
     from reports.sensor_graphs import get_sensor_meta, SENSOR_META
     from models.models import DeviceState, PositionRecord
     from sqlalchemy import select
+
+    start_date = _normalize_utc(start_date)
+    end_date = _normalize_utc(end_date)
 
     dev_ids = parse_id_csv(device_ids)[:5]
     db = get_db()
@@ -303,6 +318,7 @@ async def report_pdf_from_payload(
 
     filename = (payload.get("csv_filename") if isinstance(payload, dict) else None) or f"{body.report_type}.csv"
     filename = Path(filename).with_suffix(".pdf").name.replace('"', "")
+    effective_tz = body.timezone or getattr(current_user, "timezone", None) or "UTC"
     with tempfile.TemporaryDirectory(prefix="routario_report_pdf_") as td:
         pdf_path = Path(td) / filename
         _write_schedule_pdf(
@@ -315,7 +331,8 @@ async def report_pdf_from_payload(
             billing_details,
             logo_path,
             app_name,
-            current_user.timezone or "UTC",
+            effective_tz,
+            max_rows=None if body.all_rows else 500,
         )
         pdf_bytes = pdf_path.read_bytes()
 
@@ -336,6 +353,8 @@ async def report_pdf_by_key(
     user_ids: Optional[str] = Query(None),
     driver_ids: Optional[str] = Query(None),
     historical: bool = Query(False),
+    all_rows: bool = Query(False),
+    timezone: Optional[str] = Query(None),
     current_user: User = Depends(require_reports_access),
 ):
     from core.schedule_runner import _pdf_branding, _write_schedule_pdf
@@ -352,7 +371,7 @@ async def report_pdf_by_key(
     if historical and (not start_date or not end_date):
         raise HTTPException(status_code=400, detail="start_date and end_date are required for historical reports")
 
-    known_params = {"start_date", "end_date", "device_ids", "user_ids", "driver_ids", "historical"}
+    known_params = {"start_date", "end_date", "device_ids", "user_ids", "driver_ids", "historical", "all_rows", "timezone"}
     options = {k: v for k, v in request.query_params.items() if k not in known_params and v != ""}
     db = get_db()
     async with db.get_session() as session:
@@ -386,6 +405,7 @@ async def report_pdf_by_key(
 
     filename = (payload.get("csv_filename") if isinstance(payload, dict) else None) or f"{report_key}.csv"
     filename = Path(filename).with_suffix(".pdf").name.replace('"', "")
+    effective_tz = timezone or getattr(current_user, "timezone", None) or "UTC"
     with tempfile.TemporaryDirectory(prefix="routario_report_pdf_") as td:
         pdf_path = Path(td) / filename
         _write_schedule_pdf(
@@ -398,7 +418,8 @@ async def report_pdf_by_key(
             billing_details,
             logo_path,
             app_name,
-            current_user.timezone or "UTC",
+            effective_tz,
+            max_rows=None if all_rows else 500,
         )
         pdf_bytes = pdf_path.read_bytes()
 

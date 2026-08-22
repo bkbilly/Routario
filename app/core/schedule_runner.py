@@ -8,7 +8,7 @@ import logging
 import struct
 import tempfile
 import zlib
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from textwrap import wrap
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -434,11 +434,11 @@ async def _pdf_branding(session, user: User) -> tuple[str, Path | None]:
     return app_name, default_logo if default_logo.is_file() else None
 
 
-def _summary_items(data: dict) -> list[tuple[str, str]]:
-    return [(str(card.get("label") or ""), _pdf_cell_value(card.get("value"))) for card in data.get("summary") or []]
+def _summary_items(data: dict, timezone_name: str | None = "UTC") -> list[tuple[str, str]]:
+    return [(str(card.get("label") or ""), _pdf_cell_value(card.get("value"), None, timezone_name)) for card in data.get("summary") or []]
 
 
-def _pdf_cell_value(value, column: dict | None = None) -> str:
+def _pdf_cell_value(value, column: dict | None = None, timezone_name: str | None = "UTC") -> str:
     column = column or {}
     if value is None:
         return ""
@@ -450,15 +450,30 @@ def _pdf_cell_value(value, column: dict | None = None) -> str:
         return "Yes" if value else "No"
     if isinstance(value, list):
         return "; ".join(str(v) for v in value)
-    val_str = str(value)
-    if len(val_str) >= 16 and "T" in val_str and val_str[:4].isdigit():
-        val_str = val_str.replace("T", " ")
+    val_str = str(value).strip()
+    col_type = column.get("type")
+    if col_type in ("datetime", "datetime_split") or (len(val_str) >= 16 and ("T" in val_str or (" " in val_str and len(val_str) >= 19 and val_str[10] == " ")) and val_str[:4].isdigit()):
+        try:
+            iso_clean = val_str.replace(" ", "T")
+            if iso_clean.endswith("Z"):
+                iso_clean = iso_clean[:-1]
+            dt = datetime.fromisoformat(iso_clean)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            if timezone_name:
+                try:
+                    dt = dt.astimezone(ZoneInfo(timezone_name))
+                except Exception:
+                    pass
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return val_str.replace("T", " ")
     return val_str
 
 
-def _report_table_rows(columns: list[dict], rows: list[dict]) -> tuple[list[str], list[list[str]]]:
+def _report_table_rows(columns: list[dict], rows: list[dict], timezone_name: str | None = "UTC") -> tuple[list[str], list[list[str]]]:
     headers = [str(c.get("label") or c.get("key") or "") for c in columns]
-    values = [[_pdf_cell_value(row.get(c.get("key")), c) for c in columns] for row in rows]
+    values = [[_pdf_cell_value(row.get(c.get("key")), c, timezone_name) for c in columns] for row in rows]
     return headers, values
 
 
@@ -505,7 +520,8 @@ def _get_reportlab_fonts() -> tuple[str, str]:
 
 def _write_schedule_pdf_reportlab(path: Path, schedule: ScheduledReport, data: dict, columns: list[dict],
                                   rows: list[dict], billing_details: list[dict], logo_path: Path | None,
-                                  app_name: str = "Routario", timezone_name: str | None = "UTC") -> None:
+                                  app_name: str = "Routario", timezone_name: str | None = "UTC",
+                                  max_rows: Optional[int] = 500) -> None:
     import html
     from reportlab.lib.pagesizes import letter, landscape
     from reportlab.lib import colors
@@ -591,7 +607,7 @@ def _write_schedule_pdf_reportlab(path: Path, schedule: ScheduledReport, data: d
 
     # Summary Section
     story.append(Paragraph("Summary", title_style))
-    summary_items = _summary_items(data) or [("Report", getattr(schedule, 'report_type', 'report')), ("Rows", str(len(rows)))]
+    summary_items = _summary_items(data, timezone_name) or [("Report", getattr(schedule, 'report_type', 'report')), ("Rows", str(len(rows)))]
     if summary_items:
         card_cells = []
         for label, val in summary_items:
@@ -622,9 +638,8 @@ def _write_schedule_pdf_reportlab(path: Path, schedule: ScheduledReport, data: d
             story.append(Spacer(1, 14))
 
     # Results Section
-    headers, table_rows = _report_table_rows(columns, rows)
-    max_rows = 500
-    display_rows = table_rows[:max_rows]
+    headers, table_rows = _report_table_rows(columns, rows, timezone_name)
+    display_rows = table_rows[:max_rows] if (max_rows and max_rows > 0) else table_rows
     story.append(Paragraph("Results", title_style))
 
     if headers:
@@ -644,9 +659,9 @@ def _write_schedule_pdf_reportlab(path: Path, schedule: ScheduledReport, data: d
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ]))
         story.append(rt)
-        if len(rows) > max_rows:
+        if max_rows and max_rows > 0 and len(rows) > max_rows:
             story.append(Spacer(1, 4))
-            story.append(Paragraph(f"Showing first {max_rows} of {len(rows)} rows. Full results are included in the CSV attachment.", cell_style))
+            story.append(Paragraph(f"Showing first {max_rows} of {len(rows)} rows. Full results are included in the CSV export.", cell_style))
 
     # Billing Details
     for detail in billing_details:
@@ -676,27 +691,29 @@ def _write_schedule_pdf_reportlab(path: Path, schedule: ScheduledReport, data: d
 
 def _write_schedule_pdf(path: Path, schedule: ScheduledReport, user: User, data: dict, columns: list[dict],
                         rows: list[dict], billing_details: list[dict], logo_path: Path | None,
-                        app_name: str = "Routario", timezone_name: str | None = "UTC") -> None:
+                        app_name: str = "Routario", timezone_name: str | None = "UTC",
+                        max_rows: Optional[int] = 500) -> None:
     try:
-        _write_schedule_pdf_reportlab(path, schedule, data, columns, rows, billing_details, logo_path, app_name, timezone_name)
+        _write_schedule_pdf_reportlab(path, schedule, data, columns, rows, billing_details, logo_path, app_name, timezone_name, max_rows=max_rows)
     except Exception as exc:
         logger.warning("ReportLab PDF generation failed, falling back to basic PDF: %s", exc)
-        _write_schedule_pdf_basic(path, schedule, data, columns, rows, billing_details, logo_path, app_name, timezone_name)
+        _write_schedule_pdf_basic(path, schedule, data, columns, rows, billing_details, logo_path, app_name, timezone_name, max_rows=max_rows)
 
 
 
 def _write_schedule_pdf_basic(path: Path, schedule: ScheduledReport, data: dict, columns: list[dict],
                               rows: list[dict], billing_details: list[dict], logo_path: Path | None,
-                              app_name: str = "Routario", timezone_name: str | None = "UTC") -> None:
+                              app_name: str = "Routario", timezone_name: str | None = "UTC",
+                              max_rows: Optional[int] = 500) -> None:
     pdf = _PdfDocument(schedule.name, logo_path, app_name, timezone_name)
     pdf.new_page()
     pdf.section("Summary")
-    pdf.cards(_summary_items(data) or [("Report", schedule.report_type), ("Rows", str(len(rows)))])
-    headers, table_rows = _report_table_rows(columns, rows)
+    pdf.cards(_summary_items(data, timezone_name) or [("Report", schedule.report_type), ("Rows", str(len(rows)))])
+    headers, table_rows = _report_table_rows(columns, rows, timezone_name)
     pdf.section("Results")
-    pdf.table(headers, table_rows, max_rows=500)
-    if len(rows) > 500:
-        pdf.text(f"Showing first 500 of {len(rows)} rows. Full results are included in the CSV attachment.", pdf.margin, pdf.y, size=8, color=(0.420, 0.447, 0.502))
+    pdf.table(headers, table_rows, max_rows=max_rows or 999999)
+    if max_rows and max_rows > 0 and len(rows) > max_rows:
+        pdf.text(f"Showing first {max_rows} of {len(rows)} rows. Full results are included in the CSV export.", pdf.margin, pdf.y, size=8, color=(0.420, 0.447, 0.502))
         pdf.y -= 16
     for detail in billing_details:
         company = (detail.get("company") or {}).get("name") or "Company"

@@ -110,6 +110,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.addEventListener('keydown', e => {
         if (e.key !== 'Escape') return;
+        if (document.getElementById('pdfExportModal')?.classList.contains('active')) {
+            closePdfExportModal();
+            return;
+        }
         if (document.getElementById('schedModal')?.classList.contains('active')) {
             closeScheduleModal();
             return;
@@ -797,8 +801,8 @@ async function _fetchAvailableSensors() {
     const end = document.getElementById('endDate')?.value;
     const params = new URLSearchParams();
     params.set('device_ids', [..._selectedIds].join(','));
-    if (start) params.set('start_date', `${start}T00:00:00`);
-    if (end) params.set('end_date', `${end}T23:59:59`);
+    if (start) params.set('start_date', _localDateToUtcIso(start, false));
+    if (end) params.set('end_date', _localDateToUtcIso(end, true));
 
     try {
         const res = await apiFetch(`${API_BASE}/reports/sensor-keys?${params}`);
@@ -905,7 +909,8 @@ function _renderSensorChart(payload) {
     const sortedTimes = [...timeSet].sort();
 
     const labels = sortedTimes.map(t => {
-        const d = new Date(t);
+        const d = _parseUtcDate(t);
+        if (!d) return t;
         return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
     });
 
@@ -1001,6 +1006,15 @@ function _renderSensorChart(payload) {
                     titleFont: { family: 'Outfit, sans-serif', size: 12, weight: 'bold' },
                     bodyFont: { family: 'JetBrains Mono, monospace', size: 11 },
                     padding: 10,
+                    callbacks: {
+                        title: function(items) {
+                            if (!items.length) return '';
+                            const idx = items[0].dataIndex;
+                            const rawTime = sortedTimes[idx];
+                            const d = _parseUtcDate(rawTime);
+                            return d ? d.toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : (items[0].label || '');
+                        }
+                    }
                 }
             },
             scales: {
@@ -1122,8 +1136,8 @@ async function generateReport() {
 
     const params = new URLSearchParams();
     if (needsRange) {
-        params.set('start_date', `${start}T00:00:00`);
-        params.set('end_date', `${end}T23:59:59`);
+        params.set('start_date', _localDateToUtcIso(start, false));
+        params.set('end_date', _localDateToUtcIso(end, true));
     }
     if (def.supports_vehicle_filter !== false && _selectedIds.size && !_isDailyDriverMode()) {
         params.set('device_ids', [..._selectedIds].join(','));
@@ -1407,15 +1421,54 @@ function _exportPayloadCsv(payload, data) {
 
 function exportPdf() {
     if (!_reportPayload) return;
+    const rowCount = (_reportData || []).length;
+    if (rowCount > 500) {
+        const modal = document.getElementById('pdfExportModal');
+        const msgEl = document.getElementById('pdfExportRowCountMsg');
+        if (modal && msgEl) {
+            msgEl.innerHTML = `This report contains <strong>${rowCount.toLocaleString()}</strong> rows. Select how you would like to export:`;
+            modal.classList.add('active');
+            return;
+        }
+        const exportAll = confirm(`This report contains ${rowCount.toLocaleString()} rows.\n\nClick OK to export ALL ${rowCount.toLocaleString()} rows in PDF.\nClick Cancel to export the first 500 rows only.`);
+        _performPdfExport(exportAll);
+        return;
+    }
+    _performPdfExport(false);
+}
+
+function closePdfExportModal() {
+    const modal = document.getElementById('pdfExportModal');
+    if (modal) modal.classList.remove('active');
+}
+
+function _getUserTimezone() {
+    try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    } catch {
+        return 'UTC';
+    }
+}
+
+function confirmPdfExport(allRows) {
+    closePdfExportModal();
+    _performPdfExport(allRows);
+}
+
+function _performPdfExport(allRows = false) {
+    const tz = _getUserTimezone();
     if (_viewingRunData) {
-        _exportPayloadPdf(_reportPayload, _reportData, _reportDefMap[_reportPayload.type]?.label || 'Report');
+        _exportPayloadPdf(_reportPayload, _reportData, _reportDefMap[_reportPayload.type]?.label || 'Report', allRows, tz);
         return;
     }
     if (!_lastReportPdfUrl) {
         showAlert('Generate the report again before exporting PDF.', 'warning');
         return;
     }
-    _downloadStyledReportPdf(_lastReportPdfUrl);
+    const sep = _lastReportPdfUrl.includes('?') ? '&' : '?';
+    let url = `${_lastReportPdfUrl}${sep}timezone=${encodeURIComponent(tz)}`;
+    if (allRows) url += '&all_rows=true';
+    _downloadStyledReportPdf(url);
 }
 
 async function _downloadStyledReportPdf(url) {
@@ -1435,7 +1488,7 @@ async function _downloadStyledReportPdf(url) {
     }
 }
 
-async function _exportPayloadPdf(payload, data, title = 'Report') {
+async function _exportPayloadPdf(payload, data, title = 'Report', allRows = false, timezone = 'UTC') {
     const columns = (payload.columns || []).filter(c => c.csv !== false && c.hidden !== true);
     const sort = _sortCol ? { key: _sortCol, dir: _sortDir } : (payload.default_sort || {});
     const rows = _sortedRowsBy(data || [], sort.key || columns[0]?.key, sort.dir || 1);
@@ -1447,6 +1500,8 @@ async function _exportPayloadPdf(payload, data, title = 'Report') {
                 title,
                 report_type: payload.type || 'report',
                 payload: { ...payload, rows },
+                all_rows: allRows,
+                timezone: timezone || _getUserTimezone(),
             }),
         });
         if (!res.ok) {
@@ -1783,23 +1838,55 @@ function closeTripMap() {
 
 function _fmtDate(d) { return d.toISOString().split('T')[0]; }
 
+function _parseUtcDate(val) {
+    if (!val) return null;
+    if (val instanceof Date) return val;
+    let s = String(val).trim();
+    if (!s) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const parts = s.split('-').map(Number);
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+    s = s.replace(' ', 'T');
+    if (!s.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(s)) {
+        s += 'Z';
+    }
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+function _localDateToUtcIso(dateStr, isEndOfDay = false) {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-').map(Number);
+    const d = isEndOfDay
+        ? new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59, 999)
+        : new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
+    return d.toISOString();
+}
+
 function _fmtDatetime(iso) {
     if (!iso) return '—';
-    const str = String(iso).replace('T', ' ');
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return str;
-    return d.toLocaleString(undefined, { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }).replace('T', ' ');
+    const d = _parseUtcDate(iso);
+    if (!d) return String(iso).replace('T', ' ');
+    return d.toLocaleString(undefined, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    }).replace('T', ' ');
 }
 
 function _fmtDatetimeSplit(iso) {
     if (!iso) return '—';
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) {
+    const d = _parseUtcDate(iso);
+    if (!d) {
         const parts = String(iso).replace('T', ' ').split(' ');
         return `<span style="display:block;">${_esc(parts[0])}</span><span style="display:block;color:var(--text-muted);">${_esc(parts[1] || '')}</span>`;
     }
-    const date = d.toLocaleDateString(undefined, { year:'numeric', month:'2-digit', day:'2-digit' });
-    const time = d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
+    const date = d.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+    const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     return `<span style="display:block;">${date}</span><span style="display:block;color:var(--text-muted);">${time}</span>`;
 }
 
