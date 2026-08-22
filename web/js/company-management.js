@@ -32,12 +32,12 @@ async function initCompanySection() {
     if (_cmpSectionInitialized) return;
     _cmpSectionInitialized = true;
     if (localStorage.getItem('is_admin') !== 'true') return;
-    await Promise.all([loadCompanies(), loadAllUsers(), loadAllDevices(), loadCompanyBillingPlans()]);
+    await Promise.all([cmpLoadCompanies(), cmpLoadAllUsers(), cmpLoadAllDevices(), cmpLoadCompanyBillingPlans()]);
 }
 
 // ── Loaders ───────────────────────────────────────────────────────
 
-async function loadCompanies() {
+async function cmpLoadCompanies() {
     try {
         const res = await apiFetch(`${API_BASE}/companies`);
         if (!res.ok) throw new Error(`${res.status}`);
@@ -50,21 +50,21 @@ async function loadCompanies() {
     }
 }
 
-async function loadAllUsers() {
+async function cmpLoadAllUsers() {
     try {
         const res = await apiFetch(`${API_BASE}/users`);
         if (res.ok) cmpAllUsers = (await res.json()).filter(u => !u.is_admin);
     } catch (e) { console.error(e); }
 }
 
-async function loadAllDevices() {
+async function cmpLoadAllDevices() {
     try {
         const res = await apiFetch(`${API_BASE}/devices/all`);
         if (res.ok) cmpAllDevices = await res.json();
     } catch (e) { console.error(e); }
 }
 
-async function loadCompanyBillingPlans() {
+async function cmpLoadCompanyBillingPlans() {
     try {
         const res = await apiFetch(`${API_BASE}/billing/plans`);
         if (res.ok) {
@@ -257,7 +257,7 @@ async function saveCompany() {
             const saved = await res.json();
             if (saved?.id === parseInt(localStorage.getItem('company_id') || '0', 10)) applyCompanyBranding(saved.id);
             closeCompanyModal();
-            await loadCompanies();
+            await cmpLoadCompanies();
         } else {
             const err = await res.json();
             showAlert(err.detail || 'Failed to save', 'error');
@@ -345,7 +345,7 @@ async function deleteCurrentCompany() {
         if (res.ok) {
             showAlert('Company deleted', 'success');
             closeCompanyModal();
-            await loadCompanies();
+            await cmpLoadCompanies();
         } else {
             const err = await res.json();
             showAlert(err.detail || 'Failed to delete', 'error');
@@ -359,7 +359,7 @@ async function confirmDelete(companyId, name) {
         const res = await apiFetch(`${API_BASE}/companies/${companyId}`, { method: 'DELETE' });
         if (res.ok) {
             showAlert('Company deleted', 'success');
-            await loadCompanies();
+            await cmpLoadCompanies();
         } else {
             const err = await res.json();
             showAlert(err.detail || 'Failed to delete', 'error');

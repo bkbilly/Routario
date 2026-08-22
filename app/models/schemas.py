@@ -97,6 +97,7 @@ class AlertRow(BaseModel):
     duration:        Optional[int]           = Field(None, ge=1)  # seconds; None = disabled
     notify_user_ids: Optional[List[int]]     = None
     send_push:              bool                    = True
+    send_email:             bool                    = False
     action_command:         Optional[str]           = None
     action_command_payload: Optional[str]           = None
 

@@ -91,11 +91,53 @@ function _findUserById(id) {
         || null;
 }
 
+function _canViewUserChannel(targetUser, currentUserId) {
+    if (!targetUser) return false;
+    if (currentUserId && _sameId(targetUser.id, currentUserId)) return true;
+    if (isAdmin) return true;
+    if (targetUser.is_admin) return false;
+    if (!isCompanyAdmin && targetUser.is_company_admin) return false;
+    return true;
+}
+
+function _getVisibleNotificationChannels(currentUserId) {
+    const channels = [];
+    (userChannels || []).forEach(uc => {
+        if (uc && (uc.id || uc.name)) {
+            channels.push({
+                id: uc.id,
+                name: uc.name,
+                isOtherUser: false,
+                username: ''
+            });
+        }
+    });
+    [...allUsers, ...deviceAlertUsers].forEach(u => {
+        if (!_canViewUserChannel(u, currentUserId)) return;
+        const isOther = !_sameId(u.id, currentUserId);
+        (u.notification_channels || []).forEach(nc => {
+            if (nc && (nc.id || nc.name)) {
+                const key = nc.id || nc.name;
+                if (!channels.some(ac => (ac.id || ac.name) === key)) {
+                    channels.push({
+                        id: nc.id,
+                        name: nc.name,
+                        isOtherUser: isOther,
+                        username: u.username || ''
+                    });
+                }
+            }
+        });
+    });
+    return channels;
+}
+
 function _hasUnresolvedNotifyUsers() {
     return _missingNotifyUserIds().length > 0;
 }
 
 function _missingNotifyUserIds() {
+    if (isCompanyAdmin && (allUsersLoaded || allUsersLoadFailed)) return [];
     const missing = new Set();
     alertRows.forEach(row => {
         (row.notify_user_ids || []).forEach(id => {
@@ -135,7 +177,6 @@ async function initDeviceSection() {
     if (isAdmin) {
         document.querySelector('.devices-table')?.classList.add('show-company-col');
         document.getElementById('deviceCompanyGroup').style.display = '';
-        loadAllCompanies();
     }
 
     await Promise.all([
@@ -143,7 +184,8 @@ async function initDeviceSection() {
         loadAvailableProtocols(),
         loadUserChannels(),
         loadDevices(),
-        ...((isAdmin || (isCompanyAdmin && hasPermission('manage_users'))) ? [loadAllUsers()] : []),
+        ...(isAdmin ? [loadAllCompanies()] : []),
+        loadAllUsers(),
     ]);
     populateAddAlertDropdown();
 }
@@ -228,8 +270,8 @@ async function loadUserChannels(forceRefresh = false) {
         const userId = localStorage.getItem('user_id') || 1;
         if (!forceRefresh && typeof permissionsReady !== 'undefined') {
             const currentUser = await permissionsReady;
-            if (_sameId(currentUser?.id, userId)) {
-                userChannels = currentUser.notification_channels || [];
+            if (_sameId(currentUser?.id, userId) && Array.isArray(currentUser?.notification_channels) && currentUser.notification_channels.length > 0) {
+                userChannels = currentUser.notification_channels;
                 return;
             }
         }
@@ -358,7 +400,7 @@ function renderDeviceTable(list) {
         const odometer    = d.state?.total_odometer != null ? fmtOdometer(d.state.total_odometer) : '—';
         const plate       = d.license_plate || '—';
         const cmds        = d.supports_commands !== false && hasPermission('send_commands');
-        const companyName = allCompanies.find(c => c.id === d.company_id)?.name || '—';
+        const companyName = allCompanies.find(c => _sameId(c.id, d.company_id))?.name || '—';
         const canEdit     = hasPermission('edit_devices');
 
         return `
@@ -527,6 +569,15 @@ function openDeviceModal(deviceId, startTab = 'general') {
     restoreIntegrationFields(d);
     if (!d.config?.integration?.provider) onProtocolChange();
 
+    // Ensure the current user is always resolvable in the notify-users lookup
+    const _myId = parseInt(localStorage.getItem('user_id'), 10);
+    const _myName = localStorage.getItem('username');
+    if (_myId && _myName && !allUsers.some(u => _sameId(u.id, _myId))) {
+        allUsers.push({ id: _myId, username: _myName });
+    }
+
+    loadAlertsFromConfig(d.config || {});
+
     loadGeofencesForDevice(d.id).then(opts => {
         cachedGeofenceOptions = opts;
         renderAlertsTable();
@@ -535,14 +586,9 @@ function openDeviceModal(deviceId, startTab = 'general') {
         cachedDriverOptions = opts;
         renderAlertsTable();
     });
-    // Ensure the current user is always resolvable in the notify-users lookup
-    const _myId = parseInt(localStorage.getItem('user_id'), 10);
-    const _myName = localStorage.getItem('username');
-    if (_myId && _myName && !allUsers.some(u => _sameId(u.id, _myId))) {
-        allUsers.push({ id: _myId, username: _myName });
+    if (!allUsersLoaded) {
+        loadAllUsers().then(() => renderAlertsTable());
     }
-    if (isCompanyAdmin && !allUsersLoaded) loadDeviceAlertUsers(d.id);
-    loadAlertsFromConfig(d.config || {});
     populateAlertProfileDeviceSelect();
     switchModalTab(startTab);
     refreshNativeEventAlerts();
@@ -971,10 +1017,7 @@ async function _ensureUsersForAlertProfileRows(rows = alertRows) {
         _mergeUsersIntoCache([{ id: myId, username: myName }]);
     }
 
-    if (hasAdminAccess) {
-        if (isAdmin) await loadAllUsers();
-        else if (editingDeviceId) await loadDeviceAlertUsers(editingDeviceId);
-    }
+    if (hasAdminAccess) await loadAllUsers();
 
     const ids = new Set();
     rows.forEach(row => (row.notify_user_ids || []).forEach(id => {
@@ -1021,10 +1064,7 @@ async function _resolveImportedAlertProfileUsers(rows) {
     if (myId && myName && !_findUserById(myId)) {
         _mergeUsersIntoCache([{ id: myId, username: myName }]);
     }
-    if (hasAdminAccess) {
-        if (isAdmin) await loadAllUsers();
-        else if (editingDeviceId) await loadDeviceAlertUsers(editingDeviceId);
-    }
+    if (hasAdminAccess) await loadAllUsers();
 
     clonedRows.forEach(row => {
         const names = row.notify_users || row.notify_usernames;
@@ -1621,10 +1661,11 @@ function addSelectedAlert() {
         return;
     }
 
+    const _curUid = parseInt(localStorage.getItem('user_id'), 10) || null;
+
     if (val.startsWith('__native__:')) {
         try {
             const eventDef = JSON.parse(val.slice('__native__:'.length));
-            const _curUid = parseInt(localStorage.getItem('user_id'), 10);
             alertRows.push({
                 uid:      nextUid(),
                 alertKey: 'device_event',
@@ -1639,8 +1680,9 @@ function addSelectedAlert() {
                 channels: [],
                 schedule: null,
                 duration: null,
-                notify_user_ids: [_curUid],
+                notify_user_ids: _curUid ? [_curUid] : null,
                 send_push: true,
+                send_email: false,
             });
         } catch(e) {
             console.error('Failed to parse native event def', e);
@@ -1654,8 +1696,7 @@ function addSelectedAlert() {
     if (!def) return;
     const params = {};
     (def.fields || []).forEach(f => { params[f.key] = f.default; });
-    const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
-    alertRows.push({ uid: nextUid(), alertKey: val, params, channels: [], schedule: null, notify_user_ids: [currentUserId], send_push: true });
+    alertRows.push({ uid: nextUid(), alertKey: val, params, channels: [], schedule: null, notify_user_ids: _curUid ? [_curUid] : null, send_push: true, send_email: false });
     renderAlertsTable();
     sel.value = '';
 }
@@ -1675,8 +1716,8 @@ function addCustomRule() {
         }, 1500);
         return;
     }
-    const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
-    alertRows.push({ uid: nextUid(), alertKey: '__custom__', name, rule, channels: [], schedule: null, duration: null, notify_user_ids: [currentUserId], send_push: true });
+    const _curUid = parseInt(localStorage.getItem('user_id'), 10) || null;
+    alertRows.push({ uid: nextUid(), alertKey: '__custom__', name, rule, channels: [], schedule: null, duration: null, notify_user_ids: _curUid ? [_curUid] : null, send_push: true, send_email: false });
     nameEl.value = '';
     ruleEl.value = '';
     // Reset dropdown and hide custom fields
@@ -1825,9 +1866,13 @@ function renderAlertsTable() {
             activePills.push(`<span class="channel-pill active" title="System Email Notification Enabled" style="pointer-events:none;"><i class="mdi mdi-email-outline"></i> Email</span>`);
         }
         if (Array.isArray(row.channels)) {
+            const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
+            const visibleChannels = _getVisibleNotificationChannels(currentUserId);
             row.channels.forEach(c => {
-                const found = userChannels.find(uc => uc.id === c || uc.name === c);
-                const displayName = found ? found.name : c;
+                const found = visibleChannels.find(ac => ac.id === c || ac.name === c);
+                if (!found) return; // Do not show channels that belong to parent / higher hierarchy users
+                const chName = found.name || found.id || c;
+                const displayName = (found.isOtherUser && found.username) ? `${chName} (${found.username})` : chName;
                 activePills.push(`<span class="channel-pill active" style="pointer-events:none;">${_esc(displayName)}</span>`);
             });
         }
@@ -1855,11 +1900,25 @@ function renderAlertsTable() {
                 const visibleUsers = ids
                     .map(id => {
                         const user = _findUserById(id);
-                        return user || { id, username: (allUsersLoaded || allUsersLoadFailed) ? `User #${id}` : 'Loading...' };
-                    });
-                notifyUsersCell = `<td><div style="display:flex;flex-wrap:wrap;gap:0.3rem;">${
-                    visibleUsers.map(u => `<span class="channel-pill active" style="pointer-events:none;font-size:0.75rem;">${_esc(u.username)}</span>`).join('')
-                }</div></td>`;
+                        if (user) {
+                            if (!isAdmin && user.is_admin) return null;
+                            return user;
+                        }
+                        const numId = _toId(id);
+                        if (isAdmin && (allUsersLoaded || allUsersLoadFailed || (numId !== null && notifyUserLoadFailedIds.has(numId)))) {
+                            return { id, username: `User #${id}` };
+                        }
+                        return null;
+                    })
+                    .filter(Boolean);
+
+                if (visibleUsers.length === 0) {
+                    notifyUsersCell = `<td><span style="color:var(--text-muted);font-size:0.8rem;">None</span></td>`;
+                } else {
+                    notifyUsersCell = `<td><div style="display:flex;flex-wrap:wrap;gap:0.3rem;">${
+                        visibleUsers.map(u => `<span class="channel-pill active" style="pointer-events:none;font-size:0.75rem;">${_esc(u.username)}</span>`).join('')
+                    }</div></td>`;
+                }
             }
         }
 
@@ -2127,66 +2186,77 @@ async function openAlertEditor(uid) {
     `;
 
     const selectedCh = row.channels || [];
-    const userChannelPills = userChannels.map(c => {
+    const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
+    const visibleChannels = _getVisibleNotificationChannels(currentUserId);
+
+    // Channels on this alert that are NOT visible to current user (i.e. belongs to parent)
+    // are preserved so saving the alert doesn't drop them.
+    const hiddenChannels = selectedCh.filter(chKey =>
+        !visibleChannels.some(c => (c.id || c.name) === chKey || (c.name && c.name === chKey))
+    );
+
+    const userChannelPills = visibleChannels.map(c => {
         const key = c.id || c.name;
         const isChecked = selectedCh.includes(key) || (c.name && selectedCh.includes(c.name));
+        const baseName = c.name || key;
+        const displayName = (c.isOtherUser && c.username) ? `${baseName} (${c.username})` : baseName;
         return `
         <label class="channel-pill${isChecked ? ' active' : ''}">
             <input type="checkbox" class="editor-channel-cb" value="${_esc(key)}"${isChecked ? ' checked' : ''}>
-            ${_esc(c.name)}
+            ${_esc(displayName)}
         </label>`;
     }).join('');
 
-    const chHtml = pushPillHtml + emailPillHtml + userChannelPills;
+    const chHtml = pushPillHtml + emailPillHtml + userChannelPills +
+        `<input type="hidden" id="alertEditorHiddenChannels" value="${_escAttrJson(hiddenChannels)}">`;
 
     let notifyUsersHtml = '';
     if (hasAdminAccess && editingDeviceId) {
         try {
             const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
-            let deviceUsers = [];
-            let allFetched = [];
+            const fetchedUsers = await loadAllUsers();
 
-            if (isAdmin) {
-                await loadAllUsers();
-                allFetched = allUsers;
-                deviceUsers = allFetched;
-            } else {
-                const res = await apiFetch(`${API_BASE}/devices/${editingDeviceId}/users`);
-                deviceUsers = res.ok ? await res.json() : [];
-                deviceUsers = deviceUsers.filter(u => !u.is_admin);
-            }
-            _mergeUsersIntoCache(deviceUsers);
+            const userMap = new Map();
+            (fetchedUsers || []).forEach(u => {
+                if (!isAdmin && u.is_admin) return;
+                userMap.set(_toId(u.id), u);
+            });
 
-            // Always include the current user
-            if (!deviceUsers.some(u => _sameId(u.id, currentUserId))) {
-                deviceUsers.unshift({ id: currentUserId, username: localStorage.getItem('username') || 'me' });
+            const curUser = _findUserById(currentUserId);
+            if (currentUserId && (isAdmin || !curUser?.is_admin) && !userMap.has(currentUserId)) {
+                userMap.set(currentUserId, { id: currentUserId, username: localStorage.getItem('username') || 'me' });
             }
 
-            // Always include users already in notify_user_ids (e.g. creator outside the company filter)
             const existingIds = (row.notify_user_ids ?? []).map(_toId).filter(id => id !== null);
             for (const uid of existingIds) {
-                if (!deviceUsers.some(u => _sameId(u.id, uid))) {
-                    const known = allFetched.find(u => _sameId(u.id, uid)) || _findUserById(uid);
-                    if (known) deviceUsers.push(known);
+                if (!userMap.has(uid)) {
+                    const known = _findUserById(uid);
+                    if (known && (isAdmin || !known.is_admin)) userMap.set(uid, known);
                 }
             }
 
-            // Merge fetched users into allUsers so renderAlertsTable can show names
-            (allFetched.length ? allFetched : deviceUsers).forEach(u => {
+            const deviceUsers = Array.from(userMap.values());
+            _mergeUsersIntoCache(deviceUsers);
+            deviceUsers.forEach(u => {
                 if (!allUsers.some(a => _sameId(a.id, u.id))) allUsers.push(u);
             });
-            renderAlertsTable();
 
-            // Default selection: existing notify_user_ids, no fallback to current user
-            const selectedIds = _idSet(existingIds);
-            // IDs not shown as checkboxes (out-of-scope admins, etc.) — preserve on save
-            const hiddenIds = existingIds.filter(id => !deviceUsers.some(u => _sameId(u.id, id)));
+            // Default selection: if notify_user_ids is null/undefined (All mode), select all; otherwise select specified IDs
+            const isAllMode = row.notify_user_ids == null;
+            const selectedIds = isAllMode ? new Set(deviceUsers.map(u => _toId(u.id))) : _idSet(existingIds);
+            const hiddenIds = existingIds.filter(id => {
+                const user = _findUserById(id);
+                if (!isAdmin && user?.is_admin) return false;
+                return !deviceUsers.some(u => _sameId(u.id, id));
+            });
+
             const pills = deviceUsers.map(u =>
                 `<label class="channel-pill${selectedIds.has(_toId(u.id)) ? ' active' : ''}">
                     <input type="checkbox" class="editor-notify-user-cb" value="${u.id}"${selectedIds.has(_toId(u.id)) ? ' checked' : ''}>
                     ${_esc(u.username)}${_sameId(u.id, currentUserId) ? ' (you)' : ''}
                 </label>`
             ).join('');
+
             notifyUsersHtml = `<div class="form-group">
                 <label class="form-label">Notify Users</label>
                 <input type="hidden" id="alertEditorHiddenNotifyIds" value="${_escAttrJson(hiddenIds)}">
@@ -2270,12 +2340,12 @@ async function openAlertEditor(uid) {
         const cb = pill.querySelector('input');
         if (!cb) return;
         pill.classList.toggle('active', cb.checked);
-        pill.addEventListener('click', (e) => { e.preventDefault(); cb.checked = !cb.checked; pill.classList.toggle('active', cb.checked); });
+        cb.addEventListener('change', () => { pill.classList.toggle('active', cb.checked); });
     });
     document.querySelectorAll('#alertEditorBody .channel-pill').forEach(pill => {
         const cb = pill.querySelector('input');
         if (!cb) return;
-        pill.addEventListener('click', (e) => { e.preventDefault(); cb.checked = !cb.checked; pill.classList.toggle('active', cb.checked); });
+        cb.addEventListener('change', () => { pill.classList.toggle('active', cb.checked); });
     });
     document.querySelectorAll('#alertEditorBody .alert-param-input[data-updates-field]').forEach(sel => {
         sel.addEventListener('change', () => {
@@ -2386,6 +2456,9 @@ function saveAlertFromEditor() {
 
     row.channels = [];
     document.querySelectorAll('.editor-channel-cb:checked').forEach(cb => row.channels.push(cb.value));
+    const hiddenChEl = document.getElementById('alertEditorHiddenChannels');
+    const preservedCh = hiddenChEl ? JSON.parse(hiddenChEl.value || '[]') : [];
+    row.channels = [...new Set([...row.channels, ...preservedCh])];
 
     const notifyUserCbs = document.querySelectorAll('.editor-notify-user-cb');
     if (notifyUserCbs.length > 0) {
@@ -2393,7 +2466,11 @@ function saveAlertFromEditor() {
         notifyUserCbs.forEach(cb => { if (cb.checked) selected.push(parseInt(cb.value, 10)); });
         const hiddenEl = document.getElementById('alertEditorHiddenNotifyIds');
         const preserved = hiddenEl ? JSON.parse(hiddenEl.value || '[]') : [];
-        row.notify_user_ids = [...new Set([...selected, ...preserved])];
+        if (selected.length === notifyUserCbs.length && preserved.length === 0) {
+            row.notify_user_ids = null;
+        } else {
+            row.notify_user_ids = [...new Set([...selected, ...preserved])];
+        }
     }
 
     const activeDays = [];
@@ -2424,20 +2501,18 @@ function buildConfigFromAlertRows(existing = {}) {
 //  USERS TAB
 // ================================================================
 
-async function loadAllUsers() {
-    if (allUsersLoaded) return allUsers;
+async function loadAllUsers(force = false) {
+    if (!force && allUsersLoaded) return allUsers;
     if (allUsersLoadPromise) return allUsersLoadPromise;
 
     allUsersLoadPromise = (async () => {
         try {
             const res = await apiFetch(`${API_BASE}/users`);
             if (res.ok) {
-                allUsers = await res.json();
+                const fetched = await res.json();
+                allUsers = Array.isArray(fetched) ? fetched : [];
                 allUsersLoaded = true;
                 allUsersLoadFailed = false;
-                if (document.getElementById('deviceModal')?.classList.contains('active')) {
-                    renderAlertsTable();
-                }
             } else {
                 allUsersLoadFailed = true;
             }
@@ -2456,7 +2531,10 @@ async function loadAllUsers() {
 async function loadNotifyUserById(userId) {
     const id = _toId(userId);
     if (id === null || _findUserById(id)) return _findUserById(id);
-    if (notifyUserLoadFailedIds.has(id)) return null;
+    if (isCompanyAdmin || allUsersLoaded || notifyUserLoadFailedIds.has(id)) {
+        notifyUserLoadFailedIds.add(id);
+        return null;
+    }
     if (notifyUserLoadPromises.has(id)) return notifyUserLoadPromises.get(id);
 
     const promise = (async () => {
@@ -2496,22 +2574,23 @@ async function resolveMissingNotifyUsers() {
     return loadMissingNotifyUsers();
 }
 
-async function loadDeviceAlertUsers(deviceId) {
-    try {
-        const res = await apiFetch(`${API_BASE}/devices/${deviceId}/users`);
-        if (!res.ok) return;
-        deviceAlertUsers = await res.json();
-        _mergeUsersIntoCache(deviceAlertUsers);
-        if (editingDeviceId === deviceId) renderAlertsTable();
-    } catch (e) { console.error('Failed to load device alert users:', e); }
-}
+
 
 async function loadAllCompanies() {
+    if (!isAdmin) return;
     try {
         const res = await apiFetch(`${API_BASE}/companies`);
         if (res.ok) {
             allCompanies = await res.json();
             populateDeviceCompanySelect();
+            if (allCompanies.length > 0) {
+                document.querySelector('.devices-table')?.classList.add('show-company-col');
+            }
+            if (typeof filterDevices === 'function') {
+                filterDevices();
+            } else if (typeof renderDeviceTable === 'function') {
+                renderDeviceTable(devices);
+            }
         }
     } catch (e) { console.error('Failed to load companies:', e); }
 }
@@ -2549,13 +2628,14 @@ function renderUsersTab() {
     const list = document.getElementById('usersAssignList');
     if (!list) return;
     const query = (document.getElementById('usersTabSearch')?.value || '').toLowerCase().trim();
-    const myCompanyId = isCompanyAdmin
-        ? (parseInt(localStorage.getItem('company_id')) || null)
-        : (parseInt(document.getElementById('deviceCompany')?.value) || null);
+    const deviceObj = editingDeviceId ? devices.find(d => _sameId(d.id, editingDeviceId)) : null;
+    const devCompanyId = deviceObj?.company_id || (parseInt(document.getElementById('deviceCompany')?.value) || null);
+    const targetCompanyId = isCompanyAdmin
+        ? (parseInt(localStorage.getItem('company_id')) || devCompanyId)
+        : devCompanyId;
+
     const filtered = allUsers.filter(u =>
-        !u.is_admin &&
-        !u.is_company_admin &&
-        (!myCompanyId || u.company_id === myCompanyId) &&
+        (!targetCompanyId || _sameId(u.company_id, targetCompanyId) || u.is_admin) &&
         (!query ||
             (u.username || '').toLowerCase().includes(query) ||
             (u.email    || '').toLowerCase().includes(query)

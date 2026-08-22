@@ -119,10 +119,12 @@ class AlertEngine:
                 results = await alert_cls().check_many(position, device, state, params)
                 notify_ids = row.get('notify_user_ids')
                 send_push = row.get('send_push', True)
+                send_email = row.get('send_email', False)
                 action_cmd = row.get('action_command')
                 action_cmd_payload = row.get('action_command_payload')
                 for r in results:
                     r.setdefault('send_push', send_push)
+                    r.setdefault('send_email', send_email)
                     if action_cmd and action_cmd != 'disabled':
                         r.setdefault('action_command', action_cmd)
                         if action_cmd_payload:
@@ -439,6 +441,7 @@ async def periodic_alert_task():
                             result.setdefault('latitude',  state.last_latitude)
                             result.setdefault('longitude', state.last_longitude)
                             result.setdefault('send_push', row.get('send_push', True))
+                            result.setdefault('send_email', row.get('send_email', False))
                             action_cmd = row.get('action_command')
                             if action_cmd and action_cmd != 'disabled':
                                 result.setdefault('action_command', action_cmd)
