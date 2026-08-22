@@ -349,6 +349,9 @@ function updateDeviceMarker(deviceId, state) {
         if (prev.animFrame) {
             cancelAnimationFrame(prev.animFrame);
             prev.animFrame = null;
+            if (markers[deviceId]) {
+                markers[deviceId].setLatLng([prev.lat, prev.lng]);
+            }
         }
 
         const fromLat  = prev.lat;
@@ -360,7 +363,7 @@ function updateDeviceMarker(deviceId, state) {
         const startTime = performance.now();
 
         function step(now) {
-            if (!markers[deviceId] || !clusterGroup.hasLayer(markers[deviceId])) {
+            if (!markers[deviceId] || !clusterGroup.hasLayer(markers[deviceId]) || (map && !map.hasLayer(clusterGroup))) {
                 markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
                 return;
             }
@@ -372,20 +375,22 @@ function updateDeviceMarker(deviceId, state) {
             const lng  = fromLng  + (toLng  - fromLng)  * ease;
             const head = canAnimateHead ? fromHead + dH * ease : toHead;
 
-            // Suppress markercluster's move handler during animation — it would
-            // removeLayer + addLayer on every frame, making the popup flash
-            clusterGroup._ignoreMove = true;
-            markers[deviceId].setLatLng([lat, lng]);
-            clusterGroup._ignoreMove = false;
-            _applyMarkerRotation(markers[deviceId], head, device?.vehicle_type);
-
             if (t < 1) {
+                // Suppress markercluster's move handler during intermediate frames
+                clusterGroup._ignoreMove = true;
+                markers[deviceId].setLatLng([lat, lng]);
+                clusterGroup._ignoreMove = false;
+                _applyMarkerRotation(markers[deviceId], head, device?.vehicle_type);
+
                 markerState[deviceId] = {
                     lat: toLat, lng: toLng,
                     heading: head,
                     animFrame: requestAnimationFrame(step)
                 };
             } else {
+                // Final frame: update without suppressing move so MarkerClusterGroup updates its DistanceGrid
+                markers[deviceId].setLatLng([toLat, toLng]);
+                _applyMarkerRotation(markers[deviceId], toHead, device?.vehicle_type);
                 markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
             }
         }

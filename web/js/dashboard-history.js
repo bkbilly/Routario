@@ -279,10 +279,22 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
     }
     stopPlayback();
 
+    // Cancel pending live marker animations
+    if (typeof markerState !== 'undefined') {
+        Object.keys(markerState).forEach(id => {
+            if (markerState[id]?.animFrame) {
+                cancelAnimationFrame(markerState[id].animFrame);
+                markerState[id].animFrame = null;
+            }
+        });
+    }
+
     // Hide ALL live markers and accuracy circles when entering history mode
+    if (typeof clusterGroup !== 'undefined' && clusterGroup && map && map.hasLayer(clusterGroup)) {
+        map.removeLayer(clusterGroup);
+    }
     devices.forEach(d => {
-        if (markers[d.id] && clusterGroup.hasLayer(markers[d.id])) clusterGroup.removeLayer(markers[d.id]);
-        if (accuracyCircles[d.id] && map.hasLayer(accuracyCircles[d.id])) map.removeLayer(accuracyCircles[d.id]);
+        if (accuracyCircles[d.id] && map && map.hasLayer(accuracyCircles[d.id])) map.removeLayer(accuracyCircles[d.id]);
     });
 
     try {
@@ -301,9 +313,11 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
             showAlert({ title: 'History', message: 'No data found.', type: 'warning' });
             historyDeviceId = previousHistoryDeviceId;
             // Restore live markers since we're not entering history mode
+            if (typeof clusterGroup !== 'undefined' && clusterGroup && map && !map.hasLayer(clusterGroup)) {
+                map.addLayer(clusterGroup);
+            }
             devices.forEach(d => {
-                if (markers[d.id] && !clusterGroup.hasLayer(markers[d.id])) clusterGroup.addLayer(markers[d.id]);
-                if (accuracyCircles[d.id] && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
+                if (accuracyCircles[d.id] && map && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
             });
             return;
         }
@@ -354,9 +368,11 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
         showAlert({ title: 'Error', message: 'Failed to load history.', type: 'error' });
         historyDeviceId = previousHistoryDeviceId;
         // Restore live markers since history mode was not entered
+        if (typeof clusterGroup !== 'undefined' && clusterGroup && map && !map.hasLayer(clusterGroup)) {
+            map.addLayer(clusterGroup);
+        }
         devices.forEach(d => {
-            if (markers[d.id] && !clusterGroup.hasLayer(markers[d.id])) clusterGroup.addLayer(markers[d.id]);
-            if (accuracyCircles[d.id] && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
+            if (accuracyCircles[d.id] && map && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
         });
     }
 }
@@ -481,66 +497,117 @@ function _updateLineModeBtn() {
 }
 
 function exitHistoryMode(fromPopState = false) {
-    stopPlayback();
-    _clearAlertHighlight();
-    historyDeviceId = null;
-    historyData = [];
-    historyIndex = 0;
-    historyLineRenderMode = null;
-    _historyZoomLineSwitchActive = false;
-    if (polylines['history']) {
-        polylines['history'].eachLayer(l => map.removeLayer(l));
-        delete polylines['history'];
-    }
+    try {
+        stopPlayback();
+        _clearAlertHighlight();
+        historyDeviceId = null;
+        historyData = [];
+        historyIndex = 0;
+        historyLineRenderMode = null;
+        _historyZoomLineSwitchActive = false;
+        if (polylines['history']) {
+            try {
+                polylines['history'].eachLayer(l => map.removeLayer(l));
+            } catch (e) {
+                console.warn('Error removing history polylines:', e);
+            }
+            delete polylines['history'];
+        }
 
-    if (markers['history_pos']) {
-        map.removeLayer(markers['history_pos']);
-        delete markers['history_pos'];
-    }
-    if (sensorChart) { sensorChart.destroy(); sensorChart = null; }
-    selectedSensorAttrs = new Set([]);
-    currentHistoryTab = 'trips';
-    switchHistoryTab('trips');
+        if (markers['history_pos']) {
+            try {
+                map.removeLayer(markers['history_pos']);
+            } catch (e) {
+                console.warn('Error removing history marker:', e);
+            }
+            delete markers['history_pos'];
+        }
+        if (sensorChart) {
+            try {
+                sensorChart.destroy();
+            } catch (e) {
+                console.warn('Error destroying sensorChart:', e);
+            }
+            sensorChart = null;
+        }
+        selectedSensorAttrs = new Set([]);
+        currentHistoryTab = 'trips';
+        switchHistoryTab('trips');
 
-    // Remove history accuracy circle
-    if (accuracyCircles['history_pos']) {
-        map.removeLayer(accuracyCircles['history_pos']);
-        delete accuracyCircles['history_pos'];
-    }
+        // Remove history accuracy circle
+        if (accuracyCircles['history_pos']) {
+            try {
+                map.removeLayer(accuracyCircles['history_pos']);
+            } catch (e) {
+                console.warn('Error removing history accuracy circle:', e);
+            }
+            delete accuracyCircles['history_pos'];
+        }
 
-    // Restore ALL live markers and accuracy circles when exiting history mode
-    devices.forEach(d => {
-        if (markers[d.id] && !clusterGroup.hasLayer(markers[d.id])) clusterGroup.addLayer(markers[d.id]);
-        if (accuracyCircles[d.id] && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
-    });
-    if (typeof restoreDashboardRouteLayerAfterHistory === 'function') {
-        restoreDashboardRouteLayerAfterHistory();
-    }
+        // Restore ALL live markers and accuracy circles when exiting history mode
+        if (typeof clusterGroup !== 'undefined' && clusterGroup && map && !map.hasLayer(clusterGroup)) {
+            map.addLayer(clusterGroup);
+        }
+        devices.forEach(d => {
+            if (markers[d.id] && typeof clusterGroup !== 'undefined' && clusterGroup && !clusterGroup.hasLayer(markers[d.id])) {
+                try {
+                    clusterGroup.addLayer(markers[d.id]);
+                } catch (e) {
+                    console.warn('Error adding marker to cluster:', e);
+                }
+            }
+            if (accuracyCircles[d.id] && map && !map.hasLayer(accuracyCircles[d.id])) {
+                accuracyCircles[d.id].addTo(map);
+            }
+            if (d.last_latitude && d.last_longitude && typeof updateDeviceMarker === 'function') {
+                try {
+                    updateDeviceMarker(d.id, d);
+                } catch (e) {
+                    console.warn('Error updating device marker on history exit:', e);
+                }
+            }
+        });
+        if (typeof restoreDashboardRouteLayerAfterHistory === 'function') {
+            try {
+                restoreDashboardRouteLayerAfterHistory();
+            } catch (e) {
+                console.warn('Error restoring route layer:', e);
+            }
+        }
+    } catch (err) {
+        console.error('Error during exitHistoryMode:', err);
+    } finally {
+        // Hide history footer
+        const footer = document.getElementById('historyControls');
+        if (footer) footer.style.display = 'none';
+        const details = document.getElementById('sidebarHistoryDetails');
+        if (details) details.style.paddingBottom = '';
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar) sidebar.classList.remove('history-active');
 
-    // Hide history footer
-    const footer = document.getElementById('historyControls');
-    if (footer) footer.style.display = 'none';
-    const details = document.getElementById('sidebarHistoryDetails');
-    if (details) details.style.paddingBottom = '';
-    document.querySelector('.sidebar').classList.remove('history-active');
+        document.getElementById('historySlider')?.style.removeProperty('--track-gradient');
+        historyClips = [];
+        try {
+            _renderClipMarkers();
+        } catch (e) {
+            console.warn('Error clearing clip markers:', e);
+        }
+        historyTrips = [];
+        historyBatchOffset = 0;
+        historyHasNext = false;
+        const batchNav = document.getElementById('historyBatchNav');
+        if (batchNav) batchNav.style.display = 'none';
+        const tripLabel = document.getElementById('historyTripLabel');
+        if (tripLabel) tripLabel.textContent = '';
+        const tripList = document.getElementById('tripListContent');
+        if (tripList) tripList.innerHTML = '';
+        const devList = document.getElementById('sidebarDeviceList');
+        if (devList) devList.style.display = 'block';
+        if (details) details.style.display = 'none';
 
-    document.getElementById('historySlider')?.style.removeProperty('--track-gradient');
-    historyClips = [];
-    _renderClipMarkers();
-    historyTrips = [];
-    historyBatchOffset = 0;
-    historyHasNext = false;
-    const batchNav = document.getElementById('historyBatchNav');
-    if (batchNav) batchNav.style.display = 'none';
-    const tripLabel = document.getElementById('historyTripLabel');
-    if (tripLabel) tripLabel.textContent = '';
-    const tripList = document.getElementById('tripListContent');
-    if (tripList) tripList.innerHTML = '';
-    document.getElementById('sidebarDeviceList').style.display = 'block';
-    document.getElementById('sidebarHistoryDetails').style.display = 'none';
-
-    if (!fromPopState) {
-        popModalState('history_playback');
+        if (!fromPopState) {
+            popModalState('history_playback');
+        }
     }
 }
 
@@ -1131,14 +1198,18 @@ function renderSensorGraph() {
 const verticalLinePlugin = {
     id: 'verticalLine',
     afterDraw(chart) {
-        const idx = chart.options.plugins.verticalLine?.index;
-        if (idx == null || !chart.data.labels?.length) return;
+        const idx = chart.options.plugins?.verticalLine?.index;
+        if (idx == null || !chart.data?.labels?.length) return;
         const meta = chart.getDatasetMeta(0);
-        if (!meta || !meta.data[idx]) return;
+        if (!meta || !meta.data || !meta.data[idx]) return;
         const x = meta.data[idx].x;
+        if (x == null || isNaN(x)) return;
         const ctx = chart.ctx;
-        const top = chart.chartArea.top;
-        const bottom = chart.chartArea.bottom;
+        const chartArea = chart.chartArea;
+        if (!ctx || !chartArea) return;
+        const top = chartArea.top;
+        const bottom = chartArea.bottom;
+        if (top == null || bottom == null) return;
         ctx.save();
         ctx.beginPath();
         ctx.moveTo(x, top);
