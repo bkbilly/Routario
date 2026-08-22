@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Settings - Routario</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <link rel="icon" href="icons/favicon.ico">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Routario">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+    <!-- Material Design Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+    <link rel="stylesheet" href="css/tables.css">
+    <link rel="stylesheet" href="css/user-settings.css">
+    <script src="js/settings-nav.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <style>
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.8rem;
+            margin-bottom: 0.9rem;
+        }
+        .form-grid label span {
+            display: block;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            margin-bottom: 0.3rem;
+            font-weight: 600;
+        }
+        .stack-item {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.85rem;
+        }
+        .stack-item-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.35rem;
+        }
+        .health-status {
+            border: 1px solid transparent;
+            font-weight: 700;
+        }
+        .health-status-ok {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: rgba(16, 185, 129, 0.28);
+            color: var(--accent-success, #10b981);
+        }
+        .health-status-degraded {
+            background: rgba(245, 158, 11, 0.15);
+            border-color: rgba(245, 158, 11, 0.3);
+            color: var(--accent-warning, #f59e0b);
+        }
+        .health-status-disabled {
+            background: rgba(148, 163, 184, 0.15);
+            border-color: rgba(148, 163, 184, 0.28);
+            color: var(--text-muted, #94a3b8);
+        }
+        .health-status-optional {
+            background: rgba(59, 130, 246, 0.14);
+            border-color: rgba(59, 130, 246, 0.28);
+            color: var(--accent-primary, #3b82f6);
+        }
+        .health-status-fail {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: var(--accent-danger, #ef4444);
+        }
+        .route-status-default {
+            background: rgba(148, 163, 184, 0.14);
+            border-color: rgba(148, 163, 184, 0.25);
+            color: var(--text-secondary, #94a3b8);
+        }
+        .ticket-switch {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.55rem;
+            color: var(--text-secondary);
+            font-size: 0.86rem;
+            cursor: pointer;
+            user-select: none;
+        }
+        .ticket-switch input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .ticket-switch-track {
+            width: 42px;
+            height: 24px;
+            border-radius: 999px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            position: relative;
+            transition: background var(--transition-fast), border-color var(--transition-fast);
+            flex: 0 0 auto;
+        }
+        .ticket-switch-track::after {
+            content: "";
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: transform var(--transition-fast), background var(--transition-fast);
+        }
+        .ticket-switch input:checked + .ticket-switch-track {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: rgba(59, 130, 246, 0.45);
+        }
+        .ticket-switch input:checked + .ticket-switch-track::after {
+            transform: translateX(18px);
+            background: var(--accent-primary);
+        }
+        @media (max-width: 640px) {
+            .form-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="mgmt-tabs settings-tabs" id="settingsTabs">
+            <button class="mgmt-tab settings-tab active" onclick="switchSettingsTab('profile')" id="settingsTabProfile"><i class="mdi mdi-account-circle"></i> Profile</button>
+            <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('tickets')" id="settingsTabTickets"><i class="mdi mdi-ticket-confirmation-outline"></i> Tickets</button>
+            <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('webhooks')" id="settingsTabWebhooks"><i class="mdi mdi-link-variant"></i> Webhooks</button>
+            <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('apiKeys')" id="settingsTabApiKeys" style="display:none;"><i class="mdi mdi-key-variant"></i> API Keys</button>
+            <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('backups')" id="settingsTabBackups" style="display:none;"><i class="mdi mdi-database-arrow-down"></i> Backups</button>
+            <button class="mgmt-tab settings-tab" onclick="switchSettingsTab('system')" id="settingsTabSystem" style="display:none;"><i class="mdi mdi-tune-vertical"></i> System Settings</button>
+        </div>
+
+        <div>
+            <!-- Profile -->
+            <div class="settings-section" id="settings-section-profile">
+                <p class="settings-section-description">
+                    Update your account preferences and sign-in methods.
+                </p>
+                <div class="profile-settings-grid">
+                    <section class="profile-settings-panel">
+                        <h2 style="font-size:1rem;margin:0 0 1rem 0;">Profile</h2>
+                        <div class="form-group">
+                            <label class="form-label">Username</label>
+                            <input type="text" id="profileUsername" class="form-input profile-readonly-input" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" id="profileEmail" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">New Password</label>
+                            <input type="password" id="profilePassword" class="form-input" autocomplete="new-password" placeholder="Leave blank to keep current password">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Unit System</label>
+                            <select id="profileUnits" class="form-input">
+                                <option value="metric">Metric (km, km/h, m)</option>
+                                <option value="imperial">Imperial (mi, mph, ft)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Currency</label>
+                            <select id="profileCurrency" class="form-input"></select>
+                        </div>
+                        <button type="button" class="btn btn-primary" id="profileSaveBtn" onclick="saveProfile()"><i class="mdi mdi-content-save"></i> Save Profile</button>
+                    </section>
+
+                    <section class="profile-settings-panel">
+                        <div style="margin-bottom:1.25rem;">
+                            <h2 style="font-size:1rem;margin:0 0 1rem 0;">Multi-Factor Authentication</h2>
+                            <div id="profileMfaStatus" style="font-size:0.86rem;color:var(--text-secondary);margin-bottom:0.7rem;"></div>
+                            <div id="profileMfaSetupBox" class="secret-box" style="display:none;margin:0 0 0.75rem 0;"></div>
+                            <div id="profileMfaCodeGroup" style="display:none;margin-bottom:0.75rem;">
+                                <label class="form-label" id="profileMfaCodeLabel" style="font-size:0.78rem;">Authenticator Code</label>
+                                <input type="text" id="profileMfaCode" class="form-input" placeholder="123456" inputmode="numeric" autocomplete="one-time-code">
+                            </div>
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                                <button type="button" class="btn btn-secondary" id="profileMfaSetupBtn" onclick="profileSetupMfa()"><i class="mdi mdi-qrcode"></i> Setup</button>
+                                <button type="button" class="btn btn-primary" id="profileMfaEnableBtn" onclick="profileEnableMfa()" style="display:none;"><i class="mdi mdi-shield-check"></i> Enable</button>
+                                <button type="button" class="btn btn-danger" id="profileMfaDisableBtn" onclick="profileDisableMfa()" style="display:none;"><i class="mdi mdi-shield-off"></i> Disable</button>
+                            </div>
+                        </div>
+
+                        <div class="profile-passkey-header">
+                            <h2 style="font-size:1rem;margin:0;">Passkeys</h2>
+                            <button type="button" class="btn btn-primary btn-small" id="passkeyRegisterBtn" onclick="registerPasskey()"><i class="mdi mdi-fingerprint"></i> Add Passkey</button>
+                        </div>
+                        <div id="passkeySupportNote" style="display:none;color:var(--text-muted);font-size:0.86rem;margin-bottom:0.75rem;">Passkeys are not supported by this browser.</div>
+                        <div id="passkeyList" class="profile-passkey-list"></div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- Tickets -->
+            <div class="settings-section" id="settings-section-tickets" style="display:none;">
+                <p class="settings-section-description">
+                    Create tickets and track issue status, assignments, and comments.
+                </p>
+                <div class="devices-search-bar">
+                    <div class="search-input-wrap">
+                        <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                        <input type="text" id="ticketSearch" class="search-input" placeholder="Search tickets..." oninput="rtpRenderTicketsTable()">
+                    </div>
+                    <span class="devices-count" id="ticketsCount"></span>
+                </div>
+                <div class="table-wrapper">
+                    <table class="devices-table settings-table tickets-table">
+                        <thead>
+                            <tr>
+                                <th data-sort="updated" data-sort-dir="desc" onclick="rtpSortTickets('updated')">Updated</th>
+                                <th data-sort="title" onclick="rtpSortTickets('title')">Ticket</th>
+                                <th data-sort="status" onclick="rtpSortTickets('status')">Status</th>
+                                <th data-sort="priority" onclick="rtpSortTickets('priority')">Priority</th>
+                                <th data-sort="comments" onclick="rtpSortTickets('comments')">Comments</th>
+                                <th data-sort="creator" onclick="rtpSortTickets('creator')">Created By</th>
+                                <th data-sort="assignee" onclick="rtpSortTickets('assignee')">Assigned To</th>
+                                <th style="width:130px;text-align:center;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ticketsTableBody">
+                            <tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading tickets...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Notifications -->
+            <div class="settings-section" id="settings-section-notifications" style="display:none;">
+                <p class="settings-section-description">
+                    Configure services to receive alerts, such as Telegram, Discord, or Email.
+                    <a href="https://appriseit.com/services/" target="_blank">Read Apprise Documentation</a>
+                </p>
+                <div class="devices-search-bar">
+                    <div class="search-input-wrap">
+                        <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                        <input type="text" id="notificationSearch" class="search-input" placeholder="Search notification channels..." oninput="renderChannels()">
+                    </div>
+                    <span class="devices-count" id="channelCount"></span>
+                </div>
+                <div class="table-wrapper">
+                    <table class="devices-table settings-table">
+                        <thead>
+                            <tr>
+                                <th data-sort="name" data-sort-dir="asc" onclick="sortNotificationChannels('name')">Name</th>
+                                <th data-sort="url" onclick="sortNotificationChannels('url')">Apprise URL</th>
+                                <th style="text-align: right;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="channelListBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+
+            <!-- Webhooks -->
+            <div class="settings-section" id="settings-section-webhooks" style="display:none;">
+                <p class="settings-section-description">
+                    POST live position data to one or more URLs on every device update. Works with Home Assistant, Zapier, n8n, or any HTTP endpoint.
+                </p>
+                <div class="devices-search-bar">
+                    <div class="search-input-wrap">
+                        <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                        <input type="text" id="webhookSearch" class="search-input" placeholder="Search webhooks..." oninput="renderWebhooks()">
+                    </div>
+                    <span class="devices-count" id="webhookCount"></span>
+                </div>
+                <div class="table-wrapper">
+                    <table class="devices-table settings-table">
+                        <thead>
+                            <tr>
+                                <th data-sort="url" data-sort-dir="asc" onclick="sortWebhooks('url')">URL</th>
+                                <th style="text-align: right;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="webhookListBody"></tbody>
+                    </table>
+                </div>
+
+            </div>
+
+            <!-- API Keys -->
+            <div class="settings-section" id="settings-section-apiKeys" style="display:none;">
+                <p class="settings-section-description">
+                    Create scoped REST API keys for integrations. New keys are shown once.
+                    <a href="/docs" target="_blank">Open Swagger REST API documentation</a>
+                </p>
+                <div class="devices-search-bar">
+                    <div class="search-input-wrap">
+                        <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                        <input type="text" id="settingsApiKeySearch" class="search-input" placeholder="Search API keys..." oninput="renderSettingsApiKeys()">
+                    </div>
+                    <span class="devices-count" id="settingsApiKeyCount"></span>
+                </div>
+                <div id="settingsApiKeyReveal" class="secret-box" style="display:none;"></div>
+                <div class="table-wrapper">
+                    <table class="devices-table settings-table">
+                        <thead>
+                            <tr>
+                                <th data-sort="name" data-sort-dir="asc" onclick="sortSettingsApiKeys('name')">Name</th>
+                                <th data-sort="prefix" onclick="sortSettingsApiKeys('prefix')">Prefix</th>
+                                <th data-sort="scopes" onclick="sortSettingsApiKeys('scopes')">Scopes</th>
+                                <th data-sort="last_used" onclick="sortSettingsApiKeys('last_used')">Last Used</th>
+                                <th style="text-align:right;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="settingsApiKeyTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="settings-section" id="settings-section-backups" style="display: none;">
+                <div class="backup-shell" id="backupSection">
+                    <div class="backup-header">
+                        <h2>Backup & Restore</h2>
+                        <p>Exports and restores are scoped to the current company.</p>
+                    </div>
+
+                    <div class="backup-operations">
+                        <section class="backup-operation">
+                            <div class="backup-operation-main">
+                                <i class="mdi mdi-tray-arrow-down backup-operation-icon"></i>
+                                <div class="backup-operation-copy">
+                                    <h3>Export company backup</h3>
+                                    <p>Downloads database rows and related uploads as a <span class="mono">.tar.gz</span> archive.</p>
+                                </div>
+                            </div>
+                            <button class="btn btn-primary backup-action-btn" onclick="downloadBackup()" id="backupDownloadBtn">
+                                <i class="mdi mdi-download"></i> Download Backup
+                            </button>
+                        </section>
+
+                        <section class="backup-operation restore-operation">
+                            <div class="backup-operation-main">
+                                <i class="mdi mdi-restore backup-operation-icon warning"></i>
+                                <div class="backup-operation-copy">
+                                    <h3>Restore company backup</h3>
+                                    <p>Replaces existing company data from a backup archive. Other companies and super admins are not changed.</p>
+                                </div>
+                            </div>
+
+                            <input type="file" id="restoreFileInput" accept=".tar.gz" style="display:none;" onchange="handleRestoreFile(this)">
+
+                            <div class="backup-restore-controls">
+                                <button class="backup-file-button" onclick="document.getElementById('restoreFileInput').click()">
+                                    <i class="mdi mdi-folder-upload-outline"></i>
+                                    <span id="restoreFileName">Choose backup file</span>
+                                </button>
+                                <button id="restoreConfirmBtn" onclick="confirmRestore()" class="btn-restore">
+                                    <i class="mdi mdi-database-sync"></i> Restore
+                                </button>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Settings (Superuser only) -->
+            <div class="settings-section" id="settings-section-system" style="display: none;">
+                <div style="margin-bottom:1.25rem;">
+                    <h2 style="font-size:1.2rem; font-weight:700; margin:0 0 0.25rem 0; display:flex; align-items:center; gap:0.5rem;">
+                        <i class="mdi mdi-tune-vertical" style="color:var(--accent-primary);"></i> System Configuration
+                    </h2>
+                    <p class="settings-section-description" style="margin:0;">
+                        Platform-wide system parameters, feature flags, single sign-on (SSO), geocoding, and engine parameters. Accessible to Super Users only.
+                    </p>
+                </div>
+
+                <div class="devices-search-bar" style="margin-bottom:1.25rem;">
+                    <div class="search-input-wrap">
+                        <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
+                        <input type="text" id="systemSettingsSearch" class="search-input" placeholder="Search settings by key, label, description, or category..." oninput="filterSystemSettings()">
+                    </div>
+                    <span class="devices-count" id="systemSettingsCount"></span>
+                </div>
+
+                <div id="systemSettingsContainer" class="system-settings-grid">
+                    <div style="grid-column: 1 / -1; text-align:center; padding:3rem; color:var(--text-muted);">
+                        <div class="loading" style="margin:0 auto 1rem;"></div>
+                        Loading system settings...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Save Button (Bottom Right) -->
+    <div id="systemSaveFloatingBubble" class="system-save-bubble" style="display: none;">
+        <button type="button" class="btn btn-primary system-save-bubble-btn" id="systemSaveBtn" onclick="saveSystemSettings()">
+            <i class="mdi mdi-content-save"></i> Save
+        </button>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="modal" id="ticketModal">
+        <div class="modal-content wide" style="max-width:960px;height:auto;max-height:92vh;">
+            <div class="modal-header" style="border-bottom:1px solid var(--border-color);padding:1.25rem 1.75rem;">
+                <div style="flex:1;min-width:0;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;" id="ticketModalTitleContainer">
+                    <h2 class="modal-title" id="ticketModalTitle" ondblclick="rtpStartTicketFieldEdit('title')" style="font-size:1.2rem;font-weight:700;word-break:break-word;cursor:pointer;" title="Double-click to edit title">Ticket Details</h2>
+                    <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">
+                        <span id="ticketModalBadgeStatus" class="proto-badge"></span>
+                        <span id="ticketModalBadgePriority" class="proto-badge"></span>
+                    </div>
+                </div>
+                <button type="button" class="modal-close" onclick="rtpCloseTicketModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="modal-scrollable" style="padding:1.5rem;background:var(--bg-primary,#0b0f17);">
+                <div id="ticketDetailLayout" class="ticket-detail-grid">
+                    <!-- Left Column: Description, Timeline & Reply -->
+                    <div class="ticket-detail-main">
+                        <div class="ticket-card" id="ticketMainCard">
+                            <div class="ticket-card-header">
+                                <div class="ticket-author-info">
+                                    <i class="mdi mdi-account-circle ticket-author-avatar"></i>
+                                    <div>
+                                        <div class="ticket-author-name" id="ticketAuthorName"></div>
+                                        <div class="ticket-author-meta" id="ticketCreatedMeta"></div>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-secondary tbl-btn ticket-edit-btn" id="ticketEditDescBtn" onclick="rtpStartTicketFieldEdit('description')"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Edit</span></button>
+                            </div>
+                            <div id="ticketDescriptionBody" class="ticket-card-body"></div>
+                            <div id="ticketAttachmentsList" style="margin-top:0.75rem;"></div>
+                        </div>
+
+                        <div style="margin-top:1.5rem;">
+                            <h3 class="ticket-section-title"><i class="mdi mdi-forum-outline"></i> Activity & Discussion</h3>
+                            <div id="ticketCommentsList" class="ticket-comments-timeline"></div>
+                        </div>
+
+                        <div class="ticket-reply-card">
+                            <h4 style="font-size:0.9rem;font-weight:700;color:var(--text-primary);margin-bottom:0.75rem;display:flex;align-items:center;gap:0.4rem;">
+                                <i class="mdi mdi-reply" style="color:var(--accent-primary);"></i> Write a Reply
+                            </h4>
+                            <textarea id="ticketCommentBody" class="form-input" rows="4" placeholder="Write a response or note..."></textarea>
+                            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;margin-top:0.85rem;">
+                                <div class="ticket-file-picker">
+                                    <input type="file" id="ticketCommentAttachments" class="ticket-file-input" multiple onchange="rtpAddTicketFiles('ticketCommentAttachments','ticketCommentAttachmentSummary')">
+                                    <button type="button" class="btn btn-secondary tbl-btn" onclick="document.getElementById('ticketCommentAttachments').click()"><i class="mdi mdi-paperclip"></i> Attach files</button>
+                                    <span id="ticketCommentAttachmentSummary" class="ticket-file-summary">No files selected</span>
+                                </div>
+                                <label class="ticket-switch" id="ticketCommentInternalWrap" style="margin:0;">
+                                    <input type="checkbox" id="ticketCommentInternal">
+                                    <span class="ticket-switch-track"></span>
+                                    <span>Internal note (staff only)</span>
+                                </label>
+                            </div>
+                            <div style="display:flex;justify-content:flex-end;margin-top:1rem;">
+                                <button type="button" class="btn btn-primary" onclick="rtpAddTicketComment()"><i class="mdi mdi-send"></i> Send Reply</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Ticket Attributes & Metadata Sidebar -->
+                    <div class="ticket-detail-sidebar">
+                        <div class="ticket-sidebar-box">
+                            <h4 class="ticket-sidebar-title"><i class="mdi mdi-tune"></i> Ticket Attributes</h4>
+                            <div class="form-group" style="margin-bottom:0.85rem;">
+                                <label class="form-label" style="font-size:0.78rem;">Status</label>
+                                <select id="ticketStatus" class="form-input" style="font-size:0.85rem;padding:0.45rem 0.75rem;"></select>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0.85rem;">
+                                <label class="form-label" style="font-size:0.78rem;">Priority</label>
+                                <select id="ticketPriority" class="form-input" style="font-size:0.85rem;padding:0.45rem 0.75rem;"></select>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0.85rem;">
+                                <label class="form-label" style="font-size:0.78rem;">Assigned To</label>
+                                <select id="ticketAssignee" class="form-input" style="font-size:0.85rem;padding:0.45rem 0.75rem;"></select>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0.85rem;">
+                                <label class="form-label" style="font-size:0.78rem;">Related Item Type</label>
+                                <select id="ticketRelatedType" class="form-input" style="font-size:0.85rem;padding:0.45rem 0.75rem;" onchange="rtpPopulateRelatedEntitySelect('ticketRelatedType', 'ticketRelatedId', 'ticketRelatedIdWrap')">
+                                    <option value="">None</option>
+                                    <option value="device">Device / Vehicle</option>
+                                    <option value="route">Route</option>
+                                    <option value="driver">Driver</option>
+                                    <option value="alert">Alert Profile</option>
+                                    <option value="maintenance">Maintenance</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="ticketRelatedIdWrap" style="margin-bottom:0.85rem;display:none;">
+                                <label class="form-label" style="font-size:0.78rem;">Related Item</label>
+                                <select id="ticketRelatedId" class="form-input" style="font-size:0.85rem;padding:0.45rem 0.75rem;">
+                                    <option value="">None</option>
+                                </select>
+                            </div>
+                            <button type="button" class="btn btn-primary" onclick="rtpSaveTicket()" style="width:100%;margin-top:0.5rem;"><i class="mdi mdi-content-save"></i> Save Attributes</button>
+                        </div>
+
+                        <div class="ticket-sidebar-box" style="margin-top:1rem;">
+                            <h4 class="ticket-sidebar-title"><i class="mdi mdi-information-outline"></i> Metadata</h4>
+                            <div class="ticket-meta-row">
+                                <span class="ticket-meta-label">Ticket ID</span>
+                                <span class="ticket-meta-value vp-mono" id="ticketMetaId"></span>
+                            </div>
+                            <div class="ticket-meta-row">
+                                <span class="ticket-meta-label">Created</span>
+                                <span class="ticket-meta-value" id="ticketMetaCreated" style="font-size:0.75rem;text-align:right;"></span>
+                            </div>
+                            <div class="ticket-meta-row">
+                                <span class="ticket-meta-label">Last Updated</span>
+                                <span class="ticket-meta-value" id="ticketMetaUpdated" style="font-size:0.75rem;text-align:right;"></span>
+                            </div>
+                            <div class="ticket-meta-row">
+                                <span class="ticket-meta-label">Related Item</span>
+                                <span class="ticket-meta-value" id="ticketMetaRelated"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="ticketCreateModal">
+        <div class="modal-content" style="max-width:720px;height:auto;max-height:90vh;">
+            <div class="modal-header">
+                <h2 class="modal-title">New Ticket</h2>
+                <button type="button" class="modal-close" onclick="rtpCloseCreateTicketModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
+                <div class="form-grid">
+                    <label><span>Title <b style="color:var(--accent-danger);font-weight:600;">*</b></span><input id="ticketCreateTitle" class="form-input" placeholder="Short issue summary"></label>
+                    <label><span>Priority</span><select id="ticketCreatePriority" class="form-input">
+                        <option value="low">Low</option>
+                        <option value="normal" selected>Normal</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                    </select></label>
+                    <label><span>Related Item Type</span><select id="ticketCreateRelatedType" class="form-input" onchange="rtpPopulateRelatedEntitySelect('ticketCreateRelatedType', 'ticketCreateRelatedId', 'ticketCreateRelatedIdWrap')">
+                        <option value="" selected>None</option>
+                        <option value="device">Device / Vehicle</option>
+                        <option value="route">Route</option>
+                        <option value="driver">Driver</option>
+                        <option value="alert">Alert Profile</option>
+                        <option value="maintenance">Maintenance</option>
+                    </select></label>
+                    <label id="ticketCreateRelatedIdWrap" style="display:none;"><span>Related Item</span><select id="ticketCreateRelatedId" class="form-input">
+                        <option value="">None</option>
+                    </select></label>
+                    <label style="grid-column:1 / -1;"><span>Description <b style="color:var(--accent-danger);font-weight:600;">*</b></span><textarea id="ticketCreateDescription" class="form-input" rows="6" placeholder="Describe what happened and what you expected."></textarea></label>
+                    <label style="grid-column:1 / -1;"><span>Attachments</span>
+                        <div class="ticket-file-picker">
+                            <input type="file" id="ticketCreateAttachments" class="ticket-file-input" multiple onchange="rtpAddTicketFiles('ticketCreateAttachments','ticketCreateAttachmentSummary')">
+                            <button type="button" class="btn btn-secondary btn-small" onclick="document.getElementById('ticketCreateAttachments').click()"><i class="mdi mdi-paperclip"></i> Attach files</button>
+                            <span id="ticketCreateAttachmentSummary" class="ticket-file-summary">No files selected</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="rtpCloseCreateTicketModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="ticketCreateBtn" onclick="rtpCreateTicket()"><i class="mdi mdi-ticket-confirmation-outline"></i> Create Ticket</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="notificationChannelModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="notificationChannelModalTitle">Add Notification Channel</h2>
+                <button type="button" class="modal-close" onclick="closeChannelModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="modal-scrollable">
+                <div class="form-group">
+                    <label class="form-label">Channel Name</label>
+                    <input type="text" id="newChannelName" class="form-input" placeholder="e.g. My Phone">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Apprise URL</label>
+                    <input type="text" id="newChannelUrl" class="form-input" placeholder="tgram://bot_token/chat_id">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" id="deleteChannelBtn" onclick="deleteChannelFromModal()" style="display:none;"><i class="mdi mdi-delete"></i> Remove</button>
+                <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                    <button type="button" class="btn btn-secondary" onclick="closeChannelModal()">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveChannelFromModal()"><i class="mdi mdi-plus" id="saveChannelIcon"></i> <span id="saveChannelLabel">Add Channel</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="webhookModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Add Webhook</h2>
+                <button type="button" class="modal-close" onclick="closeWebhookModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="modal-scrollable">
+                <div class="form-group">
+                    <label class="form-label">Webhook URL</label>
+                    <input type="url" id="newWebhookUrl" class="form-input" placeholder="https://your-server.com/webhook">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                    <button type="button" class="btn btn-secondary" onclick="closeWebhookModal()">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="addWebhook()"><i class="mdi mdi-plus"></i> Add Webhook</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="apiKeyModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Create API Key</h2>
+                <button type="button" class="modal-close" onclick="closeApiKeyModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="modal-scrollable">
+                <div class="form-group">
+                    <label class="form-label">Key Name</label>
+                    <input type="text" id="settingsApiKeyName" class="form-input" placeholder="Automation key">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Scopes</label>
+                    <div id="settingsApiKeyScopes" class="scope-grid"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div style="display:flex;gap:0.75rem;margin-left:auto;">
+                    <button type="button" class="btn btn-secondary" onclick="closeApiKeyModal()">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="createSettingsApiKey()"><i class="mdi mdi-key-plus"></i> Create Key</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="editApiKeyModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Edit API Key</h2>
+                <button type="button" class="modal-close" onclick="closeEditApiKeyModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="modal-scrollable">
+                <div class="form-group">
+                    <label class="form-label">Key Name</label>
+                    <input type="text" id="editSettingsApiKeyName" class="form-input" placeholder="Automation key">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Key Prefix</label>
+                    <input type="text" id="editSettingsApiKeyPrefix" class="form-input" readonly style="opacity:0.75;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Scopes</label>
+                    <div id="editSettingsApiKeyScopes" class="scope-grid"></div>
+                </div>
+            </div>
+            <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;">
+                <button type="button" class="btn btn-danger" onclick="revokeSettingsApiKeyFromModal()"><i class="mdi mdi-key-remove"></i> Revoke Key</button>
+                <div style="display:flex;gap:0.5rem;flex-wrap:nowrap;margin-left:auto;">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditApiKeyModal()">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveSettingsApiKey()"><i class="mdi mdi-content-save"></i> Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/demo-mock-api.js"></script>
+<script src="js/config.js"></script>
+    <script src="js/units.js"></script>
+    <script src="js/impersonation.js"></script>
+    <script src="js/ui-utils.js"></script>
+    <script src="js/management-advanced.js"></script>
+    <script src="js/user-settings.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => initPWA());
+    </script>
+<script src="js/voice-ptt.js"></script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+{
+  "id": "/routario",
+  "name": "Routario Platform",
+  "short_name": "Routario",
+  "description": "Real-time GPS device tracking and alerts",
+  "start_url": "/gps-dashboard.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#170b1c",
+  "orientation": "natural",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["navigation", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "url": "/gps-dashboard.html",
+      "description": "Open live map dashboard",
+      "icons": [{ "src": "icons/shortcut-dashboard.png", "sizes": "96x96", "type": "image/png" }]
+    },
+    {
+      "name": "Devices",
+      "url": "/device-management.html",
+      "description": "Manage tracked devices",
+      "icons": [{ "src": "icons/shortcut-devices.png", "sizes": "96x96", "type": "image/png" }]
+    },
+    {
+      "name": "User Settings",
+      "url": "/user-settings.html",
+      "description": "Manage your account and notifications",
+      "icons": [{ "src": "icons/shortcut-settings.png", "sizes": "96x96", "type": "image/png" }]
+    }
+  ]
+}
