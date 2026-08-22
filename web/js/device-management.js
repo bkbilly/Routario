@@ -2207,6 +2207,13 @@ async function openAlertEditor(uid) {
         </label>`;
     }).join('');
 
+    const totalChannelCount = 2 + visibleChannels.length;
+    const channelSearchHtml = totalChannelCount >= 6 ? `
+        <div style="position:relative;margin-bottom:0.5rem;">
+            <input type="search" class="form-input" id="alertEditorChannelSearch" placeholder="Search channels..." oninput="filterAlertEditorChannels()" style="padding:0.35rem 0.65rem 0.35rem 2rem;font-size:0.8rem;width:100%;">
+            <i class="mdi mdi-magnify" style="position:absolute;left:0.65rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:1rem;pointer-events:none;"></i>
+        </div>` : '';
+
     const chHtml = pushPillHtml + emailPillHtml + userChannelPills +
         `<input type="hidden" id="alertEditorHiddenChannels" value="${_escAttrJson(hiddenChannels)}">`;
 
@@ -2257,10 +2264,17 @@ async function openAlertEditor(uid) {
                 </label>`
             ).join('');
 
+            const userSearchHtml = deviceUsers.length >= 6 ? `
+                <div style="position:relative;margin-bottom:0.5rem;">
+                    <input type="search" class="form-input" id="alertEditorUserSearch" placeholder="Search users..." oninput="filterAlertEditorUsers()" style="padding:0.35rem 0.65rem 0.35rem 2rem;font-size:0.8rem;width:100%;">
+                    <i class="mdi mdi-magnify" style="position:absolute;left:0.65rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:1rem;pointer-events:none;"></i>
+                </div>` : '';
+
             notifyUsersHtml = `<div class="form-group">
                 <label class="form-label">Notify Users</label>
                 <input type="hidden" id="alertEditorHiddenNotifyIds" value="${_escAttrJson(hiddenIds)}">
-                <div style="display:flex;flex-wrap:wrap;gap:0.4rem;">${pills}</div>
+                ${userSearchHtml}
+                <div id="alertEditorUsersList" style="display:flex;flex-wrap:wrap;gap:0.4rem;max-height:180px;overflow-y:auto;padding:2px 0;">${pills}</div>
             </div>`;
         } catch (e) { console.error('Failed to load device users:', e); }
     }
@@ -2276,7 +2290,8 @@ async function openAlertEditor(uid) {
             <div class="alert-editor-right">
                 <div class="form-group">
                     <label class="form-label">Notify Via Channels</label>
-                    <div style="display:flex;flex-wrap:wrap;gap:0.4rem;">${chHtml}</div>
+                    ${channelSearchHtml}
+                    <div id="alertEditorChannelsList" style="display:flex;flex-wrap:wrap;gap:0.4rem;max-height:180px;overflow-y:auto;padding:2px 0;">${chHtml}</div>
                 </div>
                 ${notifyUsersHtml}
                 <div class="form-group" id="editor-command-group" style="margin-top:1.25rem; display:none;">
@@ -2377,6 +2392,58 @@ async function openAlertEditor(uid) {
     applyShowIf();
 
     document.getElementById('alertEditorModal').classList.add('active');
+}
+
+function filterAlertEditorChannels() {
+    const q = (document.getElementById('alertEditorChannelSearch')?.value || '').trim().toLowerCase();
+    const container = document.getElementById('alertEditorChannelsList');
+    if (!container) return;
+    let visibleCount = 0;
+    container.querySelectorAll('.channel-pill').forEach(pill => {
+        const text = (pill.textContent || '').trim().toLowerCase();
+        const match = !q || text.includes(q);
+        pill.style.display = match ? '' : 'none';
+        if (match) visibleCount++;
+    });
+    let noMatch = document.getElementById('alertEditorNoChannels');
+    if (visibleCount === 0 && q) {
+        if (!noMatch) {
+            noMatch = document.createElement('div');
+            noMatch.id = 'alertEditorNoChannels';
+            noMatch.style.cssText = 'color:var(--text-muted);font-size:0.8rem;padding:0.3rem 0;';
+            noMatch.textContent = 'No matching channels';
+            container.appendChild(noMatch);
+        }
+        noMatch.style.display = '';
+    } else if (noMatch) {
+        noMatch.style.display = 'none';
+    }
+}
+
+function filterAlertEditorUsers() {
+    const q = (document.getElementById('alertEditorUserSearch')?.value || '').trim().toLowerCase();
+    const container = document.getElementById('alertEditorUsersList');
+    if (!container) return;
+    let visibleCount = 0;
+    container.querySelectorAll('.channel-pill').forEach(pill => {
+        const text = (pill.textContent || '').trim().toLowerCase();
+        const match = !q || text.includes(q);
+        pill.style.display = match ? '' : 'none';
+        if (match) visibleCount++;
+    });
+    let noMatch = document.getElementById('alertEditorNoUsers');
+    if (visibleCount === 0 && q) {
+        if (!noMatch) {
+            noMatch = document.createElement('div');
+            noMatch.id = 'alertEditorNoUsers';
+            noMatch.style.cssText = 'color:var(--text-muted);font-size:0.8rem;padding:0.3rem 0;';
+            noMatch.textContent = 'No matching users';
+            container.appendChild(noMatch);
+        }
+        noMatch.style.display = '';
+    } else if (noMatch) {
+        noMatch.style.display = 'none';
+    }
 }
 
 function closeAlertEditor() {
