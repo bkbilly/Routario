@@ -49,6 +49,10 @@ function settingsToggleSort(sortState, col) {
     return RoutarioTables.toggleNumericSort(sortState.col, sortState.dir, col);
 }
 
+function generateChannelId() {
+    return 'nc_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+}
+
 function sortNotificationChannels(col) {
     notificationSort = settingsToggleSort(notificationSort, col);
     renderChannels();
