@@ -27,33 +27,31 @@ Routario connects directly to your GPS hardware over TCP/UDP and gives you a liv
 
 | | Feature | |
 |---|---|---|
-| 🗺️ | **Live map** — real-time positions with smooth movement and heading rotation | |
-| 🕒 | **History & playback** — scrub through routes, replay trips, graph any sensor over time | |
-| 📊 | **Fleet reports** — backend-defined reports for summary, trips, daily aggregates, drivers, users, alerts, logbook, geofences, sensors, billing, time, route, and alert-triggered schedules, audit logs, health checks, and CSV export | |
-| 🤖 | **AI Copilot & LLM engine** — natural language fleet assistant and custom AI report generator | |
-| 🔔 | **Smart alerts** — speeding, geofence, idling, towing, low battery, maintenance, and custom rules | |
-| 📣 | **Notifications** — Telegram, Discord, Email, Slack, browser push, and SIP voice calls. Route each alert to specific channels, schedule alerts by day and hour | |
-| 🚗 | **Driver management** — create driver profiles, assign to vehicles, track who drove which trip | |
-| 📋 | **Logbook** — service records, fuel fill-ups with consumption stats, and maintenance intervals per vehicle; with odometer, cost, date, and file attachments | |
-| 🧭 | **Route planning** — create multi-stop planned routes, assign vehicles, preview route geometry, track status, and trigger off-route or skipped-waypoint alerts | |
-| 💳 | **Billing operations** — super-admin billing plan management, company plan assignment, usage tracking, invoices, billing status, and configurable exchange rates | |
-| ⚙️ | **Remote commands** — reboot, request position, set interval, and more from the dashboard | |
-| 🔗 | **Live sharing** — send a time-limited link; recipients see the live map with no login required | |
-| 🎙️ | **Voice PTT** — push-to-talk voice messages over WebSocket; read receipts, push notifications to offline users, message history | |
-| 🎫 | **Support tickets** — users can create tickets with file attachments, add comments, and let admins assign, prioritise, and resolve requests | |
-| 📡 | **8 native protocols** — Teltonika, GT06, Queclink, H02, TK103, Meitrack, Flespi, OsmAnd; listeners run only for protocols used by active devices | |
-| 🔌 | **Cloud integrations** — pull live data from Traccar, Wialon, 3D Tracking, Flespi Cloud, GPS Server, Google Find Hub, and the built-in GPS simulator alongside native devices | |
-| 🪝 | **Webhooks** — push live position data to any HTTP endpoint on every update | |
-| 👥 | **Multi-user & multi-tenant** — three-tier roles (super admin → company admin → user), fine-grained per-user permissions, company-scoped device and user management, and company branding with custom login slugs | |
-| 🔐 | **Security controls** — SSO/OIDC login, passkey login, scoped API keys, authenticator-app MFA with recovery codes, user impersonation, per-permission settings access, audit logging, health checks, runtime logs, and company-isolated admin tools | |
-| 🌍 | **Unit systems** — switch between metric (km, km/h, m) and imperial (mi, mph, ft) per user | |
-| 📱 | **PWA** — installs on Android and iOS, push notifications even when the tab is closed | |
-| 💾 | **Backup & restore** — super admins can back up the whole platform; company admins with permission can back up and restore only their own company | |
-| 📥 | **CSV export** — download full position history with all sensor columns included | |
-
----
-
-https://github.com/user-attachments/assets/82189d71-8810-4d81-a055-f0dc463d9480
+| 🗺️ | **Live fleet map** — see all your vehicles moving in real-time with speed, direction, and ignition status | |
+| 🌓 | **Light & dark themes** — easily switch between sleek dark mode and clean light mode | |
+| 🕒 | **Trip history** — replay past trips on the map, review stops, and view speed and sensor graphs | |
+| 🚧 | **Geofences** — draw zones on the map and get alerted when vehicles enter, exit, or stay too long | |
+| 🚨 | **Speed limit detection** — detect speeding using actual road speed limits or your own custom thresholds | |
+| 🔔 | **Instant alerts** — immediate alerts for speeding, towing, idling, low battery, maintenance, or harsh driving | |
+| 📣 | **Multi-channel notifications** — get notified via Telegram, Discord, Slack, Email, browser push, or phone voice calls | |
+| 🧭 | **Route planning** — plan multi-stop routes, assign drivers, and track live progress and arrival times | |
+| 🚗 | **Driver management** — create driver profiles, track license dates, and automatically log who drove each vehicle | |
+| 📋 | **Fuel & service logbook** — track fuel fill-ups, calculate fuel consumption, log repair costs, and attach receipts | |
+| 🎙️ | **Voice walkie-talkie (PTT)** — send quick voice messages between fleet dispatchers and drivers | |
+| 🤖 | **AI Copilot** — ask questions in plain English about vehicle activity, trips, and fleet costs | |
+| 📊 | **Scheduled fleet reports** — automatically receive daily, weekly, or monthly PDF and CSV reports | |
+| 🔗 | **Live sharing links** — share temporary live tracking links with customers so they can track deliveries without logging in | |
+| ⚙️ | **Remote commands** — send commands directly to vehicles (e.g. cut engine, reboot, change update rate) | |
+| 🎫 | **Maintenance & repair tickets** — report vehicle issues, assign repair tasks, and track maintenance progress | |
+| 🏢 | **Multi-company support** — host multiple companies with isolated vehicles, custom logos, and branded login pages | |
+| 👤 | **User access control** — customize exactly what each team member can see and do | |
+| 🔒 | **Easy & secure login** — sign in with Face ID / Touch ID (Passkeys), Google / Microsoft (SSO), or two-factor authentication | |
+| 📡 | **Wide GPS tracker support** — connects directly to major GPS hardware (Teltonika, Queclink, Concox, TK103, etc.) or smartphones | |
+| 🔌 | **External platform sync** — import live data from existing platforms like Traccar, Wialon, 3D Tracking, or Google Find My | |
+| 🪝 | **Webhooks** — forward live GPS data to your own external systems or automations | |
+| 🌍 | **Metric & imperial units** — switch easily between kilometers/km/h and miles/mph | |
+| 📱 | **Mobile app (PWA)** — install on Android and iOS with background push notifications | |
+| 💾 | **Backup & restore** — one-click platform backups and company-level data exports and restores | |
 
 ---
 
