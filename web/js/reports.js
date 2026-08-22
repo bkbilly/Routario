@@ -9,6 +9,10 @@ let _allDevices          = [];
 let _selectedIds         = new Set(); // empty = all
 let _sensorsHistoryMode  = false;
 let _tripRows            = []; // sorted trip rows, for map button index lookup
+let _sensorChart         = null;
+let _availableSensors    = [];
+let _selectedSensors     = new Set();
+let _sensorViewMode      = 'both'; // 'both' | 'graph' | 'table'
 
 let _allUsers            = [];
 let _selectedUserIds     = new Set(); // empty = all visible users
@@ -81,6 +85,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     _injectNavScheduleAction();
     const hash = RoutarioTabs.hashValue();
     switchTab(_validReportTab(hash) ? hash : canSeeReports ? 'reports' : hasPermission('view_health') ? 'health' : 'logs', false);
+
+    document.getElementById('startDate')?.addEventListener('change', () => {
+        if (document.getElementById('reportType')?.value === 'sensor_graphs') _fetchAvailableSensors();
+    });
+    document.getElementById('endDate')?.addEventListener('change', () => {
+        if (document.getElementById('reportType')?.value === 'sensor_graphs') _fetchAvailableSensors();
+    });
 
     window.addEventListener('hashchange', () => {
         const next = RoutarioTabs.hashValue();
@@ -356,31 +367,52 @@ function toggleVehDropdown(e) {
 
 function onVehCheck(cb) {
     const id = parseInt(cb.dataset.id);
-    if (cb.checked) _selectedIds.add(id);
-    else _selectedIds.delete(id);
+    const isSensorGraphs = document.getElementById('reportType')?.value === 'sensor_graphs';
+    if (cb.checked) {
+        if (isSensorGraphs && _selectedIds.size >= 5) {
+            cb.checked = false;
+            showAlert('Maximum 5 vehicles can be selected for Sensor Graphs.', 'warning');
+            return;
+        }
+        _selectedIds.add(id);
+    } else {
+        _selectedIds.delete(id);
+    }
     _syncAllCheck();
     _updateVehLabel();
+    if (isSensorGraphs) _fetchAvailableSensors();
 }
 
 function toggleAllVehicles(cb) {
+    const isSensorGraphs = document.getElementById('reportType')?.value === 'sensor_graphs';
     _selectedIds.clear();
-    // When "All vehicles" is toggled, uncheck all individual vehicles
-    document.querySelectorAll('#vehOptsList input[type=checkbox]').forEach(el => { el.checked = false; });
-    // "All vehicles" checkbox always stays checked (it means "no filter = all")
-    cb.checked = true;
+    if (isSensorGraphs) {
+        cb.checked = false;
+        document.querySelectorAll('#vehOptsList input[type=checkbox]').forEach(el => { el.checked = false; });
+        showAlert('Please select up to 5 individual vehicles for Sensor Graphs.', 'info');
+    } else {
+        document.querySelectorAll('#vehOptsList input[type=checkbox]').forEach(el => { el.checked = false; });
+        cb.checked = true;
+    }
     _updateVehLabel();
+    if (isSensorGraphs) _fetchAvailableSensors();
 }
 
 function _syncAllCheck() {
+    const isSensorGraphs = document.getElementById('reportType')?.value === 'sensor_graphs';
     const checked = document.querySelectorAll('#vehOptsList input[type=checkbox]:checked');
     const allChk  = document.getElementById('allVehCheck');
-    allChk.checked = checked.length === 0;
+    if (allChk) {
+        allChk.checked = isSensorGraphs ? false : (checked.length === 0);
+    }
 }
 
 function _updateVehLabel() {
     const label = document.getElementById('vehSelectLabel');
+    if (!label) return;
+    const isSensorGraphs = document.getElementById('reportType')?.value === 'sensor_graphs';
     if (_selectedIds.size === 0) {
-        label.textContent = 'All vehicles';
+        label.textContent = isSensorGraphs ? 'Select vehicles (max 5)' : 'All vehicles';
     } else if (_selectedIds.size === 1) {
         const d = _allDevices.find(d => _selectedIds.has(d.id));
         label.textContent = d ? d.name : '1 vehicle';
@@ -402,12 +434,36 @@ function _syncReportFilters() {
     const aiGroup = document.getElementById('aiReportPromptGroup');
     if (aiGroup) aiGroup.style.display = (type === 'ai_custom') ? '' : 'none';
 
+    const sensorSelectGroup = document.getElementById('sensorSelectGroup');
+    if (sensorSelectGroup) sensorSelectGroup.style.display = (type === 'sensor_graphs') ? '' : 'none';
+
+    const sensorViewModeGroup = document.getElementById('sensorViewModeGroup');
+    if (sensorViewModeGroup) sensorViewModeGroup.style.display = (type === 'sensor_graphs') ? '' : 'none';
+
     document.getElementById('historyCheckGroup').style.display = def.supports_historical_toggle ? '' : 'none';
     document.getElementById('vehicleSelectGroup').style.display = (def.supports_vehicle_filter === false || dailyDrivers) ? 'none' : '';
     document.getElementById('dateFromGroup').style.display = def.needs_date_range === false && !document.getElementById('historyCheck').checked ? 'none' : '';
     document.getElementById('dateToGroup').style.display  = def.needs_date_range === false && !document.getElementById('historyCheck').checked ? 'none' : '';
     document.getElementById('userSelectGroup').style.display = (def.supports_user_filter && _CAN_SEE_USERS) ? '' : 'none';
     document.getElementById('driverSelectGroup').style.display = (def.supports_driver_filter && dailyDrivers) ? '' : 'none';
+
+    if (type === 'sensor_graphs') {
+        // By default for sensor graphs, do not select all vehicles
+        if (_selectedIds.size > 5) {
+            const first5 = [..._selectedIds].slice(0, 5);
+            _selectedIds = new Set(first5);
+            document.querySelectorAll('#vehOptsList input[type=checkbox]').forEach(el => {
+                el.checked = _selectedIds.has(parseInt(el.dataset.id));
+            });
+        }
+        const allChk = document.getElementById('allVehCheck');
+        if (allChk) allChk.checked = false;
+        _updateVehLabel();
+        _fetchAvailableSensors();
+    } else {
+        const graphCard = document.getElementById('sensorGraphCard');
+        if (graphCard) graphCard.style.display = 'none';
+    }
 }
 
 function _renderReportControls(controls) {
@@ -645,12 +701,27 @@ function onReportTypeChange() {
     _sensorsHistoryMode = false;
     document.getElementById('reportTable').style.display = 'none';
     document.getElementById('noData').style.display = 'none';
+    const graphCard = document.getElementById('sensorGraphCard');
+    if (graphCard) graphCard.style.display = 'none';
     const card = document.getElementById('aiReportResultCard');
     if (card) card.style.display = 'none';
     document.getElementById('summaryBar').style.display = 'none';
     document.getElementById('exportMenuWrap').style.display = 'none';
     closeExportMenus();
     document.getElementById('historyCheck').checked = false;
+
+    const type = document.getElementById('reportType').value;
+    if (type === 'sensor_graphs') {
+        _selectedIds.clear();
+        document.querySelectorAll('#vehOptsList input[type=checkbox]').forEach(el => { el.checked = false; });
+        const allChk = document.getElementById('allVehCheck');
+        if (allChk) allChk.checked = false;
+        _availableSensors = [];
+        _selectedSensors.clear();
+        const pillList = document.getElementById('sensorPillsList');
+        if (pillList) pillList.innerHTML = '<span style="font-size:0.8rem;color:var(--text-muted);">Please select at least 1 vehicle above to view available sensors.</span>';
+    }
+
     _syncReportFilters();
     _updateDescription();
 }
@@ -679,6 +750,311 @@ function onReportControlChange() {
     document.getElementById('exportMenuWrap').style.display = 'none';
     closeExportMenus();
     _syncReportFilters();
+}
+
+function onSensorViewModeChange() {
+    _sensorViewMode = document.getElementById('sensorViewMode')?.value || 'both';
+    _applySensorViewVisibility();
+}
+
+function _applySensorViewVisibility() {
+    const isSensorGraphs = document.getElementById('reportType')?.value === 'sensor_graphs';
+    const graphCard = document.getElementById('sensorGraphCard');
+    const tableWrap = document.getElementById('reportTableWrap');
+    const table = document.getElementById('reportTable');
+    const mode = document.getElementById('sensorViewMode')?.value || _sensorViewMode || 'both';
+
+    if (!isSensorGraphs || !_reportPayload || _reportPayload.type !== 'sensor_graphs' || !_reportData.length) {
+        if (graphCard) graphCard.style.display = 'none';
+        if (tableWrap) tableWrap.style.display = '';
+        return;
+    }
+
+    if (graphCard) {
+        graphCard.style.display = (mode === 'both' || mode === 'graph') ? '' : 'none';
+    }
+    if (tableWrap) {
+        tableWrap.style.display = (mode === 'both' || mode === 'table') ? '' : 'none';
+    }
+    if (table) {
+        table.style.display = (mode === 'both' || mode === 'table') ? '' : 'none';
+    }
+}
+
+async function _fetchAvailableSensors() {
+    const type = document.getElementById('reportType')?.value;
+    if (type !== 'sensor_graphs') return;
+
+    const container = document.getElementById('sensorPillsList');
+    if (_selectedIds.size === 0) {
+        _availableSensors = [];
+        _selectedSensors.clear();
+        if (container) container.innerHTML = '<span style="font-size:0.8rem;color:var(--text-muted);">Please select at least 1 vehicle above to view available sensors.</span>';
+        return;
+    }
+
+    const start = document.getElementById('startDate')?.value;
+    const end = document.getElementById('endDate')?.value;
+    const params = new URLSearchParams();
+    params.set('device_ids', [..._selectedIds].join(','));
+    if (start) params.set('start_date', `${start}T00:00:00`);
+    if (end) params.set('end_date', `${end}T23:59:59`);
+
+    try {
+        const res = await apiFetch(`${API_BASE}/reports/sensor-keys?${params}`);
+        if (res.ok) {
+            const data = await res.json();
+            _availableSensors = data.sensors || [];
+            // Prune any selected keys that are no longer available in the new list
+            const validKeys = new Set(_availableSensors.map(s => s.key));
+            for (const key of _selectedSensors) {
+                if (!validKeys.has(key)) _selectedSensors.delete(key);
+            }
+            _renderSensorPills();
+        }
+    } catch (e) {
+        console.error('Error fetching sensor keys:', e);
+    }
+}
+
+function _renderSensorPills() {
+    const container = document.getElementById('sensorPillsList');
+    if (!container) return;
+
+    if (!_availableSensors.length) {
+        container.innerHTML = '<span style="font-size:0.8rem;color:var(--text-muted);">No sensor readings found for selected vehicles/dates.</span>';
+        return;
+    }
+
+    container.innerHTML = _availableSensors.map(s => {
+        const isChecked = _selectedSensors.has(s.key);
+        const label = s.label + (s.unit ? ` (${s.unit})` : '');
+        return `
+            <div class="sensor-pill ${isChecked ? 'active' : ''}" data-sensor-key="${_esc(s.key)}" onclick="toggleSensorPill('${_esc(s.key)}')">
+                <i class="mdi ${isChecked ? 'mdi-check-circle' : 'mdi-circle-outline'}" style="font-size:0.9rem;"></i>
+                <span>${_esc(label)}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function toggleSensorPill(key) {
+    if (_selectedSensors.has(key)) {
+        _selectedSensors.delete(key);
+    } else {
+        _selectedSensors.add(key);
+    }
+    _renderSensorPills();
+}
+
+function selectAllSensors(selectAll) {
+    if (selectAll) {
+        _selectedSensors = new Set(_availableSensors.map(s => s.key));
+    } else {
+        _selectedSensors.clear();
+    }
+    _renderSensorPills();
+}
+
+function _renderSensorChart(payload) {
+    const canvas = document.getElementById('sensorGraphCanvas');
+    if (!canvas) return;
+
+    if (_sensorChart) {
+        _sensorChart.destroy();
+        _sensorChart = null;
+    }
+
+    const seriesList = payload.series || [];
+    const activeSensors = (payload.available_sensors || _availableSensors).filter(s => _selectedSensors.has(s.key));
+    if (!activeSensors.length) return;
+
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    const gridColor = isLight ? '#e2e8f0' : '#374151';
+    const textMuted = isLight ? '#64748b' : '#9ca3af';
+    const tickColor = isLight ? '#64748b' : '#6b7280';
+    const tooltipBg = isLight ? '#ffffff' : '#131825';
+    const tooltipBorder = isLight ? '#cbd5e1' : '#374151';
+    const tooltipTitle = isLight ? '#0f172a' : '#e5e7eb';
+    const tooltipBody = isLight ? '#475569' : '#9ca3af';
+
+    const palette = [
+        '#3b82f6', // Blue
+        '#10b981', // Emerald
+        '#f59e0b', // Amber
+        '#8b5cf6', // Violet
+        '#ec4899', // Pink
+        '#06b6d4', // Cyan
+        '#ef4444', // Red
+        '#14b8a6', // Teal
+        '#f97316', // Orange
+        '#6366f1', // Indigo
+        '#84cc16', // Lime
+        '#a855f7', // Fuchsia
+        '#0ea5e9', // Sky Blue
+        '#e11d48', // Ruby
+        '#d97706', // Ochre
+    ];
+
+    const timeSet = new Set();
+    seriesList.forEach(veh => {
+        (veh.points || []).forEach(pt => {
+            if (pt.time) timeSet.add(pt.time);
+        });
+    });
+    const sortedTimes = [...timeSet].sort();
+
+    const labels = sortedTimes.map(t => {
+        const d = new Date(t);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
+    });
+
+    let colorIdx = 0;
+    const datasets = [];
+    seriesList.forEach((veh) => {
+        const ptMap = new Map((veh.points || []).map(pt => [pt.time, pt]));
+
+        activeSensors.forEach((sensor) => {
+            const color = palette[colorIdx % palette.length];
+            colorIdx++;
+
+            const dataPoints = sortedTimes.map(t => {
+                const pt = ptMap.get(t);
+                if (!pt || pt[sensor.key] === undefined || pt[sensor.key] === null) return null;
+                return pt[sensor.key];
+            });
+
+            datasets.push({
+                label: `${veh.name} - ${sensor.label}${sensor.unit ? ` (${sensor.unit})` : ''}`,
+                data: dataPoints,
+                borderColor: color,
+                backgroundColor: color,
+                pointBackgroundColor: color,
+                borderWidth: 2.5,
+                pointStyle: 'circle',
+                pointRadius: sortedTimes.length > 80 ? 1.5 : 3.5,
+                pointHoverRadius: 6,
+                tension: 0.25,
+                spanGaps: true,
+                fill: false,
+            });
+        });
+    });
+
+    const titleEl = document.getElementById('sensorGraphTitleText');
+    if (titleEl) {
+        titleEl.textContent = `Sensor Graphs (${seriesList.length} vehicle${seriesList.length === 1 ? '' : 's'})`;
+    }
+    const metaEl = document.getElementById('sensorGraphMeta');
+    if (metaEl) {
+        metaEl.textContent = `${datasets.length} series • ${sortedTimes.length} timestamps`;
+    }
+
+    const resetBtn = document.getElementById('sensorResetZoomBtn');
+    if (resetBtn) resetBtn.style.display = 'none';
+
+    _sensorChart = new Chart(canvas, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                zoom: {
+                    pan: {
+                        enabled: true,
+                        mode: 'x',
+                        onPan: _checkSensorGraphZoomState,
+                        onPanComplete: _checkSensorGraphZoomState,
+                    },
+                    zoom: {
+                        wheel: {
+                            enabled: true,
+                            speed: 0.1,
+                        },
+                        pinch: {
+                            enabled: true,
+                        },
+                        mode: 'x',
+                        onZoom: _checkSensorGraphZoomState,
+                        onZoomComplete: _checkSensorGraphZoomState,
+                    },
+                },
+                legend: {
+                    display: true,
+                    labels: {
+                        color: textMuted,
+                        font: { family: 'Outfit, sans-serif', size: 11 },
+                        boxWidth: 14,
+                        padding: 10,
+                        usePointStyle: true,
+                    }
+                },
+                tooltip: {
+                    backgroundColor: tooltipBg,
+                    borderColor: tooltipBorder,
+                    borderWidth: 1,
+                    titleColor: tooltipTitle,
+                    bodyColor: tooltipBody,
+                    titleFont: { family: 'Outfit, sans-serif', size: 12, weight: 'bold' },
+                    bodyFont: { family: 'JetBrains Mono, monospace', size: 11 },
+                    padding: 10,
+                }
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        color: tickColor,
+                        font: { family: 'JetBrains Mono, monospace', size: 10 },
+                        maxTicksLimit: 8,
+                        maxRotation: 0,
+                    },
+                    grid: { color: gridColor }
+                },
+                y: {
+                    ticks: { color: tickColor, font: { family: 'JetBrains Mono, monospace', size: 10 } },
+                    grid: { color: gridColor }
+                }
+            }
+        }
+    });
+
+    _checkSensorGraphZoomState();
+}
+
+function sensorGraphPan(direction) {
+    if (!_sensorChart) return;
+    if (typeof _sensorChart.pan === 'function') {
+        const delta = direction === 'left' ? 80 : -80;
+        _sensorChart.pan({ x: delta }, undefined, 'default');
+    }
+    _checkSensorGraphZoomState();
+}
+
+function sensorGraphZoom(factor) {
+    if (!_sensorChart) return;
+    if (typeof _sensorChart.zoom === 'function') {
+        _sensorChart.zoom(factor);
+    }
+    _checkSensorGraphZoomState();
+}
+
+function _checkSensorGraphZoomState() {
+    if (!_sensorChart) return;
+    const isZoomed = typeof _sensorChart.isZoomedOrPanned === 'function' ? _sensorChart.isZoomedOrPanned() : false;
+    ['sensorPanLeftBtn', 'sensorPanRightBtn', 'sensorZoomOutBtn', 'sensorResetZoomBtn'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = isZoomed ? 'inline-flex' : 'none';
+    });
+}
+
+function resetSensorGraphZoom() {
+    if (_sensorChart && typeof _sensorChart.resetZoom === 'function') {
+        _sensorChart.resetZoom();
+    }
+    _checkSensorGraphZoomState();
 }
 
 async function generateReport() {
@@ -765,6 +1141,22 @@ async function generateReport() {
         params.set('historical', historical ? 'true' : 'false');
     }
 
+    if (type === 'sensor_graphs') {
+        if (_selectedIds.size === 0) {
+            showAlert('Please select at least one vehicle (up to 5) for Sensor Graphs.', 'warning');
+            return;
+        }
+        if (_selectedIds.size > 5) {
+            showAlert('Maximum 5 vehicles can be selected for Sensor Graphs.', 'warning');
+            return;
+        }
+        if (_selectedSensors.size === 0) {
+            showAlert('Please select at least one sensor from the available sensors list.', 'warning');
+            return;
+        }
+        params.set('sensors', [..._selectedSensors].join(','));
+    }
+
     const endpoint = `${API_BASE}/reports/${encodeURIComponent(type)}${params.toString() ? `?${params}` : ''}`;
     const pdfEndpoint = `${API_BASE}/reports/${encodeURIComponent(type)}/pdf${params.toString() ? `?${params}` : ''}`;
 
@@ -795,6 +1187,7 @@ function _setReportLoading(isLoading) {
     const noData = document.getElementById('noData');
     const summary = document.getElementById('summaryBar');
     const exportWrap = document.getElementById('exportMenuWrap');
+    const graphCard = document.getElementById('sensorGraphCard');
 
     if (btn) {
         btn.disabled = isLoading;
@@ -804,6 +1197,7 @@ function _setReportLoading(isLoading) {
     }
     if (isLoading) {
         table.style.display = 'none';
+        if (graphCard) graphCard.style.display = 'none';
         summary.style.display = 'none';
         exportWrap.style.display = 'none';
         noData.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Generating report...';
@@ -833,6 +1227,8 @@ async function _renderReport() {
 
     if (_reportData.length === 0) {
         table.style.display = 'none';
+        const graphCard = document.getElementById('sensorGraphCard');
+        if (graphCard) graphCard.style.display = 'none';
         noData.style.display = '';
         sumBar.style.display = 'none';
         expWrap.style.display = 'none';
@@ -853,6 +1249,14 @@ async function _renderReport() {
     table.style.display = '';
     noData.style.display = 'none';
     expWrap.style.display = 'inline-flex';
+
+    if (payload.type === 'sensor_graphs') {
+        _renderSensorChart(payload);
+    } else {
+        const graphCard = document.getElementById('sensorGraphCard');
+        if (graphCard) graphCard.style.display = 'none';
+    }
+    _applySensorViewVisibility();
 
     const chunkSize = rows.length > 1000 ? 100 : 250;
     for (let start = 0; start < rows.length; start += chunkSize) {

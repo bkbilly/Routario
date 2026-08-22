@@ -470,6 +470,7 @@
         { key: 'drivers', label: 'Driver Activity', description: 'Activity per driver for the selected period - trips, distance, driving time, and top speed.', renderer: 'drivers', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
         { key: 'geofences', label: 'Geofence Activity', description: 'Geofence enter and exit activity by vehicle, geofence, event, and recipient.', renderer: 'geofences', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
         { key: 'logbook', label: 'Logbook', description: 'Fuel or maintenance logbook reports for the selected vehicles and period.', renderer: 'logbook', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [{ key: 'logbook_type', label: 'Logbook Type', type: 'select', default: 'maintenance', options: [{ value: 'maintenance', label: 'Maintenance' }, { value: 'fuel', label: 'Fuel' }] }], schedule_controls: [] },
+        { key: 'sensor_graphs', label: 'Sensor Graphs', description: 'Interactive sensor graphs and data tables for up to 5 vehicles across a date range.', renderer: 'sensor_graphs', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
         { key: 'sensors', label: 'Vehicle Sensors', description: 'Current sensor readings for all vehicles. Enable historical data to view sensor values over a date range.', renderer: 'sensors', needs_date_range: false, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: true, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
         { key: 'summary', label: 'Fleet Summary', description: 'Totals per vehicle for the selected period - trips, distance, driving time, and top speed.', renderer: 'summary', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
         { key: 'trips', label: 'Trip List', description: 'Individual trips with start/end location, distance, duration, and driver. Click any row to view the route on a map.', renderer: 'trips', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
@@ -748,6 +749,78 @@
             return table('logbook', rows, [
                 ['date', 'Date', 'datetime_split'], ['vehicle', 'Vehicle'], ['license_plate', 'Plate'], ['type', 'Type'], ['description', 'Description'], ['odometer_km', 'Odometer (km)', 'number'], ['cost_cents', 'Cost', 'currency_cents'], ['vendor', 'Vendor'],
             ], [{ label: 'Entries', value: rows.length }, { label: 'Total Cost', value: typeof fmtMoneyCents === 'function' ? fmtMoneyCents(rows.reduce((a, r) => a + r.cost_cents, 0)) : '281.00' }], { key: 'date', dir: -1 });
+        if (type === 'sensor_graphs') {
+            const devs = filteredDevices(input).slice(0, 5);
+            const available_sensors = [
+                { key: 'speed', label: 'Speed', unit: 'km/h', decimals: 1, type: 'number' },
+                { key: 'battery', label: 'Battery', unit: '%', decimals: 0, type: 'number' },
+                { key: 'ignition', label: 'Ignition', unit: '', decimals: 0, type: 'bool_on' },
+                { key: 'altitude', label: 'Altitude', unit: 'm', decimals: 0, type: 'number' },
+                { key: 'fuel_level', label: 'Fuel Level', unit: '%', decimals: 0, type: 'number' },
+                { key: 'temperature', label: 'Temperature', unit: '°C', decimals: 1, type: 'number' },
+            ];
+            const qSensors = (queryOf(input).get('sensors') || '').split(',').filter(Boolean);
+            const active_sensors = qSensors.length ? qSensors : ['speed', 'battery', 'ignition'];
+
+            const rows = [];
+            const series = devs.map(d => ({ id: d.id, name: d.name, license_plate: d.license_plate, points: [] }));
+
+            for (let i = 24; i >= 0; i--) {
+                const t = iso(i * 15);
+                devs.forEach((d, idx) => {
+                    const speed = Math.max(0, Math.round(50 + Math.sin(i / 2 + idx) * 35 + (idx * 5)));
+                    const battery = Math.min(100, Math.max(20, Math.round(90 - (24 - i) * 1.2 - idx * 5)));
+                    const ignition = speed > 5 ? 1 : 0;
+                    const altitude = Math.round(80 + Math.cos(i / 3 + idx) * 25);
+                    const fuel_level = Math.max(10, Math.round(85 - (24 - i) * 1.1 - idx * 8));
+                    const temperature = parseFloat((22.5 + Math.sin(i / 4 + idx) * 4).toFixed(1));
+
+                    const point = { time: t };
+                    const row = { device_id: d.id, vehicle: d.name, license_plate: d.license_plate, time: t };
+
+                    if (active_sensors.includes('speed')) { point.speed = speed; row.speed = speed; }
+                    if (active_sensors.includes('battery')) { point.battery = battery; row.battery = battery; }
+                    if (active_sensors.includes('ignition')) { point.ignition = ignition; row.ignition = ignition; }
+                    if (active_sensors.includes('altitude')) { point.altitude = altitude; row.altitude = altitude; }
+                    if (active_sensors.includes('fuel_level')) { point.fuel_level = fuel_level; row.fuel_level = fuel_level; }
+                    if (active_sensors.includes('temperature')) { point.temperature = temperature; row.temperature = temperature; }
+
+                    rows.push(row);
+                    series[idx].points.push(point);
+                });
+            }
+
+            const columns = [
+                { key: 'vehicle', label: 'Vehicle', type: 'text' },
+                { key: 'time', label: 'Time', type: 'datetime' },
+            ];
+            active_sensors.forEach(k => {
+                const s = available_sensors.find(x => x.key === k) || { label: k, unit: '', decimals: 1, type: 'number' };
+                columns.push({
+                    key: k,
+                    label: s.label + (s.unit ? ` (${s.unit})` : ''),
+                    type: s.type,
+                    decimals: s.decimals,
+                    suffix: s.unit ? ` ${s.unit}` : ''
+                });
+            });
+
+            return {
+                type: 'sensor_graphs',
+                columns,
+                summary: [
+                    { label: 'Vehicles', value: devs.length },
+                    { label: 'Active Sensors', value: active_sensors.length },
+                    { label: 'Total Points', value: rows.length },
+                ],
+                rows,
+                available_sensors,
+                active_sensors,
+                vehicles: devs.map(d => ({ id: d.id, name: d.name, license_plate: d.license_plate })),
+                series,
+                default_sort: { key: 'time', dir: -1 },
+                csv_filename: 'sensor_graphs.csv'
+            };
         }
         if (type === 'sensors') {
             const rows = filteredDevices(input).map(d => ({
@@ -1100,6 +1173,19 @@
                     { period: 'Feb', active_devices: 3, positions: 132400, api_calls: 4200, amount_display_cents: 5270, line_items: [{ label: 'Base subscription', quantity: 1, amount_display_cents: 4900 }] },
                     { period: 'Mar', active_devices: 3, positions: 131800, api_calls: 4740, amount_display_cents: 5360, line_items: [{ label: 'Base subscription', quantity: 1, amount_display_cents: 4900 }] },
                 ],
+            });
+        }
+        if (apiPath === '/reports/sensor-keys' || apiPath === '/reports/sensor_graphs/keys') {
+            return json({
+                sensors: [
+                    { key: 'speed', label: 'Speed', unit: 'km/h', decimals: 1, type: 'number' },
+                    { key: 'battery', label: 'Battery', unit: '%', decimals: 0, type: 'number' },
+                    { key: 'ignition', label: 'Ignition', unit: '', decimals: 0, type: 'bool_on' },
+                    { key: 'altitude', label: 'Altitude', unit: 'm', decimals: 0, type: 'number' },
+                    { key: 'fuel_level', label: 'Fuel Level', unit: '%', decimals: 0, type: 'number' },
+                    { key: 'temperature', label: 'Temperature', unit: '°C', decimals: 1, type: 'number' },
+                ],
+                max_vehicles: 5
             });
         }
         if (apiPath.startsWith('/reports/')) return json(reportPayload(apiPath.split('/')[2], input));

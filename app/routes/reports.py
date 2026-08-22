@@ -82,6 +82,68 @@ async def report_types(current_user: User = Depends(require_reports_access)):
     return get_report_definitions(current_user)
 
 
+@router.get("/sensor-keys")
+@router.get("/sensor_graphs/keys")
+async def sensor_keys(
+    device_ids: Optional[str] = Query(None),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    current_user: User = Depends(require_reports_access),
+):
+    from reports.common import filtered_device_map, parse_id_csv
+    from reports.sensor_graphs import get_sensor_meta, SENSOR_META
+    from models.models import DeviceState, PositionRecord
+    from sqlalchemy import select
+
+    dev_ids = parse_id_csv(device_ids)[:5]
+    db = get_db()
+    async with db.get_session() as session:
+        dev_map = await filtered_device_map(session, current_user, dev_ids)
+        if not dev_map:
+            return {"sensors": []}
+
+        target_ids = list(dev_map.keys())[:5]
+        discovered: set[str] = set()
+
+        pos_q = select(PositionRecord).where(PositionRecord.device_id.in_(target_ids))
+        if start_date and end_date:
+            pos_q = pos_q.where(PositionRecord.device_time >= start_date, PositionRecord.device_time <= end_date)
+        pos_q = pos_q.order_by(PositionRecord.device_time.desc()).limit(200)
+        pos_res = await session.execute(pos_q)
+        for p in pos_res.scalars().all():
+            if p.speed is not None:
+                discovered.add("speed")
+            if p.altitude is not None:
+                discovered.add("altitude")
+            if p.satellites is not None:
+                discovered.add("satellites")
+            if p.ignition is not None:
+                discovered.add("ignition")
+            for k in (p.sensors or {}):
+                discovered.add(k)
+
+        states_r = await session.execute(select(DeviceState).where(DeviceState.device_id.in_(target_ids)))
+        for s in states_r.scalars().all():
+            if s.last_speed is not None:
+                discovered.add("speed")
+            if s.last_altitude is not None:
+                discovered.add("altitude")
+            if s.ignition_on is not None:
+                discovered.add("ignition")
+            for k in (s.sensors or {}):
+                discovered.add(k)
+
+        if not discovered:
+            discovered = {"speed", "battery", "ignition", "altitude"}
+
+        priority = ["speed", "battery", "battery_level", "ignition", "altitude", "fuel", "fuel_level", "temperature", "rpm", "odometer"]
+        sensors = sorted(
+            [{"key": k, **get_sensor_meta(k)} for k in discovered],
+            key=lambda x: (priority.index(x["key"]) if x["key"] in priority else 99, x["label"].casefold())
+        )
+        return {"sensors": sensors, "max_vehicles": 5}
+
+
 @router.get("/fleet")
 async def fleet_report(
     start_date: datetime = Query(...),
