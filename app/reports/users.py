@@ -134,6 +134,7 @@ class UserFleetReportModule(Report):
                 "timezone": user.timezone or "UTC",
                 "language": user.language or "en",
                 "units": user.units or "metric",
+                "theme": getattr(user, "theme", "dark") or "dark",
                 "created_at": user.created_at.isoformat() if user.created_at else None,
                 "last_activity": user.last_activity.isoformat() if user.last_activity else None,
             })

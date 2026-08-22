@@ -37,6 +37,7 @@
         company_id: null,
         units: 'metric',
         currency: 'EUR',
+        theme: 'dark',
         timezone: 'Europe/Athens',
         notification_channels: [
             { id: 'nc_ops_email', name: 'Ops Email', url: 'mailto:ops@example.com' },
@@ -170,7 +171,7 @@
 
     const users = [
         DEMO_USER,
-        { id: 2, username: 'dispatcher', email: 'dispatch@routario.local', is_admin: false, is_company_admin: false, company_id: 1, permissions: ['view_reports', 'view_devices'], units: 'metric', currency: 'EUR' },
+        { id: 2, username: 'dispatcher', email: 'dispatch@routario.local', is_admin: false, is_company_admin: false, company_id: 1, permissions: ['view_reports', 'view_devices'], units: 'metric', currency: 'EUR', theme: 'dark' },
         {
             id: 3,
             username: 'fleetadmin',
@@ -186,6 +187,7 @@
             ],
             units: 'metric',
             currency: 'EUR',
+            theme: 'dark',
         },
     ];
     let demoCompanies = [
@@ -883,11 +885,11 @@
 
         if (path.endsWith('/api/login') && method === 'POST') {
             if ((body.username === 'demo' || body.username === 'demo@routario.local') && body.password === 'demo') {
-                return json({ access_token: 'demo-token', user_id: 1, username: 'demo', is_admin: true, is_company_admin: true, company_id: null, units: 'metric', currency: 'EUR', permissions: DEMO_USER.permissions });
+                return json({ access_token: 'demo-token', user_id: 1, username: 'demo', is_admin: true, is_company_admin: true, company_id: null, units: 'metric', currency: 'EUR', theme: DEMO_USER.theme || 'dark', permissions: DEMO_USER.permissions });
             }
             if ((body.username === 'fleetadmin' || body.username === 'fleetadmin@routario.local') && body.password === 'demo') {
                 const user = users.find(u => u.username === 'fleetadmin');
-                return json({ access_token: 'demo-company-admin-token', user_id: user.id, username: user.username, is_admin: false, is_company_admin: true, company_id: 1, units: user.units, currency: user.currency, permissions: user.permissions });
+                return json({ access_token: 'demo-company-admin-token', user_id: user.id, username: user.username, is_admin: false, is_company_admin: true, company_id: 1, units: user.units, currency: user.currency, theme: user.theme || 'dark', permissions: user.permissions });
             }
             return json({ detail: 'Invalid credentials' }, 401);
         }
@@ -930,6 +932,7 @@
                 if (Array.isArray(body.notification_channels)) targetUser.notification_channels = body.notification_channels;
                 if (body.units !== undefined) targetUser.units = body.units;
                 if (body.currency !== undefined) targetUser.currency = body.currency;
+                if (body.theme !== undefined) targetUser.theme = body.theme;
                 if (body.email !== undefined) targetUser.email = body.email;
                 if (body.username !== undefined) targetUser.username = body.username;
             }

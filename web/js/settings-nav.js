@@ -47,6 +47,11 @@
             -webkit-backdrop-filter: blur(6px);
             box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
         }
+        [data-theme="light"] .settings-nav.scrolled,
+        body.light-theme .settings-nav.scrolled {
+            background: rgba(241, 243, 247, 0.85);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        }
         .settings-nav-title {
             flex: 1;
             min-width: 0;

@@ -23,6 +23,30 @@
     --font-mono: 'JetBrains Mono', monospace;
 }
 
+:root[data-theme="light"],
+[data-theme="light"],
+body.light-theme,
+.light-theme {
+    color-scheme: light;
+    --bg-primary: #e6ebf1;
+    --bg-secondary: #f0f4f8;
+    --bg-tertiary: #e2e8f0;
+    --bg-card: #f8fafc;
+    --bg-hover: #cbd5e1;
+
+    --text-primary: #0f172a;
+    --text-secondary: #334155;
+    --text-muted: #64748b;
+
+    --accent-primary: #2563eb;
+    --accent-secondary: #7c3aed;
+    --accent-success: #059669;
+    --accent-warning: #d97706;
+    --accent-danger: #dc2626;
+
+    --border-color: #cbd5e1;
+}
+
 * {
     margin: 0;
     padding: 0;

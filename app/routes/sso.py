@@ -106,6 +106,7 @@ def _token_response(user: User) -> dict[str, Any]:
         "company_id": getattr(user, "company_id", None),
         "units": getattr(user, "units", "metric") or "metric",
         "currency": getattr(user, "currency", "EUR") or "EUR",
+        "theme": getattr(user, "theme", "dark") or "dark",
         "permissions": ALL_PERMISSIONS if user.is_admin else valid_permissions(user.permissions or []),
     }
 
@@ -164,6 +165,7 @@ def _callback_html(data: dict[str, Any]) -> HTMLResponse:
         "company_id": data.get("company_id") or "",
         "units": data.get("units") or "metric",
         "currency": data.get("currency") or "EUR",
+        "theme": data.get("theme") or "dark",
         "permissions": data.get("permissions") or [],
     }
     script_data = json.dumps(items)

@@ -9,21 +9,51 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="/js/vehicle-icons.js"></script>
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', theme);
+            if (theme === 'light') document.documentElement.classList.add('light-theme');
+        })();
+    </script>
     <style>
+        :root {
+            color-scheme: dark;
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #131825;
+            --bg-tertiary: #1a2035;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --border-color: #374151;
+            --accent-primary: #3b82f6;
+        }
+        :root[data-theme="light"],
+        [data-theme="light"],
+        body.light-theme {
+            color-scheme: light;
+            --bg-primary: #f1f3f7;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f8fafc;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --accent-primary: #2563eb;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Outfit', sans-serif;
-            background: #0a0e1a;
-            color: #e5e7eb;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             height: 100dvh;
             display: flex;
             flex-direction: column;
         }
         #header {
             padding: 0.75rem 1rem;
-            background: #131825;
-            border-bottom: 1px solid #374151;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -44,27 +74,27 @@
             font-weight: 600;
         }
         .badge-moving { background: rgba(16,185,129,0.15); color: #10b981; }
-        .badge-stopped { background: rgba(107,114,128,0.15); color: #9ca3af; }
+        .badge-stopped { background: rgba(107,114,128,0.15); color: var(--text-secondary); }
         #expiryInfo {
             font-size: 0.75rem;
-            color: #9ca3af;
+            color: var(--text-secondary);
             text-align: right;
             flex-shrink: 0;
         }
         #map { flex: 1; }
         #footer {
             padding: 0.6rem 1rem;
-            background: #131825;
-            border-top: 1px solid #374151;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
             display: flex;
             gap: 1.5rem;
             font-size: 0.8rem;
-            color: #9ca3af;
+            color: var(--text-secondary);
             flex-shrink: 0;
         }
         .stat { display: flex; flex-direction: column; }
-        .stat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; }
-        .stat-value { font-weight: 600; color: #e5e7eb; font-family: 'JetBrains Mono', monospace; }
+        .stat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+        .stat-value { font-weight: 600; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; }
         #errorState {
             display: none;
             flex: 1;

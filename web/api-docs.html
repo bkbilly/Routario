@@ -7,12 +7,28 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <link rel="icon" href="/icons/favicon.ico">
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', theme);
+            if (theme === 'light') document.documentElement.classList.add('light-theme');
+        })();
+    </script>
     <style>
         :root {
+            color-scheme: dark;
             --bg-primary:#0a0e1a; --bg-secondary:#131825; --bg-tertiary:#1a2035;
             --text-primary:#e5e7eb; --text-secondary:#9ca3af; --text-muted:#6b7280;
             --accent-primary:#3b82f6; --accent-danger:#ef4444; --border-color:#374151;
             --font-display:'Outfit',sans-serif; --font-mono:'JetBrains Mono',monospace;
+        }
+        :root[data-theme="light"],
+        [data-theme="light"],
+        body.light-theme {
+            color-scheme: light;
+            --bg-primary:#f1f3f7; --bg-secondary:#ffffff; --bg-tertiary:#f8fafc;
+            --text-primary:#0f172a; --text-secondary:#475569; --text-muted:#64748b;
+            --accent-primary:#2563eb; --accent-danger:#dc2626; --border-color:#e2e8f0;
         }
         * { box-sizing:border-box; }
         body { margin:0; background:var(--bg-primary); color:var(--text-primary); font-family:var(--font-display); line-height:1.55; }

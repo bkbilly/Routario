@@ -198,6 +198,7 @@ class UserCreate(BaseModel):
     language: Optional[str] = "en"
     units: Optional[str] = "metric"
     currency: Optional[str] = "EUR"
+    theme: Optional[str] = "dark"
     is_admin: bool = False
     company_id: Optional[int] = None
     is_company_admin: bool = False
@@ -212,6 +213,7 @@ class UserUpdate(BaseModel):
     language: Optional[str] = None
     units: Optional[str] = None
     currency: Optional[str] = None
+    theme: Optional[str] = None
     timezone: Optional[str] = None
     is_admin: Optional[bool] = None
     is_company_admin: Optional[bool] = None
@@ -237,6 +239,7 @@ class Token(BaseModel):
     company_id: Optional[int] = None
     units: str = "metric"
     currency: str = "EUR"
+    theme: str = "dark"
     permissions: List[str] = Field(default_factory=list)
 
     @field_validator('permissions', mode='before')
@@ -266,6 +269,7 @@ class UserResponse(BaseModel):
     language: Optional[str] = "en"
     units: Optional[str] = "metric"
     currency: Optional[str] = "EUR"
+    theme: Optional[str] = "dark"
     timezone: str = "UTC"
     notification_channels: List[Dict[str, str]] = Field(default_factory=list)
     created_at: datetime

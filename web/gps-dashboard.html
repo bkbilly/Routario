@@ -7,6 +7,13 @@
 
     <link rel="icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', theme);
+            if (theme === 'light') document.documentElement.classList.add('light-theme');
+        })();
+    </script>
     <link rel="manifest" href="/manifest.json">
     <!-- Leaflet for maps -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -336,7 +343,7 @@
                 <!-- AI Copilot button (placed right below Routes) -->
                 <div class="map-ctrl-bar" id="dashboardAiCopilotWrap" style="display:none;">
                     <button class="map-ctrl-btn" id="dashboardAiCopilotBtn" onclick="openAiCopilotModal()" title="AI Copilot">
-                        <i class="mdi mdi-robot-excited-outline" style="font-size:16px;color:#ffffff;"></i>
+                        <i class="mdi mdi-robot-excited-outline" style="font-size:16px;"></i>
                     </button>
                 </div>
             </div>

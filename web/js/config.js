@@ -99,6 +99,30 @@ function hasPermission(perm) {
     } catch { return false; }
 }
 
+/**
+ * Apply light or dark theme across the application.
+ * @param {string} theme - 'light' or 'dark'
+ */
+function applyTheme(theme) {
+    const activeTheme = (theme === 'light') ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', activeTheme);
+    if (activeTheme === 'light') {
+        document.documentElement.classList.add('light-theme');
+        if (document.body) document.body.classList.add('light-theme');
+    } else {
+        document.documentElement.classList.remove('light-theme');
+        if (document.body) document.body.classList.remove('light-theme');
+    }
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+        metaThemeColor.setAttribute('content', activeTheme === 'light' ? '#f1f3f7' : '#170b1c');
+    }
+    window.dispatchEvent(new CustomEvent('routario:themechange', { detail: { theme: activeTheme } }));
+}
+
+// Immediately apply saved or default theme
+applyTheme(localStorage.getItem('theme') || 'dark');
+
 function handleLogout() {
     const loginSlug = localStorage.getItem('company_login_slug');
     const slugCompanyId = localStorage.getItem('company_login_slug_company_id');
@@ -106,10 +130,11 @@ function handleLogout() {
     const loginUrl = loginSlug && slugCompanyId && currentCompanyId && slugCompanyId === currentCompanyId
         ? `/login/${encodeURIComponent(loginSlug)}`
         : '/login.html';
-    ['auth_token','user_id','username','is_admin','units','currency','is_company_admin','company_id',
+    ['auth_token','user_id','username','is_admin','units','currency','theme','is_company_admin','company_id',
      'permissions',
      'impersonating_admin_token','impersonating_admin_user_id','impersonating_admin_username']
         .forEach(k => localStorage.removeItem(k));
+    applyTheme('dark');
     window.location.href = loginUrl;
 }
 
@@ -294,6 +319,10 @@ const permissionsReady = (function () {
             localStorage.setItem('units', user.units);
         if (user.currency)
             localStorage.setItem('currency', user.currency);
+        if (user.theme) {
+            localStorage.setItem('theme', user.theme);
+            applyTheme(user.theme);
+        }
         if (user.timezone)
             localStorage.setItem('timezone', user.timezone);
         applyCompanyBranding(user.company_id);

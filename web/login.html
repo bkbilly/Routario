@@ -8,19 +8,48 @@
     <link rel="icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', theme);
+            if (theme === 'light') document.documentElement.classList.add('light-theme');
+        })();
+    </script>
     <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <style>
         :root {
+            color-scheme: dark;
             --bg-primary: #0a0e1a;
             --bg-secondary: #131825;
             --bg-tertiary: #1a2035;
+            --bg-hover: #2a3447;
             --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
             --accent-primary: #3b82f6;
             --accent-secondary: #8b5cf6;
             --border-color: #374151;
+            --shadow-card: 0 25px 50px rgba(0,0,0,0.5);
         }
         
+        :root[data-theme="light"],
+        [data-theme="light"],
+        body.light-theme {
+            color-scheme: light;
+            --bg-primary: #f1f3f7;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f8fafc;
+            --bg-hover: #e2e8f0;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #64748b;
+            --accent-primary: #2563eb;
+            --accent-secondary: #7c3aed;
+            --border-color: #e2e8f0;
+            --shadow-card: 0 20px 40px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05);
+        }
+
         body {
             font-family: 'Outfit', sans-serif;
             background: var(--bg-primary);
@@ -41,6 +70,10 @@
             background: radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.1) 0%, transparent 50%);
             animation: pulse 10s ease infinite; z-index: -1;
         }
+        [data-theme="light"] body::before,
+        body.light-theme::before {
+            background: radial-gradient(circle at 50% 50%, rgba(37, 99, 235, 0.05) 0%, transparent 50%);
+        }
         @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
 
         .login-card {
@@ -50,7 +83,7 @@
             padding: 3rem;
             width: 100%;
             max-width: 400px;
-            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+            box-shadow: var(--shadow-card);
             text-align: center;
         }
 
@@ -65,10 +98,10 @@
         .logo { font-size: 3rem; margin-bottom: 1rem; }
         .logo img { width: 96px; height: 96px; object-fit: contain; }
         h1 { margin-bottom: 0.5rem; font-weight: 700; }
-        p { color: #9ca3af; margin-bottom: 2rem; font-size: 0.9rem; }
+        p { color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.9rem; }
 
         .form-group { margin-bottom: 1.5rem; text-align: left; }
-        .form-label { display: block; font-size: 0.85rem; margin-bottom: 0.5rem; color: #9ca3af; }
+        .form-label { display: block; font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--text-secondary); }
         .form-input {
             width: 100%; padding: 0.75rem 1rem;
             box-sizing: border-box;
@@ -251,6 +284,7 @@
             localStorage.setItem('company_id', data.company_id ?? '');
             localStorage.setItem('units', data.units || 'metric');
             localStorage.setItem('currency', data.currency || 'EUR');
+            localStorage.setItem('theme', data.theme || 'dark');
             localStorage.setItem('permissions', JSON.stringify(data.permissions || []));
             if (String(data.company_id ?? '') !== localStorage.getItem('company_login_slug_company_id')) {
                 localStorage.removeItem('company_login_slug');

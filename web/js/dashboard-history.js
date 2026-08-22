@@ -1141,6 +1141,15 @@ function renderSensorGraph() {
         sensorChart.data.datasets = datasets;
         sensorChart.update('none');
     } else {
+        const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+        const gridColor = isLight ? '#e2e8f0' : '#374151';
+        const textMuted = isLight ? '#64748b' : '#9ca3af';
+        const tickColor = isLight ? '#64748b' : '#6b7280';
+        const tooltipBg = isLight ? '#ffffff' : '#131825';
+        const tooltipBorder = isLight ? '#cbd5e1' : '#374151';
+        const tooltipTitle = isLight ? '#0f172a' : '#e5e7eb';
+        const tooltipBody = isLight ? '#475569' : '#9ca3af';
+
         sensorChart = new Chart(canvas, {
             type: 'line',
             data: { labels, datasets },
@@ -1153,18 +1162,18 @@ function renderSensorGraph() {
                     legend: {
                         display: true,
                         labels: {
-                            color: '#9ca3af',
+                            color: textMuted,
                             font: { family: 'JetBrains Mono', size: 10 },
                             boxWidth: 12,
                             padding: 8,
                         }
                     },
                     tooltip: {
-                        backgroundColor: '#131825',
-                        borderColor: '#374151',
+                        backgroundColor: tooltipBg,
+                        borderColor: tooltipBorder,
                         borderWidth: 1,
-                        titleColor: '#e5e7eb',
-                        bodyColor: '#9ca3af',
+                        titleColor: tooltipTitle,
+                        bodyColor: tooltipBody,
                         titleFont: { family: 'JetBrains Mono', size: 11 },
                         bodyFont: { family: 'JetBrains Mono', size: 11 },
                     },
@@ -1174,16 +1183,16 @@ function renderSensorGraph() {
                 scales: {
                     x: {
                         ticks: {
-                            color: '#6b7280',
+                            color: tickColor,
                             font: { family: 'JetBrains Mono', size: 9 },
                             maxTicksLimit: 6,
                             maxRotation: 0,
                         },
-                        grid: { color: '#374151' }
+                        grid: { color: gridColor }
                     },
                     y: {
-                        ticks: { color: '#6b7280', font: { family: 'JetBrains Mono', size: 10 } },
-                        grid: { color: '#374151' }
+                        ticks: { color: tickColor, font: { family: 'JetBrains Mono', size: 10 } },
+                        grid: { color: gridColor }
                     }
                 }
             },
@@ -1193,6 +1202,14 @@ function renderSensorGraph() {
 
     updateSensorChartCursor(historyIndex);
 }
+
+window.addEventListener('routario:themechange', () => {
+    if (sensorChart) {
+        sensorChart.destroy();
+        sensorChart = null;
+        updateSensorChart();
+    }
+});
 
 // ── Vertical cursor line plugin ────────────────────────────────
 const verticalLinePlugin = {

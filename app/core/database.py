@@ -166,6 +166,7 @@ class DatabaseService:
             "ALTER TABLE geofences ALTER COLUMN polygon DROP NOT NULL",
             "ALTER TABLE users ADD COLUMN units VARCHAR(10) DEFAULT 'metric'",
             "ALTER TABLE users ADD COLUMN currency VARCHAR(3) DEFAULT 'EUR'",
+            "ALTER TABLE users ADD COLUMN theme VARCHAR(20) DEFAULT 'dark'",
             "ALTER TABLE fuel_logs ADD COLUMN currency VARCHAR(3) DEFAULT 'EUR'",
             "ALTER TABLE fuel_logs ADD COLUMN exchange_rate FLOAT DEFAULT 1.0",
             "ALTER TABLE fuel_logs ADD COLUMN trip_distance_km FLOAT",
@@ -682,6 +683,7 @@ class DatabaseService:
                 language=user_data.language or "en",
                 units=user_data.units or "metric",
                 currency=(user_data.currency or "EUR").upper(),
+                theme=user_data.theme or "dark",
                 permissions=user_data.permissions if user_data.permissions is not None else [],
             )
             session.add(user)
@@ -740,6 +742,8 @@ class DatabaseService:
                 user.units = user_data.units
             if user_data.currency is not None:
                 user.currency = user_data.currency.upper()
+            if user_data.theme is not None:
+                user.theme = user_data.theme
             user_timezone = getattr(user_data, "timezone", None)
             if user_timezone is not None:
                 user.timezone = user_timezone or "UTC"

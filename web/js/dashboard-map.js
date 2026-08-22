@@ -247,7 +247,7 @@ function updateDeviceMarker(deviceId, state) {
         if (!isNaN(d.getTime())) {
             const dateStr = d.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
             const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            lastGpsTimeStr = `<div style="text-align:right;"><div style="font-weight:600;color:#e5e7eb;">${dateStr}</div><div style="font-size:0.72rem;color:#9ca3af;">${timeStr}</div></div>`;
+            lastGpsTimeStr = `<div style="text-align:right;"><div style="font-weight:600;color:var(--text-primary);">${dateStr}</div><div style="font-size:0.72rem;color:var(--text-muted);">${timeStr}</div></div>`;
         } else {
             lastGpsTimeStr = rawGpsTime;
         }
@@ -264,10 +264,10 @@ function updateDeviceMarker(deviceId, state) {
                 ? JSON.stringify(v)
                 : String(v);
             return `<div style="display:flex;justify-content:space-between;align-items:baseline;
-                                gap:0.5rem;padding:0.2rem 0;border-bottom:1px solid #1f2937;flex-wrap:wrap;">
-                        <span style="color:#6b7280;font-size:0.75rem;flex-shrink:0;">${label}</span>
+                                gap:0.5rem;padding:0.2rem 0;border-bottom:1px solid var(--border-color);flex-wrap:wrap;">
+                        <span style="color:var(--text-muted);font-size:0.75rem;flex-shrink:0;">${label}</span>
                         <span style="font-family:JetBrains Mono,monospace;font-size:0.72rem;
-                                     color:#e5e7eb;word-break:break-all;text-align:right;">${display}</span>
+                                     color:var(--text-primary);word-break:break-all;text-align:right;">${display}</span>
                     </div>`;
         }).join('');
 
@@ -286,9 +286,9 @@ function updateDeviceMarker(deviceId, state) {
                 <span class="vp-label">Odometer</span>   <span class="vp-value">${fmtOdometer(state.total_odometer || 0)}</span>
             </div>
             ${sensorRows ? `
-            <div style="border-top:1px solid #374151;">
+            <div style="border-top:1px solid var(--border-color);">
                 <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'grid':'none';this.textContent=this.textContent.includes('More')?'▲ Less sensors':'▼ More sensors';"
-                    style="width:100%;background:transparent;border:none;color:#6b7280;font-size:0.75rem;
+                    style="width:100%;background:transparent;border:none;color:var(--text-muted);font-size:0.75rem;
                            padding:0.4rem 0.75rem;cursor:pointer;text-align:left;font-family:Outfit,sans-serif;">
                     ▼ More sensors
                 </button>
@@ -350,7 +350,9 @@ function updateDeviceMarker(deviceId, state) {
             cancelAnimationFrame(prev.animFrame);
             prev.animFrame = null;
             if (markers[deviceId]) {
+                clusterGroup._ignoreMove = true;
                 markers[deviceId].setLatLng([prev.lat, prev.lng]);
+                clusterGroup._ignoreMove = false;
             }
         }
 
@@ -375,9 +377,9 @@ function updateDeviceMarker(deviceId, state) {
             const lng  = fromLng  + (toLng  - fromLng)  * ease;
             const head = canAnimateHead ? fromHead + dH * ease : toHead;
 
+            // Suppress markercluster's move handler so it doesn't remove/re-add the layer and flicker the popup
+            clusterGroup._ignoreMove = true;
             if (t < 1) {
-                // Suppress markercluster's move handler during intermediate frames
-                clusterGroup._ignoreMove = true;
                 markers[deviceId].setLatLng([lat, lng]);
                 clusterGroup._ignoreMove = false;
                 _applyMarkerRotation(markers[deviceId], head, device?.vehicle_type);
@@ -388,8 +390,8 @@ function updateDeviceMarker(deviceId, state) {
                     animFrame: requestAnimationFrame(step)
                 };
             } else {
-                // Final frame: update without suppressing move so MarkerClusterGroup updates its DistanceGrid
                 markers[deviceId].setLatLng([toLat, toLng]);
+                clusterGroup._ignoreMove = false;
                 _applyMarkerRotation(markers[deviceId], toHead, device?.vehicle_type);
                 markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
             }

@@ -7,6 +7,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="icon" href="/icons/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', theme);
+            if (theme === 'light') document.documentElement.classList.add('light-theme');
+        })();
+    </script>
     <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -1437,6 +1444,13 @@
                             <option value="USD">US Dollar ($)</option>
                             <option value="GBP">British Pound (£)</option>
                             <option value="CHF">Swiss Franc (CHF)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Theme</label>
+                        <select id="userModalTheme" class="form-input">
+                            <option value="dark">Dark Theme (Default)</option>
+                            <option value="light">Light Theme</option>
                         </select>
                     </div>
                     <div class="form-group" id="userModalMfaGroup" style="display:none;">

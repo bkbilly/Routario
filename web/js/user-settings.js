@@ -93,9 +93,24 @@ document.addEventListener('keydown', e => {
     if (typeof rtpCloseCreateTicketModal === 'function') rtpCloseCreateTicketModal();
     if (typeof rtpCloseTicketModal === 'function') rtpCloseTicketModal();
     closeApiKeyModal();
+    closeEditApiKeyModal();
     closeUserModal();
     usrCloseAssignModal();
     usrCloseNotifyModal();
+});
+
+window.addEventListener('click', e => {
+    if (e.target.classList && e.target.classList.contains('modal')) {
+        if (e.target.id === 'editApiKeyModal') closeEditApiKeyModal();
+        else if (e.target.id === 'apiKeyModal') closeApiKeyModal();
+        else if (e.target.id === 'webhookModal') closeWebhookModal();
+        else if (e.target.id === 'notificationChannelModal') closeChannelModal();
+        else if (e.target.id === 'ticketModal' && typeof rtpCloseTicketModal === 'function') rtpCloseTicketModal();
+        else if (e.target.id === 'ticketCreateModal' && typeof rtpCloseCreateTicketModal === 'function') rtpCloseCreateTicketModal();
+        else if (e.target.id === 'userModal') closeUserModal();
+        else if (e.target.id === 'assignVehiclesModal') usrCloseAssignModal();
+        else if (e.target.id === 'notifySettingsModal') usrCloseNotifyModal();
+    }
 });
 
 function switchSettingsTab(name, pushState = true) {
@@ -216,6 +231,8 @@ function renderProfile() {
     document.getElementById('profileEmail').value = profileUser.email || '';
     document.getElementById('profilePassword').value = '';
     document.getElementById('profileUnits').value = profileUser.units || 'metric';
+    const themeEl = document.getElementById('profileTheme');
+    if (themeEl) themeEl.value = profileUser.theme || 'dark';
     renderProfileCurrencyOptions(profileUser.currency || 'EUR');
     const supported = Boolean(window.PublicKeyCredential);
     const note = document.getElementById('passkeySupportNote');
@@ -238,15 +255,26 @@ window.addEventListener('routario:currencyrateschange', () => {
 
 async function initProfileSection() {
     renderProfile();
+    const themeEl = document.getElementById('profileTheme');
+    if (themeEl && !themeEl.dataset.themeBound) {
+        themeEl.dataset.themeBound = 'true';
+        themeEl.addEventListener('change', (e) => {
+            if (typeof applyTheme === 'function') {
+                applyTheme(e.target.value);
+            }
+        });
+    }
     await initProfileMfaPanel();
     await loadPasskeys();
 }
 
 async function saveProfile() {
+    const themeEl = document.getElementById('profileTheme');
     const payload = {
         email: document.getElementById('profileEmail').value.trim(),
         units: document.getElementById('profileUnits').value,
         currency: document.getElementById('profileCurrency').value,
+        theme: themeEl ? themeEl.value : (profileUser?.theme || 'dark'),
     };
     const password = document.getElementById('profilePassword').value;
     if (password) payload.password = password;
@@ -262,6 +290,10 @@ async function saveProfile() {
         profileUser = saved;
         localStorage.setItem('units', saved.units || payload.units);
         localStorage.setItem('currency', saved.currency || payload.currency);
+        localStorage.setItem('theme', saved.theme || payload.theme);
+        if (typeof applyTheme === 'function') {
+            applyTheme(saved.theme || payload.theme);
+        }
         window.dispatchEvent(new Event('routario:currencychange'));
         renderProfile();
         showAlert('Profile saved', 'success');

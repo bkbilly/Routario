@@ -168,6 +168,8 @@ function openUserModal(userId = null) {
     document.getElementById('userModalUnits').value = _usrEditing?.units || 'metric';
     usrRenderCurrencyOptions(_usrEditing?.currency || 'EUR');
     document.getElementById('userModalCurrency').value = _usrEditing?.currency || 'EUR';
+    const themeEl = document.getElementById('userModalTheme');
+    if (themeEl) themeEl.value = _usrEditing?.theme || 'dark';
 
     const roleSelect = document.getElementById('userModalRole');
     roleSelect.innerHTML = _usrIsAdmin
@@ -555,6 +557,7 @@ async function saveUser() {
     const isMe = !isNew && _usrEditing?.id === _usrMyId;
     const units = document.getElementById('userModalUnits').value;
     const currency = document.getElementById('userModalCurrency').value;
+    const theme = document.getElementById('userModalTheme')?.value || 'dark';
 
     // Collect permissions from checkboxes (only when not super admin role)
     // Company admins cannot change their own permissions — leave them untouched
@@ -567,6 +570,7 @@ async function saveUser() {
         email,
         units,
         currency,
+        theme,
         ...(!isMe && { is_admin: role === 'admin', is_company_admin: role === 'company_admin' }),
         company_id: companyId,
         ...(permissions !== null && { permissions }),
@@ -595,6 +599,10 @@ async function saveUser() {
             if (saved.id === _usrMyId) {
                 localStorage.setItem('units', saved.units || units);
                 localStorage.setItem('currency', saved.currency || currency);
+                localStorage.setItem('theme', saved.theme || theme);
+                if (typeof applyTheme === 'function') {
+                    applyTheme(saved.theme || theme);
+                }
                 window.dispatchEvent(new Event('routario:currencychange'));
             }
             showAlert(isNew ? 'User created' : 'User updated', 'success');
