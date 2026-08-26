@@ -135,6 +135,7 @@ function initMap() {
         showCoverageOnHover: false,
         zoomToBoundsOnClick: false,
         maxClusterRadius: 60,
+        iconCreateFunction: _createClusterPieIcon,
     }).addTo(map);
 
     clusterGroup.on('clusterclick', (e) => {
@@ -309,6 +310,7 @@ function updateDeviceMarker(deviceId, state) {
             icon: _makeMarkerIcon(device?.vehicle_type, state.ignition_on, toHead)
         })
             .bindPopup(popupContent);
+        markers[deviceId].deviceId = deviceId;
         clusterGroup.addLayer(markers[deviceId]);
 
         markers[deviceId].on('click', () => selectDevice(deviceId, { zoom: false }));
@@ -430,6 +432,7 @@ function updateDeviceMarker(deviceId, state) {
         if (!state.hasOwnProperty('is_online') && state.last_latitude) state.is_online = true;
         devices[deviceIndex] = { ...devices[deviceIndex], ...state };
     }
+    refreshClusterIcons();
 }
 
 /**
@@ -469,6 +472,95 @@ function applyLatLngOffset(latlng, zoom) {
     if (!offset) return L.latLng(latlng);
     const point = map.project(L.latLng(latlng), zoom);
     return map.unproject(L.point(point.x - offset / 2, point.y), zoom);
+}
+
+function _createClusterPieIcon(cluster) {
+    const childMarkers = cluster.getAllChildMarkers();
+    const total = childMarkers.length;
+
+    const counts = { moving: 0, idle: 0, stopped: 0, offline: 0 };
+    const statusColors = {
+        moving:  '#10b981', // green for driving / moving
+        idle:    '#f59e0b', // amber for idling
+        stopped: '#ef4444', // red for stopped / engine off
+        offline: '#64748b'  // slate / grey for offline
+    };
+    const statusLabels = {
+        moving:  'Moving',
+        idle:    'Idling',
+        stopped: 'Stopped',
+        offline: 'Offline'
+    };
+
+    for (let i = 0; i < total; i++) {
+        const m = childMarkers[i];
+        const devId = m.deviceId || m.options?.deviceId;
+        const dev = devId ? devices.find(d => d.id === devId) : null;
+        const st = dev && typeof getVehicleStatus === 'function' ? getVehicleStatus(dev) : { cls: 'offline' };
+        const cls = (st && st.cls in counts) ? st.cls : 'offline';
+        counts[cls]++;
+    }
+
+    let currentAngle = 0;
+    const gradientParts = [];
+    const tooltipParts = [];
+
+    const order = ['moving', 'idle', 'stopped', 'offline'];
+    for (const key of order) {
+        const cnt = counts[key];
+        if (cnt > 0) {
+            const pct = (cnt / total) * 100;
+            const nextAngle = currentAngle + pct;
+            gradientParts.push(`${statusColors[key]} ${currentAngle.toFixed(1)}% ${nextAngle.toFixed(1)}%`);
+            tooltipParts.push(`${cnt} ${statusLabels[key]}`);
+            currentAngle = nextAngle;
+        }
+    }
+
+    let conicBg = '';
+    if (gradientParts.length > 1) {
+        conicBg = `background: conic-gradient(${gradientParts.join(', ')});`;
+    } else if (gradientParts.length === 1) {
+        const singleKey = order.find(k => counts[k] > 0) || 'stopped';
+        conicBg = `background: ${statusColors[singleKey]};`;
+    } else {
+        conicBg = `background: #ef4444;`;
+    }
+
+    const size = total < 10 ? 38 : (total < 50 ? 44 : 52);
+    const innerSize = total < 10 ? 24 : (total < 50 ? 28 : 34);
+    const fontSize = total < 10 ? '0.8rem' : (total < 50 ? '0.88rem' : '0.96rem');
+    const esc = typeof _esc === 'function' ? _esc : (s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'));
+    const tooltipText = tooltipParts.join(' · ');
+
+    const html = `
+        <div class="cluster-pie-container" style="width:${size}px; height:${size}px;" title="${esc(tooltipText)}">
+            <div class="cluster-pie-chart" style="${conicBg}">
+                <div class="cluster-pie-inner" style="width:${innerSize}px; height:${innerSize}px; font-size:${fontSize};">
+                    <span>${total}</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+    return L.divIcon({
+        html: html,
+        className: 'cluster-pie-wrapper',
+        iconSize: L.point(size, size),
+        iconAnchor: L.point(size / 2, size / 2)
+    });
+}
+
+let _refreshClusterTimer = null;
+function refreshClusterIcons() {
+    if (!clusterGroup || typeof clusterGroup.refreshClusters !== 'function') return;
+    if (_refreshClusterTimer) return;
+    _refreshClusterTimer = setTimeout(() => {
+        _refreshClusterTimer = null;
+        try {
+            clusterGroup.refreshClusters();
+        } catch (_) {}
+    }, 150);
 }
 
 function zoomToClusterWithSidebarOffset(cluster) {
@@ -597,6 +689,7 @@ function handleWebSocketMessage(message) {
             }
         }
         updateStats();
+        refreshClusterIcons();
     } else if (message.type === 'alert') {
         const nids = message.notify_user_ids;
         const myId = parseInt(localStorage.getItem('user_id'), 10);

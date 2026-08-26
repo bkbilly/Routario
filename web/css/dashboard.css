@@ -3758,3 +3758,54 @@ body.light-theme .attr-key {
 body.light-theme .attr-val {
     color: #2563eb;
 }
+
+/* ── Multi-status Donut / Pie Marker Cluster ───────────────────────── */
+.cluster-pie-wrapper {
+    background: transparent !important;
+    border: none !important;
+}
+.cluster-pie-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.cluster-pie-container:hover {
+    transform: scale(1.12);
+    z-index: 1000 !important;
+}
+.cluster-pie-chart {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(255, 255, 255, 0.25);
+    position: relative;
+    box-sizing: border-box;
+}
+.cluster-pie-inner {
+    border-radius: 50%;
+    background: var(--bg-card, #0f172a);
+    color: var(--text-primary, #ffffff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-family: var(--font-display, 'Outfit', sans-serif);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
+    user-select: none;
+    box-sizing: border-box;
+}
+[data-theme="light"] .cluster-pie-chart,
+body.light-theme .cluster-pie-chart {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2), 0 0 0 2.5px #ffffff;
+}
+[data-theme="light"] .cluster-pie-inner,
+body.light-theme .cluster-pie-inner {
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15);
+}

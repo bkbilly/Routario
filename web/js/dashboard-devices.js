@@ -308,6 +308,10 @@ function updateSidebarTimes() {
             }
         }
     });
+
+    if (clusterGroup && typeof clusterGroup.refreshClusters === 'function') {
+        try { clusterGroup.refreshClusters(); } catch (_) {}
+    }
 }
 
 // Select Device
