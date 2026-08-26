@@ -329,7 +329,8 @@
                         </span>
                         <span>Dashboard</span>
                         ${chevron}
-                       </button>`
+                       </button>
+                       <div class="header-menu-divider"></div>`
                     : ''
                 }
 

@@ -864,7 +864,7 @@ function scheduleDashboardRouteEditorPreview(stops, signature) {
 
 function initDashboardRouteEditorMap() {
     if (dashboardRouteEditorMap || !window.L || !document.getElementById('dashboardRouteEditorMap')) return;
-    dashboardRouteEditorMap = L.map('dashboardRouteEditorMap', { zoomControl: true, attributionControl: true }).setView([39.0742, 21.8243], 6);
+    dashboardRouteEditorMap = L.map('dashboardRouteEditorMap', { zoomControl: true, attributionControl: true, wheelPxPerZoomLevel: 120 }).setView([39.0742, 21.8243], 6);
     const tileKey = localStorage.getItem('mapTileLayer') || 'openstreetmap_dark';
     const tile = (typeof MAP_TILES !== 'undefined' && MAP_TILES[tileKey]) ? MAP_TILES[tileKey] : {
         url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',

@@ -36,8 +36,8 @@ class TripListReport(Report):
                 [
                     {"key": "start_time", "label": "Date", "type": "datetime"},
                     {"key": "device_name", "label": "Vehicle", "type": "text", "detail_key": "license_plate"},
-                    {"key": "start_address", "label": "From", "type": "text", "max_width": 180},
-                    {"key": "end_address", "label": "To", "type": "text", "max_width": 180},
+                    {"key": "start_address", "label": "From", "type": "text", "max_width": 200},
+                    {"key": "end_address", "label": "To", "type": "text", "max_width": 200},
                     {"key": "distance_km", "label": "Distance (km)", "type": "number", "decimals": 1},
                     {"key": "duration_minutes", "label": "Duration", "type": "duration_minutes"},
                     {"key": "avg_speed", "label": "Avg Speed", "type": "number", "decimals": 1, "suffix": " km/h"},

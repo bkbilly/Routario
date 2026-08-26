@@ -1,6 +1,6 @@
 /**
  * dashboard-history.js
- * History modal, playback controls, trip display, sensor graph, and CSV export.
+ * History modal, playback controls, trip display, and point details.
  */
 
 let historyLineMode = 'static'; // 'static' | 'ant'
@@ -11,11 +11,6 @@ let _historyZoomLineSwitchActive = false;
 
 const PLAYBACK_SPEEDS = [1, 2, 5, 10];
 let playbackSpeedIdx = 0;
-
-const SENSOR_COLORS = [
-    '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
-    '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'
-];
 
 const tripColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#84cc16'];
 
@@ -36,10 +31,8 @@ async function syncPublicSystemSettings() {
 
 function pushModalState(modalName) {
     try {
-        if (!window.history.state || !window.history.state.routarioModal) {
+        if (!window.history.state || window.history.state.routarioModal !== modalName) {
             window.history.pushState({ routarioModal: modalName }, '');
-        } else if (window.history.state.routarioModal !== modalName) {
-            window.history.replaceState({ routarioModal: modalName }, '');
         }
     } catch (e) {
         console.warn('pushState failed:', e);
@@ -57,25 +50,14 @@ function popModalState(modalName) {
 }
 
 window.addEventListener('popstate', (e) => {
-    // 1. History Playback
-    const footer = document.getElementById('historyControls');
-    if (footer && footer.style.display !== 'none') {
-        if (typeof exitHistoryMode === 'function') {
-            exitHistoryMode(true);
-            return;
-        }
-    }
-
-    // 2. History Filter Modal
+    // 1. History Filter Modal
     const historyModal = document.getElementById('historyModal');
     if (historyModal && historyModal.classList.contains('active')) {
-        if (typeof closeHistoryModal === 'function') {
-            closeHistoryModal(true);
-            return;
-        }
+        closeHistoryModal();
+        return;
     }
 
-    // 3. AI Copilot Modal
+    // 2. AI Copilot Modal
     const aiModal = document.getElementById('aiCopilotModal');
     if (aiModal && aiModal.classList.contains('active')) {
         if (typeof closeAiCopilotModal === 'function') {
@@ -84,18 +66,26 @@ window.addEventListener('popstate', (e) => {
         }
     }
 
-    // 4. Any generic active modal
+    // 3. Any generic active modal
     const activeModal = document.querySelector('.modal.active');
     if (activeModal) {
         activeModal.classList.remove('active');
         return;
+    }
+
+    // 4. History Playback (only exit when navigating back away from history)
+    const footer = document.getElementById('historyControls');
+    if (footer && footer.style.display !== 'none') {
+        if (typeof exitHistoryMode === 'function') {
+            exitHistoryMode(true);
+            return;
+        }
     }
 });
 
 // --- HISTORY MODAL ---
 function openHistoryModal(deviceId) {
     syncPublicSystemSettings();
-    pushModalState('history_modal');
     document.getElementById('historyModal').dataset.deviceId = String(deviceId);
 
     // Reset all cycle buttons to their first option
@@ -115,12 +105,31 @@ function openHistoryModal(deviceId) {
     _setActiveQuickBtn(defaultBtn);
 }
 
-function closeHistoryModal(fromPopState = false) {
+function openHistoryDateRangeModal() {
+    if (!historyDeviceId) return;
+    syncPublicSystemSettings();
+    document.getElementById('historyModal').dataset.deviceId = String(historyDeviceId);
+
+    const device = devices.find(d => d.id === historyDeviceId);
+    const icon = device ? (VEHICLE_ICONS[device.vehicle_type] || VEHICLE_ICONS['other']).emoji : '🚗';
+    const name = device ? device.name : `Device ${historyDeviceId}`;
+    document.getElementById('historyModalDeviceName').textContent = `${icon} ${name}`;
+
+    if (historyStartTime) {
+        document.getElementById('historyStart').value = toLocalISO(new Date(historyStartTime));
+    }
+    if (historyEndTime) {
+        document.getElementById('historyEnd').value = toLocalISO(new Date(historyEndTime));
+    }
+
+    _setActiveQuickBtn(null);
+    _validateHistoryRange();
+    document.getElementById('historyModal').classList.add('active');
+}
+
+function closeHistoryModal() {
     document.getElementById('historyModal').classList.remove('active');
     _setActiveQuickBtn(null);
-    if (!fromPopState) {
-        popModalState('history_modal');
-    }
 }
 
 const toLocalISO = (date) => {
@@ -255,7 +264,7 @@ async function handleHistorySubmit(e) {
         const modalDeviceId = parseInt(document.getElementById('historyModal').dataset.deviceId || '', 10);
         const start = new Date(document.getElementById('historyStart').value);
         const end = new Date(document.getElementById('historyEnd').value);
-        closeHistoryModal(true);
+        closeHistoryModal();
         await loadHistory(modalDeviceId, start, end);
     } finally {
         btn.disabled = false;
@@ -265,6 +274,8 @@ async function handleHistorySubmit(e) {
 
 async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
     const previousHistoryDeviceId = historyDeviceId;
+    const previousHistoryStartTime = historyStartTime;
+    const previousHistoryEndTime = historyEndTime;
     historyBatchOffset = batchOffset;
     historyLineRenderMode = null;
     _historyZoomLineSwitchActive = false;
@@ -312,6 +323,8 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
         if (historyData.length === 0) {
             showAlert({ title: 'History', message: 'No data found.', type: 'warning' });
             historyDeviceId = previousHistoryDeviceId;
+            historyStartTime = previousHistoryStartTime;
+            historyEndTime = previousHistoryEndTime;
             // Restore live markers since we're not entering history mode
             if (typeof clusterGroup !== 'undefined' && clusterGroup && map && !map.hasLayer(clusterGroup)) {
                 map.addLayer(clusterGroup);
@@ -322,6 +335,8 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
             return;
         }
         historyDeviceId = deviceId;
+        historyStartTime = startTime instanceof Date ? startTime : new Date(startTime);
+        historyEndTime = endTime instanceof Date ? endTime : new Date(endTime);
         if (typeof hideDashboardRouteLayerForHistory === 'function') {
             hideDashboardRouteLayerForHistory();
         }
@@ -367,6 +382,8 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
         console.log(error);
         showAlert({ title: 'Error', message: 'Failed to load history.', type: 'error' });
         historyDeviceId = previousHistoryDeviceId;
+        historyStartTime = previousHistoryStartTime;
+        historyEndTime = previousHistoryEndTime;
         // Restore live markers since history mode was not entered
         if (typeof clusterGroup !== 'undefined' && clusterGroup && map && !map.hasLayer(clusterGroup)) {
             map.addLayer(clusterGroup);
@@ -501,6 +518,8 @@ function exitHistoryMode(fromPopState = false) {
         stopPlayback();
         _clearAlertHighlight();
         historyDeviceId = null;
+        historyStartTime = null;
+        historyEndTime = null;
         historyData = [];
         historyIndex = 0;
         historyLineRenderMode = null;
@@ -522,15 +541,6 @@ function exitHistoryMode(fromPopState = false) {
             }
             delete markers['history_pos'];
         }
-        if (sensorChart) {
-            try {
-                sensorChart.destroy();
-            } catch (e) {
-                console.warn('Error destroying sensorChart:', e);
-            }
-            sensorChart = null;
-        }
-        selectedSensorAttrs = new Set([]);
         currentHistoryTab = 'trips';
         switchHistoryTab('trips');
 
@@ -647,8 +657,8 @@ async function loadHistoryBatch(direction) {
         const batchSize = HISTORY_BATCH_SIZE || 2000;
         const newOffset = historyBatchOffset + direction * batchSize;
         if (newOffset < 0) return;
-        const start = new Date(document.getElementById('historyStart').value);
-        const end   = new Date(document.getElementById('historyEnd').value);
+        const start = historyStartTime || new Date(document.getElementById('historyStart').value);
+        const end   = historyEndTime   || new Date(document.getElementById('historyEnd').value);
         await loadHistory(historyDeviceId, start, end, newOffset);
     } finally {
         if (prevBtn) {
@@ -730,8 +740,6 @@ function updatePlaybackUI() {
     const heading = p.course ?? null;
     const device = devices.find(d => d.id === historyDeviceId);
 
-    buildSensorAttrList();
-    updateSensorChartCursor(historyIndex);
     document.getElementById('historySlider').value = historyIndex;
     document.getElementById('historyTimestamp').textContent = time;
     document.getElementById('historySliderCounter').textContent = `${historyIndex + 1} / ${historyData.length}`;
@@ -1016,298 +1024,14 @@ function getCurrentTripForPoint(isoTimeStr) {
 // ── Tab switcher ───────────────────────────────────────────────
 function switchHistoryTab(tab) {
     currentHistoryTab = tab;
-    document.getElementById('tabTrips').style.display   = tab === 'trips'   ? 'block' : 'none';
-    document.getElementById('tabDetails').style.display = tab === 'details' ? 'block' : 'none';
-    document.getElementById('tabGraph').style.display   = tab === 'graph'   ? 'block' : 'none';
-    document.getElementById('tabBtnTrips').classList.toggle('active',   tab === 'trips');
-    document.getElementById('tabBtnDetails').classList.toggle('active', tab === 'details');
-    document.getElementById('tabBtnGraph').classList.toggle('active',   tab === 'graph');
-    if (tab === 'graph') renderSensorGraph();
-}
-
-// ── Build attribute list from all historyData ──────────────────
-function buildSensorAttrList() {
-    if (!historyData || historyData.length === 0) return;
-
-    // Collect all numeric keys across all points
-    const attrSet = new Set();
-
-    // Always include core fields if they are numeric
-    const coreFields = ['speed', 'altitude', 'course', 'satellites'];
-    coreFields.forEach(f => attrSet.add(f));
-
-    historyData.forEach(feat => {
-        const p = feat.properties;
-        // Add sensor sub-keys
-        if (p.sensors) {
-            Object.entries(p.sensors).forEach(([k, v]) => {
-                if (k !== 'raw' && !isNaN(parseFloat(v))) attrSet.add('sensors.' + k);
-            });
-        }
-    });
-
-    const container = document.getElementById('sensorAttrList');
-    container.innerHTML = '';
-
-    let colorIdx = 0;
-    attrSet.forEach(attr => {
-        const color = SENSOR_COLORS[colorIdx % SENSOR_COLORS.length];
-        colorIdx++;
-
-        const chip = document.createElement('button');
-        chip.className = 'sensor-chip' + (selectedSensorAttrs.has(attr) ? ' selected' : '');
-        chip.dataset.attr = attr;
-        chip.dataset.color = color;
-        chip.style.setProperty('--chip-color', color);
-        chip.textContent = formatAttrLabel(attr);
-        chip.onclick = () => toggleSensorAttr(attr, chip);
-        container.appendChild(chip);
-    });
-
-    renderSensorGraph();
-}
-
-function formatAttrLabel(attr) {
-    return attr
-        .replace('sensors.', '')
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, c => c.toUpperCase());
-}
-
-function toggleSensorAttr(attr, chip) {
-    if (selectedSensorAttrs.has(attr)) {
-        selectedSensorAttrs.delete(attr);
-        chip.classList.remove('selected');
-    } else {
-        selectedSensorAttrs.add(attr);
-        chip.classList.add('selected');
-    }
-    renderSensorGraph();
-}
-
-// ── Render / update the Chart.js graph ────────────────────────
-function renderSensorGraph() {
-    if (!historyData || historyData.length === 0) return;
-
-    const canvas = document.getElementById('sensorChart');
-    const emptyMsg = document.getElementById('sensorChartEmpty');
-
-    if (selectedSensorAttrs.size === 0) {
-        canvas.style.display = 'none';
-        emptyMsg.style.display = 'block';
-        return;
-    }
-    canvas.style.display = 'block';
-    emptyMsg.style.display = 'none';
-
-    // Build labels (timestamps) and datasets
-    const labels = historyData.map(f => {
-        const d = new Date(f.properties.time);
-        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    });
-
-    const chips = document.querySelectorAll('.sensor-chip.selected');
-    const colorMap = {};
-    chips.forEach(c => { colorMap[c.dataset.attr] = c.dataset.color; });
-
-    const datasets = Array.from(selectedSensorAttrs).map(attr => {
-        const color = colorMap[attr] || '#3b82f6';
-        const data = historyData.map(f => {
-            const p = f.properties;
-            if (attr.startsWith('sensors.')) {
-                const key = attr.slice('sensors.'.length);
-                const val = p.sensors?.[key];
-                return val !== undefined ? parseFloat(val) : null;
-            }
-            const val = p[attr];
-            return val !== undefined ? parseFloat(val) : null;
-        });
-        return {
-            label: formatAttrLabel(attr),
-            data,
-            borderColor: color,
-            backgroundColor: color + '22',
-            borderWidth: 2,
-            pointRadius: 0,
-            pointHoverRadius: 5,
-            tension: 0.3,
-            fill: false,
-            yAxisID: 'y',
-        };
-    });
-
-    if (sensorChart) {
-        sensorChart.data.labels = labels;
-        sensorChart.data.datasets = datasets;
-        sensorChart.update('none');
-    } else {
-        const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-        const gridColor = isLight ? '#e2e8f0' : '#374151';
-        const textMuted = isLight ? '#64748b' : '#9ca3af';
-        const tickColor = isLight ? '#64748b' : '#6b7280';
-        const tooltipBg = isLight ? '#ffffff' : '#131825';
-        const tooltipBorder = isLight ? '#cbd5e1' : '#374151';
-        const tooltipTitle = isLight ? '#0f172a' : '#e5e7eb';
-        const tooltipBody = isLight ? '#475569' : '#9ca3af';
-
-        sensorChart = new Chart(canvas, {
-            type: 'line',
-            data: { labels, datasets },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: {
-                        display: true,
-                        labels: {
-                            color: textMuted,
-                            font: { family: 'JetBrains Mono', size: 10 },
-                            boxWidth: 12,
-                            padding: 8,
-                        }
-                    },
-                    tooltip: {
-                        backgroundColor: tooltipBg,
-                        borderColor: tooltipBorder,
-                        borderWidth: 1,
-                        titleColor: tooltipTitle,
-                        bodyColor: tooltipBody,
-                        titleFont: { family: 'JetBrains Mono', size: 11 },
-                        bodyFont: { family: 'JetBrains Mono', size: 11 },
-                    },
-                    // Vertical cursor line plugin (defined below)
-                    verticalLine: { index: historyIndex }
-                },
-                scales: {
-                    x: {
-                        ticks: {
-                            color: tickColor,
-                            font: { family: 'JetBrains Mono', size: 9 },
-                            maxTicksLimit: 6,
-                            maxRotation: 0,
-                        },
-                        grid: { color: gridColor }
-                    },
-                    y: {
-                        ticks: { color: tickColor, font: { family: 'JetBrains Mono', size: 10 } },
-                        grid: { color: gridColor }
-                    }
-                }
-            },
-            plugins: [verticalLinePlugin]
-        });
-    }
-
-    updateSensorChartCursor(historyIndex);
-}
-
-window.addEventListener('routario:themechange', () => {
-    if (sensorChart) {
-        sensorChart.destroy();
-        sensorChart = null;
-        updateSensorChart();
-    }
-});
-
-// ── Vertical cursor line plugin ────────────────────────────────
-const verticalLinePlugin = {
-    id: 'verticalLine',
-    afterDraw(chart) {
-        const idx = chart.options.plugins?.verticalLine?.index;
-        if (idx == null || !chart.data?.labels?.length) return;
-        const meta = chart.getDatasetMeta(0);
-        if (!meta || !meta.data || !meta.data[idx]) return;
-        const x = meta.data[idx].x;
-        if (x == null || isNaN(x)) return;
-        const ctx = chart.ctx;
-        const chartArea = chart.chartArea;
-        if (!ctx || !chartArea) return;
-        const top = chartArea.top;
-        const bottom = chartArea.bottom;
-        if (top == null || bottom == null) return;
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(x, top);
-        ctx.lineTo(x, bottom);
-        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([4, 3]);
-        ctx.stroke();
-        ctx.restore();
-    }
-};
-
-function updateSensorChartCursor(idx) {
-    if (!sensorChart) return;
-    sensorChart.options.plugins.verticalLine.index = idx;
-    sensorChart.update('none');
-}
-
-// ── Export history data to CSV ─────────────────────────────────
-function exportHistoryCSV() {
-    if (!historyData || historyData.length === 0) {
-        showAlert({ title: 'Export', message: 'No history data to export.', type: 'warning' });
-        return;
-    }
-
-    // Collect all sensor keys across all points
-    const sensorKeys = new Set();
-    historyData.forEach(f => {
-        if (f.properties.sensors) {
-            Object.keys(f.properties.sensors).forEach(k => {
-                if (k !== 'raw') sensorKeys.add(k);
-            });
-        }
-    });
-
-    const coreFields = ['time', 'latitude', 'longitude', 'driver', 'speed', 'altitude', 'course', 'satellites', 'ignition'];
-    const sensorCols = Array.from(sensorKeys).sort();
-    const allHeaders = [...coreFields, ...sensorCols];
-
-    // Build CSV rows
-    const rows = historyData.map(f => {
-        const p = f.properties;
-        const coords = f.geometry.coordinates;
-        const row = {
-            time:       p.time || '',
-            latitude:   coords[1],
-            longitude:  coords[0],
-            driver:     p.driver_name || '',
-            speed:      p.speed      ?? '',
-            altitude:   p.altitude   ?? '',
-            course:     p.course     ?? '',
-            satellites: p.satellites ?? '',
-            ignition:   p.ignition != null ? (p.ignition ? 'true' : 'false') : '',
-        };
-        sensorCols.forEach(k => {
-            row[k] = p.sensors?.[k] ?? '';
-        });
-        return allHeaders.map(h => {
-            const val = row[h] ?? '';
-            // Wrap in quotes if value contains comma or quote
-            const str = String(val);
-            return str.includes(',') || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str;
-        }).join(',');
-    });
-
-    const csvContent = [allHeaders.join(','), ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-
-    const device = devices.find(d => d.id === historyDeviceId);
-    const deviceName = (device?.name || 'device').replace(/\s+/g, '_');
-    const now = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
-    const filename = `history_${deviceName}_${now}.csv`;
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-
-    showAlert({ title: 'Export', message: `Exported ${historyData.length} points to ${filename}`, type: 'success' });
+    const tabTrips = document.getElementById('tabTrips');
+    const tabDetails = document.getElementById('tabDetails');
+    const tabBtnTrips = document.getElementById('tabBtnTrips');
+    const tabBtnDetails = document.getElementById('tabBtnDetails');
+    if (tabTrips) tabTrips.style.display = tab === 'trips' ? 'block' : 'none';
+    if (tabDetails) tabDetails.style.display = tab === 'details' ? 'block' : 'none';
+    if (tabBtnTrips) tabBtnTrips.classList.toggle('active', tab === 'trips');
+    if (tabBtnDetails) tabBtnDetails.classList.toggle('active', tab === 'details');
 }
 
 // --- KEYBOARD SHORTCUTS (history mode only) ---

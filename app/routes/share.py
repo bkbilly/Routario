@@ -64,9 +64,9 @@ async def create_share(
     await verify_device_access(payload.device_id, current_user)
     db = get_db()
 
-    # Validate duration (1 min to 7 days)
-    if payload.duration_minutes < 1 or payload.duration_minutes > 10080:
-        raise HTTPException(status_code=400, detail="Duration must be between 1 and 10080 minutes")
+    # Validate duration (1 min to 525600 min / 1 year)
+    if payload.duration_minutes < 1 or payload.duration_minutes > 525600:
+        raise HTTPException(status_code=400, detail="Duration must be between 1 and 525600 minutes")
 
     async with db.get_session() as session:
         # Get device name
@@ -161,7 +161,7 @@ async def renew_share(
     current_user: User = Depends(require_permission("live_share")),
 ):
     """Extend the expiry of a share link from now."""
-    if payload.duration_minutes < 1 or payload.duration_minutes > 10080:
+    if payload.duration_minutes < 1 or payload.duration_minutes > 525600:
         raise HTTPException(status_code=400, detail="Invalid duration")
 
     db = get_db()

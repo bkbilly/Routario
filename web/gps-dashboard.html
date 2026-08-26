@@ -29,8 +29,6 @@
 
     <!-- Material Design Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
-    <!-- Chart.js for analytics -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -203,7 +201,7 @@
                 <div class="history-tab-bar" style="display:flex; gap:0.5rem; margin-bottom:1rem;">
                     <button class="history-tab active" id="tabBtnTrips" onclick="switchHistoryTab('trips')"><i class="mdi mdi-map"></i> Trips</button>
                     <button class="history-tab" id="tabBtnDetails" onclick="switchHistoryTab('details')"><i class="mdi mdi-map-marker"></i> Details</button>
-                    <button class="history-tab" id="tabBtnGraph" onclick="switchHistoryTab('graph')"><i class="mdi mdi-chart-line"></i> Graph</button>
+                    <button class="history-date-btn" id="historyDateRangeBtn" onclick="openHistoryDateRangeModal()" title="Change Date Range"><i class="mdi mdi-calendar-range"></i></button>
                 </div>
 
                 <!-- Tab: Trips -->
@@ -216,34 +214,6 @@
                 <!-- Tab: Point Details -->
                 <div id="tabDetails" style="display:none;">
                     <div id="pointDetailsContent"></div>
-                </div>
-
-                <!-- Tab: Sensor Graph -->
-                <div id="tabGraph" style="display:none;">
-                    <div id="sensorGraphPanel">
-                        <div id="sensorAttrList" style="
-                            display: flex;
-                            flex-wrap: wrap;
-                            gap: 0.4rem;
-                            margin-bottom: 0.75rem;
-                            max-height: 250px;
-                            overflow-y: auto;
-                            padding: 0.25rem 0;
-                        ">
-                            <span style="color:var(--text-muted);font-size:0.8rem;">Load history to see attributes...</span>
-                        </div>
-                        <div style="position:relative; background:var(--bg-tertiary); border-radius:10px; border:1px solid var(--border-color); padding:0.75rem;">
-                            <canvas id="sensorChart" style="width:100%;max-height:220px;"></canvas>
-                            <div id="sensorChartEmpty" style="display:none;text-align:center;padding:2rem;color:var(--text-muted);font-size:0.85rem;">
-                                Select at least one attribute above to plot.
-                            </div>
-                        </div>
-                    </div>
-                    <div style="display:flex; justify-content:flex-end; margin-top:0.75rem;">
-                        <button class="btn btn-secondary" onclick="exportHistoryCSV()" style="font-size:0.78rem; padding:0.4rem 0.9rem; display:flex; align-items:center; gap:0.4rem;">
-                            <i class="mdi mdi-download"></i> Export CSV
-                        </button>
-                    </div>
                 </div>
 
             </div>
@@ -660,14 +630,14 @@
                     <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em;
                                 color:var(--text-muted); margin-bottom:0.6rem;">Generate share link</div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; margin-bottom:0.75rem;">
-                        <button class="share-duration-btn btn btn-secondary" data-minutes="15"  onclick="selectShareDuration(this)">15 min</button>
-                        <button class="share-duration-btn btn btn-secondary" data-minutes="60"  onclick="selectShareDuration(this)">1 hour</button>
-                        <button class="share-duration-btn btn btn-secondary" data-minutes="240" onclick="selectShareDuration(this)">4 hours</button>
-                        <button class="share-duration-btn btn btn-secondary" data-minutes="1440" onclick="selectShareDuration(this)">24 hours</button>
+                        <button type="button" class="share-duration-btn btn btn-secondary" data-group="minutes" onclick="cycleShareGroup(this, 'minutes')">5 min</button>
+                        <button type="button" class="share-duration-btn btn btn-secondary" data-group="hours" onclick="cycleShareGroup(this, 'hours')">1 hour</button>
+                        <button type="button" class="share-duration-btn btn btn-secondary" data-group="days" onclick="cycleShareGroup(this, 'days')">1 day</button>
+                        <button type="button" class="share-duration-btn btn btn-secondary" data-group="weeks" onclick="cycleShareGroup(this, 'weeks')">1 week</button>
                     </div>
                     <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.75rem;">
                         <span style="font-size:0.85rem; color:var(--text-muted); white-space:nowrap;">Custom (min):</span>
-                        <input type="number" id="shareCustomMinutes" min="1" max="10080" placeholder="e.g. 90"
+                        <input type="number" id="shareCustomMinutes" min="1" max="525600" placeholder="e.g. 60"
                             style="flex:1; padding:0.4rem 0.6rem; background:var(--bg-tertiary);
                                    border:1px solid var(--border-color); border-radius:6px;
                                    color:var(--text-primary); font-size:0.875rem;"

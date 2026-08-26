@@ -2440,6 +2440,28 @@ body.light-theme::before {
     color: var(--accent-primary);
 }
 
+.history-date-btn {
+    padding: 0.45rem 0.65rem;
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.history-date-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    background: var(--bg-hover);
+}
+
 .history-slider-row {
     display: flex;
     align-items: center;
@@ -2485,32 +2507,6 @@ body.light-theme::before {
     text-align: right;
 }
 
-/* Sensor Attribute Chips */
-.sensor-chip {
-    padding: 0.3rem 0.65rem;
-    font-family: var(--font-display);
-    font-size: 0.72rem;
-    font-weight: 600;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    border-radius: 20px;
-    color: var(--text-muted);
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    white-space: nowrap;
-}
-
-.sensor-chip:hover {
-    border-color: var(--chip-color, var(--accent-primary));
-    color: var(--chip-color, var(--accent-primary));
-}
-
-.sensor-chip.selected {
-    background: color-mix(in srgb, var(--chip-color, var(--accent-primary)) 15%, transparent);
-    border-color: var(--chip-color, var(--accent-primary));
-    color: var(--chip-color, var(--accent-primary));
-}
-
 .user-info:hover .user-name {
     color: var(--accent-primary);
 }
@@ -2518,17 +2514,6 @@ body.light-theme::before {
 .user-info:hover .user-role {
     color: var(--text-secondary);
 }
-
-/* Sensor chart canvas container */
-#sensorChart {
-    display: block;
-    height: 200px !important;
-    max-height: 200px;
-}
-
-/* Sensor attr list scrollbar */
-#sensorAttrList::-webkit-scrollbar { height: 4px; width: 4px; }
-#sensorAttrList::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 2px; }
 
 .alert-pulse {
     display: inline-block;
@@ -3712,6 +3697,18 @@ body.light-theme .history-tab.active {
     color: #1d4ed8;
     font-weight: 700;
 }
+[data-theme="light"] .history-date-btn,
+body.light-theme .history-date-btn {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+}
+[data-theme="light"] .history-date-btn:hover,
+body.light-theme .history-date-btn:hover {
+    border-color: #2563eb;
+    color: #2563eb;
+    background: #eff6ff;
+}
 [data-theme="light"] .trip-card,
 body.light-theme .trip-card {
     background: #ffffff;
@@ -3734,12 +3731,6 @@ body.light-theme .trip-badge {
     background: #eff6ff;
     border: 1px solid #bfdbfe;
     color: #1d4ed8;
-}
-[data-theme="light"] .sensor-chip,
-body.light-theme .sensor-chip {
-    background: #ffffff;
-    border: 1px solid #cbd5e1;
-    color: #475569;
 }
 [data-theme="light"] .detail-item,
 body.light-theme .detail-item {

@@ -827,7 +827,7 @@ function rtpInitRouteMap() {
         setTimeout(() => _rtpMap?.invalidateSize(), 50);
         return;
     }
-    _rtpMap = L.map('routePlanMap', { zoomControl: true, attributionControl: true }).setView([39.0742, 21.8243], 6);
+    _rtpMap = L.map('routePlanMap', { zoomControl: true, attributionControl: true, wheelPxPerZoomLevel: 120 }).setView([39.0742, 21.8243], 6);
     rtpApplyRouteMapTileLayer();
     _rtpStopLayer = L.layerGroup().addTo(_rtpMap);
     _rtpMap.on('click', e => {

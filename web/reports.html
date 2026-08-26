@@ -249,13 +249,323 @@
             min-height: 360px;
         }
 
+        #reportTableWrap {
+            scroll-margin-top: 85px;
+        }
+
+        /* ── Report Pagination ──────────────────────────────────── */
+        .report-pagination {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-top: 1rem;
+            padding: 0.75rem 0.25rem 0.25rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        .report-pagination-info {
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            white-space: nowrap;
+        }
+        .report-pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .report-page-size-wrap {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            margin-right: 0.5rem;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }
+        .report-page-size-select {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            padding: 0.25rem 0.5rem;
+            font-size: 0.8rem;
+            cursor: pointer;
+            outline: none;
+        }
+        .report-page-size-select:focus {
+            border-color: var(--accent-primary);
+        }
+        .report-page-btn-group {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        .report-page-btn {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            min-width: 32px;
+            height: 32px;
+            padding: 0 0.45rem;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+            user-select: none;
+        }
+        .report-page-btn:hover:not(:disabled):not(.active) {
+            background: var(--bg-hover);
+            border-color: var(--accent-primary);
+            color: var(--text-primary);
+        }
+        .report-page-btn.active {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            color: #ffffff;
+            font-weight: 700;
+            cursor: default;
+        }
+        .report-page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .report-page-ellipsis {
+            color: var(--text-muted);
+            padding: 0 0.25rem;
+            user-select: none;
+            font-size: 0.8rem;
+        }
+
+        @media (max-width: 650px) {
+            .report-pagination {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.6rem;
+            }
+            .report-pagination-info {
+                text-align: center;
+            }
+            .report-pagination-controls {
+                justify-content: space-between;
+                width: 100%;
+            }
+            .report-page-btn {
+                min-width: 28px;
+                height: 28px;
+                padding: 0 0.35rem;
+                font-size: 0.76rem;
+            }
+        }
+
         /* ── Trip map modal ──────────────────────────────────────── */
-        #tripMapModal .modal-content { max-width: 900px; width: 95vw; max-height: 90vh; padding: 0; display: flex; flex-direction: column; }
-        #tripMapModal .modal-header { padding: 1rem 1.25rem 0.75rem; flex-shrink: 0; }
-        #tripMapMeta { padding: 0 1.25rem 0.75rem; font-size: 0.8rem; color: var(--text-muted); flex-shrink: 0; }
-        @media (max-width: 600px) { #tripMapModal .modal-title { font-size: 1.1rem; } }
-        #tripMapWrap { position: relative; flex: 1; min-height: 300px; }
-        #tripMapContainer { height: 100%; }
+        #tripMapModal {
+            padding: 0.5rem;
+            box-sizing: border-box;
+        }
+        #tripMapModal .modal-content {
+            max-width: 920px;
+            width: 100%;
+            max-height: 90vh;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        #tripMapModal .modal-header {
+            padding: 0.85rem 1.25rem 0.5rem;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            min-width: 0;
+            box-sizing: border-box;
+        }
+        #tripMapTitle {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            flex: 1;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.35;
+            margin: 0;
+        }
+        #tripMapModal .modal-close {
+            flex-shrink: 0;
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #tripMapMeta {
+            padding: 0 1.25rem 0.75rem;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+            min-width: 0;
+            box-sizing: border-box;
+            width: 100%;
+        }
+        .trip-meta-route {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.4rem 0.6rem;
+            min-width: 0;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .trip-meta-loc {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex: 1 1 0%;
+            min-width: 0;
+            cursor: pointer;
+            padding: 0.35rem 0.5rem;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            transition: background 0.15s ease, border-color 0.15s ease;
+            user-select: none;
+            box-sizing: border-box;
+        }
+        .trip-meta-loc:hover {
+            background: var(--bg-secondary);
+            border-color: var(--border-color);
+        }
+        .trip-meta-loc.expanded {
+            background: var(--bg-secondary);
+            border-color: var(--border-color);
+            align-items: flex-start;
+        }
+        .trip-meta-tag {
+            font-size: 0.95rem;
+            width: 26px;
+            height: 26px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            flex-shrink: 0;
+            line-height: 1;
+        }
+        .trip-meta-tag.from {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .trip-meta-tag.to {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        [data-theme="light"] .trip-meta-tag.from,
+        body.light-theme .trip-meta-tag.from {
+            background: rgba(16, 185, 129, 0.12);
+            color: #059669;
+            border-color: rgba(16, 185, 129, 0.25);
+        }
+        [data-theme="light"] .trip-meta-tag.to,
+        body.light-theme .trip-meta-tag.to {
+            background: rgba(239, 68, 68, 0.12);
+            color: #dc2626;
+            border-color: rgba(239, 68, 68, 0.25);
+        }
+        .trip-meta-address {
+            color: var(--text-primary);
+            font-weight: 500;
+            font-size: 0.82rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.35;
+            flex: 1;
+            min-width: 0;
+        }
+        .trip-meta-loc.expanded .trip-meta-address {
+            white-space: normal;
+            overflow: visible;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
+        .trip-meta-coords {
+            font-family: var(--font-mono, monospace);
+            font-size: 0.76rem;
+            color: var(--text-secondary);
+        }
+        .trip-meta-divider {
+            color: var(--text-muted);
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            opacity: 0.6;
+        }
+        @media (max-width: 768px) {
+            #tripMapModal {
+                padding: 0.25rem;
+            }
+            #tripMapModal .modal-content {
+                width: 98vw;
+                max-height: 94vh;
+                border-radius: 14px;
+            }
+            #tripMapModal .modal-header {
+                padding: 0.75rem 0.85rem 0.4rem;
+                gap: 0.5rem;
+            }
+            #tripMapTitle {
+                font-size: 0.95rem;
+            }
+            #tripMapModal .modal-close {
+                width: 32px;
+                height: 32px;
+                font-size: 1.1rem;
+            }
+            #tripMapMeta {
+                padding: 0 0.85rem 0.5rem;
+            }
+            .trip-meta-route {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.35rem;
+                padding: 0.35rem 0.45rem;
+            }
+            .trip-meta-divider {
+                display: none;
+            }
+            .trip-meta-loc {
+                width: 100%;
+                flex: 1 1 auto;
+                padding: 0.35rem 0.45rem;
+            }
+            .trip-meta-tag {
+                font-size: 0.85rem;
+                width: 24px;
+                height: 24px;
+            }
+            .trip-meta-address {
+                font-size: 0.78rem;
+            }
+        }
+        #tripMapWrap { position: relative; flex: 1; min-height: 260px; width: 100%; overflow: hidden; }
+        #tripMapContainer { height: 100%; width: 100%; }
         #tripMapSpinner { display:none; position:absolute; inset:0; align-items:center; justify-content:center; background:var(--bg-card); color:var(--text-muted); gap:0.5rem; font-size:0.9rem; z-index:1000; }
 
         /* ── Billing detail modal ───────────────────────────────── */
@@ -863,6 +1173,7 @@
                 <tbody id="reportBody"></tbody>
             </table>
         </div>
+        <div class="report-pagination" id="reportPagination" style="display:none;"></div>
         <div class="no-data" id="noData" style="display:none;">No data found for the selected period.</div>
         <div id="aiReportResultCard" style="display:none;margin-top:1rem;"></div>
 

@@ -172,7 +172,7 @@
     let map, marker, currentPosition = null;
 
     function initMap() {
-        map = L.map('map', { zoomControl: true, attributionControl: false });
+        map = L.map('map', { zoomControl: true, attributionControl: false, wheelPxPerZoomLevel: 120 });
         L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
             maxZoom: 19
         }).addTo(map);

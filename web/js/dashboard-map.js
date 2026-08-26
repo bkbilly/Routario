@@ -105,6 +105,7 @@ function _makeMarkerIcon(vehicleType, ignitionOn, heading) {
 function initMap() {
     map = L.map('map', {
         zoomControl: false,
+        wheelPxPerZoomLevel: 120,
     }).setView([20, 0], 2);
 
     const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap_dark';

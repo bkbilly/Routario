@@ -471,17 +471,84 @@ function closeDeviceModal() {
 }
 // ── Location Share ────────────────────────────────────────────────────────────
 
+const SHARE_QUICK_GROUPS = {
+    'minutes': [
+        { label: '5 min', minutes: 5 },
+        { label: '10 min', minutes: 10 },
+        { label: '15 min', minutes: 15 },
+        { label: '30 min', minutes: 30 },
+        { label: '45 min', minutes: 45 },
+    ],
+    'hours': [
+        { label: '1 hour', minutes: 60 },
+        { label: '2 hours', minutes: 120 },
+        { label: '5 hours', minutes: 300 },
+        { label: '8 hours', minutes: 480 },
+        { label: '12 hours', minutes: 720 },
+    ],
+    'days': [
+        { label: '1 day', minutes: 1440 },
+        { label: '2 days', minutes: 2880 },
+        { label: '3 days', minutes: 4320 },
+        { label: '5 days', minutes: 7200 },
+    ],
+    'weeks': [
+        { label: '1 week', minutes: 10080 },
+        { label: '2 weeks', minutes: 20160 },
+        { label: '3 weeks', minutes: 30240 },
+        { label: '4 weeks', minutes: 40320 },
+        { label: '8 weeks', minutes: 80640 },
+    ],
+};
+
+function cycleShareGroup(btn, groupKey) {
+    const steps = SHARE_QUICK_GROUPS[groupKey];
+    if (!steps || !steps.length) return;
+    const isActive = btn.classList.contains('active');
+    const currentStep = parseInt(btn.dataset.step || '0');
+    const step = isActive ? (currentStep + 1) % steps.length : currentStep;
+    btn.dataset.step = step;
+    btn.textContent = steps[step].label;
+    btn.dataset.minutes = steps[step].minutes;
+
+    const input = document.getElementById('shareCustomMinutes');
+    if (input) input.value = steps[step].minutes;
+
+    _setActiveShareBtn(btn);
+}
+
+function _setActiveShareBtn(btn) {
+    document.querySelectorAll('.share-duration-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+}
+
 function openShareModal(deviceId) {
     const device = devices.find(d => d.id === deviceId);
     if (!device) return;
 
     const modal = document.getElementById('shareModal');
     const icon = (VEHICLE_ICONS[device.vehicle_type] || VEHICLE_ICONS['other']).emoji;
-    document.getElementById('shareDeviceName').textContent = `${icon} ${device.name}`;  // ← add icon
+    document.getElementById('shareDeviceName').textContent = `${icon} ${device.name}`;
     modal.dataset.deviceId = deviceId;
 
-    document.querySelectorAll('.share-duration-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('shareCustomMinutes').value = '';
+    // Reset all cycle buttons to their first option
+    document.querySelectorAll('.share-duration-btn[data-group]').forEach(btn => {
+        const steps = SHARE_QUICK_GROUPS[btn.dataset.group];
+        if (steps && steps.length) {
+            btn.dataset.step = '0';
+            btn.textContent = steps[0].label;
+            btn.dataset.minutes = steps[0].minutes;
+        }
+    });
+
+    const defaultBtn = document.querySelector('.share-duration-btn[data-group="hours"]');
+    if (defaultBtn) {
+        _setActiveShareBtn(defaultBtn);
+        document.getElementById('shareCustomMinutes').value = defaultBtn.dataset.minutes || '60';
+    } else {
+        _setActiveShareBtn(null);
+        document.getElementById('shareCustomMinutes').value = '';
+    }
 
     modal.classList.add('active');
     loadActiveShareLinks(deviceId);
@@ -491,12 +558,6 @@ function closeShareModal() {
     document.getElementById('shareModal').classList.remove('active');
 }
 
-function selectShareDuration(btn) {
-    document.querySelectorAll('.share-duration-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('shareCustomMinutes').value = '';
-}
-
 async function generateShareLink() {
     const modal = document.getElementById('shareModal');
     const deviceId = parseInt(modal.dataset.deviceId);
@@ -504,8 +565,12 @@ async function generateShareLink() {
     const customVal = document.getElementById('shareCustomMinutes').value;
 
     let minutes = activeBtn ? parseInt(activeBtn.dataset.minutes) : parseInt(customVal);
-    if (!minutes || minutes < 1) {
+    if (!minutes || isNaN(minutes) || minutes < 1) {
         showAlert('Please select or enter a duration.', 'warning');
+        return;
+    }
+    if (minutes > 525600) {
+        showAlert('Maximum share duration is 1 year (525,600 minutes).', 'warning');
         return;
     }
 

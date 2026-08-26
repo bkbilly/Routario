@@ -9,7 +9,7 @@
  *   dashboard-map.js      — initMap, tile layers, markers, WebSocket
  *   dashboard-devices.js  — loadDevices, sidebar cards, sorting, filtering
  *   dashboard-alerts.js   — loadAlerts, toasts, alert modal
- *   dashboard-history.js  — history modal, playback, trips, sensor graph, CSV
+ *   dashboard-history.js  — history modal, playback, trips, details
  */
 
 // Initialize
@@ -117,7 +117,11 @@ document.addEventListener('keydown', (e) => {
     for (const id of modalIds) {
         const modal = document.getElementById(id);
         if (modal?.classList.contains('active')) {
-            modal.classList.remove('active');
+            if (id === 'historyModal' && typeof closeHistoryModal === 'function') {
+                closeHistoryModal();
+            } else {
+                modal.classList.remove('active');
+            }
             return;
         }
     }

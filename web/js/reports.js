@@ -2,6 +2,8 @@
 
 let _reportData          = [];
 let _reportPayload       = null;
+let _reportPage          = 1;
+let _reportPageSize      = 50;
 let _lastReportPdfUrl    = null;
 let _sortCol             = null;
 let _sortDir             = 1;
@@ -698,12 +700,15 @@ function _getScheduleControlValues() {
 function onReportTypeChange() {
     _reportData = [];
     _reportPayload = null;
+    _reportPage = 1;
     _lastReportPdfUrl = null;
     _selectedBillingKey = null;
     _billingDetail = null;
     _billingDetailPdfUrl = null;
     _sensorsHistoryMode = false;
     document.getElementById('reportTable').style.display = 'none';
+    const pagEl = document.getElementById('reportPagination');
+    if (pagEl) pagEl.style.display = 'none';
     document.getElementById('noData').style.display = 'none';
     const graphCard = document.getElementById('sensorGraphCard');
     if (graphCard) graphCard.style.display = 'none';
@@ -744,11 +749,14 @@ function onHistoryCheckChange() {
 function onReportControlChange() {
     _reportData = [];
     _reportPayload = null;
+    _reportPage = 1;
     _lastReportPdfUrl = null;
     _selectedBillingKey = null;
     _billingDetail = null;
     _billingDetailPdfUrl = null;
     document.getElementById('reportTable').style.display = 'none';
+    const pagEl = document.getElementById('reportPagination');
+    if (pagEl) pagEl.style.display = 'none';
     document.getElementById('noData').style.display = 'none';
     document.getElementById('summaryBar').style.display = 'none';
     document.getElementById('exportMenuWrap').style.display = 'none';
@@ -1185,6 +1193,7 @@ async function generateReport() {
         if (def.supports_driver_filter) _mergeDriversFromTrips(_reportData);
         _sortCol = _reportPayload.default_sort?.key || null;
         _sortDir = _reportPayload.default_sort?.dir || 1;
+        _reportPage = 1;
         _lastReportPdfUrl = pdfEndpoint;
         await _renderReport();
     } catch (e) {
@@ -1202,6 +1211,7 @@ function _setReportLoading(isLoading) {
     const summary = document.getElementById('summaryBar');
     const exportWrap = document.getElementById('exportMenuWrap');
     const graphCard = document.getElementById('sensorGraphCard');
+    const pagination = document.getElementById('reportPagination');
 
     if (btn) {
         btn.disabled = isLoading;
@@ -1212,6 +1222,7 @@ function _setReportLoading(isLoading) {
     if (isLoading) {
         table.style.display = 'none';
         if (graphCard) graphCard.style.display = 'none';
+        if (pagination) pagination.style.display = 'none';
         summary.style.display = 'none';
         exportWrap.style.display = 'none';
         noData.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Generating report...';
@@ -1236,11 +1247,13 @@ async function _renderReport() {
     const expWrap = document.getElementById('exportMenuWrap');
     const head    = document.getElementById('reportHead');
     const body    = document.getElementById('reportBody');
+    const pagination = document.getElementById('reportPagination');
     const payload = _reportPayload || { rows: _reportData, columns: [] };
     const columns = (payload.columns || []).filter(c => c.hidden !== true);
 
     if (_reportData.length === 0) {
         table.style.display = 'none';
+        if (pagination) pagination.style.display = 'none';
         const graphCard = document.getElementById('sensorGraphCard');
         if (graphCard) graphCard.style.display = 'none';
         noData.style.display = '';
@@ -1272,20 +1285,195 @@ async function _renderReport() {
     }
     _applySensorViewVisibility();
 
-    const chunkSize = rows.length > 1000 ? 100 : 250;
-    for (let start = 0; start < rows.length; start += chunkSize) {
-        if (token !== _reportRenderToken) return;
-        body.insertAdjacentHTML(
-            'beforeend',
-            rows.slice(start, start + chunkSize)
-                .map((row, offset) => _renderGenericRow(row, columns, payload.row_action, start + offset))
-                .join('')
-        );
-        await _nextFrame();
+    const totalRows = rows.length;
+    const isAll = _reportPageSize === 'all' || _reportPageSize === -1;
+    const pageSize = isAll ? totalRows : (parseInt(_reportPageSize, 10) || 50);
+    const totalPages = isAll ? 1 : (Math.ceil(totalRows / pageSize) || 1);
+    if (_reportPage > totalPages) _reportPage = totalPages;
+    if (_reportPage < 1) _reportPage = 1;
+
+    const startIdx = isAll ? 0 : (_reportPage - 1) * pageSize;
+    const endIdx = isAll ? totalRows : Math.min(startIdx + pageSize, totalRows);
+    const pageRows = rows.slice(startIdx, endIdx);
+
+    if (pageRows.length > 500) {
+        const chunkSize = 200;
+        for (let start = 0; start < pageRows.length; start += chunkSize) {
+            if (token !== _reportRenderToken) return;
+            body.insertAdjacentHTML(
+                'beforeend',
+                pageRows.slice(start, start + chunkSize)
+                    .map((row, offset) => _renderGenericRow(row, columns, payload.row_action, startIdx + start + offset))
+                    .join('')
+            );
+            await _nextFrame();
+        }
+    } else {
+        body.innerHTML = pageRows
+            .map((row, offset) => _renderGenericRow(row, columns, payload.row_action, startIdx + offset))
+            .join('');
     }
 
     if (token !== _reportRenderToken) return;
     if (payload.total_row) body.insertAdjacentHTML('beforeend', _renderTotalRow(payload.total_row, columns));
+
+    _renderPaginationControls(totalRows);
+}
+
+function _renderPaginationControls(totalRows) {
+    const pagEl = document.getElementById('reportPagination');
+    if (!pagEl) return;
+
+    if (!totalRows || totalRows === 0) {
+        pagEl.style.display = 'none';
+        pagEl.innerHTML = '';
+        return;
+    }
+
+    const isAll = _reportPageSize === 'all' || _reportPageSize === -1;
+    const pageSize = isAll ? totalRows : (parseInt(_reportPageSize, 10) || 50);
+    const totalPages = isAll ? 1 : (Math.ceil(totalRows / pageSize) || 1);
+
+    if (_reportPage > totalPages) _reportPage = totalPages;
+    if (_reportPage < 1) _reportPage = 1;
+
+    const startItem = isAll ? 1 : Math.min((_reportPage - 1) * pageSize + 1, totalRows);
+    const endItem = isAll ? totalRows : Math.min(_reportPage * pageSize, totalRows);
+
+    pagEl.style.display = 'flex';
+
+    let pageButtonsHtml = '';
+    if (totalPages > 1) {
+        const pages = _getPageNumbers(_reportPage, totalPages);
+        pageButtonsHtml = `
+            <div class="report-page-btn-group">
+                <button type="button" class="report-page-btn" onclick="setReportPage(${_reportPage - 1})" ${ _reportPage === 1 ? 'disabled' : '' } title="Previous Page">
+                    <i class="mdi mdi-chevron-left"></i>
+                </button>
+                ${pages.map(p => {
+                    if (p === '...') return `<span class="report-page-ellipsis">…</span>`;
+                    return `<button type="button" class="report-page-btn ${p === _reportPage ? 'active' : ''}" onclick="setReportPage(${p})">${p}</button>`;
+                }).join('')}
+                <button type="button" class="report-page-btn" onclick="setReportPage(${_reportPage + 1})" ${ _reportPage === totalPages ? 'disabled' : '' } title="Next Page">
+                    <i class="mdi mdi-chevron-right"></i>
+                </button>
+            </div>
+        `;
+    }
+
+    pagEl.innerHTML = `
+        <div class="report-pagination-info">
+            Showing <strong style="color:var(--text-primary);">${startItem.toLocaleString()}</strong>–<strong style="color:var(--text-primary);">${endItem.toLocaleString()}</strong> of <strong style="color:var(--text-primary);">${totalRows.toLocaleString()}</strong> results
+        </div>
+        <div class="report-pagination-controls">
+            <div class="report-page-size-wrap">
+                <span>Per page:</span>
+                <select class="report-page-size-select" onchange="changeReportPageSize(this.value)">
+                    <option value="25" ${pageSize === 25 ? 'selected' : ''}>25</option>
+                    <option value="50" ${pageSize === 50 && !isAll ? 'selected' : ''}>50</option>
+                    <option value="100" ${pageSize === 100 ? 'selected' : ''}>100</option>
+                    <option value="250" ${pageSize === 250 ? 'selected' : ''}>250</option>
+                    <option value="all" ${isAll ? 'selected' : ''}>All</option>
+                </select>
+            </div>
+            ${pageButtonsHtml}
+        </div>
+    `;
+}
+
+function _getPageNumbers(current, total) {
+    const isSmall = window.innerWidth < 650;
+
+    if (isSmall) {
+        if (total <= 5) {
+            return Array.from({ length: total }, (_, i) => i + 1);
+        }
+        const pages = [];
+        if (current <= 3) {
+            for (let i = 1; i <= Math.min(3, total); i++) pages.push(i);
+            if (total > 4) pages.push('...');
+            pages.push(total);
+        } else if (current >= total - 2) {
+            pages.push(1);
+            if (total > 4) pages.push('...');
+            for (let i = Math.max(1, total - 2); i <= total; i++) pages.push(i);
+        } else {
+            pages.push(1);
+            pages.push('...');
+            pages.push(current);
+            pages.push('...');
+            pages.push(total);
+        }
+        return pages;
+    }
+
+    // Desktop / larger screens: rich page button set
+    if (total <= 9) {
+        return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    const pages = [];
+    if (current <= 5) {
+        for (let i = 1; i <= 6; i++) pages.push(i);
+        pages.push('...');
+        pages.push(total);
+    } else if (current >= total - 4) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = total - 5; i <= total; i++) pages.push(i);
+    } else {
+        pages.push(1);
+        pages.push('...');
+        pages.push(current - 2);
+        pages.push(current - 1);
+        pages.push(current);
+        pages.push(current + 1);
+        pages.push(current + 2);
+        pages.push('...');
+        pages.push(total);
+    }
+    return pages;
+}
+
+let _paginationResizeTimer = null;
+window.addEventListener('resize', () => {
+    if (_paginationResizeTimer) clearTimeout(_paginationResizeTimer);
+    _paginationResizeTimer = setTimeout(() => {
+        const pagEl = document.getElementById('reportPagination');
+        if (pagEl && pagEl.style.display !== 'none' && _reportData && _reportData.length) {
+            _renderPaginationControls(_reportData.length);
+        }
+    }, 150);
+});
+
+function setReportPage(page) {
+    _reportPage = page;
+    _renderReport();
+    const tableWrap = document.getElementById('reportTableWrap');
+    if (tableWrap) {
+        const nav = document.querySelector('.settings-nav, .header');
+        const navHeight = nav ? nav.offsetHeight : 0;
+        const rect = tableWrap.getBoundingClientRect();
+        if (rect.top < navHeight + 16) {
+            const targetTop = window.pageYOffset + rect.top - navHeight - 16;
+            window.scrollTo({ top: Math.max(0, targetTop), behavior: 'auto' });
+        }
+    }
+}
+
+function changeReportPageSize(size) {
+    _reportPageSize = size === 'all' ? 'all' : (parseInt(size, 10) || 50);
+    _reportPage = 1;
+    _renderReport();
+    const tableWrap = document.getElementById('reportTableWrap');
+    if (tableWrap) {
+        const nav = document.querySelector('.settings-nav, .header');
+        const navHeight = nav ? nav.offsetHeight : 0;
+        const rect = tableWrap.getBoundingClientRect();
+        if (rect.top < navHeight + 16) {
+            const targetTop = window.pageYOffset + rect.top - navHeight - 16;
+            window.scrollTo({ top: Math.max(0, targetTop), behavior: 'auto' });
+        }
+    }
 }
 
 function toggleExportMenu(e, menuId) {
@@ -1735,6 +1923,11 @@ const _TRIP_TILES = {
 let _tripMapInst   = null; // Leaflet map instance
 let _tripMapLayers = [];   // layers added for the current trip
 
+function toggleTripAddress(type) {
+    const el = document.getElementById(type === 'start' ? 'tripMetaStart' : 'tripMetaEnd');
+    if (el) el.classList.toggle('expanded');
+}
+
 async function showTripMap(idx) {
     const r = _tripRows[idx];
     if (!r) return;
@@ -1748,8 +1941,27 @@ async function showTripMap(idx) {
     const emoji    = (VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other']).emoji;
     const duration = r.duration_minutes ? _fmtDuration(r.duration_minutes) : null;
     title.textContent = `${emoji} ${r.device_name} — ${_fmtDatetime(r.start_time)}${duration ? `  ·  ${duration}` : ''}`;
-    const parts = [r.start_address, r.end_address].filter(Boolean);
-    meta.textContent = parts.join('  →  ');
+
+    const startAddr = r.start_address || '—';
+    const endAddr = r.end_address || '—';
+    const isStartCoords = /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(startAddr.trim());
+    const isEndCoords = /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(endAddr.trim());
+
+    meta.innerHTML = `
+        <div class="trip-meta-route">
+            <div class="trip-meta-loc trip-meta-start" id="tripMetaStart" onclick="toggleTripAddress('start')" title="Click to expand/collapse full address">
+                <span class="trip-meta-tag from" title="Departure point"><i class="mdi ${isStartCoords ? 'mdi-crosshairs-gps' : 'mdi-map-marker-outline'}"></i></span>
+                <span class="trip-meta-address${isStartCoords ? ' trip-meta-coords' : ''}">${_esc(startAddr)}</span>
+            </div>
+            <div class="trip-meta-divider">
+                <i class="mdi mdi-arrow-right"></i>
+            </div>
+            <div class="trip-meta-loc trip-meta-end" id="tripMetaEnd" onclick="toggleTripAddress('end')" title="Click to expand/collapse full address">
+                <span class="trip-meta-tag to" title="Destination"><i class="mdi ${isEndCoords ? 'mdi-crosshairs-gps' : 'mdi-flag-checkered'}"></i></span>
+                <span class="trip-meta-address${isEndCoords ? ' trip-meta-coords' : ''}">${_esc(endAddr)}</span>
+            </div>
+        </div>
+    `;
 
     // Show modal with spinner overlay; map container stays visible so Leaflet can measure it
     spinner.style.display = 'flex';
@@ -1762,7 +1974,7 @@ async function showTripMap(idx) {
     if (!_tripMapInst) {
         const tileKey   = localStorage.getItem('mapTileLayer') || 'openstreetmap_dark';
         const tile      = _TRIP_TILES[tileKey] || _TRIP_TILES['openstreetmap_dark'];
-        _tripMapInst    = L.map('tripMapContainer', { zoomControl: true });
+        _tripMapInst    = L.map('tripMapContainer', { zoomControl: true, wheelPxPerZoomLevel: 120 });
         const tileLayer = L.tileLayer(tile.url, { maxZoom: tile.maxZoom, attribution: '© OpenStreetMap contributors' });
         tileLayer.addTo(_tripMapInst);
         if (tile.filter) {
@@ -1956,11 +2168,14 @@ function exitRunView() {
     document.getElementById('runViewBanner').style.display = 'none';
     document.getElementById('liveControls').style.display  = '';
     document.getElementById('reportTable').style.display   = 'none';
+    const pagEl = document.getElementById('reportPagination');
+    if (pagEl) pagEl.style.display = 'none';
     document.getElementById('summaryBar').style.display    = 'none';
     document.getElementById('noData').style.display        = 'none';
     document.getElementById('exportMenuWrap').style.display  = 'none';
     closeExportMenus();
     _reportData = [];
+    _reportPage = 1;
     switchTab('schedules');
 }
 
@@ -1969,6 +2184,7 @@ function _renderRunData(reportType, data) {
     _reportData = data.rows || [];
     _sortCol    = _reportPayload.default_sort?.key || null;
     _sortDir    = _reportPayload.default_sort?.dir || 1;
+    _reportPage = 1;
     _renderReport();
 }
 

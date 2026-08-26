@@ -23,6 +23,8 @@ let loadedAlerts = [];
 
 // ── History ───────────────────────────────────────────────────────────────────
 let historyDeviceId = null;
+let historyStartTime = null;
+let historyEndTime = null;
 let historyData = [];
 let historyTrips = [];
 let historyIndex = 0;
@@ -31,8 +33,6 @@ let historyHasNext = false;
 let HISTORY_BATCH_SIZE = 2000;
 let playbackInterval = null;
 let currentHistoryTab = 'trips';
-let sensorChart = null;
-let selectedSensorAttrs = new Set();
 let tripColorMap = {}; // trip_id → color, shared between loadHistory and loadTripsForHistory
 
 // ── Marker animations ─────────────────────────────────────────────────────────
