@@ -1870,18 +1870,41 @@ body.light-theme::before {
 .history-trip-label {
     flex: 1;
     text-align: center;
-    background: rgba(139, 92, 246, 0.15);
-    border: 1px solid rgba(139, 92, 246, 0.3);
+    background: rgba(107, 114, 128, 0.2);
+    border: 1px solid rgba(107, 114, 128, 0.4);
     border-radius: 5px;
     padding: 0.2rem 0.5rem;
     font-size: 0.72rem;
     font-weight: 600;
     font-family: var(--font-mono);
-    color: var(--accent-secondary);
+    color: #cbd5e1;
     overflow: hidden;
+    white-space: nowrap;
     transition: background 0.2s, border-color 0.2s, color 0.2s;
     text-overflow: ellipsis;
-    min-width: 80px;
+    min-width: 180px;
+}
+
+.history-trip-dur {
+    display: inline;
+}
+
+.history-trip-timerange {
+    display: inline;
+    opacity: 0.85;
+    font-size: 0.95em;
+}
+
+@media (max-width: 1200px) {
+    .history-trip-timerange {
+        display: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .history-trip-dur {
+        display: none;
+    }
 }
 
 .history-close-btn {
@@ -2262,6 +2285,10 @@ body.light-theme::before {
     margin: 0.3rem 0.5rem;
 }
 
+.header-menu-divider + .header-menu-divider {
+    display: none !important;
+}
+
 .header-menu-danger {
     color: var(--accent-danger);
 }
@@ -2390,6 +2417,53 @@ body.light-theme::before {
     font-size: 0.72rem;
     font-family: var(--font-mono);
     color: var(--text-muted);
+}
+
+.trip-time-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-top: 0.4rem;
+}
+
+.trip-time-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    line-height: 1.25;
+}
+
+.trip-time-row i {
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.trip-time-row span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.trip-time-end i {
+    color: #ef4444;
+}
+
+.trip-time-start i {
+    color: #10b981;
+}
+
+[data-theme="light"] .trip-time-end i,
+body.light-theme .trip-time-end i {
+    color: #dc2626;
+}
+
+[data-theme="light"] .trip-time-start i,
+body.light-theme .trip-time-start i {
+    color: #059669;
 }
 
 .trip-card-active {
@@ -3189,6 +3263,9 @@ body.light-theme .leaflet-bar a:hover {
         bottom: 1rem;
         width: 95%;
     }
+    .history-trip-label {
+        min-width: 90px;
+    }
     .sidebar.history-active .sidebar-section {
     }
     .sidebar {
@@ -3665,9 +3742,9 @@ body.light-theme .history-time {
 }
 [data-theme="light"] .history-trip-label,
 body.light-theme .history-trip-label {
-    background: #f5f3ff;
-    border: 1px solid #c4b5fd;
-    color: #6d28d9;
+    background: rgba(107, 114, 128, 0.15);
+    border: 1px solid rgba(107, 114, 128, 0.35);
+    color: #4b5563;
     font-weight: 700;
 }
 [data-theme="light"] .history-slider,

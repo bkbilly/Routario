@@ -272,10 +272,17 @@ async function handleHistorySubmit(e) {
     }
 }
 
-async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
+async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { preserveScroll = false } = {}) {
     const previousHistoryDeviceId = historyDeviceId;
     const previousHistoryStartTime = historyStartTime;
     const previousHistoryEndTime = historyEndTime;
+    const detailsEl = document.getElementById('sidebarHistoryDetails');
+    const sidebarEl = document.querySelector('.sidebar');
+    const isSameSession = previousHistoryDeviceId === deviceId;
+    const shouldPreserveScroll = preserveScroll || (isSameSession && (batchOffset > 0 || historyBatchOffset > 0));
+    const savedDetailsScroll = shouldPreserveScroll && detailsEl ? detailsEl.scrollTop : 0;
+    const savedSidebarScroll = shouldPreserveScroll && sidebarEl ? sidebarEl.scrollTop : 0;
+
     historyBatchOffset = batchOffset;
     historyLineRenderMode = null;
     _historyZoomLineSwitchActive = false;
@@ -343,7 +350,17 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
         document.getElementById('historySlider').max = historyData.length - 1;
         document.getElementById('historySlider').value = 0;
 
-        tripColorMap = {}; // reset shared state
+        if (!isSameSession) {
+            tripColorMap = {}; // only reset when starting a new history session or new device
+        }
+
+        const device = devices.find(d => d.id === deviceId);
+        document.getElementById('historyDeviceName').textContent = device ? device.name : 'History Details';
+
+        // Load and populate trips and deterministic color map first
+        await loadTripsForHistory(deviceId, startTime, endTime, { preserveScroll: shouldPreserveScroll });
+
+        // Build history map polylines using consistent tripColorMap
         const allLayers = _buildHistoryLayers();
         polylines['history'] = L.featureGroup(allLayers);
 
@@ -373,11 +390,17 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
         // Show History Details section
         document.getElementById('sidebarHistoryDetails').style.display = 'block';
 
-        const device = devices.find(d => d.id === deviceId);
-        document.getElementById('historyDeviceName').textContent = device ? device.name : 'History Details';
-        await loadTripsForHistory(deviceId, startTime, endTime);
         updatePlaybackUI();
         _updateBatchNav();
+
+        if (shouldPreserveScroll) {
+            if (detailsEl) detailsEl.scrollTop = savedDetailsScroll;
+            if (sidebarEl) sidebarEl.scrollTop = savedSidebarScroll;
+            requestAnimationFrame(() => {
+                if (detailsEl) detailsEl.scrollTop = savedDetailsScroll;
+                if (sidebarEl) sidebarEl.scrollTop = savedSidebarScroll;
+            });
+        }
     } catch (error) {
         console.log(error);
         showAlert({ title: 'Error', message: 'Failed to load history.', type: 'error' });
@@ -397,7 +420,6 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0) {
 function _buildHistoryLayers() {
     const ant = (historyLineRenderMode || historyLineMode) === 'ant';
     const allLayers = [];
-    let tripColorIdx = 0;
     let currentTripId = undefined;
     let currentSegment = [];
 
@@ -419,7 +441,7 @@ function _buildHistoryLayers() {
         let color;
         if (currentTripId) {
             if (!(currentTripId in tripColorMap)) {
-                tripColorMap[currentTripId] = tripColors[tripColorIdx++ % tripColors.length];
+                tripColorMap[currentTripId] = tripColors[Math.abs(currentTripId) % tripColors.length];
             }
             color = tripColorMap[currentTripId];
         } else {
@@ -450,7 +472,6 @@ function _redrawHistoryPolylines() {
         polylines['history'].eachLayer(l => map.removeLayer(l));
         delete polylines['history'];
     }
-    tripColorMap = {};
     polylines['history'] = L.featureGroup(_buildHistoryLayers());
     _updateLineModeBtn();
     _updateSliderGradient();
@@ -524,6 +545,7 @@ function exitHistoryMode(fromPopState = false) {
         historyIndex = 0;
         historyLineRenderMode = null;
         _historyZoomLineSwitchActive = false;
+        tripColorMap = {};
         if (polylines['history']) {
             try {
                 polylines['history'].eachLayer(l => map.removeLayer(l));
@@ -608,7 +630,10 @@ function exitHistoryMode(fromPopState = false) {
         const batchNav = document.getElementById('historyBatchNav');
         if (batchNav) batchNav.style.display = 'none';
         const tripLabel = document.getElementById('historyTripLabel');
-        if (tripLabel) tripLabel.textContent = '';
+        if (tripLabel) {
+            tripLabel.textContent = '';
+            tripLabel.title = '';
+        }
         const tripList = document.getElementById('tripListContent');
         if (tripList) tripList.innerHTML = '';
         const devList = document.getElementById('sidebarDeviceList');
@@ -646,6 +671,11 @@ async function loadHistoryBatch(direction) {
 
     if (prevBtn?.disabled || nextBtn?.disabled) return;
 
+    const detailsEl = document.getElementById('sidebarHistoryDetails');
+    const sidebarEl = document.querySelector('.sidebar');
+    const savedDetailsScroll = detailsEl ? detailsEl.scrollTop : 0;
+    const savedSidebarScroll = sidebarEl ? sidebarEl.scrollTop : 0;
+
     if (prevBtn) prevBtn.disabled = true;
     if (nextBtn) nextBtn.disabled = true;
 
@@ -659,7 +689,7 @@ async function loadHistoryBatch(direction) {
         if (newOffset < 0) return;
         const start = historyStartTime || new Date(document.getElementById('historyStart').value);
         const end   = historyEndTime   || new Date(document.getElementById('historyEnd').value);
-        await loadHistory(historyDeviceId, start, end, newOffset);
+        await loadHistory(historyDeviceId, start, end, newOffset, { preserveScroll: true });
     } finally {
         if (prevBtn) {
             prevBtn.disabled = false;
@@ -670,6 +700,13 @@ async function loadHistoryBatch(direction) {
             nextBtn.innerHTML = 'Next <i class="mdi mdi-chevron-right"></i>';
         }
         _updateBatchNav();
+
+        if (detailsEl) detailsEl.scrollTop = savedDetailsScroll;
+        if (sidebarEl) sidebarEl.scrollTop = savedSidebarScroll;
+        requestAnimationFrame(() => {
+            if (detailsEl) detailsEl.scrollTop = savedDetailsScroll;
+            if (sidebarEl) sidebarEl.scrollTop = savedSidebarScroll;
+        });
     }
 }
 
@@ -800,13 +837,31 @@ function updatePlaybackUI() {
         if (currentTrip) {
             const tripIndex = historyTrips.length - historyTrips.indexOf(currentTrip);
             const dist = currentTrip.distance_km != null ? ` · ${fmtDist(currentTrip.distance_km)}` : '';
-            const color = tripColorMap[currentTrip.id] || 'var(--accent-secondary)';
-            tripLabel.textContent = `Trip ${tripIndex}${dist}`;
+            const dur = currentTrip.duration_minutes != null ? ` · ⏱ ${formatDuration(currentTrip.duration_minutes)}` : '';
+            const color = tripColorMap[currentTrip.id] || tripColors[(tripIndex - 1) % tripColors.length];
+
+            let timeRange = '';
+            if (currentTrip.start_time) {
+                const sDate = new Date(currentTrip.start_time.endsWith('Z') ? currentTrip.start_time : currentTrip.start_time + 'Z');
+                const sTimeStr = isNaN(sDate.getTime()) ? '' : sDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                let eTimeStr = 'Ongoing';
+                if (currentTrip.end_time) {
+                    const eDate = new Date(currentTrip.end_time.endsWith('Z') ? currentTrip.end_time : currentTrip.end_time + 'Z');
+                    eTimeStr = isNaN(eDate.getTime()) ? '' : eDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                }
+                if (sTimeStr) {
+                    timeRange = ` (${sTimeStr} – ${eTimeStr})`;
+                }
+            }
+
+            tripLabel.innerHTML = `<span class="history-trip-title">Trip ${tripIndex}${dist}</span>${dur ? `<span class="history-trip-dur">${dur}</span>` : ''}${timeRange ? `<span class="history-trip-timerange">${timeRange}</span>` : ''}`;
+            tripLabel.title = `Trip ${tripIndex}${dist}${dur}${timeRange}`;
             tripLabel.style.background = `color-mix(in srgb, ${color} 20%, transparent)`;
             tripLabel.style.borderColor = `color-mix(in srgb, ${color} 40%, transparent)`;
             tripLabel.style.color = color;
         } else {
             tripLabel.textContent = historyTrips.length ? 'Between trips' : '';
+            tripLabel.title = '';
             tripLabel.style.background = '';
             tripLabel.style.borderColor = '';
             tripLabel.style.color = '';
@@ -879,41 +934,65 @@ function createHistoryMarker() {
 }
 
 // Load Trips for History Modal
-async function loadTripsForHistory(deviceId, startTime, endTime) {
+async function loadTripsForHistory(deviceId, startTime, endTime, { preserveScroll = false } = {}) {
     const container = document.getElementById('tripListContent');
     if (!container) return;
-    container.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:0.5rem 0;text-align:center;">Loading trips…</div>';
+
+    const detailsEl = document.getElementById('sidebarHistoryDetails');
+    const sidebarEl = document.querySelector('.sidebar');
+    const savedDetailsScroll = detailsEl ? detailsEl.scrollTop : 0;
+    const savedSidebarScroll = sidebarEl ? sidebarEl.scrollTop : 0;
+
+    if (!container.children.length) {
+        container.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:0.5rem 0;text-align:center;">Loading trips…</div>';
+    } else if (preserveScroll) {
+        container.style.minHeight = `${container.offsetHeight}px`;
+    }
 
     try {
-        const res = await apiFetch(
-            `${API_BASE}/devices/${deviceId}/trips?start_date=${startTime.toISOString()}&end_date=${endTime.toISOString()}`
-        );
-        if (!res.ok) throw new Error('Failed to fetch trips');
-        let trips = await res.json();
+        let trips;
+        if (preserveScroll && historyTrips && historyTrips.length > 0) {
+            trips = historyTrips;
+        } else {
+            const res = await apiFetch(
+                `${API_BASE}/devices/${deviceId}/trips?start_date=${startTime.toISOString()}&end_date=${endTime.toISOString()}`
+            );
+            if (!res.ok) throw new Error('Failed to fetch trips');
+            trips = await res.json();
 
-        // Deduplicate by id — guards against DB rows with different IDs
-        // but identical start_time/distance (rapid ignition toggle artifacts)
-        const seenIds = new Set();
-        trips = trips.filter(t => {
-            if (seenIds.has(t.id)) return false;
-            seenIds.add(t.id);
-            return true;
+            // Deduplicate by id — guards against DB rows with different IDs
+            // but identical start_time/distance (rapid ignition toggle artifacts)
+            const seenIds = new Set();
+            trips = trips.filter(t => {
+                if (seenIds.has(t.id)) return false;
+                seenIds.add(t.id);
+                return true;
+            });
+
+            // Also deduplicate by start_time — two trips starting at the exact same
+            // second are always duplicates regardless of their DB ids
+            const seenTimes = new Set();
+            trips = trips.filter(t => {
+                const key = t.start_time;
+                if (seenTimes.has(key)) return false;
+                seenTimes.add(key);
+                return true;
+            });
+
+            // Drop phantom trips: closed immediately with no meaningful movement
+            trips = trips.filter(t => t.end_time || (t.distance_km != null && t.distance_km > 0.05));
+            historyTrips = trips;
+        }
+
+        // Populate deterministic color map for each trip based on chronological order
+        // Oldest trip is Trip 1 (trips.length - i = 1) -> tripColors[0]
+        // Next oldest is Trip 2 -> tripColors[1], etc.
+        trips.forEach((trip, i) => {
+            const label = trips.length - i;
+            if (!(trip.id in tripColorMap)) {
+                tripColorMap[trip.id] = tripColors[(label - 1) % tripColors.length];
+            }
         });
-
-        // Also deduplicate by start_time — two trips starting at the exact same
-        // second are always duplicates regardless of their DB ids
-        const seenTimes = new Set();
-        trips = trips.filter(t => {
-            const key = t.start_time;
-            if (seenTimes.has(key)) return false;
-            seenTimes.add(key);
-            return true;
-        });
-
-        // Drop phantom trips: closed immediately with no meaningful movement
-        trips = trips.filter(t => t.end_time || (t.distance_km != null && t.distance_km > 0.05));
-
-        historyTrips = trips;
 
         // Build the set of trip IDs that have at least one point in the returned data
         const tripIdsWithPoints = new Set(
@@ -964,7 +1043,7 @@ async function loadTripsForHistory(deviceId, startTime, endTime) {
             const dist    = trip.distance_km != null ? fmtDist(trip.distance_km) : '—';
             const dur     = formatDuration(trip.duration_minutes);
             const label   = trips.length - i;
-            const color   = tripColorMap[trip.id] || tripColors[i % tripColors.length];
+            const color   = tripColorMap[trip.id] || tripColors[(label - 1) % tripColors.length];
             const hasData = tripIdsWithPoints.has(trip.id);
             const dimStyle   = hasData ? '' : 'opacity:0.4;';
             const titleAttr  = hasData ? 'Click to jump to this trip' : 'No map data — outside the 2,000-point limit';
@@ -982,7 +1061,16 @@ async function loadTripsForHistory(deviceId, startTime, endTime) {
                 </div>
                 <div class="trip-card-body">
                     ${trip.driver_name ? `<div class="trip-driver" title="${_esc(trip.driver_name)}"><i class="mdi mdi-account"></i><span>${_esc(trip.driver_name)}</span></div>` : ''}
-                    <div class="trip-time">${start} → ${end}</div>
+                    <div class="trip-time trip-time-list">
+                        <div class="trip-time-row trip-time-end" title="End: ${end}">
+                            <i class="mdi ${trip.end_time ? 'mdi-flag-checkered' : 'mdi-progress-clock'}"></i>
+                            <span>${end}</span>
+                        </div>
+                        <div class="trip-time-row trip-time-start" title="Start: ${start}">
+                            <i class="mdi mdi-play-circle-outline"></i>
+                            <span>${start}</span>
+                        </div>
+                    </div>
                 </div>
             </div>`;
         }).join('');
@@ -990,6 +1078,16 @@ async function loadTripsForHistory(deviceId, startTime, endTime) {
     } catch (e) {
         historyTrips = [];
         container.innerHTML = '<div style="color:var(--accent-danger);font-size:0.8rem;padding:0.5rem 0;">Failed to load trips</div>';
+    } finally {
+        if (preserveScroll) {
+            container.style.minHeight = '';
+            if (detailsEl) detailsEl.scrollTop = savedDetailsScroll;
+            if (sidebarEl) sidebarEl.scrollTop = savedSidebarScroll;
+            requestAnimationFrame(() => {
+                if (detailsEl) detailsEl.scrollTop = savedDetailsScroll;
+                if (sidebarEl) sidebarEl.scrollTop = savedSidebarScroll;
+            });
+        }
     }
 }
 

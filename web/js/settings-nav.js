@@ -253,6 +253,15 @@
             background: var(--border-color);
             margin: 0.3rem 0.5rem;
         }
+        .header-menu-divider + .header-menu-divider {
+            display: none !important;
+        }
+        .header-menu-action-divider {
+            display: none;
+        }
+        .header-menu-action-group:has(.header-menu-item) .header-menu-action-divider {
+            display: block;
+        }
         .header-menu-danger {
             color: var(--accent-danger);
         }
@@ -375,12 +384,14 @@
                     ${chevron}
                 </a>
 
-                ${isManagement ? `<div class="header-menu-divider"></div><div id="snAddAction"></div><div id="snNotifyAction"></div><div id="snRefreshAction"></div>` : ''}
-                ${isReports ? `<div class="header-menu-divider"></div><div id="snAddAction"></div>` : ''}
+                <div class="header-menu-action-group" id="snActionGroup">
+                    <div class="header-menu-divider header-menu-action-divider"></div>
+                    ${isManagement ? `<div id="snAddAction"></div><div id="snNotifyAction"></div><div id="snRefreshAction"></div>` : ''}
+                    ${isReports ? `<div id="snAddAction"></div>` : ''}
+                    ${isSettings ? `<div id="snSettingsAction"></div>` : ''}
+                </div>
 
                 <div class="header-menu-divider"></div>
-
-                ${isSettings ? `<div id="snSettingsAction"></div><div class="header-menu-divider"></div>` : ''}
 
                 <button class="header-menu-item header-menu-danger" onclick="handleLogout()">
                     <span class="header-menu-item-icon">
@@ -397,6 +408,19 @@
         </div>
         </div>
     `;
+
+    const group = nav.querySelector('#snActionGroup');
+    if (group) {
+        const updateActionDivider = () => {
+            const actionDivider = group.querySelector('.header-menu-action-divider');
+            if (!actionDivider) return;
+            const hasItem = !!group.querySelector('.header-menu-item');
+            actionDivider.style.display = hasItem ? 'block' : 'none';
+        };
+        new MutationObserver(updateActionDivider).observe(group, { childList: true, subtree: true });
+        updateActionDivider();
+    }
+
     return nav;
     } // end _buildNav
 
