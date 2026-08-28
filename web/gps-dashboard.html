@@ -218,7 +218,6 @@
 
             </div>
         </aside>
-        
         <main class="main-content" style="position: relative;">
             <div id="map"></div>
 
@@ -594,8 +593,26 @@
                     <input type="datetime-local" class="form-input" id="historyEnd" required>
                 </div>
                 
-                <div style="display: flex; justify-content: flex-end;">
-                    <button type="submit" class="btn btn-primary" id="historySubmitBtn">Load History</button>
+                <div class="history-modal-footer">
+                    <!-- In-modal Loading State -->
+                    <div id="historyModalLoading" class="history-modal-loading" style="display: none;">
+                        <div class="history-modal-loading-info">
+                            <div class="history-modal-spinner">
+                                <i class="mdi mdi-loading mdi-spin"></i>
+                            </div>
+                            <div class="history-modal-loading-text">
+                                <span class="history-modal-loading-title" id="historyModalLoadingTitle">Loading history…</span>
+                                <span class="history-modal-loading-subtitle" id="historyModalLoadingSubtitle">Fetching positions…</span>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-danger history-modal-stop-btn" id="historyStopBtn" onclick="stopHistoryLoading()">
+                            <i class="mdi mdi-close"></i> Stop
+                        </button>
+                    </div>
+
+                    <div class="history-modal-actions" id="historyModalActions">
+                        <button type="submit" class="btn btn-primary" id="historySubmitBtn">Load History</button>
+                    </div>
                 </div>
             </form>
         </div>

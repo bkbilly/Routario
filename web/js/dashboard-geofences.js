@@ -116,6 +116,20 @@ function _geometryToCoords(geometry) {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+function _preventTabSelect(layer) {
+    if (!layer) return;
+    const apply = () => {
+        const el = layer.getElement ? layer.getElement() : layer._path;
+        if (el) {
+            el.setAttribute('tabindex', '-1');
+            el.removeAttribute('role');
+            el.style.outline = 'none';
+        }
+    };
+    apply();
+    if (layer.on) layer.once('add', apply);
+}
+
 function initGeofences(mapInstance) {
     _map = mapInstance;
 
@@ -124,6 +138,7 @@ function initGeofences(mapInstance) {
 
     // Feature group that Leaflet.draw uses for edit toolbar
     _geofenceLayer = new L.FeatureGroup().addTo(_map);
+    _geofenceLayer.on('layeradd', (e) => _preventTabSelect(e.layer));
 
     if (_canAssignOwner()) {
         const wrap = document.getElementById('geofenceAllUsersToggleWrap');
@@ -192,6 +207,7 @@ function _addLayerToMap(gf) {
         fillOpacity: 0.15,
         weight: 2,
         opacity: 0.8,
+        className: 'geofence-shape',
     };
 
     let layer;
@@ -210,6 +226,7 @@ function _addLayerToMap(gf) {
                 fillColor: color,
                 fillOpacity: 0.12,
                 weight: 0,
+                className: 'geofence-corridor',
             });
             const corridorTooltip = (_canAssignOwner() && gf.owner_username)
                 ? `${gf.name}<br><span style="font-size:0.8em;opacity:0.7">${gf.owner_username}</span>`
@@ -220,10 +237,13 @@ function _addLayerToMap(gf) {
                 className: 'geofence-tooltip',
             });
             corridorLayer.on('click', (e) => {
+                const el = corridorLayer.getElement ? corridorLayer.getElement() : corridorLayer._path;
+                if (el) el.blur();
                 if (_drawControl || _mapDraggedRecently || !hasPermission('manage_geofences')) return;
                 L.DomEvent.stopPropagation(e);
                 _enterEditMode(layer, gf.id);
             });
+            _preventTabSelect(corridorLayer);
             _geofenceLayer.addLayer(corridorLayer);
         }
     } else {
@@ -248,11 +268,14 @@ function _addLayerToMap(gf) {
 
     // Click → enter edit mode (only if user can manage geofences)
     layer.on('click', (e) => {
+        const el = layer.getElement ? layer.getElement() : layer._path;
+        if (el) el.blur();
         if (_drawControl || _mapDraggedRecently || !hasPermission('manage_geofences')) return;
         L.DomEvent.stopPropagation(e);
         _enterEditMode(layer, gf.id);
     });
 
+    _preventTabSelect(layer);
     _geofenceLayer.addLayer(layer);
     return layer;
 }
@@ -292,6 +315,7 @@ async function _onDrawCreated(e) {
     _setDrawButtonActive(false);
 
     const layer = e.layer;
+    _preventTabSelect(layer);
 
     // Extract coords as [lng, lat] (GeoJSON order for backend)
     let coords;
@@ -368,8 +392,24 @@ function _enterEditMode(layer, geofenceId) {
     _editingLayer = layer;
     _editingGeofenceId = geofenceId;
 
+    // Immediately blur the layer element to prevent any focus outline
+    const el = layer.getElement ? layer.getElement() : layer._path;
+    if (el) el.blur();
+
     // Make the shape editable
-    if (layer.editing) layer.editing.enable();
+    if (layer.editing) {
+        layer.editing.enable();
+        // Remove tabindex and outline from edit handle markers
+        setTimeout(() => {
+            const pane = _map?.getPanes ? _map.getPanes().markerPane : null;
+            if (pane) {
+                pane.querySelectorAll('.leaflet-marker-icon, .leaflet-edit-marker').forEach(m => {
+                    m.setAttribute('tabindex', '-1');
+                    m.style.outline = 'none';
+                });
+            }
+        }, 0);
+    }
 
     // Show the floating edit toolbar
     _showEditToolbar(geofenceId);

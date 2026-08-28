@@ -14,9 +14,9 @@ let playbackSpeedIdx = 0;
 
 const tripColors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#84cc16'];
 
-async function syncPublicSystemSettings() {
+async function syncPublicSystemSettings(signal = null) {
     try {
-        const res = await apiFetch(`${API_BASE}/system-settings/public`);
+        const res = await apiFetch(`${API_BASE}/system-settings/public`, signal ? { signal } : {});
         if (res.ok) {
             const data = await res.json();
             window.smtpEnabled = data.smtp_enabled === true;
@@ -25,6 +25,7 @@ async function syncPublicSystemSettings() {
             }
         }
     } catch (e) {
+        if (e.name === 'AbortError') throw e;
         console.warn('Public settings sync skipped:', e);
     }
 }
@@ -87,6 +88,10 @@ window.addEventListener('popstate', (e) => {
 function openHistoryModal(deviceId) {
     syncPublicSystemSettings();
     document.getElementById('historyModal').dataset.deviceId = String(deviceId);
+    setHistoryModalLoading(false);
+
+    const submitBtn = document.getElementById('historySubmitBtn');
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'Load History'; }
 
     // Reset all cycle buttons to their first option
     document.querySelectorAll('.history-quick-btn[data-group]').forEach(btn => {
@@ -109,6 +114,10 @@ function openHistoryDateRangeModal() {
     if (!historyDeviceId) return;
     syncPublicSystemSettings();
     document.getElementById('historyModal').dataset.deviceId = String(historyDeviceId);
+    setHistoryModalLoading(false);
+
+    const submitBtn = document.getElementById('historySubmitBtn');
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = 'Load History'; }
 
     const device = devices.find(d => d.id === historyDeviceId);
     const icon = device ? (VEHICLE_ICONS[device.vehicle_type] || VEHICLE_ICONS['other']).emoji : '🚗';
@@ -128,8 +137,20 @@ function openHistoryDateRangeModal() {
 }
 
 function closeHistoryModal() {
+    const wasLoading = Boolean(_historyAbortController);
+    if (_historyAbortController) {
+        _historyAbortController.abort();
+        _historyAbortController = null;
+        _historyLoadRequestId++;
+        showAlert({ title: 'History', message: 'History loading stopped.', type: 'info' });
+    }
+    setHistoryModalLoading(false);
     document.getElementById('historyModal').classList.remove('active');
     _setActiveQuickBtn(null);
+
+    if (wasLoading && typeof _restoreLiveTracking === 'function') {
+        _restoreLiveTracking();
+    }
 }
 
 const toLocalISO = (date) => {
@@ -252,27 +273,131 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const monthsBtn = document.querySelector('.history-quick-btn[data-group="months"]');
     if (monthsBtn) monthsBtn.textContent = 'This Month';
+
+    const historyModalEl = document.getElementById('historyModal');
+    if (historyModalEl) {
+        historyModalEl.addEventListener('click', (e) => {
+            if (e.target === historyModalEl) {
+                closeHistoryModal();
+            }
+        });
+    }
 });
 
 async function handleHistorySubmit(e) {
     e.preventDefault();
-    const btn = document.getElementById('historySubmitBtn');
-    const origText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Loading...';
+    const modalDeviceId = parseInt(document.getElementById('historyModal').dataset.deviceId || '', 10);
+    const start = new Date(document.getElementById('historyStart').value);
+    const end = new Date(document.getElementById('historyEnd').value);
+
+    setHistoryModalLoading(true, 'Fetching positions…');
     try {
-        const modalDeviceId = parseInt(document.getElementById('historyModal').dataset.deviceId || '', 10);
-        const start = new Date(document.getElementById('historyStart').value);
-        const end = new Date(document.getElementById('historyEnd').value);
-        closeHistoryModal();
-        await loadHistory(modalDeviceId, start, end);
+        const ok = await loadHistory(modalDeviceId, start, end);
+        if (ok === true) {
+            closeHistoryModal();
+        }
+    } catch (err) {
+        console.error('Failed to load history:', err);
     } finally {
-        btn.disabled = false;
-        btn.textContent = origText;
+        setHistoryModalLoading(false);
     }
 }
 
+let _historyLoadRequestId = 0;
+let _historyAbortController = null;
+
+function _restoreLiveTracking() {
+    if (!historyDeviceId) {
+        if (typeof clusterGroup !== 'undefined' && clusterGroup && map && !map.hasLayer(clusterGroup)) {
+            map.addLayer(clusterGroup);
+        }
+        if (typeof devices !== 'undefined' && Array.isArray(devices)) {
+            devices.forEach(d => {
+                if (accuracyCircles[d.id] && map && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
+            });
+        }
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar) sidebar.classList.remove('history-active');
+        const devList = document.getElementById('sidebarDeviceList');
+        if (devList) devList.style.display = '';
+        const details = document.getElementById('sidebarHistoryDetails');
+        if (details) details.style.display = 'none';
+        const footer = document.getElementById('historyControls');
+        if (footer) footer.style.display = 'none';
+    }
+}
+
+function stopHistoryLoading() {
+    if (_historyAbortController) {
+        _historyAbortController.abort();
+        _historyAbortController = null;
+    }
+    _historyLoadRequestId++;
+    setHistoryModalLoading(false);
+    showAlert({ title: 'History', message: 'History loading stopped.', type: 'info' });
+    _restoreLiveTracking();
+}
+
+function setHistoryModalLoading(isLoading, subtitle = 'Fetching positions…') {
+    const loadingEl  = document.getElementById('historyModalLoading');
+    const actionsEl  = document.getElementById('historyModalActions');
+    const titleEl    = document.getElementById('historyModalLoadingTitle');
+    const subEl      = document.getElementById('historyModalLoadingSubtitle');
+    const startInput = document.getElementById('historyStart');
+    const endInput   = document.getElementById('historyEnd');
+    const quickBtns  = document.querySelectorAll('#historyModal .history-quick-btn');
+    const submitBtn  = document.getElementById('historySubmitBtn');
+
+    if (isLoading) {
+        let deviceName = '';
+        const modalDevId = parseInt(document.getElementById('historyModal')?.dataset?.deviceId || '', 10) || historyDeviceId;
+        if (modalDevId && typeof devices !== 'undefined' && Array.isArray(devices)) {
+            const dev = devices.find(d => d.id === modalDevId);
+            if (dev && dev.name) deviceName = dev.name;
+        }
+        if (titleEl) {
+            titleEl.textContent = deviceName ? `Loading history for ${deviceName}…` : 'Loading history…';
+        }
+        if (subEl) {
+            subEl.textContent = subtitle;
+        }
+        if (loadingEl) loadingEl.style.display = 'flex';
+        if (actionsEl) actionsEl.style.display = 'none';
+        if (startInput) startInput.disabled = true;
+        if (endInput) endInput.disabled = true;
+        quickBtns.forEach(b => { b.disabled = true; });
+    } else {
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (actionsEl) actionsEl.style.display = 'flex';
+        if (startInput) startInput.disabled = false;
+        if (endInput) endInput.disabled = false;
+        quickBtns.forEach(b => { b.disabled = false; });
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Load History';
+        }
+    }
+}
+
+function updateHistoryLoadingSubtitle(subtitle) {
+    const subEl = document.getElementById('historyModalLoadingSubtitle');
+    if (subEl) subEl.textContent = subtitle;
+}
+
 async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { preserveScroll = false } = {}) {
+    const requestId = ++_historyLoadRequestId;
+    if (_historyAbortController) {
+        _historyAbortController.abort();
+        _historyAbortController = null;
+    }
+    _historyAbortController = new AbortController();
+    const signal = _historyAbortController.signal;
+
+    const modal = document.getElementById('historyModal');
+    if (modal && modal.classList.contains('active')) {
+        setHistoryModalLoading(true, 'Fetching positions…');
+    }
+
     const previousHistoryDeviceId = historyDeviceId;
     const previousHistoryStartTime = historyStartTime;
     const previousHistoryEndTime = historyEndTime;
@@ -316,14 +441,21 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { pres
     });
 
     try {
-        await syncPublicSystemSettings();
+        await syncPublicSystemSettings(signal);
+        if (requestId !== _historyLoadRequestId) return false;
+
         const batchSize = HISTORY_BATCH_SIZE || 2000;
         const response = await apiFetch(`${API_BASE}/positions/history`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device_id: deviceId, start_time: startTime.toISOString(), end_time: endTime.toISOString(), max_points: batchSize, offset: historyBatchOffset })
+            body: JSON.stringify({ device_id: deviceId, start_time: startTime.toISOString(), end_time: endTime.toISOString(), max_points: batchSize, offset: historyBatchOffset }),
+            signal,
         });
+        if (requestId !== _historyLoadRequestId) return false;
+
         const data = await response.json();
+        if (requestId !== _historyLoadRequestId) return false;
+
         historyHasNext = data.truncated;
         historyData = data.features;
         historyIndex = 0;
@@ -339,7 +471,7 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { pres
             devices.forEach(d => {
                 if (accuracyCircles[d.id] && map && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
             });
-            return;
+            return false;
         }
         historyDeviceId = deviceId;
         historyStartTime = startTime instanceof Date ? startTime : new Date(startTime);
@@ -358,9 +490,12 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { pres
         document.getElementById('historyDeviceName').textContent = device ? device.name : 'History Details';
 
         // Load and populate trips and deterministic color map first
-        await loadTripsForHistory(deviceId, startTime, endTime, { preserveScroll: shouldPreserveScroll });
+        updateHistoryLoadingSubtitle('Loading trips…');
+        await loadTripsForHistory(deviceId, startTime, endTime, { preserveScroll: shouldPreserveScroll, signal });
+        if (requestId !== _historyLoadRequestId) return false;
 
         // Build history map polylines using consistent tripColorMap
+        updateHistoryLoadingSubtitle('Rendering track…');
         const allLayers = _buildHistoryLayers();
         polylines['history'] = L.featureGroup(allLayers);
 
@@ -371,7 +506,7 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { pres
         _updateSpeedBtn();
         _updateSliderGradient();
         requestAnimationFrame(applyHistoryControlsPadding);
-        _loadHistoryClips(deviceId, startTime, endTime);
+        _loadHistoryClips(deviceId, startTime, endTime, signal);
 
         if (allLayers.length > 0) {
             requestAnimationFrame(() => {
@@ -401,19 +536,29 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { pres
                 if (sidebarEl) sidebarEl.scrollTop = savedSidebarScroll;
             });
         }
+        return true;
     } catch (error) {
+        if (error.name === 'AbortError') {
+            _restoreLiveTracking();
+            return false;
+        }
+        if (requestId !== _historyLoadRequestId) {
+            _restoreLiveTracking();
+            return false;
+        }
         console.log(error);
         showAlert({ title: 'Error', message: 'Failed to load history.', type: 'error' });
         historyDeviceId = previousHistoryDeviceId;
         historyStartTime = previousHistoryStartTime;
         historyEndTime = previousHistoryEndTime;
         // Restore live markers since history mode was not entered
-        if (typeof clusterGroup !== 'undefined' && clusterGroup && map && !map.hasLayer(clusterGroup)) {
-            map.addLayer(clusterGroup);
+        _restoreLiveTracking();
+        return false;
+    } finally {
+        if (requestId === _historyLoadRequestId) {
+            setHistoryModalLoading(false);
+            _historyAbortController = null;
         }
-        devices.forEach(d => {
-            if (accuracyCircles[d.id] && map && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
-        });
     }
 }
 
@@ -536,6 +681,12 @@ function _updateLineModeBtn() {
 
 function exitHistoryMode(fromPopState = false) {
     try {
+        if (_historyAbortController) {
+            _historyAbortController.abort();
+            _historyAbortController = null;
+        }
+        _historyLoadRequestId++;
+        setHistoryModalLoading(false);
         stopPlayback();
         _clearAlertHighlight();
         historyDeviceId = null;
@@ -934,7 +1085,7 @@ function createHistoryMarker() {
 }
 
 // Load Trips for History Modal
-async function loadTripsForHistory(deviceId, startTime, endTime, { preserveScroll = false } = {}) {
+async function loadTripsForHistory(deviceId, startTime, endTime, { preserveScroll = false, signal = null } = {}) {
     const container = document.getElementById('tripListContent');
     if (!container) return;
 
@@ -943,8 +1094,8 @@ async function loadTripsForHistory(deviceId, startTime, endTime, { preserveScrol
     const savedDetailsScroll = detailsEl ? detailsEl.scrollTop : 0;
     const savedSidebarScroll = sidebarEl ? sidebarEl.scrollTop : 0;
 
-    if (!container.children.length) {
-        container.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:0.5rem 0;text-align:center;">Loading trips…</div>';
+    if (!preserveScroll) {
+        container.innerHTML = '<div class="history-trips-loading"><i class="mdi mdi-loading mdi-spin"></i><span>Loading trips…</span></div>';
     } else if (preserveScroll) {
         container.style.minHeight = `${container.offsetHeight}px`;
     }
@@ -955,7 +1106,8 @@ async function loadTripsForHistory(deviceId, startTime, endTime, { preserveScrol
             trips = historyTrips;
         } else {
             const res = await apiFetch(
-                `${API_BASE}/devices/${deviceId}/trips?start_date=${startTime.toISOString()}&end_date=${endTime.toISOString()}`
+                `${API_BASE}/devices/${deviceId}/trips?start_date=${startTime.toISOString()}&end_date=${endTime.toISOString()}`,
+                signal ? { signal } : {}
             );
             if (!res.ok) throw new Error('Failed to fetch trips');
             trips = await res.json();
@@ -1076,6 +1228,7 @@ async function loadTripsForHistory(deviceId, startTime, endTime, { preserveScrol
         }).join('');
 
     } catch (e) {
+        if (e.name === 'AbortError') return;
         historyTrips = [];
         container.innerHTML = '<div style="color:var(--accent-danger);font-size:0.8rem;padding:0.5rem 0;">Failed to load trips</div>';
     } finally {
@@ -1166,14 +1319,16 @@ function applyHistoryControlsPadding() {
 
 // ── Dashcam clip markers ──────────────────────────────────────────────────────
 
-async function _loadHistoryClips(deviceId, startTime, endTime) {
+async function _loadHistoryClips(deviceId, startTime, endTime, signal = null) {
     try {
         const res = await apiFetch(
-            `${API_BASE}/dashcam/clips?device_id=${deviceId}&start=${startTime.toISOString()}&end=${endTime.toISOString()}`
+            `${API_BASE}/dashcam/clips?device_id=${deviceId}&start=${startTime.toISOString()}&end=${endTime.toISOString()}`,
+            signal ? { signal } : {}
         );
         if (!res.ok) return;
         historyClips = await res.json();
-    } catch {
+    } catch (e) {
+        if (e.name === 'AbortError') return;
         historyClips = [];
     }
     _renderClipMarkers();

@@ -326,7 +326,7 @@ async function toggleAlertHistory() {
     btn.innerHTML       = historyVisible ? '<i class="mdi mdi-close"></i> Hide History' : '<i class="mdi mdi-history"></i> History';
     if (historyVisible) {
         historyOffset = 0;
-        document.getElementById('alertsHistoryList').innerHTML = '';
+        document.getElementById('alertsHistoryList').innerHTML = '<div style="text-align:center; padding: 1.5rem; color: var(--text-muted); font-size: 0.85rem;"><i class="mdi mdi-loading mdi-spin" style="font-size:1.2rem; color:var(--accent-primary); margin-right:0.3rem; vertical-align:middle;"></i> Loading alert history…</div>';
         await loadAlertHistory();
     }
 }
@@ -341,6 +341,7 @@ async function loadAlertHistory() {
         const toShow  = alerts.slice(0, HISTORY_PAGE_SIZE);
 
         const list = document.getElementById('alertsHistoryList');
+        if (historyOffset === 0) list.innerHTML = '';
         if (historyOffset === 0 && toShow.length === 0) {
             list.innerHTML = '<div style="text-align:center; padding: 1.5rem; color: var(--text-muted); font-size: 0.875rem;">No cleared alerts yet.</div>';
         } else {
@@ -355,7 +356,20 @@ async function loadAlertHistory() {
 }
 
 async function loadMoreAlertHistory() {
-    await loadAlertHistory();
+    const btn = document.querySelector('#alertsHistoryLoadMore button');
+    const origHtml = btn ? btn.innerHTML : 'Load More';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Loading...';
+    }
+    try {
+        await loadAlertHistory();
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
+    }
 }
 
 // ── Toast / Generic Alert ─────────────────────────────────────────────────────

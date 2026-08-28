@@ -456,6 +456,9 @@ function toggleSidebar() {
     document.querySelector('.dashboard').classList.toggle('sidebar-hidden');
     setTimeout(() => {
         map.invalidateSize();
+        if (selectedDevice && markers[selectedDevice]?.isPopupOpen?.() && typeof _ensurePopupInVisibleMap === 'function') {
+            _ensurePopupInVisibleMap(selectedDevice);
+        }
     }, 300);
 }
 

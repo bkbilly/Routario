@@ -29,28 +29,57 @@
     const style = document.createElement('style');
     style.textContent = `
         .settings-nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            width: 100%;
+            background: transparent;
+            padding: 0.85rem 0;
+            margin-bottom: 0;
+            border-bottom: 1px solid transparent;
+            transition: background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease, backdrop-filter 0.25s ease;
+        }
+        .settings-nav.scrolled {
+            background: rgba(10, 14, 26, 0.2);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom-color: rgba(55, 65, 81, 0.4);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+        [data-theme="light"] .settings-nav,
+        body.light-theme .settings-nav {
+            background: transparent;
+        }
+        [data-theme="light"] .settings-nav.scrolled,
+        body.light-theme .settings-nav.scrolled {
+            background: rgba(230, 235, 241, 0.12);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom-color: rgba(203, 213, 225, 0.35);
+            box-shadow: 0 4px 20px rgba(15, 23, 42, 0.03);
+        }
+        .settings-nav-inner {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 0.75rem;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            background: var(--bg-primary);
-            padding: 1rem 0;
-            margin-bottom: 1rem;
-            transition: background 0.2s ease, box-shadow 0.2s ease;
+            width: 100%;
         }
-        .settings-nav.scrolled {
-            background: rgba(10, 14, 26, 0.7);
-            backdrop-filter: blur(6px);
-            -webkit-backdrop-filter: blur(6px);
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+        @media (max-width: 768px) {
+            .settings-nav-inner {
+                padding: 0 1rem;
+            }
         }
-        [data-theme="light"] .settings-nav.scrolled,
-        body.light-theme .settings-nav.scrolled {
-            background: rgba(241, 243, 247, 0.85);
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        @media (max-width: 480px) {
+            .settings-nav-inner {
+                padding: 0 0.75rem;
+            }
+        }
+        .settings-nav + .container {
+            padding-top: 1rem;
         }
         .settings-nav-title {
             flex: 1;
@@ -287,6 +316,7 @@
     const nav = document.createElement('div');
     nav.className = 'settings-nav';
     nav.innerHTML = `
+        <div class="settings-nav-inner">
         <button class="settings-nav-home" onclick="history.back()" title="Go back">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="15 18 9 12 15 6"/>
@@ -407,6 +437,7 @@
             </div>
         </div>
         </div>
+        </div>
     `;
 
     const group = nav.querySelector('#snActionGroup');
@@ -505,7 +536,11 @@
         await permissionsReady;
         const nav = _buildNav();
         const container = document.querySelector('.container');
-        if (container) container.insertBefore(nav, container.firstChild);
+        if (container && container.parentNode) {
+            container.parentNode.insertBefore(nav, container);
+        } else {
+            document.body.insertBefore(nav, document.body.firstChild);
+        }
 
         const btn      = document.getElementById('snGearBtn');
         const dropdown = document.getElementById('snDropdown');

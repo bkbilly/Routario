@@ -104,9 +104,22 @@ function _makeMarkerIcon(vehicleType, ignitionOn, heading) {
 
 function initMap() {
     map = L.map('map', {
+        center: [20, 0],
+        zoom: 2,
+        minZoom: 2,
         zoomControl: false,
         wheelPxPerZoomLevel: 120,
-    }).setView([20, 0], 2);
+        worldCopyJump: true,
+    });
+
+    // Seamlessly normalize map longitude across world copies so markers/overlays are always visible
+    map.on('moveend', () => {
+        const center = map.getCenter();
+        const wrapped = center.wrap();
+        if (Math.abs(center.lng - wrapped.lng) > 0.001) {
+            map.panTo(wrapped, { animate: false });
+        }
+    });
 
     const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap_dark';
     applyTileLayer(savedTile);
@@ -114,8 +127,22 @@ function initMap() {
 
     // Close flyouts on map click; also auto-close sidebar on mobile
     let popupWasOpen = false;
-    map.on('popupopen',  () => { popupWasOpen = true; });
-    map.on('popupclose', () => { popupWasOpen = true; setTimeout(() => { popupWasOpen = false; }, 0); });
+    map.on('popupopen',  (e) => {
+        popupWasOpen = true;
+        const devId = e.popup?._source?.deviceId;
+        if (devId && typeof _ensurePopupInVisibleMap === 'function') {
+            _ensurePopupInVisibleMap(devId, e.popup._source.getLatLng());
+        }
+    });
+    map.on('popupclose', (e) => {
+        popupWasOpen = true;
+        const devId = e.popup?._source?.deviceId;
+        if (devId) {
+            delete _popupGridScroll[devId];
+            delete _popupSensorsScroll[devId];
+        }
+        setTimeout(() => { popupWasOpen = false; }, 0);
+    });
     map.on('click', () => {
         closeAllMapFlyouts();
         if (window.innerWidth <= 630) {
@@ -208,6 +235,26 @@ function closePicker(e) {
 
 // ── Device markers ────────────────────────────────────────────────────────────
 
+const _popupSensorsExpanded = new Set();
+const _popupGridScroll = window._popupGridScroll = {};
+const _popupSensorsScroll = window._popupSensorsScroll = {};
+
+function togglePopupSensors(btn, deviceId) {
+    const panel = btn.parentElement?.querySelector('.vp-sensor-panel');
+    if (!panel) return;
+    const isExpanded = panel.style.display !== 'none';
+    if (isExpanded) {
+        panel.style.display = 'none';
+        btn.textContent = '▼ More sensors';
+        _popupSensorsExpanded.delete(deviceId);
+    } else {
+        panel.style.display = 'grid';
+        btn.textContent = '▲ Less sensors';
+        _popupSensorsExpanded.add(deviceId);
+    }
+}
+window.togglePopupSensors = togglePopupSensors;
+
 function updateDeviceMarker(deviceId, state) {
     if (!state.last_latitude || !state.last_longitude) return;
 
@@ -273,13 +320,38 @@ function updateDeviceMarker(deviceId, state) {
                     </div>`;
         }).join('');
 
+    // ── Check if sensor panel should be expanded & save scroll positions ─────────
+    let sensorsExpanded = _popupSensorsExpanded.has(deviceId);
+    let prevSensorsScrollTop = _popupSensorsScroll[deviceId] || 0;
+    let prevGridScrollTop = _popupGridScroll[deviceId] || 0;
+    const existingPopup = markers[deviceId]?.getPopup();
+    if (existingPopup) {
+        const el = existingPopup.getElement();
+        if (el) {
+            const domPanel = el.querySelector('.vp-sensor-panel');
+            if (domPanel) {
+                if (domPanel.style.display !== 'none') {
+                    sensorsExpanded = true;
+                    _popupSensorsExpanded.add(deviceId);
+                }
+                prevSensorsScrollTop = domPanel.scrollTop || 0;
+                _popupSensorsScroll[deviceId] = prevSensorsScrollTop;
+            }
+            const domGrid = el.querySelector('.vp-grid');
+            if (domGrid) {
+                prevGridScrollTop = domGrid.scrollTop || 0;
+                _popupGridScroll[deviceId] = prevGridScrollTop;
+            }
+        }
+    }
+
     const popupContent = `
         <div class="vp-popup">
             <div class="vp-header">
                 <span class="vp-icon">${vehicle.emoji}</span>
                 <span class="vp-name">${deviceName}</span>
             </div>
-            <div class="vp-grid">
+            <div class="vp-grid" onscroll="_popupGridScroll[${deviceId}] = this.scrollTop">
                 ${state.ignition_on != null ? `<span class="vp-label">Ignition</span>   <span class="vp-value" style="color:${ignitionColor};font-weight:700;">${ignitionText}</span>` : ''}
                 ${lastGpsTimeStr !== '—'     ? `<span class="vp-label">Last GPS</span>   <span class="vp-value vp-mono" style="font-size:0.72rem;">${lastGpsTimeStr}</span>` : ''}
                 ${state.last_speed != null   ? `<span class="vp-label">Speed</span>      <span class="vp-value">${fmtSpeed(state.last_speed)}</span>` : ''}
@@ -289,12 +361,12 @@ function updateDeviceMarker(deviceId, state) {
             </div>
             ${sensorRows ? `
             <div style="border-top:1px solid var(--border-color);">
-                <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'grid':'none';this.textContent=this.textContent.includes('More')?'▲ Less sensors':'▼ More sensors';"
+                <button type="button" class="vp-sensor-btn" onclick="togglePopupSensors(this, ${deviceId})"
                     style="width:100%;background:transparent;border:none;color:var(--text-muted);font-size:0.75rem;
                            padding:0.4rem 0.75rem;cursor:pointer;text-align:left;font-family:Outfit,sans-serif;">
-                    ▼ More sensors
+                    ${sensorsExpanded ? '▲ Less sensors' : '▼ More sensors'}
                 </button>
-                <div style="display:none;padding:0.5rem 0.75rem;max-height:160px;overflow-y:auto;">
+                <div class="vp-sensor-panel" onscroll="_popupSensorsScroll[${deviceId}] = this.scrollTop" style="display:${sensorsExpanded ? 'grid' : 'none'};padding:0.5rem 0.75rem;max-height:160px;overflow-y:auto;">
                     ${sensorRows}
                 </div>
             </div>` : ''}
@@ -309,7 +381,9 @@ function updateDeviceMarker(deviceId, state) {
         markers[deviceId] = L.marker([toLat, toLng], {
             icon: _makeMarkerIcon(device?.vehicle_type, state.ignition_on, toHead)
         })
-            .bindPopup(popupContent);
+            .bindPopup(popupContent, {
+                autoPan: false
+            });
         markers[deviceId].deviceId = deviceId;
         clusterGroup.addLayer(markers[deviceId]);
 
@@ -318,33 +392,27 @@ function updateDeviceMarker(deviceId, state) {
         markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
 
     } else {
-        // ── Preserve the expanded/collapsed state of the sensor panel ─────────
-        let sensorsExpanded = false;
-        const existingPopup = markers[deviceId].getPopup();
-        if (existingPopup) {
-            const el = existingPopup.getElement();
-            if (el) {
-                const panel = el.querySelector('.leaflet-popup-content div[style*="padding:0.5rem"]');
-                if (panel) {
-                    sensorsExpanded = panel.style.display !== 'none';
-                }
-            }
-        }
-
-        // Replace {{SENSORS_DISPLAY}} placeholder based on saved state
-        const finalContent = sensorsExpanded
-            ? popupContent
-                .replace('display:none;padding:0.5rem', 'display:grid;padding:0.5rem')
-                .replace('▼ More sensors', '▲ Less sensors')
-            : popupContent;
-
         if (markers[deviceId].isPopupOpen()) {
             // Update in-place — avoids Leaflet's visibility:hidden flash that looks like close/reopen
-            existingPopup._content = finalContent;
+            existingPopup._content = popupContent;
             const contentNode = existingPopup.getElement()?.querySelector('.leaflet-popup-content');
-            if (contentNode) contentNode.innerHTML = finalContent;
+            if (contentNode) {
+                contentNode.innerHTML = popupContent;
+                if (prevSensorsScrollTop) {
+                    const newPanel = contentNode.querySelector('.vp-sensor-panel');
+                    if (newPanel) newPanel.scrollTop = prevSensorsScrollTop;
+                }
+                if (prevGridScrollTop) {
+                    const newGrid = contentNode.querySelector('.vp-grid');
+                    if (newGrid) newGrid.scrollTop = prevGridScrollTop;
+                }
+            }
+            if (existingPopup.options) {
+                existingPopup.options.autoPan = false;
+            }
+            _ensurePopupInVisibleMap(deviceId, [toLat, toLng]);
         } else {
-            markers[deviceId].setPopupContent(finalContent);
+            markers[deviceId].setPopupContent(popupContent);
         }
 
         const prev = markerState[deviceId] || { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
@@ -397,6 +465,9 @@ function updateDeviceMarker(deviceId, state) {
                 clusterGroup._ignoreMove = false;
                 _applyMarkerRotation(markers[deviceId], toHead, device?.vehicle_type);
                 markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
+                if (markers[deviceId].isPopupOpen()) {
+                    _ensurePopupInVisibleMap(deviceId, [toLat, toLng]);
+                }
             }
         }
 
@@ -473,6 +544,97 @@ function applyLatLngOffset(latlng, zoom) {
     const point = map.project(L.latLng(latlng), zoom);
     return map.unproject(L.point(point.x - offset / 2, point.y), zoom);
 }
+
+// Ensures an open vehicle popup stays completely visible within the open map area (not obscured by sidebar or off-screen).
+function _ensurePopupInVisibleMap(deviceId, targetLatLng = null) {
+    if (!map || !markers[deviceId] || !markers[deviceId].isPopupOpen()) return;
+    if (map.dragging && map.dragging.moving && map.dragging.moving()) return;
+
+    const sidebarOffset = getSidebarOffset();
+    const mapSize = map.getSize();
+    const destLatLng = targetLatLng || markers[deviceId].getLatLng();
+    const markerPt = map.latLngToContainerPoint(destLatLng);
+
+    const visibleWidth = mapSize.x - sidebarOffset;
+    const visibleHeight = mapSize.y;
+    const visibleCenterX = sidebarOffset + visibleWidth / 2;
+    const visibleCenterY = visibleHeight / 2;
+
+    const popup = markers[deviceId].getPopup();
+    const popupEl = popup?.getElement();
+    const popupWidth = popupEl ? popupEl.offsetWidth : 260;
+    const popupHeight = popupEl ? popupEl.offsetHeight : 280;
+
+    // Check if there is enough room on the visible map to comfortably center the popup
+    const minRequiredWidth = popupWidth + 80;
+    const minRequiredHeight = popupHeight + 80;
+    const hasEnoughRoom = (visibleWidth >= minRequiredWidth) && (visibleHeight >= minRequiredHeight);
+
+    // Is the vehicle marker itself inside the visible viewport?
+    const isVehicleOnVisibleMap = (
+        markerPt.x >= sidebarOffset &&
+        markerPt.x <= mapSize.x &&
+        markerPt.y >= 0 &&
+        markerPt.y <= mapSize.y
+    );
+
+    if (!hasEnoughRoom) {
+        // If there is not enough room on the map to go to the center,
+        // then it shouldn't try to go, except if it is too far away from it.
+        // If the vehicle is visible on that small part of the map, do not move the map.
+        if (isVehicleOnVisibleMap) {
+            return;
+        }
+        // Only if it is hidden behind the sidebar or off-screen, bring it into the visible strip
+        map.panTo(applyLatLngOffset(destLatLng, map.getZoom()), {
+            animate: true,
+            duration: 0.5,
+        });
+        return;
+    }
+
+    // When there IS enough room on the map:
+    // Only center if the vehicle is behind the sidebar, off-screen, or drifted too far from the visible center
+    const isBehindSidebar = markerPt.x < sidebarOffset;
+    const isOffscreen = markerPt.x > mapSize.x || markerPt.y < 0 || markerPt.y > mapSize.y;
+
+    // Check if the popup is significantly obscured by the sidebar or screen edges
+    let popupObscured = false;
+    if (popupEl) {
+        const popupRect = popupEl.getBoundingClientRect();
+        const mapRect = map.getContainer().getBoundingClientRect();
+        const screenVisibleLeft = mapRect.left + sidebarOffset;
+        if (popupRect.left < screenVisibleLeft || popupRect.right > mapRect.right ||
+            popupRect.top < mapRect.top || popupRect.bottom > mapRect.bottom) {
+            popupObscured = true;
+        }
+    }
+
+    const distFromCenterX = Math.abs(markerPt.x - visibleCenterX);
+    const distFromCenterY = Math.abs(markerPt.y - visibleCenterY);
+    const isTooFarAway = isBehindSidebar || isOffscreen ||
+        distFromCenterX > (visibleWidth * 0.40) || distFromCenterY > (visibleHeight * 0.40);
+
+    if (!isBehindSidebar && !popupObscured && !isTooFarAway) {
+        return;
+    }
+
+    // Calculate destination center:
+    // The popup sits above the marker, so offset slightly vertically so the popup is nicely framed
+    const verticalOffsetPx = Math.min(Math.floor(popupHeight / 3), 80);
+    const centerPoint = map.project(L.latLng(destLatLng), map.getZoom());
+    const adjustedPoint = L.point(
+        centerPoint.x - sidebarOffset / 2,
+        centerPoint.y - verticalOffsetPx
+    );
+    const targetCenterLatLng = map.unproject(adjustedPoint, map.getZoom());
+
+    map.panTo(targetCenterLatLng, {
+        animate: true,
+        duration: 0.6,
+    });
+}
+window._ensurePopupInVisibleMap = _ensurePopupInVisibleMap;
 
 function _createClusterPieIcon(cluster) {
     const childMarkers = cluster.getAllChildMarkers();
