@@ -180,7 +180,7 @@
             is_company_admin: true,
             company_id: 1,
             permissions: [
-                'view_management', 'view_devices', 'edit_devices', 'manage_alerts',
+                'view_dashboard', 'view_management', 'view_devices', 'edit_devices', 'manage_alerts',
                 'manage_geofences', 'view_history', 'view_reports', 'manage_routes',
                 'manage_tickets', 'manage_users', 'send_commands', 'manage_drivers', 'manage_fuel',
                 'manage_maintenance', 'manage_logbook', 'live_share',
@@ -749,6 +749,7 @@
             return table('logbook', rows, [
                 ['date', 'Date', 'datetime_split'], ['vehicle', 'Vehicle'], ['license_plate', 'Plate'], ['type', 'Type'], ['description', 'Description'], ['odometer_km', 'Odometer (km)', 'number'], ['cost_cents', 'Cost', 'currency_cents'], ['vendor', 'Vendor'],
             ], [{ label: 'Entries', value: rows.length }, { label: 'Total Cost', value: typeof fmtMoneyCents === 'function' ? fmtMoneyCents(rows.reduce((a, r) => a + r.cost_cents, 0)) : '281.00' }], { key: 'date', dir: -1 });
+        }
         if (type === 'sensor_graphs') {
             const devs = filteredDevices(input).slice(0, 5);
             const available_sensors = [
@@ -1373,13 +1374,13 @@
         return mocked || realFetch(input, options);
     };
 
-    window.addEventListener('DOMContentLoaded', () => {
+    function initDemoLogin() {
         document.body.classList.add('demo-mode');
-        if (location.pathname.endsWith('login.html')) {
-            const username = document.getElementById('username');
-            const password = document.getElementById('password');
-            if (username && !username.value) username.value = 'demo';
-            if (password && !password.value) password.value = 'demo';
+        const username = document.getElementById('username');
+        const password = document.getElementById('password');
+        if (username && password) {
+            if (!username.value) username.value = 'demo';
+            if (!password.value) password.value = 'demo';
             const card = document.querySelector('.login-card');
             if (card && !document.getElementById('demoLoginHint')) {
                 const hint = document.createElement('div');
@@ -1389,5 +1390,11 @@
                 card.querySelector('form')?.prepend(hint);
             }
         }
-    });
+    }
+
+    if (document.readyState === 'loading') {
+        window.addEventListener('DOMContentLoaded', initDemoLogin);
+    } else {
+        initDemoLogin();
+    }
 })();
