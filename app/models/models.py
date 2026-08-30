@@ -84,6 +84,8 @@ class User(Base):
     currency:   Mapped[str] = mapped_column(String(3),   default='EUR')
     theme:      Mapped[str] = mapped_column(String(20),  default='dark')
     sidebar_compact: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    time_format: Mapped[str] = mapped_column(String(10),  default='auto')
+    date_format: Mapped[str] = mapped_column(String(20),  default='auto')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_activity: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

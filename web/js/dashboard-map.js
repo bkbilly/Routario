@@ -294,8 +294,12 @@ function updateDeviceMarker(deviceId, state) {
         const raw = rawGpsTime.endsWith('Z') ? rawGpsTime : rawGpsTime + 'Z';
         const d = new Date(raw);
         if (!isNaN(d.getTime())) {
-            const dateStr = d.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
-            const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const dateStr = typeof formatDateValue === 'function'
+                ? formatDateValue(d)
+                : d.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+            const timeStr = typeof formatTimeValue === 'function'
+                ? formatTimeValue(d, { withSeconds: true })
+                : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             lastGpsTimeStr = `<div style="text-align:right;"><div style="font-weight:600;color:var(--text-primary);">${dateStr}</div><div style="font-size:0.72rem;color:var(--text-muted);">${timeStr}</div></div>`;
         } else {
             lastGpsTimeStr = rawGpsTime;

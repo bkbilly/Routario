@@ -74,6 +74,27 @@
         .report-controls .form-group { margin: 0; }
         .report-controls .form-label { font-size: 0.78rem; margin-bottom: 0.3rem; }
         .report-controls .form-input { min-width: 140px; }
+        #dateFromGroup, #dateToGroup { width: 150px; flex-shrink: 0; }
+        #dateFromGroup.is-native, #dateToGroup.is-native { width: auto; }
+        #dateFromGroup .datetime-picker-wrap, #dateToGroup .datetime-picker-wrap { width: 100%; }
+        #dateFromGroup .form-input, #dateToGroup .form-input {
+            width: 100%;
+            min-width: 0;
+            padding: 0.875rem 2.25rem 0.875rem 1rem;
+            font-size: 0.9375rem;
+        }
+        #dateFromGroup.is-native .form-input, #dateToGroup.is-native .form-input {
+            padding-right: 0.875rem;
+            min-width: 140px;
+        }
+        #dateFromGroup .datetime-picker-btn, #dateToGroup .datetime-picker-btn {
+            right: 0.5rem;
+            font-size: 1.15rem;
+        }
+        #dateFromGroup.is-native .datetime-picker-btn, #dateToGroup.is-native .datetime-picker-btn,
+        #dateFromGroup.is-native .datetime-picker-native, #dateToGroup.is-native .datetime-picker-native {
+            display: none !important;
+        }
 
         /* ── Summary cards ───────────────────────────────────────── */
         .summary-bar {
@@ -1040,11 +1061,23 @@
                 <div id="reportControlsGroup" style="display:contents;"></div>
                 <div class="form-group" id="dateFromGroup">
                     <label class="form-label">From</label>
-                    <input type="date" id="startDate" class="form-input">
+                    <div class="datetime-picker-wrap">
+                        <input type="text" id="startDate" class="form-input" required autocomplete="off">
+                        <button type="button" class="datetime-picker-btn" onclick="openReportDatePicker('startDate')" title="Select date">
+                            <i class="mdi mdi-calendar"></i>
+                        </button>
+                        <input type="date" id="startDatePicker" class="datetime-picker-native" tabindex="-1" aria-hidden="true">
+                    </div>
                 </div>
                 <div class="form-group" id="dateToGroup">
                     <label class="form-label">To</label>
-                    <input type="date" id="endDate" class="form-input">
+                    <div class="datetime-picker-wrap">
+                        <input type="text" id="endDate" class="form-input" required autocomplete="off">
+                        <button type="button" class="datetime-picker-btn" onclick="openReportDatePicker('endDate')" title="Select date">
+                            <i class="mdi mdi-calendar"></i>
+                        </button>
+                        <input type="date" id="endDatePicker" class="datetime-picker-native" tabindex="-1" aria-hidden="true">
+                    </div>
                 </div>
                 <div class="form-group" id="vehicleSelectGroup">
                     <label class="form-label">Vehicles</label>

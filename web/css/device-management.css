@@ -1357,3 +1357,52 @@ h1 {
         grid-template-columns: 1fr;
     }
 }
+
+.datetime-picker-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.datetime-picker-wrap .form-input {
+    width: 100%;
+    padding-right: 2.4rem;
+}
+
+.datetime-picker-btn {
+    position: absolute;
+    right: 0.45rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.15rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: color 0.15s;
+    line-height: 1;
+    z-index: 2;
+}
+
+.datetime-picker-btn:hover {
+    color: var(--accent-primary);
+}
+
+.datetime-picker-native {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    pointer-events: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    z-index: 1;
+}

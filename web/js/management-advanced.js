@@ -45,6 +45,10 @@ function rtpEsc(value) {
 
 function rtpDateTime(value) {
     if (!value) return '-';
+    if (typeof formatDateTimeValue === 'function') {
+        const d = rtpDate(value);
+        return Number.isNaN(d.getTime()) ? '-' : formatDateTimeValue(d, { withSeconds: true });
+    }
     const date = rtpDate(value);
     if (Number.isNaN(date.getTime())) return '-';
     return date.toLocaleString();
@@ -52,10 +56,13 @@ function rtpDateTime(value) {
 
 function rtpDateTimeSplit(value) {
     if (!value) return '-';
+    if (typeof formatDateToLocalSplit === 'function') {
+        return formatDateToLocalSplit(value);
+    }
     const date = rtpDate(value);
     if (Number.isNaN(date.getTime())) return '-';
-    const dateStr = date.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
-    const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const dateStr = typeof formatDateValue === 'function' ? formatDateValue(date) : date.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+    const timeStr = typeof formatTimeValue === 'function' ? formatTimeValue(date, { withSeconds: true }) : date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     return `<div style="font-weight:600;">${dateStr}</div><div style="font-size:0.75rem;color:var(--text-muted);">${timeStr}</div>`;
 }
 
@@ -1505,7 +1512,7 @@ async function rtpLoadApiKeys() {
     list.innerHTML = keys.length ? keys.map(k => `
         <div class="stack-item">
             <div class="stack-item-title">${rtpEsc(k.name)} <span class="proto-badge">${k.is_active ? 'active' : 'revoked'}</span></div>
-            <div class="stack-item-meta">${rtpEsc(k.key_prefix)}... · ${(k.scopes || []).join(', ') || 'no scopes'} · last used ${k.last_used_at ? new Date(k.last_used_at).toLocaleString() : 'never'}</div>
+            <div class="stack-item-meta">${rtpEsc(k.key_prefix)}... · ${(k.scopes || []).join(', ') || 'no scopes'} · last used ${k.last_used_at ? (typeof formatDateTimeValue === 'function' ? formatDateTimeValue(k.last_used_at, { withSeconds: true }) : new Date(k.last_used_at).toLocaleString()) : 'never'}</div>
             ${k.is_active ? `<button class="btn btn-danger" style="margin-top:0.5rem;padding:0.4rem 0.6rem;" onclick="rtpRevokeApiKey(${k.id})">Revoke</button>` : ''}
         </div>
     `).join('') : '<div class="stack-item stack-item-meta">No API keys.</div>';
@@ -2052,7 +2059,7 @@ function rtpHealthDetails(row) {
         const errored = row.accounts.filter(a => a.last_error);
         const sample = (errored.length ? errored : row.accounts).slice(0, 5).map(a => {
             const devices = `${a.active_device_count ?? 0} device${a.active_device_count === 1 ? '' : 's'}`;
-            const auth = a.last_auth_at ? `auth ${new Date(a.last_auth_at).toLocaleString()}` : 'not authenticated yet';
+            const auth = a.last_auth_at ? `auth ${typeof formatDateTimeValue === 'function' ? formatDateTimeValue(a.last_auth_at, { withSeconds: true }) : new Date(a.last_auth_at).toLocaleString()}` : 'not authenticated yet';
             const error = a.last_error ? `; ${a.last_error}` : '';
             return [`${a.provider_id}/${a.account_label || 'default'}`, `${devices}, ${auth}${error}`];
         });

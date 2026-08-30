@@ -659,7 +659,9 @@ function renderActiveShareLinks(links) {
     list.innerHTML = links.map(link => {
         const fullUrl = window.location.origin + link.url;
         const exp = new Date(link.expires_at + 'Z');
-        const expiresStr = exp.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const expiresStr = typeof formatDateTimeValue === 'function'
+            ? formatDateTimeValue(exp)
+            : exp.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
         return `
         <div id="share-row-${link.token}"

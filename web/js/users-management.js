@@ -128,7 +128,7 @@ function _usrRender() {
             <td style="color:var(--text-secondary);font-size:0.85rem;">${_usrEsc(u.email)}</td>
             ${companyCell}
             <td>${roleBadge}</td>
-            <td style="color:var(--text-secondary);font-size:0.82rem;white-space:nowrap;">${new Date(u.created_at).toLocaleDateString()}</td>
+            <td style="color:var(--text-secondary);font-size:0.82rem;white-space:nowrap;">${typeof formatDateValue === 'function' ? formatDateValue(u.created_at) : new Date(u.created_at).toLocaleDateString()}</td>
             <td style="white-space:nowrap;text-align:right;">
                 ${assignBtn}
                 ${impersonateBtn}

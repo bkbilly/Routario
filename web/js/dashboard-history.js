@@ -104,6 +104,7 @@ function openHistoryModal(deviceId) {
     const name = device ? device.name : `Device ${deviceId}`;
     document.getElementById('historyModalDeviceName').textContent = `${icon} ${name}`;
 
+    initHistoryDateInputs();
     document.getElementById('historyModal').classList.add('active');
     const defaultBtn = document.querySelector('.history-quick-btn[data-group="days"]');
     _setRangeHours(24);
@@ -124,11 +125,12 @@ function openHistoryDateRangeModal() {
     const name = device ? device.name : `Device ${historyDeviceId}`;
     document.getElementById('historyModalDeviceName').textContent = `${icon} ${name}`;
 
+    initHistoryDateInputs();
     if (historyStartTime) {
-        document.getElementById('historyStart').value = toLocalISO(new Date(historyStartTime));
+        setHistoryInputDateTime('historyStart', new Date(historyStartTime));
     }
     if (historyEndTime) {
-        document.getElementById('historyEnd').value = toLocalISO(new Date(historyEndTime));
+        setHistoryInputDateTime('historyEnd', new Date(historyEndTime));
     }
 
     _setActiveQuickBtn(null);
@@ -158,6 +160,85 @@ const toLocalISO = (date) => {
     return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
 };
 
+function isDateTimeFormatDefault() {
+    const tf = localStorage.getItem('time_format') || 'auto';
+    const df = localStorage.getItem('date_format') || 'auto';
+    return tf === 'auto' && df === 'auto';
+}
+
+function initHistoryDateInputs() {
+    const isDef = isDateTimeFormatDefault();
+    ['historyStart', 'historyEnd'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const wrap = el.closest('.datetime-picker-wrap');
+        if (isDef) {
+            el.type = 'datetime-local';
+            if (wrap) wrap.classList.add('is-native');
+        } else {
+            el.type = 'text';
+            if (wrap) wrap.classList.remove('is-native');
+        }
+    });
+}
+window.initHistoryDateInputs = initHistoryDateInputs;
+
+function setHistoryInputDateTime(inputId, date) {
+    const el = document.getElementById(inputId);
+    if (!el || !date) return;
+    const d = date instanceof Date ? date : new Date(date);
+    if (isNaN(d.getTime())) return;
+    const iso = toLocalISO(d);
+    el.dataset.iso = iso;
+    const isDef = isDateTimeFormatDefault();
+    const wrap = el.closest('.datetime-picker-wrap');
+    if (isDef) {
+        if (el.type !== 'datetime-local') el.type = 'datetime-local';
+        if (wrap) wrap.classList.add('is-native');
+        el.value = iso;
+    } else {
+        if (el.type !== 'text') el.type = 'text';
+        if (wrap) wrap.classList.remove('is-native');
+        el.value = typeof formatDateTimeValue === 'function' ? formatDateTimeValue(d) : iso;
+        const picker = document.getElementById(inputId + 'Picker');
+        if (picker) picker.value = iso;
+    }
+    _validateHistoryRange();
+}
+
+function getHistoryInputDate(inputId) {
+    const el = document.getElementById(inputId);
+    if (!el) return new Date();
+    if (el.type === 'datetime-local' && el.value) {
+        const d = new Date(el.value);
+        if (!isNaN(d.getTime())) return d;
+    }
+    if (el.dataset.iso) {
+        const d = new Date(el.dataset.iso);
+        if (!isNaN(d.getTime())) return d;
+    }
+    const val = (el.value || '').trim();
+    if (!val) return new Date();
+    const parsed = typeof parseUserDateTime === 'function' ? parseUserDateTime(val) : new Date(val);
+    return parsed && !isNaN(parsed.getTime()) ? parsed : new Date();
+}
+
+function openHistoryPicker(inputId) {
+    const picker = document.getElementById(inputId + 'Picker');
+    if (!picker) return;
+    const current = getHistoryInputDate(inputId);
+    picker.value = toLocalISO(current);
+    if (typeof picker.showPicker === 'function') {
+        try {
+            picker.showPicker();
+            return;
+        } catch (_) {}
+    }
+    picker.focus();
+    picker.click();
+}
+window.openHistoryPicker = openHistoryPicker;
+
 function _setActiveQuickBtn(btn) {
     document.querySelectorAll('.history-quick-btn').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
@@ -171,8 +252,8 @@ const HISTORY_QUICK_GROUPS = {
             set() {
                 const start = new Date(); start.setHours(0, 0, 0, 0);
                 const end   = new Date(); end.setHours(23, 59, 59, 999);
-                document.getElementById('historyStart').value = toLocalISO(start);
-                document.getElementById('historyEnd').value   = toLocalISO(end);
+                setHistoryInputDateTime('historyStart', start);
+                setHistoryInputDateTime('historyEnd', end);
             }
         },
         {
@@ -180,8 +261,8 @@ const HISTORY_QUICK_GROUPS = {
             set() {
                 const start = new Date(); start.setDate(start.getDate() - 1); start.setHours(0, 0, 0, 0);
                 const end   = new Date(); end.setDate(end.getDate() - 1);     end.setHours(23, 59, 59, 999);
-                document.getElementById('historyStart').value = toLocalISO(start);
-                document.getElementById('historyEnd').value   = toLocalISO(end);
+                setHistoryInputDateTime('historyStart', start);
+                setHistoryInputDateTime('historyEnd', end);
             }
         },
         {
@@ -189,8 +270,8 @@ const HISTORY_QUICK_GROUPS = {
             set() {
                 const start = new Date(); start.setDate(start.getDate() - 2); start.setHours(0, 0, 0, 0);
                 const end   = new Date(); end.setDate(end.getDate() - 2);     end.setHours(23, 59, 59, 999);
-                document.getElementById('historyStart').value = toLocalISO(start);
-                document.getElementById('historyEnd').value   = toLocalISO(end);
+                setHistoryInputDateTime('historyStart', start);
+                setHistoryInputDateTime('historyEnd', end);
             }
         },
     ],
@@ -211,8 +292,8 @@ function _setRangeHours(hours) {
     const now   = new Date();
     const end   = new Date(); end.setHours(23, 59, 59, 999);
     const start = new Date(now.getTime() - hours * 3600000);
-    document.getElementById('historyStart').value = toLocalISO(start);
-    document.getElementById('historyEnd').value   = toLocalISO(end);
+    setHistoryInputDateTime('historyStart', start);
+    setHistoryInputDateTime('historyEnd', end);
 }
 
 function cycleHistoryGroup(btn, groupKey) {
@@ -228,15 +309,40 @@ function cycleHistoryGroup(btn, groupKey) {
 }
 
 function _validateHistoryRange() {
-    const start = document.getElementById('historyStart').value;
-    const end = document.getElementById('historyEnd').value;
-    const invalid = start && end && start >= end;
-    document.getElementById('historySubmitBtn').disabled = invalid;
+    const start = getHistoryInputDate('historyStart');
+    const end = getHistoryInputDate('historyEnd');
+    const invalid = !start || !end || start.getTime() >= end.getTime();
+    const submitBtn = document.getElementById('historySubmitBtn');
+    if (submitBtn) submitBtn.disabled = invalid;
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('historyStart').addEventListener('input', () => { _setActiveQuickBtn(null); _validateHistoryRange(); });
-    document.getElementById('historyEnd').addEventListener('input', () => { _setActiveQuickBtn(null); _validateHistoryRange(); });
+    initHistoryDateInputs();
+    ['historyStart', 'historyEnd'].forEach(id => {
+        const picker = document.getElementById(id + 'Picker');
+        if (picker) {
+            picker.addEventListener('change', () => {
+                if (picker.value) {
+                    setHistoryInputDateTime(id, new Date(picker.value));
+                    _setActiveQuickBtn(null);
+                }
+            });
+        }
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', () => {
+                input.dataset.iso = '';
+                _setActiveQuickBtn(null);
+                _validateHistoryRange();
+            });
+            input.addEventListener('change', () => {
+                const parsed = getHistoryInputDate(id);
+                if (parsed && !isNaN(parsed.getTime())) {
+                    setHistoryInputDateTime(id, parsed);
+                }
+            });
+        }
+    });
 
     HISTORY_QUICK_GROUPS.months = [
         {
@@ -245,8 +351,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const n = new Date();
                 const start = new Date(n.getFullYear(), n.getMonth(), 1, 0, 0, 0, 0);
                 const end   = new Date(n.getFullYear(), n.getMonth() + 1, 0, 23, 59, 59, 999);
-                document.getElementById('historyStart').value = toLocalISO(start);
-                document.getElementById('historyEnd').value   = toLocalISO(end);
+                setHistoryInputDateTime('historyStart', start);
+                setHistoryInputDateTime('historyEnd', end);
             }
         },
         {
@@ -255,8 +361,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const n = new Date();
                 const start = new Date(n.getFullYear(), n.getMonth() - 1, 1, 0, 0, 0, 0);
                 const end   = new Date(n.getFullYear(), n.getMonth(), 0, 23, 59, 59, 999);
-                document.getElementById('historyStart').value = toLocalISO(start);
-                document.getElementById('historyEnd').value   = toLocalISO(end);
+                setHistoryInputDateTime('historyStart', start);
+                setHistoryInputDateTime('historyEnd', end);
             }
         },
         {
@@ -265,8 +371,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const n = new Date();
                 const start = new Date(n.getFullYear(), n.getMonth() - 2, 1, 0, 0, 0, 0);
                 const end   = new Date(n.getFullYear(), n.getMonth() - 1, 0, 23, 59, 59, 999);
-                document.getElementById('historyStart').value = toLocalISO(start);
-                document.getElementById('historyEnd').value   = toLocalISO(end);
+                setHistoryInputDateTime('historyStart', start);
+                setHistoryInputDateTime('historyEnd', end);
             }
         },
     ];
@@ -287,8 +393,8 @@ document.addEventListener('DOMContentLoaded', () => {
 async function handleHistorySubmit(e) {
     e.preventDefault();
     const modalDeviceId = parseInt(document.getElementById('historyModal').dataset.deviceId || '', 10);
-    const start = new Date(document.getElementById('historyStart').value);
-    const end = new Date(document.getElementById('historyEnd').value);
+    const start = getHistoryInputDate('historyStart');
+    const end = getHistoryInputDate('historyEnd');
 
     setHistoryModalLoading(true, 'Fetching positions…');
     try {
@@ -840,8 +946,8 @@ async function loadHistoryBatch(direction) {
         const batchSize = HISTORY_BATCH_SIZE || 2000;
         const newOffset = historyBatchOffset + direction * batchSize;
         if (newOffset < 0) return;
-        const start = historyStartTime || new Date(document.getElementById('historyStart').value);
-        const end   = historyEndTime   || new Date(document.getElementById('historyEnd').value);
+        const start = historyStartTime || getHistoryInputDate('historyStart');
+        const end   = historyEndTime   || getHistoryInputDate('historyEnd');
         await loadHistory(historyDeviceId, start, end, newOffset, { preserveScroll: true });
     } finally {
         if (prevBtn) {
@@ -1025,11 +1131,11 @@ function updatePlaybackUI() {
             let timeRange = '';
             if (currentTrip.start_time) {
                 const sDate = new Date(currentTrip.start_time.endsWith('Z') ? currentTrip.start_time : currentTrip.start_time + 'Z');
-                const sTimeStr = isNaN(sDate.getTime()) ? '' : sDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                const sTimeStr = isNaN(sDate.getTime()) ? '' : (typeof formatTimeValue === 'function' ? formatTimeValue(sDate) : sDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }));
                 let eTimeStr = 'Ongoing';
                 if (currentTrip.end_time) {
                     const eDate = new Date(currentTrip.end_time.endsWith('Z') ? currentTrip.end_time : currentTrip.end_time + 'Z');
-                    eTimeStr = isNaN(eDate.getTime()) ? '' : eDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                    eTimeStr = isNaN(eDate.getTime()) ? '' : (typeof formatTimeValue === 'function' ? formatTimeValue(eDate) : eDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }));
                 }
                 if (sTimeStr) {
                     timeRange = ` (${sTimeStr} – ${eTimeStr})`;

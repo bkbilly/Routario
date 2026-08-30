@@ -53,6 +53,87 @@ const _IS_COMPANY_ADMIN = localStorage.getItem('is_company_admin') === 'true';
 const _CAN_SEE_USERS    = _IS_ADMIN || _IS_COMPANY_ADMIN;
 const _CAN_SEE_LOGS     = _IS_ADMIN;
 
+function isDateFormatDefault() {
+    const df = localStorage.getItem('date_format') || 'auto';
+    return df === 'auto';
+}
+
+function initReportDateInputs() {
+    const isDef = isDateFormatDefault();
+    ['startDate', 'endDate'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const group = el.closest('.form-group');
+        if (isDef) {
+            el.type = 'date';
+            if (group) group.classList.add('is-native');
+        } else {
+            el.type = 'text';
+            if (group) group.classList.remove('is-native');
+        }
+    });
+}
+window.initReportDateInputs = initReportDateInputs;
+
+function setReportInputDate(inputId, date) {
+    const el = document.getElementById(inputId);
+    if (!el || !date) return;
+    const d = _parseUtcDate(date);
+    if (!d) return;
+    const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    el.dataset.iso = ymd;
+    const isDef = isDateFormatDefault();
+    const group = el.closest('.form-group');
+    if (isDef) {
+        if (el.type !== 'date') el.type = 'date';
+        if (group) group.classList.add('is-native');
+        el.value = ymd;
+    } else {
+        if (el.type !== 'text') el.type = 'text';
+        if (group) group.classList.remove('is-native');
+        el.value = typeof formatDateValue === 'function' ? formatDateValue(d) : ymd;
+        const picker = document.getElementById(inputId + 'Picker');
+        if (picker) picker.value = ymd;
+    }
+}
+
+function getReportInputDate(inputId) {
+    const el = document.getElementById(inputId);
+    if (!el) return null;
+    if (el.type === 'date' && el.value) {
+        return _parseUtcDate(el.value);
+    }
+    if (el.dataset.iso) {
+        const d = _parseUtcDate(el.dataset.iso);
+        if (d) return d;
+    }
+    const val = (el.value || '').trim();
+    if (!val) return null;
+    return typeof parseUserDateTime === 'function' ? parseUserDateTime(val) : _parseUtcDate(val);
+}
+
+function getReportInputIso(inputId) {
+    const d = getReportInputDate(inputId);
+    if (!d) return '';
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function openReportDatePicker(inputId) {
+    const picker = document.getElementById(inputId + 'Picker');
+    if (!picker) return;
+    const current = getReportInputDate(inputId) || new Date();
+    picker.value = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
+    if (typeof picker.showPicker === 'function') {
+        try {
+            picker.showPicker();
+            return;
+        } catch (_) {}
+    }
+    picker.focus();
+    picker.click();
+}
+window.openReportDatePicker = openReportDatePicker;
+
 document.addEventListener('DOMContentLoaded', async () => {
     checkLogin();
     await permissionsReady;
@@ -69,11 +150,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('tabHealth').style.display = hasPermission('view_health') ? '' : 'none';
     document.getElementById('tabLogs').style.display = _CAN_SEE_LOGS ? '' : 'none';
 
+    initReportDateInputs();
     const now   = new Date();
     const start = new Date(now);
     start.setDate(start.getDate() - 30);
-    document.getElementById('endDate').value   = _fmtDate(now);
-    document.getElementById('startDate').value = _fmtDate(start);
+    setReportInputDate('endDate', now);
+    setReportInputDate('startDate', start);
 
     if (canSeeReports) {
         _notificationChannels = (await permissionsReady)?.notification_channels || [];
@@ -88,16 +170,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     const hash = RoutarioTabs.hashValue();
     switchTab(_validReportTab(hash) ? hash : canSeeReports ? 'reports' : hasPermission('view_health') ? 'health' : 'logs', false);
 
-    document.getElementById('startDate')?.addEventListener('change', () => {
-        if (document.getElementById('reportType')?.value === 'sensor_graphs') _fetchAvailableSensors();
-    });
-    document.getElementById('endDate')?.addEventListener('change', () => {
-        if (document.getElementById('reportType')?.value === 'sensor_graphs') _fetchAvailableSensors();
+    ['startDate', 'endDate'].forEach(id => {
+        const picker = document.getElementById(id + 'Picker');
+        if (picker) {
+            picker.addEventListener('change', () => {
+                if (picker.value) {
+                    setReportInputDate(id, picker.value);
+                    if (document.getElementById('reportType')?.value === 'sensor_graphs') _fetchAvailableSensors();
+                }
+            });
+        }
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', () => {
+                input.dataset.iso = '';
+            });
+            input.addEventListener('change', () => {
+                const parsed = getReportInputDate(id);
+                if (parsed) {
+                    setReportInputDate(id, parsed);
+                }
+                if (document.getElementById('reportType')?.value === 'sensor_graphs') _fetchAvailableSensors();
+            });
+        }
     });
 
     window.addEventListener('hashchange', () => {
         const next = RoutarioTabs.hashValue();
         switchTab(_validReportTab(next) ? next : 'reports', false);
+    });
+
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'date_format') {
+            initReportDateInputs();
+            const now = new Date();
+            const start = new Date(now);
+            start.setDate(start.getDate() - 30);
+            setReportInputDate('endDate', now);
+            setReportInputDate('startDate', start);
+        }
     });
 
     document.addEventListener('click', e => {
@@ -806,8 +917,8 @@ async function _fetchAvailableSensors() {
         return;
     }
 
-    const start = document.getElementById('startDate')?.value;
-    const end = document.getElementById('endDate')?.value;
+    const start = getReportInputIso('startDate');
+    const end = getReportInputIso('endDate');
     const params = new URLSearchParams();
     params.set('device_ids', [..._selectedIds].join(','));
     if (start) params.set('start_date', _localDateToUtcIso(start, false));
@@ -1110,8 +1221,10 @@ function _renderSensorChart(payload) {
                 callback: function(val) {
                     const d = new Date(val);
                     if (isNaN(d.getTime())) return '';
-                    return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
-                        + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    return typeof formatDateTimeValue === 'function'
+                        ? formatDateTimeValue(d)
+                        : (d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+                            + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
                 }
             },
             grid: {
@@ -1195,8 +1308,10 @@ function _renderSensorChart(payload) {
                             const xVal = items[0].parsed.x;
                             const d = new Date(xVal);
                             if (isNaN(d.getTime())) return items[0].label || '';
-                            return d.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })
-                                + '  •  ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                            return typeof formatDateTimeValue === 'function'
+                                ? formatDateTimeValue(d, { withSeconds: true })
+                                : (d.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })
+                                    + '  •  ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
                         },
                         label: function(item) {
                             const label = item.dataset.label || '';
@@ -1316,8 +1431,8 @@ async function generateReport() {
 
     const historical = !!(def.supports_historical_toggle && document.getElementById('historyCheck').checked);
     const needsRange = def.needs_date_range !== false || historical;
-    const start = document.getElementById('startDate').value;
-    const end   = document.getElementById('endDate').value;
+    const start = getReportInputIso('startDate');
+    const end   = getReportInputIso('endDate');
 
     if (type === 'ai_custom') {
         const prompt = document.getElementById('aiReportPrompt')?.value.trim();
@@ -2375,6 +2490,9 @@ function _fmtDatetime(iso) {
     if (!iso) return '—';
     const d = _parseUtcDate(iso);
     if (!d) return String(iso).replace('T', ' ');
+    if (typeof formatDateTimeValue === 'function') {
+        return formatDateTimeValue(d, { withSeconds: true });
+    }
     return d.toLocaleString(undefined, {
         year: 'numeric',
         month: '2-digit',
@@ -2392,8 +2510,8 @@ function _fmtDatetimeSplit(iso) {
         const parts = String(iso).replace('T', ' ').split(' ');
         return `<span style="display:block;">${_esc(parts[0])}</span><span style="display:block;color:var(--text-muted);">${_esc(parts[1] || '')}</span>`;
     }
-    const date = d.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
-    const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const date = typeof formatDateValue === 'function' ? formatDateValue(d) : d.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+    const time = typeof formatTimeValue === 'function' ? formatTimeValue(d, { withSeconds: true }) : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     return `<span style="display:block;">${date}</span><span style="display:block;color:var(--text-muted);">${time}</span>`;
 }
 
@@ -3043,7 +3161,7 @@ function _healthDetails(row) {
     if (row.name === 'integration_accounts') {
         if (!row.accounts?.length) return _healthBox([['Accounts', 0]], [['Integrations', 'No active integration accounts']]);
         const errored = row.accounts.filter(a => a.last_error);
-        const sample = (errored.length ? errored : row.accounts).slice(0, 5).map(a => [`${a.provider_id}/${a.account_label || 'default'}`, `${a.active_device_count ?? 0} device${a.active_device_count === 1 ? '' : 's'}, ${a.last_auth_at ? `auth ${new Date(a.last_auth_at).toLocaleString()}` : 'not authenticated yet'}${a.last_error ? `; ${a.last_error}` : ''}`]);
+        const sample = (errored.length ? errored : row.accounts).slice(0, 5).map(a => [`${a.provider_id}/${a.account_label || 'default'}`, `${a.active_device_count ?? 0} device${a.active_device_count === 1 ? '' : 's'}, ${a.last_auth_at ? `auth ${typeof formatDateTimeValue === 'function' ? formatDateTimeValue(a.last_auth_at, { withSeconds: true }) : new Date(a.last_auth_at).toLocaleString()}` : 'not authenticated yet'}${a.last_error ? `; ${a.last_error}` : ''}`]);
         return _healthBox([['Accounts', row.active_accounts ?? 0], ['Errors', row.accounts_with_errors ?? 0, row.accounts_with_errors ? 'danger' : 'ok']], sample);
     }
     if (row.name === 'runtime') {

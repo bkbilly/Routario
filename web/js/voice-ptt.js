@@ -564,8 +564,8 @@
                 ? `Everyone (${_users.length || '?'})`
                 : m.recipient_ids.map(id => id === _myId ? 'You' : (_users.find(u => u.id === id)?.username || `#${id}`)).join(', ');
             const dt   = new Date(m.created_at);
-            const date = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-            const time = dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+            const date = typeof formatDateValue === 'function' ? formatDateValue(dt) : dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            const time = typeof formatTimeValue === 'function' ? formatTimeValue(dt) : dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
             const unread = _unreadIds.has(m.id);
             return `
             <tr${unread ? ' class="ptt-row-unread"' : ''}>

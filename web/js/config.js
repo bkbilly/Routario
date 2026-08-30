@@ -256,21 +256,170 @@ function _esc(str) {
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function formatDateToLocal(str) {
-    if (!str) return 'N/A';
+function _parseDate(val) {
+    if (!val) return null;
+    if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+    if (typeof val === 'number') {
+        const d = new Date(val < 1e11 ? val * 1000 : val);
+        return isNaN(d.getTime()) ? null : d;
+    }
+    let str = String(val).trim();
+    if (!str) return null;
     if (!/[zZ]|[+-]\d{2}:\d{2}$/.test(str)) str += 'Z';
-    return new Date(str).toLocaleString();
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? null : d;
 }
 
-function formatDateToLocalSplit(str) {
+function formatDateValue(val, format = null) {
+    const d = _parseDate(val);
+    if (!d) return val ? String(val) : 'N/A';
+
+    const fmt = format || localStorage.getItem('date_format') || 'auto';
+    const tz = localStorage.getItem('timezone');
+
+    let year, month, day;
+    try {
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: tz || undefined,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        }).formatToParts(d);
+        const map = {};
+        parts.forEach(({ type, value }) => { map[type] = value; });
+        year = map.year;
+        month = map.month;
+        day = map.day;
+    } catch (_) {
+        year = String(d.getFullYear());
+        month = String(d.getMonth() + 1).padStart(2, '0');
+        day = String(d.getDate()).padStart(2, '0');
+    }
+
+    if (fmt === 'YYYY-MM-DD') return `${year}-${month}-${day}`;
+    if (fmt === 'DD/MM/YYYY') return `${day}/${month}/${year}`;
+    if (fmt === 'MM/DD/YYYY') return `${month}/${day}/${year}`;
+    if (fmt === 'DD.MM.YYYY') return `${day}.${month}.${year}`;
+
+    try {
+        return d.toLocaleDateString(undefined, {
+            timeZone: tz || undefined,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        });
+    } catch (_) {
+        return d.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+    }
+}
+
+function formatTimeValue(val, { withSeconds = false, format = null } = {}) {
+    const d = _parseDate(val);
+    if (!d) return val ? String(val) : 'N/A';
+
+    const fmt = format || localStorage.getItem('time_format') || 'auto';
+    const tz = localStorage.getItem('timezone');
+
+    const opts = {
+        minute: '2-digit',
+        ...(withSeconds ? { second: '2-digit' } : {})
+    };
+    if (tz) {
+        try { opts.timeZone = tz; } catch (_) {}
+    }
+
+    if (fmt === '12h') {
+        opts.hour = 'numeric';
+        opts.hour12 = true;
+        return d.toLocaleTimeString(undefined, opts);
+    }
+    if (fmt === '24h') {
+        opts.hour = '2-digit';
+        opts.hour12 = false;
+        return d.toLocaleTimeString(undefined, opts);
+    }
+
+    opts.hour = '2-digit';
+    return d.toLocaleTimeString(undefined, opts);
+}
+
+function formatDateTimeValue(val, { withSeconds = false, dateFormat = null, timeFormat = null } = {}) {
+    const d = _parseDate(val);
+    if (!d) return val ? String(val) : 'N/A';
+    return `${formatDateValue(d, dateFormat)} ${formatTimeValue(d, { withSeconds, format: timeFormat })}`;
+}
+
+function formatDateToLocal(str, { withSeconds = false } = {}) {
     if (!str) return 'N/A';
-    const raw = !/[zZ]|[+-]\d{2}:\d{2}$/.test(str) ? str + 'Z' : str;
-    const d = new Date(raw);
-    if (isNaN(d.getTime())) return str;
-    const dateStr = d.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
-    const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const d = _parseDate(str);
+    if (!d) return String(str);
+    return formatDateTimeValue(d, { withSeconds });
+}
+
+function formatDateToLocalSplit(str, { withSeconds = true } = {}) {
+    if (!str) return 'N/A';
+    const d = _parseDate(str);
+    if (!d) return String(str);
+    const dateStr = formatDateValue(d);
+    const timeStr = formatTimeValue(d, { withSeconds });
     return `<div style="font-weight:600;">${dateStr}</div><div style="font-size:0.75rem;color:var(--text-muted);">${timeStr}</div>`;
 }
+
+function parseUserDateTime(str) {
+    if (!str) return null;
+    str = String(str).trim();
+    if (!str) return null;
+
+    const fmt = localStorage.getItem('date_format') || 'auto';
+
+    const ymdMatch = /^(\d{4})[-\/\.](\d{1,2})[-\/\.](\d{1,2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(am|pm))?)?$/i.exec(str);
+    if (ymdMatch) {
+        let [, year, month, day, hr, min, sec, ampm] = ymdMatch;
+        let h = hr ? parseInt(hr, 10) : 0;
+        const m = min ? parseInt(min, 10) : 0;
+        const s = sec ? parseInt(sec, 10) : 0;
+        if (ampm) {
+            ampm = ampm.toLowerCase();
+            if (ampm === 'pm' && h < 12) h += 12;
+            if (ampm === 'am' && h === 12) h = 0;
+        }
+        return new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), h, m, s);
+    }
+
+    const dmyMatch = /^(\d{1,2})[-\/\.](\d{1,2})[-\/\.](\d{4})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(am|pm))?)?$/i.exec(str);
+    if (dmyMatch) {
+        let [, p1, p2, year, hr, min, sec, ampm] = dmyMatch;
+        const p1Num = parseInt(p1, 10);
+        const p2Num = parseInt(p2, 10);
+        let day, month;
+        if (fmt === 'MM/DD/YYYY') {
+            month = p1Num - 1;
+            day = p2Num;
+        } else {
+            day = p1Num;
+            month = p2Num - 1;
+        }
+        let h = hr ? parseInt(hr, 10) : 0;
+        const m = min ? parseInt(min, 10) : 0;
+        const s = sec ? parseInt(sec, 10) : 0;
+        if (ampm) {
+            ampm = ampm.toLowerCase();
+            if (ampm === 'pm' && h < 12) h += 12;
+            if (ampm === 'am' && h === 12) h = 0;
+        }
+        return new Date(parseInt(year, 10), month, day, h, m, s);
+    }
+
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? null : d;
+}
+
+window.formatDateValue = formatDateValue;
+window.formatTimeValue = formatTimeValue;
+window.formatDateTimeValue = formatDateTimeValue;
+window.formatDateToLocal = formatDateToLocal;
+window.formatDateToLocalSplit = formatDateToLocalSplit;
+window.parseUserDateTime = parseUserDateTime;
 
 async function syncUserTimezone(user = null) {
     const token = localStorage.getItem('auth_token');
@@ -332,6 +481,10 @@ const permissionsReady = (function () {
             localStorage.setItem('sidebar_compact', user.sidebar_compact ? 'true' : 'false');
             applySidebarCompact(user.sidebar_compact);
         }
+        if (user.time_format !== undefined)
+            localStorage.setItem('time_format', user.time_format || 'auto');
+        if (user.date_format !== undefined)
+            localStorage.setItem('date_format', user.date_format || 'auto');
         if (user.timezone)
             localStorage.setItem('timezone', user.timezone);
         applyCompanyBranding(user.company_id);

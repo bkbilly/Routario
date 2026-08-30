@@ -244,6 +244,14 @@ function renderProfile() {
             : (localStorage.getItem('sidebar_compact') === 'true');
         compactEl.value = isCompact ? 'true' : 'false';
     }
+    const timeFmtEl = document.getElementById('profileTimeFormat');
+    if (timeFmtEl) {
+        timeFmtEl.value = profileUser.time_format || localStorage.getItem('time_format') || 'auto';
+    }
+    const dateFmtEl = document.getElementById('profileDateFormat');
+    if (dateFmtEl) {
+        dateFmtEl.value = profileUser.date_format || localStorage.getItem('date_format') || 'auto';
+    }
     renderProfileCurrencyOptions(profileUser.currency || 'EUR');
     const supported = Boolean(window.PublicKeyCredential);
     const note = document.getElementById('passkeySupportNote');
@@ -292,12 +300,18 @@ async function saveProfile() {
     const themeEl = document.getElementById('profileTheme');
     const compactEl = document.getElementById('profileSidebarCompact');
     const isCompact = compactEl ? compactEl.value === 'true' : false;
+    const timeFmtEl = document.getElementById('profileTimeFormat');
+    const dateFmtEl = document.getElementById('profileDateFormat');
+    const timeFormat = timeFmtEl ? timeFmtEl.value : (profileUser?.time_format || 'auto');
+    const dateFormat = dateFmtEl ? dateFmtEl.value : (profileUser?.date_format || 'auto');
     const payload = {
         email: document.getElementById('profileEmail').value.trim(),
         units: document.getElementById('profileUnits').value,
         currency: document.getElementById('profileCurrency').value,
         theme: themeEl ? themeEl.value : (profileUser?.theme || 'dark'),
         sidebar_compact: isCompact,
+        time_format: timeFormat,
+        date_format: dateFormat,
     };
     const password = document.getElementById('profilePassword').value;
     if (password) payload.password = password;
@@ -315,6 +329,8 @@ async function saveProfile() {
         localStorage.setItem('currency', saved.currency || payload.currency);
         localStorage.setItem('theme', saved.theme || payload.theme);
         localStorage.setItem('sidebar_compact', saved.sidebar_compact != null ? (saved.sidebar_compact ? 'true' : 'false') : (isCompact ? 'true' : 'false'));
+        localStorage.setItem('time_format', saved.time_format || timeFormat);
+        localStorage.setItem('date_format', saved.date_format || dateFormat);
         if (typeof applyTheme === 'function') {
             applyTheme(saved.theme || payload.theme);
         }
@@ -322,6 +338,7 @@ async function saveProfile() {
             applySidebarCompact(saved.sidebar_compact != null ? saved.sidebar_compact : isCompact);
         }
         window.dispatchEvent(new Event('routario:currencychange'));
+        window.dispatchEvent(new Event('routario:datetimeformatchange'));
         renderProfile();
         showAlert('Profile saved', 'success');
     } catch (e) {

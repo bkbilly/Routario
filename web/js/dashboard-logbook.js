@@ -247,8 +247,8 @@ function _renderLogbookTable() {
 
     tbody.innerHTML = _logbookEntries.map(e => {
         const dt      = new Date(e.date);
-        const date    = dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-        const time    = dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+        const date    = typeof formatDateValue === 'function' ? formatDateValue(dt) : dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        const time    = typeof formatTimeValue === 'function' ? formatTimeValue(dt) : dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
         const odo     = e.odometer != null ? `${parseFloat(e.odometer).toLocaleString()} km` : '—';
         const price   = e.price    != null ? _lbMoneySnapshot(e.price, e) : '—';
         const docHtml = (e.documents || []).length
@@ -406,8 +406,8 @@ function _renderFuelTable() {
         .sort((a, b) => new Date(b.date) - new Date(a.date))
         .map(log => {
             const dtObj    = new Date(log.date);
-            const date     = dtObj.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-            const time     = dtObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+            const date     = typeof formatDateValue === 'function' ? formatDateValue(dtObj) : dtObj.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+            const time     = typeof formatTimeValue === 'function' ? formatTimeValue(dtObj) : dtObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
             const cons     = consumption[log.id] ? `${consumption[log.id]}` : '—';
             const distStr  = distances[log.id] ? `+${Math.round(distances[log.id]).toLocaleString()} km` : '—';
             const total    = log.price_per_liter ? _lbMoneySnapshot(log.liters * log.price_per_liter, log) : '—';
@@ -564,7 +564,7 @@ function _renderMaintenanceStatus() {
                         : `${humanDays(daysLeft)} remaining`;
                 parts.push(`<span style="color:${colour};font-weight:600;">
                     ${dayText}
-                </span> <span style="color:var(--text-muted);font-size:0.8rem;">(due ${nextDate.toLocaleDateString()})</span>`);
+                </span> <span style="color:var(--text-muted);font-size:0.8rem;">(due ${typeof formatDateValue === 'function' ? formatDateValue(nextDate) : nextDate.toLocaleDateString()})</span>`);
             }
         }
 

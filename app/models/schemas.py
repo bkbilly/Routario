@@ -215,6 +215,8 @@ class UserUpdate(BaseModel):
     currency: Optional[str] = None
     theme: Optional[str] = None
     sidebar_compact: Optional[bool] = None
+    time_format: Optional[str] = None
+    date_format: Optional[str] = None
     timezone: Optional[str] = None
     is_admin: Optional[bool] = None
     is_company_admin: Optional[bool] = None
@@ -242,6 +244,8 @@ class Token(BaseModel):
     currency: str = "EUR"
     theme: str = "dark"
     sidebar_compact: bool = False
+    time_format: str = "auto"
+    date_format: str = "auto"
     permissions: List[str] = Field(default_factory=list)
 
     @field_validator('permissions', mode='before')
@@ -273,6 +277,8 @@ class UserResponse(BaseModel):
     currency: Optional[str] = "EUR"
     theme: Optional[str] = "dark"
     sidebar_compact: bool = False
+    time_format: Optional[str] = "auto"
+    date_format: Optional[str] = "auto"
     timezone: str = "UTC"
     notification_channels: List[Dict[str, str]] = Field(default_factory=list)
     created_at: datetime

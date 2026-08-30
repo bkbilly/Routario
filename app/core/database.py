@@ -168,6 +168,8 @@ class DatabaseService:
             "ALTER TABLE users ADD COLUMN currency VARCHAR(3) DEFAULT 'EUR'",
             "ALTER TABLE users ADD COLUMN theme VARCHAR(20) DEFAULT 'dark'",
             "ALTER TABLE users ADD COLUMN sidebar_compact BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE users ADD COLUMN time_format VARCHAR(10) DEFAULT 'auto'",
+            "ALTER TABLE users ADD COLUMN date_format VARCHAR(20) DEFAULT 'auto'",
             "ALTER TABLE fuel_logs ADD COLUMN currency VARCHAR(3) DEFAULT 'EUR'",
             "ALTER TABLE fuel_logs ADD COLUMN exchange_rate FLOAT DEFAULT 1.0",
             "ALTER TABLE fuel_logs ADD COLUMN trip_distance_km FLOAT",
@@ -747,6 +749,10 @@ class DatabaseService:
                 user.theme = user_data.theme
             if user_data.sidebar_compact is not None:
                 user.sidebar_compact = user_data.sidebar_compact
+            if user_data.time_format is not None:
+                user.time_format = user_data.time_format
+            if user_data.date_format is not None:
+                user.date_format = user_data.date_format
             user_timezone = getattr(user_data, "timezone", None)
             if user_timezone is not None:
                 user.timezone = user_timezone or "UTC"

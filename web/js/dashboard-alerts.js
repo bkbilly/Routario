@@ -36,8 +36,8 @@ function _placeAlertHighlight(lat, lng, alertObj, iconHtml, title) {
     const meta   = alertObj.alert_metadata;
     const ts     = alertObj.created_at.endsWith('Z') ? alertObj.created_at : alertObj.created_at + 'Z';
     const dt     = new Date(ts);
-    const datePart = dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-    const timePart = dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    const datePart = typeof formatDateValue === 'function' ? formatDateValue(dt) : dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    const timePart = typeof formatTimeValue === 'function' ? formatTimeValue(dt) : dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
     const rows   = [];
     if (device) rows.push(`<span class="vp-label">Device</span><span class="vp-value">${(VEHICLE_ICONS[device.vehicle_type] || VEHICLE_ICONS['other']).emoji} ${device.name}</span>`);
     rows.push(`<span class="vp-label">Time</span><span class="vp-value vp-mono">${datePart}<br>${timePart}</span>`);

@@ -586,11 +586,23 @@
                 
                 <div class="form-group">
                     <label class="form-label">Start Time</label>
-                    <input type="datetime-local" class="form-input" id="historyStart" required>
+                    <div class="datetime-picker-wrap">
+                        <input type="text" class="form-input" id="historyStart" required autocomplete="off">
+                        <button type="button" class="datetime-picker-btn" onclick="openHistoryPicker('historyStart')" title="Select date and time">
+                            <i class="mdi mdi-calendar-clock"></i>
+                        </button>
+                        <input type="datetime-local" id="historyStartPicker" class="datetime-picker-native" tabindex="-1" aria-hidden="true">
+                    </div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">End Time</label>
-                    <input type="datetime-local" class="form-input" id="historyEnd" required>
+                    <div class="datetime-picker-wrap">
+                        <input type="text" class="form-input" id="historyEnd" required autocomplete="off">
+                        <button type="button" class="datetime-picker-btn" onclick="openHistoryPicker('historyEnd')" title="Select date and time">
+                            <i class="mdi mdi-calendar-clock"></i>
+                        </button>
+                        <input type="datetime-local" id="historyEndPicker" class="datetime-picker-native" tabindex="-1" aria-hidden="true">
+                    </div>
                 </div>
                 
                 <div class="history-modal-footer">
@@ -993,6 +1005,11 @@
         window.addEventListener('storage', (e) => {
             if (e.key === 'sidebar_compact' && typeof applySidebarCompact === 'function') {
                 applySidebarCompact(e.newValue === 'true');
+            }
+            if (e.key === 'time_format' || e.key === 'date_format') {
+                if (typeof updateSidebarTimes === 'function') updateSidebarTimes();
+                if (typeof renderDeviceList === 'function') renderDeviceList();
+                if (typeof initHistoryDateInputs === 'function') initHistoryDateInputs();
             }
         });
 

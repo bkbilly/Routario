@@ -52,15 +52,18 @@ function dashboardRouteDate(value) {
 
 function dashboardRouteDateTime(value) {
     const date = dashboardRouteDate(value);
-    return date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : '-';
+    if (!date || Number.isNaN(date.getTime())) return '-';
+    return typeof formatDateTimeValue === 'function' ? formatDateTimeValue(date, { withSeconds: true }) : date.toLocaleString();
 }
 
 function dashboardRouteDateTimeSplit(value) {
     const date = dashboardRouteDate(value);
     if (!date || Number.isNaN(date.getTime())) return '-';
-    const iso = date.toISOString();
-    const d = iso.slice(0, 10);
-    const t = iso.slice(11, 19);
+    if (typeof formatDateToLocalSplit === 'function') {
+        return formatDateToLocalSplit(date);
+    }
+    const d = typeof formatDateValue === 'function' ? formatDateValue(date) : date.toISOString().slice(0, 10);
+    const t = typeof formatTimeValue === 'function' ? formatTimeValue(date, { withSeconds: true }) : date.toISOString().slice(11, 19);
     return `<div style="font-weight:600;">${d}</div><div style="font-size:0.75rem;color:var(--text-muted);">${t}</div>`;
 }
 

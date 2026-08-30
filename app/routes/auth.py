@@ -40,6 +40,8 @@ async def login(form_data: UserLogin, request: Request):
                 "currency": getattr(user, "currency", "EUR") or "EUR",
                 "theme": getattr(user, "theme", "dark") or "dark",
                 "sidebar_compact": getattr(user, "sidebar_compact", False) or False,
+                "time_format": getattr(user, "time_format", "auto") or "auto",
+                "date_format": getattr(user, "date_format", "auto") or "auto",
                 "permissions": [],
             }
 
@@ -89,5 +91,7 @@ async def login(form_data: UserLogin, request: Request):
         "currency": getattr(user, "currency", "EUR") or "EUR",
         "theme": getattr(user, "theme", "dark") or "dark",
         "sidebar_compact": getattr(user, "sidebar_compact", False) or False,
+        "time_format": getattr(user, "time_format", "auto") or "auto",
+        "date_format": getattr(user, "date_format", "auto") or "auto",
         "permissions": ALL_PERMISSIONS if user.is_admin else valid_permissions(user.permissions or []),
     }

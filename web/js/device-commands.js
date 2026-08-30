@@ -530,8 +530,8 @@ function renderCommandHistory(commands) {
 
     tbody.innerHTML = commands.map(cmd => {
         const dtObj = new Date(cmd.created_at);
-        const datePart = dtObj.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-        const timePart = dtObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const datePart = typeof formatDateValue === 'function' ? formatDateValue(dtObj) : dtObj.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        const timePart = typeof formatTimeValue === 'function' ? formatTimeValue(dtObj, { withSeconds: true }) : dtObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         
         const isReceived = (cmd.direction === 'received' || cmd.status === 'received');
         const statusStr = (cmd.status || (isReceived ? 'received' : 'pending')).toLowerCase();
