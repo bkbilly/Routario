@@ -501,6 +501,7 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { pres
 
         const footer = document.getElementById('historyControls');
         if (footer) footer.style.display = 'flex';
+        if (map && map.keyboard) map.keyboard.disable();
         pushModalState('history_playback');
         _updateLineModeBtn();
         _updateSpeedBtn();
@@ -767,6 +768,7 @@ function exitHistoryMode(fromPopState = false) {
         if (details) details.style.paddingBottom = '';
         const sidebar = document.querySelector('.sidebar');
         if (sidebar) sidebar.classList.remove('history-active');
+        if (map && map.keyboard) map.keyboard.enable();
 
         document.getElementById('historySlider')?.style.removeProperty('--track-gradient');
         historyClips = [];
@@ -954,12 +956,41 @@ function updatePlaybackUI() {
             </div>
         </div>
     `;
+    const isPopupOpen = markers['history_pos'] && typeof markers['history_pos'].isPopupOpen === 'function' && markers['history_pos'].isPopupOpen();
+    const existingPopup = markers['history_pos'].getPopup();
+
+    if (existingPopup) {
+        if (isPopupOpen) {
+            existingPopup._content = historyPopup;
+            const contentNode = existingPopup.getElement()?.querySelector('.leaflet-popup-content');
+            if (contentNode) {
+                contentNode.innerHTML = historyPopup;
+            } else {
+                existingPopup.setContent(historyPopup);
+            }
+            if (existingPopup.options) {
+                existingPopup.options.autoPan = false;
+            }
+        } else {
+            existingPopup.setContent(historyPopup);
+            if (existingPopup.options) {
+                existingPopup.options.autoPan = false;
+            }
+        }
+    } else {
+        markers['history_pos'].bindPopup(historyPopup, { autoPan: false });
+    }
+
     markers['history_pos'].setLatLng(position).setIcon(L.divIcon({
         html: getMarkerHtml(device?.vehicle_type, p.ignition, heading),
         className: 'history-marker',
         iconSize: [32, 32],
         iconAnchor: [16, 16]
-    })).bindPopup(historyPopup);
+    }));
+
+    if (isPopupOpen && typeof _ensurePopupInVisibleMap === 'function') {
+        _ensurePopupInVisibleMap('history_pos', position);
+    }
 
     // History accuracy circle
     const histAccuracy = p.sensors?.accuracy ?? null;
@@ -1082,6 +1113,7 @@ function createHistoryMarker() {
     });
     const startPos = historyData[historyIndex].geometry.coordinates;
     markers['history_pos'] = L.marker([startPos[1], startPos[0]], { icon }).addTo(map);
+    markers['history_pos'].deviceId = 'history_pos';
 }
 
 // Load Trips for History Modal
@@ -1256,10 +1288,15 @@ function seekToTrip(startTimeStr) {
     historyIndex = closest;
     stopPlayback();
     updatePlaybackUI();
-    map.panTo([
+    const pos = [
         historyData[closest].geometry.coordinates[1],
         historyData[closest].geometry.coordinates[0]
-    ]);
+    ];
+    if (markers['history_pos'] && markers['history_pos'].isPopupOpen() && typeof _ensurePopupInVisibleMap === 'function') {
+        _ensurePopupInVisibleMap('history_pos', pos);
+    } else {
+        map.panTo(typeof applyLatLngOffset === 'function' ? applyLatLngOffset(pos, map.getZoom()) : pos);
+    }
 }
 
 function getCurrentTripForPoint(isoTimeStr) {
@@ -1293,15 +1330,25 @@ document.addEventListener('keydown', (e) => {
 
     if (e.key === 'ArrowLeft') {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         stepHistory(-1);
     } else if (e.key === 'ArrowRight') {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         stepHistory(1);
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
     } else if (e.key === ' ') {
         e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         togglePlayback();
     }
-});
+}, true);
 
 window.addEventListener('resize', () => {
     if (historyDeviceId) requestAnimationFrame(applyHistoryControlsPadding);

@@ -893,6 +893,11 @@
             const dropdown = document.getElementById('headerMenuDropdown');
             const btn = document.getElementById('headerGearBtn');
             const isOpen = dropdown.classList.contains('open');
+            if (!isOpen && btn) {
+                const btnRect = btn.getBoundingClientRect();
+                const availableHeight = window.innerHeight - btnRect.bottom - 16;
+                dropdown.style.maxHeight = `${Math.max(160, availableHeight)}px`;
+            }
             dropdown.classList.toggle('open');
             btn.classList.toggle('active', !isOpen);
 
@@ -959,6 +964,15 @@
             if (dropdown && btn && !dropdown.contains(e.target) && !btn.contains(e.target)) {
                 dropdown.classList.remove('open');
                 btn.classList.remove('active');
+            }
+        });
+        window.addEventListener('resize', () => {
+            const dropdown = document.getElementById('headerMenuDropdown');
+            const btn = document.getElementById('headerGearBtn');
+            if (dropdown && dropdown.classList.contains('open') && btn) {
+                const btnRect = btn.getBoundingClientRect();
+                const availableHeight = window.innerHeight - btnRect.bottom - 16;
+                dropdown.style.maxHeight = `${Math.max(160, availableHeight)}px`;
             }
         });
         document.addEventListener('DOMContentLoaded', () => {

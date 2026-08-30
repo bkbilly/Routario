@@ -129,14 +129,14 @@ function initMap() {
     let popupWasOpen = false;
     map.on('popupopen',  (e) => {
         popupWasOpen = true;
-        const devId = e.popup?._source?.deviceId;
+        const devId = e.popup?._source?.deviceId || (e.popup?._source === markers['history_pos'] ? 'history_pos' : null);
         if (devId && typeof _ensurePopupInVisibleMap === 'function') {
             _ensurePopupInVisibleMap(devId, e.popup._source.getLatLng());
         }
     });
     map.on('popupclose', (e) => {
         popupWasOpen = true;
-        const devId = e.popup?._source?.deviceId;
+        const devId = e.popup?._source?.deviceId || (e.popup?._source === markers['history_pos'] ? 'history_pos' : null);
         if (devId) {
             delete _popupGridScroll[devId];
             delete _popupSensorsScroll[devId];
