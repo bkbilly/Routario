@@ -642,6 +642,21 @@ def _write_schedule_pdf_reportlab(path: Path, schedule: ScheduledReport, data: d
     display_rows = table_rows[:max_rows] if (max_rows and max_rows > 0) else table_rows
     story.append(Paragraph("Results", title_style))
 
+    if max_rows and max_rows > 0 and len(rows) > max_rows:
+        truncation_notice_style = ParagraphStyle(
+            'TruncationNoticeTop',
+            fontName=font_bold,
+            fontSize=8,
+            leading=11,
+            textColor=colors.HexColor('#991b1b'),
+            spaceAfter=6,
+        )
+        story.append(Paragraph(
+            f"<b>Note:</b> This PDF export displays the first {max_rows:,} of {len(rows):,} total rows to ensure optimal document readability. "
+            f"The complete dataset with all {len(rows):,} rows and data points is included in the CSV export.",
+            truncation_notice_style,
+        ))
+
     if headers:
         total_w = 720
         col_w = total_w / len(headers)
@@ -660,8 +675,8 @@ def _write_schedule_pdf_reportlab(path: Path, schedule: ScheduledReport, data: d
         ]))
         story.append(rt)
         if max_rows and max_rows > 0 and len(rows) > max_rows:
-            story.append(Spacer(1, 4))
-            story.append(Paragraph(f"Showing first {max_rows} of {len(rows)} rows. Full results are included in the CSV export.", cell_style))
+            story.append(Spacer(1, 6))
+            story.append(Paragraph(f"Showing first {max_rows:,} of {len(rows):,} rows. Full results ({len(rows):,} rows) are included in the CSV export.", cell_style))
 
     # Billing Details
     for detail in billing_details:
@@ -689,15 +704,23 @@ def _write_schedule_pdf_reportlab(path: Path, schedule: ScheduledReport, data: d
     doc.build(story, canvasmaker=NumberedCanvas)
 
 
+MAX_PDF_ROWS = 3000
+
+
 def _write_schedule_pdf(path: Path, schedule: ScheduledReport, user: User, data: dict, columns: list[dict],
                         rows: list[dict], billing_details: list[dict], logo_path: Path | None,
                         app_name: str = "Routario", timezone_name: str | None = "UTC",
                         max_rows: Optional[int] = 500) -> None:
+    if max_rows is None or max_rows <= 0 or max_rows > MAX_PDF_ROWS:
+        effective_max = MAX_PDF_ROWS
+    else:
+        effective_max = max_rows
+
     try:
-        _write_schedule_pdf_reportlab(path, schedule, data, columns, rows, billing_details, logo_path, app_name, timezone_name, max_rows=max_rows)
+        _write_schedule_pdf_reportlab(path, schedule, data, columns, rows, billing_details, logo_path, app_name, timezone_name, max_rows=effective_max)
     except Exception as exc:
         logger.warning("ReportLab PDF generation failed, falling back to basic PDF: %s", exc)
-        _write_schedule_pdf_basic(path, schedule, data, columns, rows, billing_details, logo_path, app_name, timezone_name, max_rows=max_rows)
+        _write_schedule_pdf_basic(path, schedule, data, columns, rows, billing_details, logo_path, app_name, timezone_name, max_rows=effective_max)
 
 
 
@@ -711,9 +734,12 @@ def _write_schedule_pdf_basic(path: Path, schedule: ScheduledReport, data: dict,
     pdf.cards(_summary_items(data, timezone_name) or [("Report", schedule.report_type), ("Rows", str(len(rows)))])
     headers, table_rows = _report_table_rows(columns, rows, timezone_name)
     pdf.section("Results")
+    if max_rows and max_rows > 0 and len(rows) > max_rows:
+        pdf.text(f"Note: Showing first {max_rows:,} of {len(rows):,} rows for PDF formatting. Full results ({len(rows):,} rows) are in the CSV export.", pdf.margin, pdf.y, size=7.5, color=(0.600, 0.100, 0.100))
+        pdf.y -= 14
     pdf.table(headers, table_rows, max_rows=max_rows or 999999)
     if max_rows and max_rows > 0 and len(rows) > max_rows:
-        pdf.text(f"Showing first {max_rows} of {len(rows)} rows. Full results are included in the CSV export.", pdf.margin, pdf.y, size=8, color=(0.420, 0.447, 0.502))
+        pdf.text(f"Showing first {max_rows:,} of {len(rows):,} rows. Full results ({len(rows):,} rows) are included in the CSV export.", pdf.margin, pdf.y, size=8, color=(0.420, 0.447, 0.502))
         pdf.y -= 16
     for detail in billing_details:
         company = (detail.get("company") or {}).get("name") or "Company"
@@ -895,7 +921,8 @@ async def _result_attachments(session, schedule: ScheduledReport, user: User, da
                 if detail:
                     billing_details.append(detail)
         app_name, logo_path = await _pdf_branding(session, user)
-        _write_schedule_pdf(
+        await asyncio.to_thread(
+            _write_schedule_pdf,
             pdf_path,
             schedule,
             user,

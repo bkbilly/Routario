@@ -464,12 +464,13 @@ function _syncReportFilters() {
         }
         const allChk = document.getElementById('allVehCheck');
         if (allChk) allChk.checked = false;
-        _updateVehLabel();
         _fetchAvailableSensors();
     } else {
         const graphCard = document.getElementById('sensorGraphCard');
         if (graphCard) graphCard.style.display = 'none';
+        _syncAllCheck();
     }
+    _updateVehLabel();
 }
 
 function _renderReportControls(controls) {
@@ -868,6 +869,124 @@ function selectAllSensors(selectAll) {
     _renderSensorPills();
 }
 
+let _rawSensorSeries = [];
+let _rawActiveSensors = [];
+let _sensorDataMinTime = null;
+let _sensorDataMaxTime = null;
+const _sensorPalette = [
+    '#3b82f6', // Blue
+    '#10b981', // Emerald
+    '#f59e0b', // Amber
+    '#8b5cf6', // Violet
+    '#ec4899', // Pink
+    '#06b6d4', // Cyan
+    '#ef4444', // Red
+    '#14b8a6', // Teal
+    '#f97316', // Orange
+    '#6366f1', // Indigo
+    '#84cc16', // Lime
+    '#a855f7', // Fuchsia
+    '#0ea5e9', // Sky Blue
+    '#e11d48', // Ruby
+    '#d97706', // Ochre
+];
+
+function _lttbDownsample(data, target) {
+    if (!data || data.length <= target || target < 3) return data;
+    const bucketSize = (data.length - 2) / (target - 2);
+    const sampled = [data[0]];
+    let a = 0;
+    for (let i = 0; i < target - 2; i++) {
+        let avgX = 0, avgY = 0;
+        const start = Math.floor((i + 1) * bucketSize) + 1;
+        const end = Math.min(Math.floor((i + 2) * bucketSize) + 1, data.length);
+        const len = Math.max(1, end - start);
+        for (let j = start; j < end; j++) {
+            avgX += data[j].x;
+            avgY += data[j].y;
+        }
+        avgX /= len;
+        avgY /= len;
+
+        const rangeStart = Math.floor(i * bucketSize) + 1;
+        const rangeEnd = Math.floor((i + 1) * bucketSize) + 1;
+        const pAx = data[a].x;
+        const pAy = data[a].y;
+        let maxArea = -1;
+        let maxIdx = rangeStart;
+        for (let j = rangeStart; j < rangeEnd; j++) {
+            const area = Math.abs(
+                (pAx - avgX) * (data[j].y - pAy) - (pAx - data[j].x) * (avgY - pAy)
+            ) * 0.5;
+            if (area > maxArea) {
+                maxArea = area;
+                maxIdx = j;
+            }
+        }
+        sampled.push(data[maxIdx]);
+        a = maxIdx;
+    }
+    sampled.push(data[data.length - 1]);
+    return sampled;
+}
+
+function _buildSensorDatasets(minX, maxX) {
+    let colorIdx = 0;
+    const datasets = [];
+    const targetSamples = 1200; // Optimal points per dataset for smooth 60fps canvas rendering
+
+    _rawSensorSeries.forEach((veh) => {
+        _rawActiveSensors.forEach((sensor) => {
+            const color = _sensorPalette[colorIdx % _sensorPalette.length];
+            colorIdx++;
+
+            if (!veh._parsedPoints) {
+                veh._parsedPoints = (veh.points || [])
+                    .map(pt => {
+                        const d = _parseUtcDate(pt.time);
+                        return d ? { t: d.getTime(), raw: pt } : null;
+                    })
+                    .filter(Boolean);
+            }
+
+            let filtered = veh._parsedPoints;
+            if (minX != null && maxX != null) {
+                filtered = filtered.filter(p => p.t >= minX && p.t <= maxX);
+            }
+
+            const rawDataPoints = [];
+            for (let i = 0; i < filtered.length; i++) {
+                const val = filtered[i].raw[sensor.key];
+                if (val !== undefined && val !== null) {
+                    rawDataPoints.push({ x: filtered[i].t, y: Number(val) });
+                }
+            }
+
+            const isDense = rawDataPoints.length > targetSamples;
+            const displayPoints = isDense ? _lttbDownsample(rawDataPoints, targetSamples) : rawDataPoints;
+
+            datasets.push({
+                label: `${veh.name} - ${sensor.label}${sensor.unit ? ` (${sensor.unit})` : ''}`,
+                data: displayPoints,
+                borderColor: color,
+                backgroundColor: color,
+                pointBackgroundColor: color,
+                borderWidth: 2,
+                pointStyle: 'circle',
+                pointRadius: rawDataPoints.length > 80 ? 0 : 2.5,
+                pointHoverRadius: 5,
+                hitRadius: 6,
+                tension: 0,
+                normalized: true,
+                spanGaps: true,
+                fill: false,
+            });
+        });
+    });
+
+    return datasets;
+}
+
 function _renderSensorChart(payload) {
     const canvas = document.getElementById('sensorGraphCanvas');
     if (!canvas) return;
@@ -890,69 +1009,12 @@ function _renderSensorChart(payload) {
     const tooltipTitle = isLight ? '#0f172a' : '#e5e7eb';
     const tooltipBody = isLight ? '#475569' : '#9ca3af';
 
-    const palette = [
-        '#3b82f6', // Blue
-        '#10b981', // Emerald
-        '#f59e0b', // Amber
-        '#8b5cf6', // Violet
-        '#ec4899', // Pink
-        '#06b6d4', // Cyan
-        '#ef4444', // Red
-        '#14b8a6', // Teal
-        '#f97316', // Orange
-        '#6366f1', // Indigo
-        '#84cc16', // Lime
-        '#a855f7', // Fuchsia
-        '#0ea5e9', // Sky Blue
-        '#e11d48', // Ruby
-        '#d97706', // Ochre
-    ];
+    _rawSensorSeries = seriesList;
+    _rawActiveSensors = activeSensors;
+    _rawSensorSeries.forEach(v => { delete v._parsedPoints; });
 
-    const timeSet = new Set();
-    seriesList.forEach(veh => {
-        (veh.points || []).forEach(pt => {
-            if (pt.time) timeSet.add(pt.time);
-        });
-    });
-    const sortedTimes = [...timeSet].sort();
-
-    const labels = sortedTimes.map(t => {
-        const d = _parseUtcDate(t);
-        if (!d) return t;
-        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
-    });
-
-    let colorIdx = 0;
-    const datasets = [];
-    seriesList.forEach((veh) => {
-        const ptMap = new Map((veh.points || []).map(pt => [pt.time, pt]));
-
-        activeSensors.forEach((sensor) => {
-            const color = palette[colorIdx % palette.length];
-            colorIdx++;
-
-            const dataPoints = sortedTimes.map(t => {
-                const pt = ptMap.get(t);
-                if (!pt || pt[sensor.key] === undefined || pt[sensor.key] === null) return null;
-                return pt[sensor.key];
-            });
-
-            datasets.push({
-                label: `${veh.name} - ${sensor.label}${sensor.unit ? ` (${sensor.unit})` : ''}`,
-                data: dataPoints,
-                borderColor: color,
-                backgroundColor: color,
-                pointBackgroundColor: color,
-                borderWidth: 2.5,
-                pointStyle: 'circle',
-                pointRadius: sortedTimes.length > 80 ? 1.5 : 3.5,
-                pointHoverRadius: 6,
-                tension: 0.25,
-                spanGaps: true,
-                fill: false,
-            });
-        });
-    });
+    const datasets = _buildSensorDatasets();
+    const totalRawPoints = seriesList.reduce((acc, v) => acc + (v.points || []).length, 0);
 
     const titleEl = document.getElementById('sensorGraphTitleText');
     if (titleEl) {
@@ -960,22 +1022,135 @@ function _renderSensorChart(payload) {
     }
     const metaEl = document.getElementById('sensorGraphMeta');
     if (metaEl) {
-        metaEl.textContent = `${datasets.length} series • ${sortedTimes.length} timestamps`;
+        metaEl.textContent = `${datasets.length} series • ${totalRawPoints.toLocaleString()} data points`;
     }
 
     const resetBtn = document.getElementById('sensorResetZoomBtn');
     if (resetBtn) resetBtn.style.display = 'none';
 
+    let dataMin = null;
+    let dataMax = null;
+
+    if (payload.start_date) {
+        const sd = _parseUtcDate(payload.start_date);
+        if (sd) dataMin = sd.getTime();
+    }
+    if (payload.end_date) {
+        const ed = _parseUtcDate(payload.end_date);
+        if (ed) dataMax = ed.getTime();
+    }
+
+    seriesList.forEach(veh => {
+        (veh.points || []).forEach(pt => {
+            const d = _parseUtcDate(pt.time);
+            if (d) {
+                const t = d.getTime();
+                if (dataMin == null || t < dataMin) dataMin = t;
+                if (dataMax == null || t > dataMax) dataMax = t;
+            }
+        });
+    });
+
+    _sensorDataMinTime = dataMin;
+    _sensorDataMaxTime = dataMax;
+
+    const hasDateAdapter = typeof Chart !== 'undefined' && Chart._adapters && Chart._adapters._date;
+    const xScaleConfig = hasDateAdapter
+        ? {
+            type: 'time',
+            min: _sensorDataMinTime != null ? _sensorDataMinTime : undefined,
+            max: _sensorDataMaxTime != null ? _sensorDataMaxTime : undefined,
+            time: {
+                tooltipFormat: 'yyyy-MM-dd HH:mm:ss',
+                displayFormats: {
+                    millisecond: 'HH:mm:ss.SSS',
+                    second: 'HH:mm:ss',
+                    minute: 'HH:mm',
+                    hour: 'EEE, HH:mm',
+                    day: 'EEE, MMM d',
+                    week: 'MMM d',
+                    month: 'MMM yyyy',
+                }
+            },
+            ticks: {
+                color: tickColor,
+                font: { family: 'Outfit, sans-serif', size: 11 },
+                maxRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: 10,
+            },
+            grid: {
+                color: (ctx) => {
+                    if (ctx.tick && ctx.tick.value) {
+                        const d = new Date(ctx.tick.value);
+                        if (d.getHours() === 0 && d.getMinutes() === 0) {
+                            return isLight ? 'rgba(99, 102, 241, 0.45)' : 'rgba(129, 140, 248, 0.4)';
+                        }
+                    }
+                    return gridColor;
+                },
+                lineWidth: (ctx) => {
+                    if (ctx.tick && ctx.tick.value) {
+                        const d = new Date(ctx.tick.value);
+                        if (d.getHours() === 0 && d.getMinutes() === 0) return 1.75;
+                    }
+                    return 1;
+                }
+            }
+        }
+        : {
+            type: 'linear',
+            min: _sensorDataMinTime != null ? _sensorDataMinTime : undefined,
+            max: _sensorDataMaxTime != null ? _sensorDataMaxTime : undefined,
+            ticks: {
+                color: tickColor,
+                font: { family: 'Outfit, sans-serif', size: 11 },
+                maxRotation: 0,
+                maxTicksLimit: 10,
+                callback: function(val) {
+                    const d = new Date(val);
+                    if (isNaN(d.getTime())) return '';
+                    return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
+                        + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                }
+            },
+            grid: {
+                color: (ctx) => {
+                    if (ctx.tick && ctx.tick.value) {
+                        const d = new Date(ctx.tick.value);
+                        if (d.getHours() === 0) {
+                            return isLight ? 'rgba(99, 102, 241, 0.45)' : 'rgba(129, 140, 248, 0.4)';
+                        }
+                    }
+                    return gridColor;
+                },
+                lineWidth: (ctx) => {
+                    if (ctx.tick && ctx.tick.value) {
+                        const d = new Date(ctx.tick.value);
+                        if (d.getHours() === 0) return 1.75;
+                    }
+                    return 1;
+                }
+            }
+        };
+
     _sensorChart = new Chart(canvas, {
         type: 'line',
-        data: { labels, datasets },
+        data: { datasets },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             animation: false,
-            interaction: { mode: 'index', intersect: false },
+            interaction: { mode: 'nearest', axis: 'x', intersect: false },
             plugins: {
                 zoom: {
+                    limits: {
+                        x: {
+                            min: _sensorDataMinTime != null ? _sensorDataMinTime : 'original',
+                            max: _sensorDataMaxTime != null ? _sensorDataMaxTime : 'original',
+                            minRange: 1000 * 30, // 30 seconds minimum zoom level
+                        }
+                    },
                     pan: {
                         enabled: true,
                         mode: 'x',
@@ -1017,24 +1192,22 @@ function _renderSensorChart(payload) {
                     callbacks: {
                         title: function(items) {
                             if (!items.length) return '';
-                            const idx = items[0].dataIndex;
-                            const rawTime = sortedTimes[idx];
-                            const d = _parseUtcDate(rawTime);
-                            return d ? d.toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : (items[0].label || '');
+                            const xVal = items[0].parsed.x;
+                            const d = new Date(xVal);
+                            if (isNaN(d.getTime())) return items[0].label || '';
+                            return d.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })
+                                + '  •  ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                        },
+                        label: function(item) {
+                            const label = item.dataset.label || '';
+                            const val = item.parsed.y;
+                            return `  ${label}: ${val}`;
                         }
                     }
                 }
             },
             scales: {
-                x: {
-                    ticks: {
-                        color: tickColor,
-                        font: { family: 'JetBrains Mono, monospace', size: 10 },
-                        maxTicksLimit: 8,
-                        maxRotation: 0,
-                    },
-                    grid: { color: gridColor }
-                },
+                x: xScaleConfig,
                 y: {
                     ticks: { color: tickColor, font: { family: 'JetBrains Mono, monospace', size: 10 } },
                     grid: { color: gridColor }
@@ -1048,6 +1221,11 @@ function _renderSensorChart(payload) {
 
 function sensorGraphPan(direction) {
     if (!_sensorChart) return;
+    const xScale = _sensorChart.scales ? _sensorChart.scales.x : null;
+    if (xScale && _sensorDataMinTime != null && _sensorDataMaxTime != null) {
+        if (direction === 'left' && xScale.min <= _sensorDataMinTime) return;
+        if (direction === 'right' && xScale.max >= _sensorDataMaxTime) return;
+    }
     if (typeof _sensorChart.pan === 'function') {
         const delta = direction === 'left' ? 80 : -80;
         _sensorChart.pan({ x: delta }, undefined, 'default');
@@ -1057,6 +1235,12 @@ function sensorGraphPan(direction) {
 
 function sensorGraphZoom(factor) {
     if (!_sensorChart) return;
+    const xScale = _sensorChart.scales ? _sensorChart.scales.x : null;
+    if (factor < 1 && xScale && _sensorDataMinTime != null && _sensorDataMaxTime != null) {
+        if (xScale.min <= _sensorDataMinTime && xScale.max >= _sensorDataMaxTime) {
+            return;
+        }
+    }
     if (typeof _sensorChart.zoom === 'function') {
         _sensorChart.zoom(factor);
     }
@@ -1065,16 +1249,62 @@ function sensorGraphZoom(factor) {
 
 function _checkSensorGraphZoomState() {
     if (!_sensorChart) return;
-    const isZoomed = typeof _sensorChart.isZoomedOrPanned === 'function' ? _sensorChart.isZoomedOrPanned() : false;
+    const xScale = _sensorChart.scales ? _sensorChart.scales.x : null;
+    let clamped = false;
+    if (xScale && _sensorDataMinTime != null && _sensorDataMaxTime != null) {
+        if (xScale.min < _sensorDataMinTime) {
+            xScale.min = _sensorDataMinTime;
+            clamped = true;
+        }
+        if (xScale.max > _sensorDataMaxTime) {
+            xScale.max = _sensorDataMaxTime;
+            clamped = true;
+        }
+    }
+
+    const isZoomed = xScale && _sensorDataMinTime != null && _sensorDataMaxTime != null
+        ? (xScale.min > _sensorDataMinTime + 1000 || xScale.max < _sensorDataMaxTime - 1000)
+        : (typeof _sensorChart.isZoomedOrPanned === 'function' ? _sensorChart.isZoomedOrPanned() : false);
+
     ['sensorPanLeftBtn', 'sensorPanRightBtn', 'sensorZoomOutBtn', 'sensorResetZoomBtn'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = isZoomed ? 'inline-flex' : 'none';
     });
+
+    if (isZoomed && xScale) {
+        const { min, max } = xScale;
+        const newDatasets = _buildSensorDatasets(min, max);
+        if (_sensorChart.data && _sensorChart.data.datasets) {
+            _sensorChart.data.datasets.forEach((ds, i) => {
+                if (newDatasets[i]) {
+                    ds.data = newDatasets[i].data;
+                    ds.pointRadius = newDatasets[i].pointRadius;
+                }
+            });
+            _sensorChart.update('none');
+        }
+    } else if (clamped) {
+        _sensorChart.update('none');
+    }
 }
 
 function resetSensorGraphZoom() {
     if (_sensorChart && typeof _sensorChart.resetZoom === 'function') {
         _sensorChart.resetZoom();
+    }
+    if (_sensorChart && _sensorChart.scales && _sensorChart.scales.x && _sensorDataMinTime != null && _sensorDataMaxTime != null) {
+        _sensorChart.scales.x.min = _sensorDataMinTime;
+        _sensorChart.scales.x.max = _sensorDataMaxTime;
+    }
+    const newDatasets = _buildSensorDatasets();
+    if (_sensorChart && _sensorChart.data && _sensorChart.data.datasets) {
+        _sensorChart.data.datasets.forEach((ds, i) => {
+            if (newDatasets[i]) {
+                ds.data = newDatasets[i].data;
+                ds.pointRadius = newDatasets[i].pointRadius;
+            }
+        });
+        _sensorChart.update('none');
     }
     _checkSensorGraphZoomState();
 }
@@ -1219,6 +1449,8 @@ function _setReportLoading(isLoading) {
             ? '<i class="mdi mdi-loading mdi-spin"></i> Generating'
             : '<i class="mdi mdi-chart-bar"></i> Generate';
     }
+    const truncBanner = document.getElementById('reportTruncationBanner');
+    if (truncBanner) truncBanner.style.display = 'none';
     if (isLoading) {
         table.style.display = 'none';
         if (graphCard) graphCard.style.display = 'none';
@@ -1256,6 +1488,8 @@ async function _renderReport() {
         if (pagination) pagination.style.display = 'none';
         const graphCard = document.getElementById('sensorGraphCard');
         if (graphCard) graphCard.style.display = 'none';
+        const truncBanner = document.getElementById('reportTruncationBanner');
+        if (truncBanner) truncBanner.style.display = 'none';
         noData.style.display = '';
         sumBar.style.display = 'none';
         expWrap.style.display = 'none';
@@ -1286,6 +1520,16 @@ async function _renderReport() {
     _applySensorViewVisibility();
 
     const totalRows = rows.length;
+    const truncBanner = document.getElementById('reportTruncationBanner');
+    const truncText = document.getElementById('reportTruncationBannerText');
+    if (truncBanner && truncText) {
+        if (totalRows > 3000) {
+            truncText.innerHTML = `This report contains <strong>${totalRows.toLocaleString()}</strong> rows. The <strong>CSV export</strong> includes all ${totalRows.toLocaleString()} rows and data points. PDF export is formatted for the first 3,000 rows.`;
+            truncBanner.style.display = 'flex';
+        } else {
+            truncBanner.style.display = 'none';
+        }
+    }
     const isAll = _reportPageSize === 'all' || _reportPageSize === -1;
     const pageSize = isAll ? totalRows : (parseInt(_reportPageSize, 10) || 50);
     const totalPages = isAll ? 1 : (Math.ceil(totalRows / pageSize) || 1);
@@ -1594,17 +1838,52 @@ function _fmtMoneyCents(cents, currency = 'EUR') {
     }).format((Number(cents) || 0) / 100);
 }
 
-function exportCsv() {
-    if (!_reportPayload) return;
-    _exportPayloadCsv(_reportPayload, _reportData);
+function _setExportingState(isExporting, format = 'CSV') {
+    const btns = [
+        document.getElementById('exportBtn'),
+        document.getElementById('runExportBtn')
+    ].filter(Boolean);
+
+    btns.forEach(btn => {
+        if (isExporting) {
+            if (!btn.dataset.originalHtml) {
+                btn.dataset.originalHtml = btn.innerHTML;
+            }
+            btn.disabled = true;
+            btn.innerHTML = `<i class="mdi mdi-loading mdi-spin"></i> Exporting ${format}...`;
+        } else {
+            if (btn.dataset.originalHtml) {
+                btn.innerHTML = btn.dataset.originalHtml;
+                delete btn.dataset.originalHtml;
+            }
+            btn.disabled = false;
+        }
+    });
 }
 
-function _exportPayloadCsv(payload, data) {
-    const columns = (payload.columns || []).filter(c => c.csv !== false && c.hidden !== true);
-    const headers = columns.map(c => c.label);
-    const sort = _sortCol ? { key: _sortCol, dir: _sortDir } : (payload.default_sort || {});
-    const rows = _sortedRowsBy(data || [], sort.key || columns[0]?.key, sort.dir || 1);
-    _downloadCsv(headers, rows, r => columns.map(c => _plainValue(r[c.key], c)), payload.csv_filename || 'report.csv');
+async function exportCsv() {
+    if (!_reportPayload) return;
+    await _exportPayloadCsv(_reportPayload, _reportData);
+}
+
+async function _exportPayloadCsv(payload, data) {
+    _setExportingState(true, 'CSV');
+    showAlert('Preparing CSV export...', 'info', 2500);
+    // Yield to the browser so the button spinner renders before serializing
+    await new Promise(r => setTimeout(r, 60));
+    try {
+        const columns = (payload.columns || []).filter(c => c.csv !== false && c.hidden !== true);
+        const headers = columns.map(c => c.label);
+        const sort = _sortCol ? { key: _sortCol, dir: _sortDir } : (payload.default_sort || {});
+        const rows = _sortedRowsBy(data || [], sort.key || columns[0]?.key, sort.dir || 1);
+        _downloadCsv(headers, rows, r => columns.map(c => _plainValue(r[c.key], c)), payload.csv_filename || 'report.csv');
+        showAlert('CSV export downloaded.', 'success', 3000);
+    } catch (err) {
+        console.error(err);
+        showAlert('Failed to export CSV: ' + (err.message || err), 'error');
+    } finally {
+        _setExportingState(false);
+    }
 }
 
 function exportPdf() {
@@ -1614,11 +1893,11 @@ function exportPdf() {
         const modal = document.getElementById('pdfExportModal');
         const msgEl = document.getElementById('pdfExportRowCountMsg');
         if (modal && msgEl) {
-            msgEl.innerHTML = `This report contains <strong>${rowCount.toLocaleString()}</strong> rows. Select how you would like to export:`;
+            msgEl.innerHTML = `This report contains <strong>${rowCount.toLocaleString()}</strong> rows.<br><span style="display:inline-block;margin-top:0.4rem;color:var(--text-muted);font-size:0.85rem;"><i class="mdi mdi-information-outline"></i> PDF exports are formatted for the first 3,000 rows. The CSV export contains all <strong>${rowCount.toLocaleString()}</strong> rows.</span>`;
             modal.classList.add('active');
             return;
         }
-        const exportAll = confirm(`This report contains ${rowCount.toLocaleString()} rows.\n\nClick OK to export ALL ${rowCount.toLocaleString()} rows in PDF.\nClick Cancel to export the first 500 rows only.`);
+        const exportAll = confirm(`This report contains ${rowCount.toLocaleString()} rows.\n\nClick OK to export PDF (up to 3,000 rows).\nClick Cancel to export the first 500 rows only.\n\nNote: The CSV export contains all ${rowCount.toLocaleString()} rows and data points.`);
         _performPdfExport(exportAll);
         return;
     }
@@ -1643,20 +1922,29 @@ function confirmPdfExport(allRows) {
     _performPdfExport(allRows);
 }
 
-function _performPdfExport(allRows = false) {
+async function _performPdfExport(allRows = false) {
     const tz = _getUserTimezone();
-    if (_viewingRunData) {
-        _exportPayloadPdf(_reportPayload, _reportData, _reportDefMap[_reportPayload.type]?.label || 'Report', allRows, tz);
-        return;
+    _setExportingState(true, 'PDF');
+    showAlert('Generating PDF report...', 'info', 6000);
+    try {
+        if (_viewingRunData) {
+            await _exportPayloadPdf(_reportPayload, _reportData, _reportDefMap[_reportPayload.type]?.label || 'Report', allRows, tz);
+            return;
+        }
+        if (!_lastReportPdfUrl) {
+            showAlert('Generate the report again before exporting PDF.', 'warning');
+            return;
+        }
+        const sep = _lastReportPdfUrl.includes('?') ? '&' : '?';
+        let url = `${_lastReportPdfUrl}${sep}timezone=${encodeURIComponent(tz)}`;
+        if (allRows) url += '&all_rows=true';
+        await _downloadStyledReportPdf(url);
+    } catch (err) {
+        console.error(err);
+        showAlert(err.message || 'Failed to export PDF', 'error');
+    } finally {
+        _setExportingState(false);
     }
-    if (!_lastReportPdfUrl) {
-        showAlert('Generate the report again before exporting PDF.', 'warning');
-        return;
-    }
-    const sep = _lastReportPdfUrl.includes('?') ? '&' : '?';
-    let url = `${_lastReportPdfUrl}${sep}timezone=${encodeURIComponent(tz)}`;
-    if (allRows) url += '&all_rows=true';
-    _downloadStyledReportPdf(url);
 }
 
 async function _downloadStyledReportPdf(url) {
@@ -1670,9 +1958,11 @@ async function _downloadStyledReportPdf(url) {
         const disposition = res.headers.get('Content-Disposition') || '';
         const match = disposition.match(/filename="?([^"]+)"?/i);
         _downloadBlob(blob, match?.[1] || 'report.pdf');
+        showAlert('PDF export downloaded.', 'success', 3000);
     } catch (error) {
         console.error(error);
         showAlert(error.message || 'Failed to export PDF', 'error');
+        throw error;
     }
 }
 
@@ -1700,9 +1990,11 @@ async function _exportPayloadPdf(payload, data, title = 'Report', allRows = fals
         const disposition = res.headers.get('Content-Disposition') || '';
         const match = disposition.match(/filename="?([^"]+)"?/i);
         _downloadBlob(blob, match?.[1] || 'report.pdf');
+        showAlert('PDF export downloaded.', 'success', 3000);
     } catch (error) {
         console.error(error);
         showAlert(error.message || 'Failed to export PDF', 'error');
+        throw error;
     }
 }
 
@@ -1782,10 +2074,13 @@ async function exportBillingDetailPdf() {
     const original = btn?.innerHTML;
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Exporting';
+        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Exporting PDF...';
     }
+    showAlert('Generating billing PDF...', 'info', 5000);
     try {
         await _downloadStyledReportPdf(_billingDetailPdfUrl);
+    } catch (err) {
+        // Error toast already displayed in _downloadStyledReportPdf
     } finally {
         if (btn) {
             btn.disabled = false;

@@ -87,7 +87,7 @@ class SensorGraphsReport(Report):
         requested_sensors_raw = (options or {}).get("sensors", "")
         requested_sensors = [s.strip() for s in requested_sensors_raw.split(",") if s.strip()] if requested_sensors_raw else None
 
-        # Fetch position records
+        # Fetch all position records (CSV export includes 100% of data points)
         query = (
             select(PositionRecord)
             .where(

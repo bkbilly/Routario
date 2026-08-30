@@ -4,6 +4,7 @@ Fleet Reports Routes.
 Report implementations live in app/reports/* and are dispatched through the
 central report registry.
 """
+import asyncio
 import csv
 import io
 import tempfile
@@ -252,7 +253,8 @@ async def billing_report_details_pdf(
 
     with tempfile.TemporaryDirectory(prefix="routario_billing_pdf_") as td:
         pdf_path = Path(td) / filename
-        _write_schedule_pdf(
+        await asyncio.to_thread(
+            _write_schedule_pdf,
             pdf_path,
             SimpleNamespace(name=f"Billing Details - {company}", report_type="billing"),
             current_user,
@@ -315,7 +317,8 @@ async def report_pdf_from_payload(
     effective_tz = body.timezone or getattr(current_user, "timezone", None) or "UTC"
     with tempfile.TemporaryDirectory(prefix="routario_report_pdf_") as td:
         pdf_path = Path(td) / filename
-        _write_schedule_pdf(
+        await asyncio.to_thread(
+            _write_schedule_pdf,
             pdf_path,
             SimpleNamespace(name=body.title or body.report_type, report_type=body.report_type),
             current_user,
@@ -406,7 +409,8 @@ async def report_pdf_by_key(
     effective_tz = (timezone if isinstance(timezone, str) else None) or getattr(current_user, "timezone", None) or "UTC"
     with tempfile.TemporaryDirectory(prefix="routario_report_pdf_") as td:
         pdf_path = Path(td) / filename
-        _write_schedule_pdf(
+        await asyncio.to_thread(
+            _write_schedule_pdf,
             pdf_path,
             SimpleNamespace(name=report.definition.label, report_type=report_key),
             current_user,
