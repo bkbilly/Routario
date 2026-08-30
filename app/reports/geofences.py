@@ -4,7 +4,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 
 from reports.base import Report, ReportDefinition
-from reports.common import filtered_device_map, table_payload
+from reports.common import filtered_device_map, normalize_utc, table_payload
 
 
 class GeofenceActivityReport(Report):
@@ -29,6 +29,9 @@ class GeofenceActivityReport(Report):
     ) -> dict:
         from models import Device, User
         from models.models import AlertHistory
+
+        start_date = normalize_utc(start_date)
+        end_date = normalize_utc(end_date)
 
         device_map = await filtered_device_map(session, current_user, device_ids)
         if not device_map:
@@ -118,7 +121,11 @@ class GeofenceActivityReport(Report):
             start_date,
             end_date,
             default_sort={"key": "created_at", "dir": -1},
-            csv_filename=f"geofence_activity_{start_date.date()}_{end_date.date()}.csv",
+            csv_filename=(
+                f"geofence_activity_{start_date.date()}_{end_date.date()}.csv"
+                if start_date and end_date
+                else "geofence_activity.csv"
+            ),
         )
 
 

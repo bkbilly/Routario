@@ -4,7 +4,7 @@ from typing import Any, Optional
 from sqlalchemy import desc, select
 
 from reports.base import Report, ReportDefinition
-from reports.common import table_payload
+from reports.common import normalize_utc, table_payload
 
 
 class AuditReport(Report):
@@ -33,6 +33,9 @@ class AuditReport(Report):
         historical: bool = False,
     ) -> dict:
         from models import AuditLog, Company, User
+
+        start_date = normalize_utc(start_date)
+        end_date = normalize_utc(end_date)
 
         actor = User.__table__.alias("actor_user")
         company = Company.__table__.alias("audit_company")
@@ -89,7 +92,11 @@ class AuditReport(Report):
             start_date,
             end_date,
             default_sort={"key": "created_at", "dir": -1},
-            csv_filename=f"audit_report_{start_date.date()}_{end_date.date()}.csv",
+            csv_filename=(
+                f"audit_report_{start_date.date()}_{end_date.date()}.csv"
+                if start_date and end_date
+                else "audit_report.csv"
+            ),
         )
 
 

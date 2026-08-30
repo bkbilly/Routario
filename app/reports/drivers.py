@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from reports.base import Report, ReportDefinition
-from reports.common import round_value, table_payload, trip_rows
+from reports.common import normalize_utc, round_value, table_payload, trip_rows
 
 
 class DriverActivityReport(Report):
@@ -25,6 +25,8 @@ class DriverActivityReport(Report):
         options: Optional[dict[str, Any]] = None,
         historical: bool = False,
     ) -> dict:
+        start_date = normalize_utc(start_date)
+        end_date = normalize_utc(end_date)
         trips = await trip_rows(session, current_user, start_date, end_date, device_ids)
         by_driver = {}
         for trip in trips:
@@ -80,7 +82,11 @@ class DriverActivityReport(Report):
             start_date,
             end_date,
             default_sort={"key": "driver", "dir": 1},
-            csv_filename=f"driver_activity_{start_date.date()}_{end_date.date()}.csv",
+            csv_filename=(
+                f"driver_activity_{start_date.date()}_{end_date.date()}.csv"
+                if start_date and end_date
+                else "driver_activity.csv"
+            ),
             total_row={"driver": "Total", "trips": total_trips, "distance_km": round_value(total_distance, 1), "driving_minutes": round_value(total_minutes, 1), "avg_speed": None, "max_speed": round_value(top_speed, 1), "vehicle_count": None},
         )
 

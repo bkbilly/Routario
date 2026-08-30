@@ -7,6 +7,7 @@ from sqlalchemy import desc, select
 from core.auth import require_company_admin
 from core.database import get_db
 from models import AuditLog, Company, User
+from reports.common import normalize_utc
 
 router = APIRouter(prefix="/api/audit-logs", tags=["audit"])
 
@@ -45,12 +46,10 @@ async def list_audit_logs(
     current_user: User = Depends(require_company_admin),
 ):
     _require_audit_permission(current_user)
-    db = get_db()
-    if not end_date:
-        end_date = datetime.utcnow()
-    if not start_date:
-        start_date = end_date - timedelta(days=30)
+    end_date = normalize_utc(end_date) or datetime.utcnow()
+    start_date = normalize_utc(start_date) or (end_date - timedelta(days=30))
 
+    db = get_db()
     async with db.get_session() as session:
         actor = User.__table__.alias("actor_user")
         company = Company.__table__.alias("audit_company")

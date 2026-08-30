@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from reports.base import Report, ReportDefinition
-from reports.common import filtered_device_map, round_value, table_payload
+from reports.common import filtered_device_map, normalize_utc, round_value, table_payload
 
 # Metadata for known sensors
 SENSOR_META = {
@@ -63,6 +63,9 @@ class SensorGraphsReport(Report):
     ) -> dict[str, Any]:
         from sqlalchemy import select
         from models.models import DeviceState, PositionRecord
+
+        start_date = normalize_utc(start_date)
+        end_date = normalize_utc(end_date)
 
         device_map = await filtered_device_map(session, current_user, device_ids)
         if not device_map:
@@ -237,7 +240,11 @@ class SensorGraphsReport(Report):
             start_date,
             end_date,
             default_sort={"key": "time", "dir": -1},
-            csv_filename=f"sensor_graphs_{start_date.date()}_{end_date.date()}.csv",
+            csv_filename=(
+                f"sensor_graphs_{start_date.date()}_{end_date.date()}.csv"
+                if start_date and end_date
+                else "sensor_graphs.csv"
+            ),
         )
         payload["available_sensors"] = available_sensors
         payload["active_sensors"] = active_sensor_keys

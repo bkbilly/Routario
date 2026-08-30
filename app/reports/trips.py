@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from reports.base import Report, ReportDefinition
-from reports.common import round_value, table_payload, trip_rows
+from reports.common import normalize_utc, round_value, table_payload, trip_rows
 
 
 class TripListReport(Report):
@@ -25,6 +25,8 @@ class TripListReport(Report):
         options: Optional[dict[str, Any]] = None,
         historical: bool = False,
     ) -> dict:
+        start_date = normalize_utc(start_date)
+        end_date = normalize_utc(end_date)
         rows = await trip_rows(session, current_user, start_date, end_date, device_ids)
         total_distance = sum(r["distance_km"] for r in rows)
         total_minutes = sum(r["duration_minutes"] for r in rows)
@@ -53,7 +55,11 @@ class TripListReport(Report):
                 start_date,
                 end_date,
                 default_sort={"key": "start_time", "dir": -1},
-                csv_filename=f"trip_list_{start_date.date()}_{end_date.date()}.csv",
+                csv_filename=(
+                    f"trip_list_{start_date.date()}_{end_date.date()}.csv"
+                    if start_date and end_date
+                    else "trip_list.csv"
+                ),
                 row_action={"type": "trip_map"},
             )
         }

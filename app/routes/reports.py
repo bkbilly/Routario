@@ -22,17 +22,11 @@ from core.permissions import user_has_permission
 from models import User
 from reports import get_report, get_report_definitions
 from reports.billing import billing_detail_payload
-from reports.common import parse_id_csv
+from reports.common import normalize_utc, parse_id_csv
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
-
-def _normalize_utc(dt: Optional[datetime]) -> Optional[datetime]:
-    if dt is None:
-        return None
-    if dt.tzinfo is not None:
-        return dt.astimezone(timezone.utc).replace(tzinfo=None)
-    return dt
+_normalize_utc = normalize_utc
 
 
 async def require_reports_access(current_user: User = Depends(get_current_user)) -> User:
@@ -366,6 +360,10 @@ async def report_pdf_by_key(
         raise HTTPException(status_code=403, detail="Super admin access required")
     if report.definition.company_admin_required and not (current_user.is_admin or current_user.is_company_admin):
         raise HTTPException(status_code=403, detail="Company admin access required")
+    if report.definition.permission_required and not user_has_permission(current_user, report.definition.permission_required):
+        raise HTTPException(status_code=403, detail=f"Permission required: {report.definition.permission_required}")
+    start_date = _normalize_utc(start_date)
+    end_date = _normalize_utc(end_date)
     if report.definition.needs_date_range and (not start_date or not end_date):
         raise HTTPException(status_code=400, detail="start_date and end_date are required")
     if historical and (not start_date or not end_date):
@@ -405,7 +403,7 @@ async def report_pdf_by_key(
 
     filename = (payload.get("csv_filename") if isinstance(payload, dict) else None) or f"{report_key}.csv"
     filename = Path(filename).with_suffix(".pdf").name.replace('"', "")
-    effective_tz = timezone or getattr(current_user, "timezone", None) or "UTC"
+    effective_tz = (timezone if isinstance(timezone, str) else None) or getattr(current_user, "timezone", None) or "UTC"
     with tempfile.TemporaryDirectory(prefix="routario_report_pdf_") as td:
         pdf_path = Path(td) / filename
         _write_schedule_pdf(
@@ -419,7 +417,7 @@ async def report_pdf_by_key(
             logo_path,
             app_name,
             effective_tz,
-            max_rows=None if all_rows else 500,
+            max_rows=None if (all_rows is True) else 500,
         )
         pdf_bytes = pdf_path.read_bytes()
 

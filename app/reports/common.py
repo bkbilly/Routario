@@ -1,10 +1,18 @@
 """
 Shared report helpers.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Tuple
 
 from sqlalchemy import select
+
+
+def normalize_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
 
 
 KEY_USER_PERMISSIONS = [
@@ -32,6 +40,8 @@ def table_payload(
     total_row: Optional[dict] = None,
     historical: Optional[bool] = None,
 ) -> dict[str, Any]:
+    start_date = normalize_utc(start_date)
+    end_date = normalize_utc(end_date)
     payload = {
         "type": report_type,
         "start_date": start_date.isoformat().replace("T", " ") if start_date else None,
@@ -55,8 +65,8 @@ def round_value(value: Any, digits: int = 1) -> float:
     return round(float(value or 0), digits)
 
 
-def parse_id_csv(value: Optional[str]) -> list[int]:
-    if not value:
+def parse_id_csv(value: Any) -> list[int]:
+    if not value or not isinstance(value, str):
         return []
     return [int(x) for x in value.split(",") if x.strip().isdigit()]
 
@@ -96,6 +106,9 @@ async def trip_rows(
     device_ids: Optional[list[int]] = None,
 ) -> list[dict]:
     from models import Driver, Trip
+
+    start_date = normalize_utc(start_date)
+    end_date = normalize_utc(end_date)
 
     device_map = await filtered_device_map(session, user, device_ids)
     if not device_map:

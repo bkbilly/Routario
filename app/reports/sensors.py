@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from reports.base import Report, ReportDefinition
-from reports.common import filtered_device_map, table_payload
+from reports.common import filtered_device_map, normalize_utc, table_payload
 
 
 class VehicleSensorsReport(Report):
@@ -31,6 +31,9 @@ class VehicleSensorsReport(Report):
         from sqlalchemy.orm import selectinload
 
         from models.models import DeviceState, Driver, PositionRecord
+
+        start_date = normalize_utc(start_date)
+        end_date = normalize_utc(end_date)
 
         device_map = await filtered_device_map(session, current_user, device_ids)
         devices = sorted(device_map.values(), key=lambda x: x.name)
@@ -131,7 +134,11 @@ class VehicleSensorsReport(Report):
             start_date,
             end_date,
             default_sort={"key": "time", "dir": -1},
-            csv_filename=f"vehicle_sensors_history_{start_date.date()}_{end_date.date()}.csv",
+            csv_filename=(
+                f"vehicle_sensors_history_{start_date.date()}_{end_date.date()}.csv"
+                if start_date and end_date
+                else "vehicle_sensors_history.csv"
+            ),
             historical=True,
         )
 

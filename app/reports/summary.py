@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from reports.base import Report, ReportDefinition
-from reports.common import filtered_device_map, round_value, table_payload
+from reports.common import filtered_device_map, normalize_utc, round_value, table_payload
 
 
 class FleetSummaryReport(Report):
@@ -30,6 +30,9 @@ class FleetSummaryReport(Report):
 
         from models import Trip
         from models.models import DeviceState
+
+        start_date = normalize_utc(start_date)
+        end_date = normalize_utc(end_date)
 
         device_map = await filtered_device_map(session, current_user, device_ids)
         devices = list(device_map.values())
@@ -98,7 +101,11 @@ class FleetSummaryReport(Report):
             start_date,
             end_date,
             default_sort={"key": "device_name", "dir": 1},
-            csv_filename=f"fleet_summary_{start_date.date()}_{end_date.date()}.csv",
+            csv_filename=(
+                f"fleet_summary_{start_date.date()}_{end_date.date()}.csv"
+                if start_date and end_date
+                else "fleet_summary.csv"
+            ),
             total_row={
                 "device_name": "Total",
                 "trips": total_trips,

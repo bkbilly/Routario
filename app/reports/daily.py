@@ -3,7 +3,7 @@ import zoneinfo
 from typing import Any, Optional
 
 from reports.base import Report, ReportDefinition
-from reports.common import round_value, table_payload, trip_rows
+from reports.common import normalize_utc, round_value, table_payload, trip_rows
 
 
 def _trip_local_date(iso_str: str, tz_name: Optional[str]) -> str:
@@ -57,6 +57,8 @@ class DailyActivityReport(Report):
         options: Optional[dict[str, Any]] = None,
         historical: bool = False,
     ) -> dict:
+        start_date = normalize_utc(start_date)
+        end_date = normalize_utc(end_date)
         group_by = (options or {}).get("group_by") or "fleet"
         trips = await trip_rows(session, current_user, start_date, end_date, device_ids)
         selected_drivers = set(driver_ids or [])
@@ -118,7 +120,11 @@ class DailyActivityReport(Report):
             start_date,
             end_date,
             default_sort={"key": "date", "dir": -1},
-            csv_filename=f"daily_activity_{group_by}_{start_date.date()}_{end_date.date()}.csv",
+            csv_filename=(
+                f"daily_activity_{group_by}_{start_date.date()}_{end_date.date()}.csv"
+                if start_date and end_date
+                else f"daily_activity_{group_by}.csv"
+            ),
             total_row={"date": "Total", "trips": total_trips, "distance_km": round_value(total_distance, 1), "driving_minutes": round_value(total_minutes, 1)},
         )
 

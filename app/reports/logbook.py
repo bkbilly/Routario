@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from reports.base import Report, ReportDefinition
-from reports.common import filtered_device_map, round_value, table_payload
+from reports.common import filtered_device_map, normalize_utc, round_value, table_payload
 
 
 def _maintenance_label(params: dict) -> str:
@@ -68,6 +68,9 @@ class LogbookReport(Report):
         historical: bool = False,
     ) -> dict:
         from models import DeviceState, FuelLog, LogbookEntry
+
+        start_date = normalize_utc(start_date)
+        end_date = normalize_utc(end_date)
 
         logbook_type = (options or {}).get("logbook_type") or "maintenance"
         if logbook_type not in {"maintenance", "fuel"}:
@@ -275,7 +278,11 @@ class LogbookReport(Report):
             start_date,
             end_date,
             default_sort={"key": "date", "dir": -1},
-            csv_filename=f"logbook_{logbook_type}_{start_date.date()}_{end_date.date()}.csv",
+            csv_filename=(
+                f"logbook_{logbook_type}_{start_date.date()}_{end_date.date()}.csv"
+                if start_date and end_date
+                else f"logbook_{logbook_type}.csv"
+            ),
         )
 
 
