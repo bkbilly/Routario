@@ -382,6 +382,55 @@ body.light-theme::before {
     transform: scaleY(1);
 }
 
+/* ── Compact Sidebar Mode ── */
+body.sidebar-compact .device-list,
+.dashboard.sidebar-compact .device-list {
+    gap: 0.25rem;
+}
+
+body.sidebar-compact .device-card,
+.dashboard.sidebar-compact .device-card {
+    padding: 0.42rem 0.65rem;
+    border-radius: 8px;
+}
+
+body.sidebar-compact .device-card .device-header,
+.dashboard.sidebar-compact .device-card .device-header {
+    margin-bottom: 0;
+    gap: 0.5rem;
+}
+
+body.sidebar-compact .device-card .device-name,
+.dashboard.sidebar-compact .device-card .device-name {
+    font-size: 0.82rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+body.sidebar-compact .device-card .device-meta,
+.dashboard.sidebar-compact .device-card .device-meta {
+    flex-shrink: 0;
+    gap: 0.35rem;
+}
+
+body.sidebar-compact .device-card .device-status,
+.dashboard.sidebar-compact .device-card .device-status,
+body.sidebar-compact .device-card .ign-badge,
+.dashboard.sidebar-compact .device-card .ign-badge {
+    padding: 0.1rem 0.35rem;
+    font-size: 0.6rem;
+}
+
+body.sidebar-compact .device-card .device-info,
+body.sidebar-compact .device-card .device-actions,
+.dashboard.sidebar-compact .device-card .device-info,
+.dashboard.sidebar-compact .device-card .device-actions {
+    display: none !important;
+}
+
 .selected-route-panel {
     margin: 0 0 0.75rem;
     padding: 0.75rem;
@@ -2909,8 +2958,8 @@ body.light-theme .leaflet-bar a:hover {
 
 .vp-grid::-webkit-scrollbar,
 .vp-sensor-panel::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 5px;
+    height: 5px;
 }
 
 .vp-grid::-webkit-scrollbar-button,
@@ -2957,32 +3006,48 @@ body.light-theme .leaflet-bar a:hover {
 
 .vp-actions {
     display: none;
-    padding: 0.6rem 0.75rem 0.75rem;
-    gap: 0.4rem;
+    padding: 0.4rem 0.6rem 0.5rem;
+    gap: 0.35rem;
     border-top: 1px solid var(--border-color);
-    flex-wrap: wrap;
+    flex-direction: row;
+    flex-wrap: nowrap;
 }
 
 .dashboard.sidebar-hidden ~ * .vp-actions,
-.sidebar-hidden .vp-actions {
+.sidebar-hidden .vp-actions,
+body.sidebar-compact .vp-actions,
+.dashboard.sidebar-compact .vp-actions,
+.dashboard.sidebar-compact ~ * .vp-actions,
+.sidebar-compact .vp-actions {
     display: flex;
 }
 
 .vp-action-btn {
-    flex: 1 1 auto;
-    min-width: calc(33% - 0.4rem);
-    padding: 0.45rem 0.4rem;
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.15rem;
+    padding: 0.35rem 0.25rem;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: 7px;
     color: var(--text-primary);
-    font-size: 0.72rem;
+    font-size: 0.68rem;
+    line-height: 1.15;
     font-family: 'Outfit', sans-serif;
-    font-weight: 600;
+    font-weight: 500;
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
     white-space: nowrap;
     text-align: center;
+}
+
+.vp-action-btn i {
+    font-size: 1.05rem;
+    line-height: 1;
 }
 
 .vp-action-btn:hover {
@@ -2992,6 +3057,23 @@ body.light-theme .leaflet-bar a:hover {
 }
 
 /* ── Smaller Screen Heights: Compact popup with scrollable attributes ── */
+@media (max-height: 800px) {
+    /* When buttons are shown on the popup, start the 120px scrollable grid at 800px and below */
+    body.sidebar-compact .vp-grid,
+    .sidebar-compact .vp-grid,
+    .sidebar-hidden .vp-grid {
+        max-height: 120px;
+        overflow-y: auto;
+        padding: 0.5rem 0.75rem;
+        gap: 0.3rem 0.75rem;
+    }
+    body.sidebar-compact .vp-sensor-panel,
+    .sidebar-compact .vp-sensor-panel,
+    .sidebar-hidden .vp-sensor-panel {
+        max-height: 110px !important;
+    }
+}
+
 @media (max-height: 700px) {
     .vp-grid {
         max-height: 120px;
@@ -3018,12 +3100,16 @@ body.light-theme .leaflet-bar a:hover {
         max-height: 85px !important;
     }
     .vp-actions {
-        padding: 0.35rem 0.5rem;
+        padding: 0.25rem 0.4rem 0.35rem;
         gap: 0.25rem;
     }
     .vp-action-btn {
-        padding: 0.3rem 0.4rem;
-        font-size: 0.7rem;
+        padding: 0.25rem 0.2rem;
+        font-size: 0.62rem;
+        gap: 0.1rem;
+    }
+    .vp-action-btn i {
+        font-size: 0.95rem;
     }
 }
 

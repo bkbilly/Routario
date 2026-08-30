@@ -117,6 +117,7 @@ def _token_response(user: User) -> dict[str, Any]:
         "units": getattr(user, "units", "metric") or "metric",
         "currency": getattr(user, "currency", "EUR") or "EUR",
         "theme": getattr(user, "theme", "dark") or "dark",
+        "sidebar_compact": getattr(user, "sidebar_compact", False) or False,
         "permissions": ALL_PERMISSIONS if user.is_admin else valid_permissions(user.permissions or []),
     }
 

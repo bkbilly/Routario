@@ -107,6 +107,7 @@ def _token_response(user: User) -> dict[str, Any]:
         "units": getattr(user, "units", "metric") or "metric",
         "currency": getattr(user, "currency", "EUR") or "EUR",
         "theme": getattr(user, "theme", "dark") or "dark",
+        "sidebar_compact": getattr(user, "sidebar_compact", False) or False,
         "permissions": ALL_PERMISSIONS if user.is_admin else valid_permissions(user.permissions or []),
     }
 
@@ -166,6 +167,7 @@ def _callback_html(data: dict[str, Any]) -> HTMLResponse:
         "units": data.get("units") or "metric",
         "currency": data.get("currency") or "EUR",
         "theme": data.get("theme") or "dark",
+        "sidebar_compact": data.get("sidebar_compact") or False,
         "permissions": data.get("permissions") or [],
     }
     script_data = json.dumps(items)

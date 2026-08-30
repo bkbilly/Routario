@@ -177,6 +177,7 @@ function renderDeviceList() {
         const card = document.createElement('div');
         card.className = 'device-card';
         card.id = `device-card-${device.id}`; // Add ID for easier updates
+        card.title = device.name || '';
         card.onclick = () => selectDevice(device.id);
 
         const vehicleIcon = (VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other']).emoji;
@@ -224,7 +225,7 @@ function getDeviceCardContent(device, icon) {
 
     return `
         <div class="device-header">
-            <div class="device-name">${icon} ${device.name}</div>
+            <div class="device-name" title="${_esc(device.name)}">${icon} ${_esc(device.name)}</div>
             <div class="device-meta">
                 ${ignBadge}
                 <span class="device-status ${vs.cls}" id="status-${device.id}"

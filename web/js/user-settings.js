@@ -237,6 +237,13 @@ function renderProfile() {
     document.getElementById('profileUnits').value = profileUser.units || 'metric';
     const themeEl = document.getElementById('profileTheme');
     if (themeEl) themeEl.value = profileUser.theme || 'dark';
+    const compactEl = document.getElementById('profileSidebarCompact');
+    if (compactEl) {
+        const isCompact = profileUser.sidebar_compact != null
+            ? Boolean(profileUser.sidebar_compact)
+            : (localStorage.getItem('sidebar_compact') === 'true');
+        compactEl.value = isCompact ? 'true' : 'false';
+    }
     renderProfileCurrencyOptions(profileUser.currency || 'EUR');
     const supported = Boolean(window.PublicKeyCredential);
     const note = document.getElementById('passkeySupportNote');
@@ -268,17 +275,29 @@ async function initProfileSection() {
             }
         });
     }
+    const compactEl = document.getElementById('profileSidebarCompact');
+    if (compactEl && !compactEl.dataset.compactBound) {
+        compactEl.dataset.compactBound = 'true';
+        compactEl.addEventListener('change', (e) => {
+            if (typeof applySidebarCompact === 'function') {
+                applySidebarCompact(e.target.value === 'true');
+            }
+        });
+    }
     await initProfileMfaPanel();
     await loadPasskeys();
 }
 
 async function saveProfile() {
     const themeEl = document.getElementById('profileTheme');
+    const compactEl = document.getElementById('profileSidebarCompact');
+    const isCompact = compactEl ? compactEl.value === 'true' : false;
     const payload = {
         email: document.getElementById('profileEmail').value.trim(),
         units: document.getElementById('profileUnits').value,
         currency: document.getElementById('profileCurrency').value,
         theme: themeEl ? themeEl.value : (profileUser?.theme || 'dark'),
+        sidebar_compact: isCompact,
     };
     const password = document.getElementById('profilePassword').value;
     if (password) payload.password = password;
@@ -295,8 +314,12 @@ async function saveProfile() {
         localStorage.setItem('units', saved.units || payload.units);
         localStorage.setItem('currency', saved.currency || payload.currency);
         localStorage.setItem('theme', saved.theme || payload.theme);
+        localStorage.setItem('sidebar_compact', saved.sidebar_compact != null ? (saved.sidebar_compact ? 'true' : 'false') : (isCompact ? 'true' : 'false'));
         if (typeof applyTheme === 'function') {
             applyTheme(saved.theme || payload.theme);
+        }
+        if (typeof applySidebarCompact === 'function') {
+            applySidebarCompact(saved.sidebar_compact != null ? saved.sidebar_compact : isCompact);
         }
         window.dispatchEvent(new Event('routario:currencychange'));
         renderProfile();

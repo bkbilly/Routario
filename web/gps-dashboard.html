@@ -977,6 +977,9 @@
         });
         document.addEventListener('DOMContentLoaded', () => {
             setAppHeight();
+            if (typeof applySidebarCompact === 'function') {
+                applySidebarCompact(localStorage.getItem('sidebar_compact') === 'true');
+            }
             
             // Auto-collapse sidebar on mobile/tablet load
             if (window.innerWidth <= 630) {
@@ -985,6 +988,12 @@
                 setTimeout(() => { if (map) map.invalidateSize(); }, 200);
             }
             initPWA();
+        });
+
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'sidebar_compact' && typeof applySidebarCompact === 'function') {
+                applySidebarCompact(e.newValue === 'true');
+            }
         });
 
         // Add resize listener to handle dynamic window resizing

@@ -285,6 +285,7 @@
             localStorage.setItem('units', data.units || 'metric');
             localStorage.setItem('currency', data.currency || 'EUR');
             localStorage.setItem('theme', data.theme || 'dark');
+            localStorage.setItem('sidebar_compact', data.sidebar_compact === true ? 'true' : 'false');
             localStorage.setItem('permissions', JSON.stringify(data.permissions || []));
             if (String(data.company_id ?? '') !== localStorage.getItem('company_login_slug_company_id')) {
                 localStorage.removeItem('company_login_slug');

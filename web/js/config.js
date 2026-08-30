@@ -328,6 +328,10 @@ const permissionsReady = (function () {
             localStorage.setItem('theme', user.theme);
             applyTheme(user.theme);
         }
+        if (user.sidebar_compact !== undefined) {
+            localStorage.setItem('sidebar_compact', user.sidebar_compact ? 'true' : 'false');
+            applySidebarCompact(user.sidebar_compact);
+        }
         if (user.timezone)
             localStorage.setItem('timezone', user.timezone);
         applyCompanyBranding(user.company_id);
@@ -336,6 +340,19 @@ const permissionsReady = (function () {
     })
     .catch(() => null); // network failure: use cached value
 })();
+
+function applySidebarCompact(compact) {
+    const isCompact = compact === true || compact === 'true';
+    if (document.body) document.body.classList.toggle('sidebar-compact', isCompact);
+    const dashboard = document.querySelector('.dashboard');
+    if (dashboard) dashboard.classList.toggle('sidebar-compact', isCompact);
+}
+window.applySidebarCompact = applySidebarCompact;
+
+if (localStorage.getItem('sidebar_compact') === 'true') {
+    if (document.body) document.body.classList.add('sidebar-compact');
+    else document.addEventListener('DOMContentLoaded', () => document.body?.classList.add('sidebar-compact'));
+}
 
 if (localStorage.getItem('company_id')) {
     applyCompanyBranding();
