@@ -1910,15 +1910,23 @@ function _renderCell(row, col) {
 }
 
 function _formatValue(value, col = {}, row = {}) {
-    if (value === null || value === undefined || value === '') {
+    if (value === null || value === undefined || value === '' || value === '-' || value === '—' || value === 'N/A') {
         const empty = col.empty || '—';
         return col.empty_tone ? `<span style="color:var(--accent-${col.empty_tone},#eab308);">${_esc(empty)}</span>` : _esc(empty);
     }
     if (col.type === 'datetime' || col.type === 'datetime_split') return _fmtDatetimeSplit(value);
+    if (col.type === 'date' || col.key === 'expiry_date') return _esc(formatDateValue(value));
     if (col.type === 'duration_minutes') return _fmtDuration(Number(value));
     if (col.type === 'currency_cents') {
         const currency = col.currency_key ? row[col.currency_key] : col.currency;
         return _fmtMoneyCents(value, currency || 'EUR');
+    }
+    if (col.key === 'balance' || col.type === 'currency' || col.type === 'sim_balance') {
+        const cur = col.currency_key ? row[col.currency_key] : (row.currency || col.currency || 'EUR');
+        const num = Number(value);
+        if (isNaN(num)) return _esc(value || '—');
+        const color = num > 0 ? 'var(--color-success, #22c55e)' : (num < 0 ? 'var(--color-danger, #ef4444)' : 'var(--text-muted)');
+        return `<span style="font-family:var(--font-mono);font-weight:600;color:${color};">${num.toFixed(col.decimals ?? 2)} ${_esc(cur)}</span>`;
     }
     if (col.type === 'number') return `${Number(value).toFixed(col.decimals ?? 1)}${col.suffix || ''}`;
     if (col.type === 'integer') return String(parseInt(value, 10));
@@ -1936,6 +1944,63 @@ function _formatValue(value, col = {}, row = {}) {
             const titleText = ch.error ? `${ch.name}: Failed (${ch.error})` : `${ch.name}: ${ch.status}`;
             return `<span title="${_esc(titleText)}" style="display:inline-flex;align-items:center;gap:0.25rem;font-size:0.72rem;padding:0.12rem 0.4rem;border-radius:4px;background:rgba(255,255,255,0.06);color:${color};margin:0.1rem;font-weight:600;"><i class="mdi ${icon}"></i>${_esc(ch.name)}</span>`;
         }).join(' ');
+    }
+    if (col.type === 'status' || col.key === 'status') {
+        const s = String(value).trim().toLowerCase();
+        let bg = 'rgba(148, 163, 184, 0.12)';
+        let color = 'var(--text-muted)';
+        let border = 'rgba(148, 163, 184, 0.28)';
+
+        if (s === 'active' || s === 'completed' || s === 'ok' || s === 'passed' || s === 'full tank') {
+            bg = 'rgba(34, 197, 94, 0.12)';
+            color = '#16a34a';
+            border = 'rgba(34, 197, 94, 0.28)';
+        } else if (s.includes('waiting') || s === 'pending' || s === 'not active' || s === 'not-active' || s === 'inactive' || s === 'due soon' || s === 'low balance') {
+            bg = 'rgba(249, 115, 22, 0.12)';
+            color = '#ea580c';
+            border = 'rgba(249, 115, 22, 0.28)';
+        } else if (s.includes('error') || s === 'blocked' || s === 'suspended' || s === 'expired' || s === 'terminated' || s === 'due') {
+            bg = 'rgba(239, 68, 68, 0.12)';
+            color = '#dc2626';
+            border = 'rgba(239, 68, 68, 0.28)';
+        } else if (s === 'missing credentials') {
+            bg = 'rgba(249, 115, 22, 0.12)';
+            color = '#ea580c';
+            border = 'rgba(249, 115, 22, 0.28)';
+        } else if (s === 'manual' || s === 'partial') {
+            bg = 'rgba(148, 163, 184, 0.12)';
+            color = 'var(--text-muted)';
+            border = 'rgba(148, 163, 184, 0.28)';
+        } else if (s === 'service entry' || s === 'info') {
+            bg = 'rgba(59, 130, 246, 0.12)';
+            color = '#2563eb';
+            border = 'rgba(59, 130, 246, 0.28)';
+        }
+
+        const errText = row.status_error || row.error || (col.error_key ? row[col.error_key] : null);
+        const titleAttr = errText ? ` title="${_esc(errText)}"` : '';
+        const cursorStyle = errText ? 'cursor:help;' : '';
+        const iconHtml = (s.includes('error') || s === 'missing credentials' || s === 'connection error' || Boolean(errText))
+            ? (errText ? '<i class="mdi mdi-information-outline" style="margin-right:0.28rem;font-size:0.88rem;vertical-align:middle;"></i>' : '')
+            : '';
+
+        return `<span class="badge"${titleAttr} style="background:${bg};color:${color};border:1px solid ${border};font-size:0.75rem;padding:0.15rem 0.5rem;border-radius:6px;font-weight:600;display:inline-flex;align-items:center;${cursorStyle}">${iconHtml}${_esc(value)}</span>`;
+    }
+    if (col.type === 'provider' || (col.key === 'provider' && (_reportPayload?.report_key === 'sim_cards' || _currentReportKey === 'sim_cards'))) {
+        const p = String(value).trim().toLowerCase();
+        if (p === 'iotsim_gr' || p === 'iotsim.gr' || p === 'iotsim') {
+            return `<span class="badge" style="background:rgba(14, 165, 233, 0.12);color:#0284c7;border:1px solid rgba(14, 165, 233, 0.28);font-size:0.75rem;padding:0.15rem 0.5rem;border-radius:6px;font-weight:600;">IoTSim.gr</span>`;
+        }
+        if (p === 'thingsmobile' || p === 'things mobile') {
+            return `<span class="badge" style="background:rgba(249, 115, 22, 0.12);color:#ea580c;border:1px solid rgba(249, 115, 22, 0.28);font-size:0.75rem;padding:0.15rem 0.5rem;border-radius:6px;font-weight:600;">Things Mobile</span>`;
+        }
+        if (p === '1nce' || p === 'once') {
+            return `<span class="badge" style="background:rgba(99, 102, 241, 0.12);color:#4f46e5;border:1px solid rgba(99, 102, 241, 0.28);font-size:0.75rem;padding:0.15rem 0.5rem;border-radius:6px;font-weight:600;">1NCE</span>`;
+        }
+        if (p === 'manual' || p === '-' || p === 'none' || !p) {
+            return `<span class="badge" style="background:rgba(148, 163, 184, 0.12);color:var(--text-muted);border:1px solid rgba(148, 163, 184, 0.28);font-size:0.75rem;padding:0.15rem 0.5rem;border-radius:6px;font-weight:500;">Manual</span>`;
+        }
+        return `<span class="badge" style="background:rgba(99, 102, 241, 0.12);color:#6366f1;border:1px solid rgba(99, 102, 241, 0.28);font-size:0.75rem;padding:0.15rem 0.5rem;border-radius:6px;font-weight:600;">${_esc(value)}</span>`;
     }
     if (col.type === 'severity') {
         const colors = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#3b82f6', info: 'var(--text-muted)' };

@@ -26,7 +26,7 @@ from core.auth import get_current_user, require_admin, require_company_admin, ve
 from core.audit import write_audit_log
 from integrations.engine import clear_device_state, evict_auth_cache
 from integrations.integration_model import IntegrationAccount
-from models import User, Device, DeviceState, user_device_association
+from models import User, Device, DeviceState, user_device_association, SimCard
 from models.models import Driver
 from models.schemas import DeviceCreate, DeviceResponse, DeviceStateResponse, TripResponse, UserResponse
 
@@ -38,7 +38,10 @@ async def get_all_devices(caller: User = Depends(require_company_admin), _: User
     """Return devices. Super admin sees all; company admin sees their company's."""
     db = get_db()
     async with db.get_session() as session:
-        q = select(Device).options(selectinload(Device.state).selectinload(DeviceState.current_driver))
+        q = select(Device).options(
+            selectinload(Device.state).selectinload(DeviceState.current_driver),
+            selectinload(Device.sim_card),
+        )
         if not caller.is_admin:
             q = q.where(Device.company_id == caller.company_id)
         result = await session.execute(q)
@@ -52,7 +55,10 @@ async def get_devices(current_user: User = Depends(get_current_user)):
     if current_user.is_admin:
         async with db.get_session() as session:
             result = await session.execute(
-                select(Device).options(selectinload(Device.state).selectinload(DeviceState.current_driver))
+                select(Device).options(
+                    selectinload(Device.state).selectinload(DeviceState.current_driver),
+                    selectinload(Device.sim_card),
+                )
             )
             return result.scalars().all()
     if current_user.is_company_admin and current_user.company_id is not None:
@@ -60,7 +66,10 @@ async def get_devices(current_user: User = Depends(get_current_user)):
             result = await session.execute(
                 select(Device)
                 .where(Device.company_id == current_user.company_id)
-                .options(selectinload(Device.state).selectinload(DeviceState.current_driver))
+                .options(
+                    selectinload(Device.state).selectinload(DeviceState.current_driver),
+                    selectinload(Device.sim_card),
+                )
             )
             return result.scalars().all()
     return await db.get_user_devices(current_user.id)
@@ -83,6 +92,16 @@ async def create_device(
         raise HTTPException(status_code=400, detail="IMEI already exists")
 
     device = await db.create_device(device_data)
+    if device_data.sim_card_id:
+        async with db.get_session() as session:
+            # Detach any other sim assigned to this device
+            await session.execute(
+                update(SimCard).where(SimCard.device_id == device.id).values(device_id=None)
+            )
+            # Assign requested sim
+            await session.execute(
+                update(SimCard).where(SimCard.id == device_data.sim_card_id).values(device_id=device.id)
+            )
     target_user = assign_to if assign_to else caller.id
     await db.add_device_to_user(target_user, device.id)
     await sync_active_protocol_servers()
@@ -134,6 +153,18 @@ async def update_device(
     device = await db.update_device(device_id, device_data)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
+
+    if "sim_card_id" in device_data.model_fields_set:
+        async with db.get_session() as session:
+            # Detach any existing sim card from this device
+            await session.execute(
+                update(SimCard).where(SimCard.device_id == device_id).values(device_id=None)
+            )
+            if device_data.sim_card_id:
+                # Assign new sim card
+                await session.execute(
+                    update(SimCard).where(SimCard.id == device_data.sim_card_id).values(device_id=device_id)
+                )
 
     if old_device and old_device.imei:
         clear_device_state(old_device.imei)

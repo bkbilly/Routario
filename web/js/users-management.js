@@ -21,7 +21,7 @@ let _usrAssignedDevices = new Set();
 const PERMISSION_GROUPS = [
     { label: 'Dashboard', perms: [['view_dashboard','View Dashboard'],['view_history','View History'],['manage_geofences','Manage Geofences'],['manage_routes','Manage Routes'],['manage_logbook','Manage Logbook'],['manage_fuel','Manage Fuel'],['manage_maintenance','Manage Maintenance'],['voice_ptt','Voice PTT'],['live_share','Live Share']] },
     { label: 'Device Management', perms: [['view_devices','View Devices'],['edit_devices','Edit Devices'],['send_commands','Send Commands'],['manage_alerts','Manage Alerts'],['manage_integrations','Manage Integrations']] },
-    { label: 'Management', perms: [['view_management','View Management'],['manage_users','Manage Users'],['manage_drivers','Manage Drivers'],['manage_mfa',"Manage Users' MFA"]] },
+    { label: 'Management', perms: [['view_management','View Management'],['manage_users','Manage Users'],['manage_drivers','Manage Drivers'],['manage_sim_cards','Manage SIM Cards'],['manage_mfa',"Manage Users' MFA"]] },
     { label: 'Fleet Reports', perms: [['view_reports','View Reports'],['llm','AI Copilot & LLM Reports'],['view_health','View Health Checks'],['view_audit','View Audit Log']] },
     { label: 'User Settings', perms: [['manage_api_keys','Manage API Keys'],['manage_tickets','Manage Tickets'],['manage_webhooks','Manage Webhooks'],['manage_backups','Backup & Restore']] },
 ];
@@ -249,6 +249,7 @@ function _usrRenderPermissions() {
     const regularUserForbiddenPerms = new Set([
         'manage_users',
         'manage_mfa',
+        'manage_sim_cards',
         'view_health',
         'manage_backups',
         'manage_integrations',

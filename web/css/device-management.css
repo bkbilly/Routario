@@ -1406,3 +1406,12 @@ h1 {
     margin: 0;
     z-index: 1;
 }
+
+.datetime-picker-wrap.is-native .datetime-picker-btn,
+.datetime-picker-wrap.is-native .datetime-picker-native {
+    display: none;
+}
+
+.datetime-picker-wrap.is-native .form-input {
+    padding-right: 0.75rem;
+}

@@ -48,6 +48,7 @@ class Company(Base):
 
     users:   Mapped[List["User"]]   = relationship(back_populates="company")
     devices: Mapped[List["Device"]] = relationship(back_populates="company")
+    sim_cards: Mapped[List["SimCard"]] = relationship("SimCard", back_populates="company", cascade="all, delete-orphan")
     billing_plan: Mapped[Optional["BillingPlan"]] = relationship("BillingPlan")
 
     @property
@@ -161,6 +162,31 @@ class Device(Base):
     commands:      Mapped[List["CommandQueue"]]    = relationship(back_populates="device")
     fuel_logs:     Mapped[List["FuelLog"]]         = relationship(back_populates="device")
     clips:         Mapped[List["VideoClip"]]       = relationship(back_populates="device", cascade="all, delete-orphan")
+    sim_card:      Mapped[Optional["SimCard"]]     = relationship("SimCard", back_populates="device", uselist=False)
+
+    @property
+    def sim_card_id(self) -> Optional[int]:
+        return self.sim_card.id if self.sim_card else None
+
+
+class SimCard(Base):
+    __tablename__ = 'sim_cards'
+
+    id:            Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_id:    Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), nullable=True, index=True)
+    device_id:     Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('devices.id', ondelete='SET NULL'), nullable=True, unique=True, index=True)
+    provider_id:   Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    account_label: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    credentials:   Mapped[dict]          = mapped_column(JsonType, nullable=False, default={})
+    phone_number:  Mapped[str]           = mapped_column(String(50), nullable=False, unique=True, index=True)
+    plan_name:     Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    balance:       Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    currency:      Mapped[str]           = mapped_column(String(10), default='EUR')
+    expiry_date:   Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    created_at:    Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
+
+    company: Mapped[Optional["Company"]] = relationship("Company", back_populates="sim_cards")
+    device:  Mapped[Optional["Device"]]  = relationship("Device", back_populates="sim_card")
 
 
 class DeviceState(Base):

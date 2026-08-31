@@ -4,7 +4,7 @@ from .models import (
     Driver, FuelLog, VoiceMessage, VoiceMessageRead, ScheduledReport,
     ScheduledReportRun, AuditLog, ApiKey, BillingPlan, UsageEvent,
     BillingInvoice, CurrencyRate, SupportTicket, SupportTicketComment,
-    PlannedRoute, RouteStop, UserPasskey, SystemSetting,
+    PlannedRoute, RouteStop, UserPasskey, SystemSetting, SimCard,
 )
 from .schemas import (
     NormalizedPosition, DeviceCreate, DeviceResponse, DeviceStateResponse,
@@ -16,7 +16,8 @@ from .schemas import (
     TripResponse, TripGeoJSON,
     GeofenceCreate, GeofenceResponse,
     WSMessage, WSMessageType,
-    DeviceStatistics
+    DeviceStatistics,
+    SimCardCreate, SimCardUpdate, SimCardResponse,
 )
 from .logbook import LogbookEntry
 from integrations.integration_model import IntegrationAccount

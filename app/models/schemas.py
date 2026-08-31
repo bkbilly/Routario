@@ -135,6 +135,7 @@ class DeviceCreate(BaseModel):
     license_plate: Optional[str] = None
     custom_attributes: Optional[Dict[str, str]] = Field(default_factory=dict)
     company_id: Optional[int] = None
+    sim_card_id: Optional[int] = None
     config: DeviceConfig = Field(
         default_factory=lambda: DeviceConfig(
             offline_timeout_hours=None,
@@ -165,6 +166,7 @@ class DeviceResponse(BaseModel):
     created_at: datetime
     config: Optional[Dict[str, Any]] = None
     company_id: Optional[int] = None
+    sim_card_id: Optional[int] = None
     state: Optional["DeviceStateResponse"] = None
 
 
@@ -717,3 +719,50 @@ class TripReportRow(BaseModel):
     max_speed: float
     start_address: Optional[str]
     end_address: Optional[str]
+
+
+# ==================== SIM Card Schemas ====================
+
+class SimCardCreate(BaseModel):
+    provider_id: Optional[str] = None
+    account_label: Optional[str] = None
+    credentials: Optional[Dict[str, Any]] = None
+    phone_number: str
+    plan_name: Optional[str] = None
+    balance: Optional[float] = None
+    currency: str = "EUR"
+    expiry_date: Optional[str] = None
+    company_id: Optional[int] = None
+    device_id: Optional[int] = None
+
+
+class SimCardUpdate(BaseModel):
+    provider_id: Optional[str] = None
+    account_label: Optional[str] = None
+    credentials: Optional[Dict[str, Any]] = None
+    phone_number: Optional[str] = None
+    plan_name: Optional[str] = None
+    balance: Optional[float] = None
+    currency: Optional[str] = None
+    expiry_date: Optional[str] = None
+    company_id: Optional[int] = None
+    device_id: Optional[int] = None
+
+
+class SimCardResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    company_id: Optional[int] = None
+    device_id: Optional[int] = None
+    device_name: Optional[str] = None
+    provider_id: Optional[str] = None
+    account_label: Optional[str] = None
+    phone_number: str
+    plan_name: Optional[str] = None
+    balance: Optional[float] = None
+    currency: str = "EUR"
+    expiry_date: Optional[str] = None
+    credentials: Optional[Dict[str, Any]] = None
+    created_at: datetime
+

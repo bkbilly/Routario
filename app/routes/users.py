@@ -33,6 +33,7 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 REGULAR_USER_FORBIDDEN_PERMISSIONS = {
     "manage_users",
     "manage_mfa",
+    "manage_sim_cards",
     "view_health",
     "manage_backups",
     "manage_integrations",

@@ -43,8 +43,9 @@ let notifyUserLoadFailedIds = new Set();
 let deviceAlertUsers        = [];
 let deviceAssignedUserIds   = new Set();
 
-// Companies
+// Companies & SIM cards
 let allCompanies            = [];
+let allSimCards             = [];
 
 // Unsaved-changes guard
 let _deviceModalSnapshot    = null;
@@ -184,6 +185,7 @@ async function initDeviceSection() {
         loadAvailableProtocols(),
         loadUserChannels(),
         loadDevices(),
+        loadSimCards(),
         ...(isAdmin ? [loadAllCompanies()] : []),
         loadAllUsers(),
     ]);
@@ -495,6 +497,7 @@ function openAddDeviceModal() {
     document.getElementById('deviceProtocol').disabled = false;
 
     if (isAdmin) populateDeviceCompanySelect();
+    populateDeviceSimCardSelect(null, null, isAdmin ? null : (parseInt(localStorage.getItem('company_id')) || null));
 
     alertRows = [];
     renderAlertsTable();
@@ -541,6 +544,7 @@ function openDeviceModal(deviceId, startTab = 'general') {
     document.getElementById('licensePlate').value        = d.license_plate || '';
     renderCustomAttributes(d.custom_attributes || {});
     if (isAdmin) populateDeviceCompanySelect(d.company_id);
+    populateDeviceSimCardSelect(d.sim_card_id, d.id, d.company_id);
     document.getElementById('currentOdometer').value     =
         d.state?.total_odometer != null ? toDisplayDist(d.state.total_odometer) : '0.0';
     document.getElementById('offlineTimeoutHours').value =
@@ -606,6 +610,7 @@ function _snapshotDeviceModal() {
         odometer:     document.getElementById('currentOdometer')?.value,
         offline:      document.getElementById('offlineTimeoutHours')?.value,
         mergeGap:     document.getElementById('tripMergeGapMinutes')?.value,
+        simCard:      document.getElementById('deviceSimCard')?.value,
         customAttrs:  readCustomAttributes(),
         alertRows:    alertRows,
     });
@@ -781,6 +786,7 @@ async function handleSubmit(event) {
             license_plate:     document.getElementById('licensePlate').value || null,
             custom_attributes: readCustomAttributes(),
             config:        newConfig,
+            sim_card_id:   parseInt(document.getElementById('deviceSimCard')?.value) || null,
         };
         if (isAdmin) {
             const companyId = parseInt(document.getElementById('deviceCompany').value) || null;
@@ -2670,6 +2676,7 @@ function onDeviceCompanyChange() {
         switchModalTab('general');
     }
     renderUsersTab();
+    populateDeviceSimCardSelect(null, editingDeviceId, companyId);
 }
 
 function populateDeviceCompanySelect(selectedId) {
@@ -2677,6 +2684,41 @@ function populateDeviceCompanySelect(selectedId) {
     if (!sel) return;
     sel.innerHTML = '<option value="">— None —</option>' +
         allCompanies.map(c => `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${_esc(c.name)}</option>`).join('');
+}
+
+async function loadSimCards() {
+    try {
+        const res = await apiFetch(`${API_BASE}/sim-cards`);
+        if (res.ok) {
+            allSimCards = await res.json();
+        }
+    } catch (e) {
+        allSimCards = [];
+    }
+}
+
+function populateDeviceSimCardSelect(selectedSimId = null, currentDeviceId = null, companyId = null) {
+    const sel = document.getElementById('deviceSimCard');
+    if (!sel) return;
+
+    // Filter SIM cards:
+    // 1. Must match target company (if specified)
+    // 2. Either unassigned (device_id == null) OR assigned to this current device
+    const targetComp = companyId != null ? parseInt(companyId, 10) : null;
+    const available = allSimCards.filter(s => {
+        if (targetComp && s.company_id && s.company_id !== targetComp) return false;
+        if (!s.device_id) return true;
+        if (currentDeviceId && s.device_id === currentDeviceId) return true;
+        if (selectedSimId && s.id === selectedSimId) return true;
+        return false;
+    });
+
+    sel.innerHTML = '<option value="">— None (No SIM assigned) —</option>' +
+        available.map(s => {
+            const isSel = (selectedSimId && s.id === selectedSimId) || (currentDeviceId && s.device_id === currentDeviceId);
+            const label = `${_esc(s.phone_number)} (${_esc(s.provider_id)}${s.plan_name ? ' - ' + _esc(s.plan_name) : ''})`;
+            return `<option value="${s.id}"${isSel ? ' selected' : ''}>${label}</option>`;
+        }).join('');
 }
 
 async function loadUsersForDevice(deviceId) {

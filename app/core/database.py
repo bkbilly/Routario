@@ -364,6 +364,21 @@ class DatabaseService:
             "ALTER TABLE route_stops ADD COLUMN dwell_seconds INTEGER DEFAULT 0",
             "ALTER TABLE support_tickets ADD COLUMN attachments JSON DEFAULT '[]'",
             "ALTER TABLE support_ticket_comments ADD COLUMN attachments JSON DEFAULT '[]'",
+            """CREATE TABLE IF NOT EXISTS sim_cards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
+                device_id INTEGER UNIQUE REFERENCES devices(id) ON DELETE SET NULL,
+                provider_id VARCHAR(50),
+                account_label VARCHAR(200),
+                credentials JSON DEFAULT '{}',
+                phone_number VARCHAR(50) NOT NULL UNIQUE,
+                plan_name VARCHAR(100),
+                balance FLOAT,
+                currency VARCHAR(10) DEFAULT 'EUR',
+                expiry_date VARCHAR(50),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )""",
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_sim_cards_phone_number ON sim_cards (phone_number)",
         ]
         if self._is_postgres:
             migrations.extend([
@@ -379,6 +394,8 @@ class DatabaseService:
             migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP")
             migrations.append("ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)")
             migrations.append("ALTER TABLE alert_history ALTER COLUMN device_id DROP NOT NULL")
+            migrations.append("ALTER TABLE sim_cards ALTER COLUMN provider_id DROP NOT NULL")
+            migrations.append("ALTER TABLE sim_cards ALTER COLUMN account_label DROP NOT NULL")
             migrations.append("""
                 ALTER TABLE drivers
                 ALTER COLUMN assignment_vehicles TYPE JSONB
@@ -406,6 +423,39 @@ class DatabaseService:
                     await conn.execute(text(stmt))
             except Exception:
                 pass  # column/change already applied
+
+        # Migrate SQLite sim_cards table if provider_id/account_label have NOT NULL constraint
+        if not self._is_postgres:
+            try:
+                async with self.engine.begin() as conn:
+                    res = await conn.execute(text("PRAGMA table_info(sim_cards)"))
+                    cols = {row[1]: row for row in res.fetchall()}
+                    if "provider_id" in cols and (cols["provider_id"][3] == 1 or "iccid" in cols):
+                        await conn.execute(text("""
+                            CREATE TABLE sim_cards_dg_tmp (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
+                                device_id INTEGER UNIQUE REFERENCES devices(id) ON DELETE SET NULL,
+                                provider_id VARCHAR(50),
+                                account_label VARCHAR(200),
+                                credentials JSON DEFAULT '{}',
+                                phone_number VARCHAR(50) NOT NULL UNIQUE,
+                                plan_name VARCHAR(100),
+                                balance FLOAT,
+                                currency VARCHAR(10) DEFAULT 'EUR',
+                                expiry_date VARCHAR(50),
+                                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                            )
+                        """))
+                        await conn.execute(text("""
+                            INSERT INTO sim_cards_dg_tmp (id, company_id, device_id, provider_id, account_label, credentials, phone_number, plan_name, balance, currency, expiry_date, created_at)
+                            SELECT id, company_id, device_id, provider_id, account_label, credentials, phone_number, plan_name, balance, currency, expiry_date, created_at FROM sim_cards
+                        """))
+                        await conn.execute(text("DROP TABLE sim_cards"))
+                        await conn.execute(text("ALTER TABLE sim_cards_dg_tmp RENAME TO sim_cards"))
+                        await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_sim_cards_phone_number ON sim_cards (phone_number)"))
+            except Exception as e:
+                logger.warning("SIM cards table migration warning: %s", e)
 
         # Grant all permissions to existing users who have never had permissions set.
         # NULL means "pre-permissions-feature" — give them full access so nothing breaks.
@@ -937,6 +987,7 @@ class DatabaseService:
                 .options(
                     selectinload(Device.state).selectinload(DeviceState.current_driver),
                     selectinload(Device.users),
+                    selectinload(Device.sim_card),
                 )
             )
             return result.scalar_one_or_none()
@@ -947,7 +998,10 @@ class DatabaseService:
                 select(Device)
                 .join(Device.users)
                 .where(User.id == user_id)
-                .options(selectinload(Device.state).selectinload(DeviceState.current_driver))
+                .options(
+                    selectinload(Device.state).selectinload(DeviceState.current_driver),
+                    selectinload(Device.sim_card),
+                )
             )
             return result.scalars().all()
 
