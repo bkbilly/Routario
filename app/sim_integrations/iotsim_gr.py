@@ -9,7 +9,11 @@ import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from bs4 import BeautifulSoup
+try:
+    from bs4 import BeautifulSoup
+except ImportError:
+    BeautifulSoup = None
+
 import httpx
 
 from sim_integrations.base import BaseSimIntegration
@@ -139,64 +143,96 @@ class IoTSimGrIntegration(BaseSimIntegration):
     @classmethod
     def parse_sim_cards(cls, html: str) -> List[SimCardInfo]:
         """Parse SIM card cards from the overview HTML."""
-        soup = BeautifulSoup(html, "html.parser")
+        if BeautifulSoup is not None:
+            soup = BeautifulSoup(html, "html.parser")
+            sim_cards = []
+            card_elements = soup.find_all(class_="sim-card")
+            for card in card_elements:
+                msisdn_elem = card.find(class_="sim-card__msisdn")
+                phone = msisdn_elem.get_text(strip=True) if msisdn_elem else ""
+
+                plan_name = None
+                expiry_date = None
+                auto_renew = None
+                plan_elem = card.find(class_="sim-card__plan")
+                if plan_elem:
+                    b_plan = plan_elem.find("b")
+                    if b_plan:
+                        plan_name = b_plan.get_text(strip=True)
+
+                    plan_text = plan_elem.get_text(separator=" ", strip=True)
+                    date_match = re.search(r"(\d{2})/(\d{2})/(\d{4})", plan_text)
+                    if date_match:
+                        try:
+                            expiry_date = date(
+                                int(date_match.group(3)),
+                                int(date_match.group(2)),
+                                int(date_match.group(1)),
+                            )
+                        except ValueError:
+                            pass
+
+                    if "ανανεωθεί αυτόματα" in plan_text:
+                        auto_renew = True
+
+                contract_id = None
+                balance = None
+                meta_elem = card.find(class_="sim-card__meta")
+                if meta_elem:
+                    meta_text = meta_elem.get_text(separator=" ", strip=True)
+                    contract_match = re.search(r"Συμβόλαιο\s+(\d+)", meta_text)
+                    if contract_match:
+                        contract_id = contract_match.group(1)
+
+                    balance_elem = meta_elem.find(class_="sim-card__balance")
+                    if balance_elem:
+                        balance = parse_price(balance_elem.get_text(strip=True))
+
+                sim_cards.append(
+                    SimCardInfo(
+                        phone_number=phone,
+                        plan_name=plan_name,
+                        expiry_date=expiry_date,
+                        auto_renew=auto_renew,
+                        contract_id=contract_id,
+                        balance=balance,
+                        currency="EUR",
+                        status="Active",
+                    )
+                )
+            return sim_cards
+
+        # Fallback pure-Python regex parser
         sim_cards = []
-
-        card_elements = soup.find_all(class_="sim-card")
-        for card in card_elements:
-            msisdn_elem = card.find(class_="sim-card__msisdn")
-            phone = msisdn_elem.get_text(strip=True) if msisdn_elem else ""
-
-            plan_name = None
+        cards_raw = re.findall(r'<div[^>]+class=["\'][^"\']*sim-card(?:\s+[^"\']*)?["\'][^>]*>(.*?)(?=<div[^>]+class=["\'][^"\']*sim-card|\Z)', html, re.DOTALL)
+        for card_html in cards_raw:
+            phone_m = re.search(r'class=["\'][^"\']*sim-card__msisdn[^"\']*["\'][^>]*>([^<]+)<', card_html)
+            phone = phone_m.group(1).strip() if phone_m else ""
+            plan_name_m = re.search(r'class=["\'][^"\']*sim-card__plan[^"\']*["\'][^>]*>.*?<b>([^<]+)</b>', card_html, re.DOTALL)
+            plan_name = plan_name_m.group(1).strip() if plan_name_m else None
+            date_m = re.search(r'(\d{2})/(\d{2})/(\d{4})', card_html)
             expiry_date = None
-            auto_renew = None
-            plan_elem = card.find(class_="sim-card__plan")
-            if plan_elem:
-                b_plan = plan_elem.find("b")
-                if b_plan:
-                    plan_name = b_plan.get_text(strip=True)
-
-                plan_text = plan_elem.get_text(separator=" ", strip=True)
-                date_match = re.search(r"(\d{2})/(\d{2})/(\d{4})", plan_text)
-                if date_match:
-                    try:
-                        expiry_date = date(
-                            int(date_match.group(3)),
-                            int(date_match.group(2)),
-                            int(date_match.group(1)),
-                        )
-                    except ValueError:
-                        pass
-
-                if "ανανεωθεί αυτόματα" in plan_text:
-                    auto_renew = True
-
-            contract_id = None
-            balance = None
-            meta_elem = card.find(class_="sim-card__meta")
-            if meta_elem:
-                meta_text = meta_elem.get_text(separator=" ", strip=True)
-                contract_match = re.search(r"Συμβόλαιο\s+(\d+)", meta_text)
-                if contract_match:
-                    contract_id = contract_match.group(1)
-
-                balance_elem = meta_elem.find(class_="sim-card__balance")
-                if balance_elem:
-                    balance = parse_price(balance_elem.get_text(strip=True))
-
+            if date_m:
+                try:
+                    expiry_date = date(int(date_m.group(3)), int(date_m.group(2)), int(date_m.group(1)))
+                except ValueError:
+                    pass
+            contract_m = re.search(r'Συμβόλαιο\s+(\d+)', card_html)
+            contract_id = contract_m.group(1) if contract_m else None
+            balance_m = re.search(r'class=["\'][^"\']*sim-card__balance[^"\']*["\'][^>]*>([^<]+)<', card_html)
+            balance = parse_price(balance_m.group(1)) if balance_m else None
             sim_cards.append(
                 SimCardInfo(
                     phone_number=phone,
                     plan_name=plan_name,
                     expiry_date=expiry_date,
-                    auto_renew=auto_renew,
+                    auto_renew="ανανεωθεί αυτόματα" in card_html,
                     contract_id=contract_id,
                     balance=balance,
                     currency="EUR",
                     status="Active",
                 )
             )
-
         return sim_cards
 
     async def _fetch_authenticity_token(self, client: httpx.AsyncClient) -> str:
@@ -204,11 +240,19 @@ class IoTSimGrIntegration(BaseSimIntegration):
         try:
             resp = await client.get(self.DATA_SESSIONS_URL)
             resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, "html.parser")
-            token_input = soup.find("input", {"name": "authenticity_token"})
-            if not token_input or not token_input.get("value"):
-                raise SimProviderError("Could not find authenticity_token in stats page")
-            return str(token_input["value"])
+            if BeautifulSoup is not None:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                token_input = soup.find("input", {"name": "authenticity_token"})
+                if token_input and token_input.get("value"):
+                    return str(token_input["value"])
+
+            token_match = re.search(r'name=["\']authenticity_token["\']\s+value=["\']([^"\']+)["\']', resp.text)
+            if not token_match:
+                token_match = re.search(r'value=["\']([^"\']+)["\']\s+name=["\']authenticity_token["\']', resp.text)
+            if token_match:
+                return token_match.group(1)
+
+            raise SimProviderError("Could not find authenticity_token in stats page")
         except httpx.HTTPError as err:
             raise SimProviderError(f"Failed to fetch data sessions page: {err}") from err
 
@@ -347,81 +391,99 @@ class IoTSimGrIntegration(BaseSimIntegration):
     @classmethod
     def _extract_total_pages(cls, html: str) -> int:
         """Extract maximum page number from pagination."""
-        soup = BeautifulSoup(html, "html.parser")
-        pag = soup.find(class_="pagination")
-        if not pag:
-            return 1
+        if BeautifulSoup is not None:
+            soup = BeautifulSoup(html, "html.parser")
+            pag = soup.find(class_="pagination")
+            if pag:
+                pages = []
+                for a in pag.find_all(["a", "span", "li"]):
+                    text = a.get_text(strip=True)
+                    if text.isdigit():
+                        pages.append(int(text))
+                if pages:
+                    return max(pages)
 
-        pages = []
-        for a in pag.find_all(["a", "span", "li"]):
-            text = a.get_text(strip=True)
-            if text.isdigit():
-                pages.append(int(text))
-
-        return max(pages) if pages else 1
+        # Fallback regex
+        pag_match = re.search(r'<[^>]+class=["\'][^"\']*pagination[^"\']*["\'][^>]*>(.*?)</(?:div|ul|nav)>', html, re.DOTALL)
+        if pag_match:
+            digits = re.findall(r'>(\d+)<', pag_match.group(1))
+            if digits:
+                return max(int(d) for d in digits)
+        return 1
 
     @classmethod
     def parse_data_sessions(cls, html: str) -> DataSessionStats:
         """Parse total_billsec, total_user_price, and session rows from response HTML."""
-        soup = BeautifulSoup(html, "html.parser")
-
-        # 1. Total billsec (total consumption)
-        billsec_elem = soup.find(id="total_billsec")
-        total_billsec = billsec_elem.get_text(strip=True) if billsec_elem else "0.00 KB"
-        total_billsec_bytes = parse_data_size_to_bytes(total_billsec)
-
-        # 2. Total user price
-        price_elem = soup.find(id="total_user_price")
-        price_raw = price_elem.get_text(strip=True) if price_elem else "0.0000 €"
-        total_user_price = parse_price(price_raw)
-
-        # 3. Session rows
+        total_billsec = "0.00 KB"
+        total_user_price = 0.0
         sessions = []
-        table = soup.find("table", class_="stats-table")
-        if table and table.find("tbody"):
-            for tr in table.find("tbody").find_all("tr"):
-                cols = tr.find_all("td")
-                if len(cols) < 7:
-                    continue
 
-                date_val = None
-                date_text = cols[0].get_text(strip=True)
-                if date_text:
-                    try:
-                        date_val = datetime.strptime(date_text, "%d-%m-%Y %H:%M:%S")
-                    except ValueError:
-                        pass
+        if BeautifulSoup is not None:
+            soup = BeautifulSoup(html, "html.parser")
 
-                status_val = cols[1].get_text(strip=True)
+            # 1. Total billsec (total consumption)
+            billsec_elem = soup.find(id="total_billsec")
+            total_billsec = billsec_elem.get_text(strip=True) if billsec_elem else "0.00 KB"
 
-                comp_val = None
-                comp_text = cols[2].get_text(strip=True)
-                if comp_text:
-                    try:
-                        comp_val = datetime.strptime(comp_text, "%d-%m-%Y %H:%M:%S")
-                    except ValueError:
-                        pass
+            # 2. Total user price
+            price_elem = soup.find(id="total_user_price")
+            price_raw = price_elem.get_text(strip=True) if price_elem else "0.0000 €"
+            total_user_price = parse_price(price_raw)
 
-                country_val = cols[3].get_text(strip=True)
-                network_val = cols[4].get_text(strip=True)
-                billed_raw = cols[5].get_text(strip=True)
-                billed_bytes = parse_data_size_to_bytes(billed_raw)
-                row_price = parse_price(cols[6].get_text(strip=True))
+            # 3. Session rows
+            table = soup.find("table", class_="stats-table")
+            if table and table.find("tbody"):
+                for tr in table.find("tbody").find_all("tr"):
+                    cols = tr.find_all("td")
+                    if len(cols) < 7:
+                        continue
 
-                sessions.append(
-                    DataSession(
-                        date=date_val,
-                        status=status_val,
-                        completed_at=comp_val,
-                        country=country_val,
-                        network=network_val,
-                        billed_raw=billed_raw,
-                        billed_bytes=billed_bytes,
-                        price=row_price,
-                        currency="EUR",
+                    date_val = None
+                    date_text = cols[0].get_text(strip=True)
+                    if date_text:
+                        try:
+                            date_val = datetime.strptime(date_text, "%d-%m-%Y %H:%M:%S")
+                        except ValueError:
+                            pass
+
+                    status_val = cols[1].get_text(strip=True)
+
+                    comp_val = None
+                    comp_text = cols[2].get_text(strip=True)
+                    if comp_text:
+                        try:
+                            comp_val = datetime.strptime(comp_text, "%d-%m-%Y %H:%M:%S")
+                        except ValueError:
+                            pass
+
+                    country_val = cols[3].get_text(strip=True)
+                    network_val = cols[4].get_text(strip=True)
+                    billed_raw = cols[5].get_text(strip=True)
+                    billed_bytes = parse_data_size_to_bytes(billed_raw)
+                    row_price = parse_price(cols[6].get_text(strip=True))
+
+                    sessions.append(
+                        DataSession(
+                            date=date_val,
+                            status=status_val,
+                            completed_at=comp_val,
+                            country=country_val,
+                            network=network_val,
+                            billed_raw=billed_raw,
+                            billed_bytes=billed_bytes,
+                            price=row_price,
+                            currency="EUR",
+                        )
                     )
-                )
+        else:
+            billsec_m = re.search(r'id=["\']total_billsec["\'][^>]*>([^<]+)<', html)
+            if billsec_m:
+                total_billsec = billsec_m.group(1).strip()
+            price_m = re.search(r'id=["\']total_user_price["\'][^>]*>([^<]+)<', html)
+            if price_m:
+                total_user_price = parse_price(price_m.group(1))
 
+        total_billsec_bytes = parse_data_size_to_bytes(total_billsec)
         return DataSessionStats(
             total_billsec=total_billsec,
             total_billsec_bytes=total_billsec_bytes,
