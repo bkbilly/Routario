@@ -368,10 +368,45 @@ function _populateReportSelect(id, defs) {
     const select = document.getElementById(id);
     if (!select) return;
     const current = select.value;
-    select.innerHTML = defs.length
-        ? defs.map(d => `<option value="${_esc(d.key)}">${_esc(d.label)}</option>`).join('')
-        : '<option value="">No reports available</option>';
-    if (defs.some(d => d.key === current)) select.value = current;
+    if (!defs || !defs.length) {
+        select.innerHTML = '<option value="">No reports available</option>';
+        return;
+    }
+
+    const categoryMap = {
+        'Fleet & Vehicles': ['summary', 'sensors', 'sensor_graphs', 'trips', 'daily', 'drivers', 'sim_cards', 'logbook', 'geofences'],
+        'System & Management': ['alerts', 'users', 'billing', 'audit'],
+        'AI & Analytics': ['ai_custom'],
+    };
+
+    const defMap = Object.fromEntries(defs.map(d => [d.key, d]));
+    const assignedKeys = new Set();
+    const groups = [];
+
+    for (const [catName, keys] of Object.entries(categoryMap)) {
+        const catDefs = keys.map(k => defMap[k]).filter(Boolean);
+        if (catDefs.length) {
+            catDefs.forEach(d => assignedKeys.add(d.key));
+            groups.push({ label: catName, defs: catDefs });
+        }
+    }
+
+    const remainingDefs = defs.filter(d => !assignedKeys.has(d.key));
+    if (remainingDefs.length) {
+        groups.push({ label: 'Other Reports', defs: remainingDefs });
+    }
+
+    select.innerHTML = groups.map(g =>
+        `<optgroup label="${_esc(g.label)}">${
+            g.defs.map(d => `<option value="${_esc(d.key)}">${_esc(d.label)}</option>`).join('')
+        }</optgroup>`
+    ).join('');
+
+    if (defs.some(d => d.key === current)) {
+        select.value = current;
+    } else if (defs.length) {
+        select.value = defs[0].key;
+    }
 }
 
 function _renderDriverOptions() {

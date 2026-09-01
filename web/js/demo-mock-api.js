@@ -591,6 +591,7 @@
         { key: 'logbook', label: 'Logbook', description: 'Fuel or maintenance logbook reports for the selected vehicles and period.', renderer: 'logbook', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [{ key: 'logbook_type', label: 'Logbook Type', type: 'select', default: 'maintenance', options: [{ value: 'maintenance', label: 'Maintenance' }, { value: 'fuel', label: 'Fuel' }] }], schedule_controls: [] },
         { key: 'sensor_graphs', label: 'Sensor Graphs', description: 'Interactive sensor graphs and data tables for up to 5 vehicles across a date range.', renderer: 'sensor_graphs', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
         { key: 'sensors', label: 'Vehicle Sensors', description: 'Current sensor readings for all vehicles. Enable historical data to view sensor values over a date range.', renderer: 'sensors', needs_date_range: false, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: true, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
+        { key: 'sim_cards', label: 'SIM Cards', description: 'SIM card data usage, cost, and session history for assigned vehicles over the selected period.', renderer: 'table', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
         { key: 'summary', label: 'Fleet Summary', description: 'Totals per vehicle for the selected period - trips, distance, driving time, and top speed.', renderer: 'summary', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
         { key: 'trips', label: 'Trip List', description: 'Individual trips with start/end location, distance, duration, and driver. Click any row to view the route on a map.', renderer: 'trips', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
         { key: 'users', label: 'User Fleet', description: 'Account readiness by user - vehicle access, push status, notification channels, alert backlog, schedules, and key permissions.', renderer: 'users', needs_date_range: true, supports_vehicle_filter: false, supports_user_filter: true, supports_driver_filter: false, supports_historical_toggle: false, company_admin_required: true, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: true, controls: [], schedule_controls: [] },
@@ -942,23 +943,193 @@
                 csv_filename: 'sensor_graphs.csv'
             };
         }
+        if (type === 'sim_cards') {
+            const devs = filteredDevices(input);
+            const simList = simCards.length ? simCards : [
+                { id: 1, phone_number: '+306981234567', iccid: '8930000000000000001', provider_id: '1nce', plan_name: '1NCE IoT Lifetime 500MB', account_label: '1NCE Core', balance: 10.00, remaining_data_mb: 412.50, currency: 'EUR', expiry_date: '2030-12-31', device_id: devs[0]?.id || 1 },
+                { id: 2, phone_number: '+306987654321', iccid: '8930000000000000002', provider_id: 'thingsmobile', plan_name: 'ThingsMobile Unlimited EU', account_label: 'ThingsMobile Corp', balance: 25.40, remaining_data_mb: 850.00, currency: 'EUR', expiry_date: '2028-06-30', device_id: devs[1]?.id || 2 },
+                { id: 3, phone_number: '+306912345678', iccid: '8930000000000000003', provider_id: 'iotsim_gr', plan_name: 'IoTSim Fleet Standard', account_label: 'IoTSim GR Account', balance: 14.50, remaining_data_mb: 620.00, currency: 'EUR', expiry_date: '2027-09-15', device_id: devs[2]?.id || 3 },
+                { id: 4, phone_number: '+306900112233', iccid: '8930000000000000004', provider_id: null, plan_name: 'Manual Fleet SIM', account_label: 'Cosmote Backup', balance: null, remaining_data_mb: null, currency: 'EUR', expiry_date: '2029-01-01', device_id: devs[3]?.id || 4 },
+            ];
+            const rows = simList.map((sc, idx) => {
+                const dev = devs.find(d => d.id === sc.device_id) || devs[idx % devs.length] || { name: 'Vehicle', license_plate: 'ABC-1234' };
+                const mb = (18.4 + idx * 7.6);
+                const cost = (1.84 + idx * 0.76);
+                return {
+                    vehicle: dev.name || '-',
+                    license_plate: dev.license_plate || null,
+                    phone_number: sc.phone_number,
+                    provider: sc.provider_id || 'Manual',
+                    account_label: sc.account_label || '-',
+                    plan_name: sc.plan_name || '-',
+                    balance: sc.balance,
+                    remaining_data_mb: sc.remaining_data_mb,
+                    currency: sc.currency || 'EUR',
+                    data_usage_mb: mb,
+                    cost: cost,
+                    expiry_date: sc.expiry_date || null,
+                    status: 'Active',
+                    status_error: null,
+                };
+            });
+            const totalMb = rows.reduce((a, r) => a + (r.data_usage_mb || 0), 0);
+            const totalCost = rows.reduce((a, r) => a + (r.cost || 0), 0);
+            return {
+                type: 'sim_cards',
+                columns: [
+                    { key: 'vehicle', label: 'Vehicle', type: 'text', detail_key: 'license_plate' },
+                    { key: 'phone_number', label: 'Phone / MSISDN', type: 'text' },
+                    { key: 'provider', label: 'Provider', type: 'provider' },
+                    { key: 'plan_name', label: 'Plan', type: 'text' },
+                    { key: 'data_usage_mb', label: 'Data (MB)', type: 'number', decimals: 2, suffix: ' MB' },
+                    { key: 'cost', label: 'Cost', type: 'number', decimals: 2 },
+                    { key: 'balance', label: 'Balance', type: 'number', decimals: 2 },
+                    { key: 'remaining_data_mb', label: 'Remaining Data', type: 'number', decimals: 2, suffix: ' MB', empty: '—' },
+                    { key: 'expiry_date', label: 'Expiry', type: 'date', empty: '—' },
+                    { key: 'status', label: 'Status', type: 'status' },
+                ],
+                summary: [
+                    { label: 'Assigned SIMs', value: rows.length },
+                    { label: 'Total Data Usage', value: `${totalMb.toFixed(2)} MB` },
+                    { label: 'Total Cost', value: `${totalCost.toFixed(2)} EUR` },
+                ],
+                rows,
+                default_sort: { key: 'data_usage_mb', dir: -1 },
+                csv_filename: 'sim_cards.csv',
+            };
+        }
         if (type === 'sensors') {
-            const rows = filteredDevices(input).map(d => ({
-                name: d.name,
+            const isHistorical = queryOf(input).get('historical') === 'true';
+            if (!isHistorical) {
+                const rows = filteredDevices(input).map(d => ({
+                    id: d.id,
+                    name: d.name,
+                    license_plate: d.license_plate,
+                    current_driver_name: d.state?.current_driver?.name || null,
+                    last_update: d.state?.last_update || iso(5),
+                    ignition_on: d.state?.ignition_on ?? true,
+                    last_speed: d.state?.last_speed ?? 48.5,
+                    last_altitude: d.state?.last_altitude ?? 120,
+                    sensor__fuel_level: d.state?.sensors?.fuel_level ?? 74,
+                    sensor__battery_voltage: d.state?.sensors?.battery_voltage ?? 13.8,
+                    sensor__temperature: d.state?.sensors?.temperature ?? 24.1,
+                    sensor__satellites: d.state?.sensors?.last_known_satellites ?? 12,
+                }));
+                return {
+                    type: 'sensors',
+                    historical: false,
+                    columns: [
+                        { key: 'name', label: 'Vehicle', type: 'text' },
+                        { key: 'license_plate', label: 'Plate', type: 'text' },
+                        { key: 'current_driver_name', label: 'Driver', type: 'text' },
+                        { key: 'last_update', label: 'Last Seen', type: 'datetime' },
+                        { key: 'ignition_on', label: 'Ignition', type: 'bool_on' },
+                        { key: 'last_speed', label: 'Speed', type: 'number', decimals: 1, suffix: ' km/h' },
+                        { key: 'last_altitude', label: 'Altitude', type: 'number', decimals: 0, suffix: ' m' },
+                        { key: 'sensor__fuel_level', label: 'fuel_level', type: 'auto' },
+                        { key: 'sensor__battery_voltage', label: 'battery_voltage', type: 'auto' },
+                        { key: 'sensor__temperature', label: 'temperature', type: 'auto' },
+                        { key: 'sensor__satellites', label: 'satellites', type: 'auto' },
+                    ],
+                    summary: [
+                        { label: 'Vehicles', value: rows.length },
+                        { label: 'Online', value: rows.filter(r => r.last_update).length },
+                    ],
+                    rows,
+                    default_sort: { key: 'name', dir: 1 },
+                    csv_filename: 'vehicle_sensors.csv',
+                };
+            } else {
+                const devs = filteredDevices(input);
+                const rows = [];
+                for (let i = 20; i >= 0; i--) {
+                    const t = iso(i * 30);
+                    devs.forEach((d, idx) => {
+                        rows.push({
+                            device_id: d.id,
+                            vehicle: d.name,
+                            time: t,
+                            driver_name: drivers[idx % drivers.length]?.name || 'Driver',
+                            ignition: (i % 3 !== 0),
+                            speed: Math.max(0, Math.round(45 + Math.sin(i + idx) * 30)),
+                            altitude: 90 + idx * 15,
+                            sensor__fuel_level: Math.max(10, 80 - i),
+                            sensor__battery_voltage: 13.6,
+                            sensor__temperature: 22.0 + idx,
+                        });
+                    });
+                }
+                return {
+                    type: 'sensors',
+                    historical: true,
+                    columns: [
+                        { key: 'vehicle', label: 'Vehicle', type: 'text' },
+                        { key: 'time', label: 'Time', type: 'datetime' },
+                        { key: 'driver_name', label: 'Driver', type: 'text' },
+                        { key: 'ignition', label: 'Ignition', type: 'bool_on' },
+                        { key: 'speed', label: 'Speed', type: 'number', decimals: 1, suffix: ' km/h' },
+                        { key: 'altitude', label: 'Altitude', type: 'number', decimals: 0, suffix: ' m' },
+                        { key: 'sensor__fuel_level', label: 'fuel_level', type: 'auto' },
+                        { key: 'sensor__battery_voltage', label: 'battery_voltage', type: 'auto' },
+                        { key: 'sensor__temperature', label: 'temperature', type: 'auto' },
+                    ],
+                    summary: [
+                        { label: 'Vehicles', value: devs.length },
+                        { label: 'Total Records', value: rows.length },
+                    ],
+                    rows,
+                    default_sort: { key: 'time', dir: -1 },
+                    csv_filename: 'vehicle_sensors_history.csv',
+                };
+            }
+        }
+        if (type === 'summary') {
+            const rows = filteredDevices(input).map((d, idx) => ({
+                device_id: d.id,
+                device_name: d.name,
                 license_plate: d.license_plate,
-                current_driver_name: d.state.current_driver?.name || null,
-                last_update: d.state.last_update,
-                ignition_on: d.state.ignition_on,
-                last_speed: d.state.last_speed,
-                last_altitude: d.state.last_altitude,
-                sensor__fuel_level: d.state.sensors?.fuel_level,
-                sensor__battery_voltage: d.state.sensors?.battery_voltage,
-                sensor__temperature: d.state.sensors?.temperature,
-                sensor__satellites: d.state.sensors?.last_known_satellites,
+                driver_name: d.state?.current_driver?.name || drivers[idx % drivers.length]?.name || null,
+                trips: 4 + idx * 2,
+                distance_km: parseFloat((180.5 + idx * 42.3).toFixed(1)),
+                driving_minutes: 245 + idx * 55,
+                max_speed: 104 - idx * 4,
+                avg_speed: 52 + idx * 3,
             }));
-            return table('sensors', rows, [
-                ['name', 'Vehicle'], ['license_plate', 'Plate'], ['current_driver_name', 'Driver'], ['last_update', 'Last Seen', 'datetime_split'], ['ignition_on', 'Ignition', 'bool_on'], ['last_speed', 'Speed', 'number'], ['last_altitude', 'Altitude', 'number'], ['sensor__fuel_level', 'fuel_level', 'number'], ['sensor__battery_voltage', 'battery_voltage', 'number'], ['sensor__temperature', 'temperature', 'number'], ['sensor__satellites', 'satellites', 'integer'],
-            ], [{ label: 'Vehicles', value: rows.length }, { label: 'Online', value: rows.filter(r => r.last_update).length }]);
+            const totalTrips = rows.reduce((a, r) => a + r.trips, 0);
+            const totalDist = parseFloat(rows.reduce((a, r) => a + r.distance_km, 0).toFixed(1));
+            const totalMin = rows.reduce((a, r) => a + r.driving_minutes, 0);
+            const topSpeed = Math.max(...rows.map(r => r.max_speed), 0);
+            return {
+                type: 'summary',
+                columns: [
+                    { key: 'device_name', label: 'Vehicle', type: 'text' },
+                    { key: 'license_plate', label: 'Plate', type: 'text' },
+                    { key: 'driver_name', label: 'Driver', type: 'text' },
+                    { key: 'trips', label: 'Trips', type: 'integer' },
+                    { key: 'distance_km', label: 'Distance (km)', type: 'number', decimals: 1 },
+                    { key: 'driving_minutes', label: 'Drive Time', type: 'duration_minutes' },
+                    { key: 'avg_speed', label: 'Avg Speed', type: 'number', decimals: 1, suffix: ' km/h' },
+                    { key: 'max_speed', label: 'Top Speed', type: 'number', decimals: 1, suffix: ' km/h' },
+                ],
+                summary: [
+                    { label: 'Vehicles', value: rows.length },
+                    { label: 'Total Trips', value: totalTrips },
+                    { label: 'Total Distance (km)', value: totalDist },
+                    { label: 'Driving Time (h)', value: (totalMin / 60).toFixed(1) },
+                    { label: 'Top Speed (km/h)', value: topSpeed },
+                ],
+                rows,
+                total_row: {
+                    device_name: 'Total',
+                    trips: totalTrips,
+                    distance_km: totalDist,
+                    driving_minutes: totalMin,
+                    avg_speed: null,
+                    max_speed: topSpeed,
+                },
+                default_sort: { key: 'device_name', dir: 1 },
+                csv_filename: 'fleet_summary.csv',
+            };
         }
         if (type === 'audit') {
             const rows = [
@@ -981,19 +1152,6 @@
             payload.row_action = { type: 'billing_detail', label: 'View billing details' };
             return payload;
         }
-        const rows = filteredDevices(input).map((d, idx) => ({
-            device_id: d.id, device_name: d.name, license_plate: d.license_plate,
-            driver_name: d.state.current_driver?.name || null,
-            trips: 4 + idx, distance_km: 180.5 + idx * 42, driving_minutes: 245 + idx * 55,
-            max_speed: 104 - idx * 4, avg_speed: 52 + idx * 3,
-        }));
-        return table('summary', rows, [
-            ['device_name', 'Vehicle'], ['license_plate', 'Plate'], ['driver_name', 'Driver'], ['trips', 'Trips', 'integer'], ['distance_km', 'Distance (km)', 'number'], ['driving_minutes', 'Drive Time', 'duration_minutes'], ['avg_speed', 'Avg Speed', 'number'], ['max_speed', 'Top Speed', 'number'],
-        ], [
-            { label: 'Vehicles', value: rows.length },
-            { label: 'Total Trips', value: rows.reduce((a, r) => a + r.trips, 0) },
-            { label: 'Distance (km)', value: rows.reduce((a, r) => a + r.distance_km, 0).toFixed(1) },
-        ]);
     }
 
     function table(type, rows, columns, summary = [], defaultSort = null) {
