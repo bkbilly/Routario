@@ -804,13 +804,87 @@
 
     function reportPayload(type, input) {
         if (type === 'trips') {
-            const rows = filteredDevices(input).flatMap((d, idx) => [
-                { device_id: d.id, device_name: d.name, license_plate: d.license_plate, driver_id: idx + 1, driver_name: drivers[idx % drivers.length]?.name, start_time: iso(1440 + idx * 60), end_time: iso(1380 + idx * 60), distance_km: 42.8 + idx * 9, duration_minutes: 58 + idx * 7, max_speed: 94 + idx * 3, avg_speed: 54 + idx * 2 },
-                { device_id: d.id, device_name: d.name, license_plate: d.license_plate, driver_id: idx + 1, driver_name: drivers[idx % drivers.length]?.name, start_time: iso(720 + idx * 45), end_time: iso(660 + idx * 45), distance_km: 26.5 + idx * 5, duration_minutes: 41 + idx * 4, max_speed: 88 + idx * 2, avg_speed: 47 + idx },
-            ]);
-            return table('trips', rows, [
-                ['device_name', 'Vehicle'], ['license_plate', 'Plate'], ['driver_name', 'Driver'], ['start_time', 'Start', 'datetime_split'], ['end_time', 'End', 'datetime_split'], ['distance_km', 'Distance (km)', 'number'], ['duration_minutes', 'Duration', 'duration_minutes'], ['max_speed', 'Top Speed', 'number'],
-            ], [{ label: 'Trips', value: rows.length }, { label: 'Distance (km)', value: rows.reduce((a, r) => a + r.distance_km, 0).toFixed(1) }], { key: 'start_time', dir: -1 });
+            const devs = filteredDevices(input);
+            const driverAddresses = [
+                { from: 'Athens Central Depot, Leof. Athinon 45', to: 'Kifisia Logistics Hub, Tatoiou 120' },
+                { from: 'Piraeus Port Container Terminal, Gate 2', to: 'Aspropyrgos Industrial Zone, Ag. Georgiou 12' },
+                { from: 'Marousi Tech Park, Kifisias 64', to: 'Ellinikon Distribution Center, Poseidonos 22' },
+                { from: 'Peristeri Warehouse B, Thivon 180', to: 'Koropi Cargo Terminal, Attikis Odou 15' },
+            ];
+            const rows = devs.flatMap((d, idx) => {
+                const addrs1 = driverAddresses[idx % driverAddresses.length];
+                const addrs2 = driverAddresses[(idx + 1) % driverAddresses.length];
+                const driver = drivers[idx % drivers.length];
+                return [
+                    {
+                        id: idx * 2 + 1,
+                        device_id: d.id,
+                        device_name: d.name,
+                        license_plate: d.license_plate,
+                        driver_id: driver?.id || idx + 1,
+                        driver_name: driver?.name || 'Driver',
+                        start_time: iso(1440 + idx * 60),
+                        end_time: iso(1380 + idx * 60),
+                        start_address: addrs1.from,
+                        end_address: addrs1.to,
+                        start_latitude: 37.9838 + idx * 0.02,
+                        start_longitude: 23.7275 + idx * 0.02,
+                        end_latitude: 38.0456 + idx * 0.03,
+                        end_longitude: 23.8567 + idx * 0.03,
+                        distance_km: parseFloat((42.8 + idx * 9.2).toFixed(1)),
+                        duration_minutes: 58 + idx * 7,
+                        avg_speed: 54 + idx * 2,
+                        max_speed: 94 + idx * 3,
+                    },
+                    {
+                        id: idx * 2 + 2,
+                        device_id: d.id,
+                        device_name: d.name,
+                        license_plate: d.license_plate,
+                        driver_id: driver?.id || idx + 1,
+                        driver_name: driver?.name || 'Driver',
+                        start_time: iso(720 + idx * 45),
+                        end_time: iso(660 + idx * 45),
+                        start_address: addrs2.from,
+                        end_address: addrs2.to,
+                        start_latitude: 37.9429 + idx * 0.01,
+                        start_longitude: 23.6469 + idx * 0.01,
+                        end_latitude: 38.0612 + idx * 0.02,
+                        end_longitude: 23.5912 + idx * 0.02,
+                        distance_km: parseFloat((26.5 + idx * 5.4).toFixed(1)),
+                        duration_minutes: 41 + idx * 4,
+                        avg_speed: 47 + idx,
+                        max_speed: 88 + idx * 2,
+                    },
+                ];
+            });
+            const totalDist = rows.reduce((a, r) => a + r.distance_km, 0);
+            const totalMin = rows.reduce((a, r) => a + r.duration_minutes, 0);
+            const topSpeed = Math.max(...rows.map(r => r.max_speed), 0);
+            return {
+                type: 'trips',
+                columns: [
+                    { key: 'start_time', label: 'Date', type: 'datetime' },
+                    { key: 'device_name', label: 'Vehicle', type: 'text', detail_key: 'license_plate' },
+                    { key: 'start_address', label: 'From', type: 'text', max_width: 200 },
+                    { key: 'end_address', label: 'To', type: 'text', max_width: 200 },
+                    { key: 'distance_km', label: 'Distance (km)', type: 'number', decimals: 1 },
+                    { key: 'duration_minutes', label: 'Duration', type: 'duration_minutes' },
+                    { key: 'avg_speed', label: 'Avg Speed', type: 'number', decimals: 1, suffix: ' km/h' },
+                    { key: 'max_speed', label: 'Top Speed', type: 'number', decimals: 1, suffix: ' km/h' },
+                    { key: 'driver_name', label: 'Driver', type: 'text' },
+                ],
+                summary: [
+                    { label: 'Trips', value: rows.length },
+                    { label: 'Total Distance (km)', value: `${totalDist.toFixed(1)}` },
+                    { label: 'Driving Time (h)', value: `${(totalMin / 60).toFixed(1)}` },
+                    { label: 'Top Speed', value: `${topSpeed.toFixed(1)} km/h` },
+                ],
+                rows,
+                default_sort: { key: 'start_time', dir: -1 },
+                csv_filename: 'trip_list.csv',
+                row_action: { type: 'trip_map' },
+            };
         }
         if (type === 'alerts') {
             const rows = [
@@ -945,7 +1019,7 @@
         }
         if (type === 'sim_cards') {
             const devs = filteredDevices(input);
-            const simList = simCards.length ? simCards : [
+            const simList = (demoSimCards && demoSimCards.length) ? demoSimCards : [
                 { id: 1, phone_number: '+306981234567', iccid: '8930000000000000001', provider_id: '1nce', plan_name: '1NCE IoT Lifetime 500MB', account_label: '1NCE Core', balance: 10.00, remaining_data_mb: 412.50, currency: 'EUR', expiry_date: '2030-12-31', device_id: devs[0]?.id || 1 },
                 { id: 2, phone_number: '+306987654321', iccid: '8930000000000000002', provider_id: 'thingsmobile', plan_name: 'ThingsMobile Unlimited EU', account_label: 'ThingsMobile Corp', balance: 25.40, remaining_data_mb: 850.00, currency: 'EUR', expiry_date: '2028-06-30', device_id: devs[1]?.id || 2 },
                 { id: 3, phone_number: '+306912345678', iccid: '8930000000000000003', provider_id: 'iotsim_gr', plan_name: 'IoTSim Fleet Standard', account_label: 'IoTSim GR Account', balance: 14.50, remaining_data_mb: 620.00, currency: 'EUR', expiry_date: '2027-09-15', device_id: devs[2]?.id || 3 },
