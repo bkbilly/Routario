@@ -161,6 +161,8 @@ class ThingsMobileIntegration(BaseSimIntegration):
                         iccid=s.contract_id,
                         plan_name=s.plan_name,
                         balance=s.balance,
+                        remaining_data_mb=s.remaining_data_mb,
+                        remaining_data_bytes=s.remaining_data_bytes,
                         currency=s.currency or "EUR",
                         expiry_date=exp_str,
                         status=s.status,
@@ -193,8 +195,10 @@ class ThingsMobileIntegration(BaseSimIntegration):
                         pass
 
             # In Things Mobile, monetary balance is the shared account credit from /credit.
-            # The <balance> tag on a <sim> represents data bundle traffic in KB, not currency.
+            # Pay-per-use SIMs do not have a fixed remaining data quota (billed per MB against monetary credit).
             balance = default_balance
+            rem_data_mb = None
+            rem_data_bytes = None
 
             status_raw = sim_node.findtext("status", "")
             status_formatted = format_status(status_raw)
@@ -208,6 +212,8 @@ class ThingsMobileIntegration(BaseSimIntegration):
                     auto_renew=auto_renew,
                     contract_id=contract_id,
                     balance=balance,
+                    remaining_data_mb=rem_data_mb,
+                    remaining_data_bytes=rem_data_bytes,
                     currency=currency,
                     status=status_formatted,
                 )
@@ -285,6 +291,10 @@ class ThingsMobileIntegration(BaseSimIntegration):
                 total_traffic_str = sim_elem.findtext("totalTraffic") or "0"
                 total_traffic = int(total_traffic_str) if total_traffic_str.isdigit() else 0
 
+                raw_bal = sim_elem.findtext("balance")
+                rem_data_mb = None
+                rem_data_bytes = None
+
                 if total_traffic == 0:
                     sim_stat = DataSessionStats(
                         total_billsec="0 Bytes",
@@ -294,6 +304,8 @@ class ThingsMobileIntegration(BaseSimIntegration):
                         sessions_count=0,
                         status=sim_status_formatted,
                         balance=latest_balance,
+                        remaining_data_mb=rem_data_mb,
+                        remaining_data_bytes=rem_data_bytes,
                         expiry_date=exp_iso,
                         plan_name=plan_name,
                         sessions=[],
@@ -314,6 +326,8 @@ class ThingsMobileIntegration(BaseSimIntegration):
                         )
                         sim_stat.status = sim_status_formatted
                         sim_stat.balance = latest_balance
+                        sim_stat.remaining_data_mb = rem_data_mb
+                        sim_stat.remaining_data_bytes = rem_data_bytes
                         sim_stat.expiry_date = exp_iso
                         sim_stat.plan_name = plan_name
                         sim_stat.currency = credit_currency
@@ -327,6 +341,8 @@ class ThingsMobileIntegration(BaseSimIntegration):
                             sessions_count=0,
                             status=sim_status_formatted,
                             balance=latest_balance,
+                            remaining_data_mb=rem_data_mb,
+                            remaining_data_bytes=rem_data_bytes,
                             expiry_date=exp_iso,
                             plan_name=plan_name,
                             sessions=[],

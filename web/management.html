@@ -678,8 +678,6 @@
                         <th data-sort="account_label" data-sort-dir="asc" onclick="sortSimCards('account_label')">Account / Label</th>
                         <th data-sort="provider" onclick="sortSimCards('provider')">Provider</th>
                         <th data-sort="phone_number" onclick="sortSimCards('phone_number')">Phone / MSISDN</th>
-                        <th data-sort="plan" onclick="sortSimCards('plan')">Plan</th>
-                        <th data-sort="balance" onclick="sortSimCards('balance')">Balance</th>
                         <th data-sort="expiry_date" onclick="sortSimCards('expiry_date')">Expiry</th>
                         <th id="simCompanyHeader" data-sort="company" onclick="sortSimCards('company')" style="display:none;">Company</th>
                         <th data-sort="device" onclick="sortSimCards('device')">Assigned Vehicle</th>
@@ -688,7 +686,7 @@
                 </thead>
                 <tbody id="simCardsTableBody">
                     <tr>
-                        <td colspan="8" style="text-align:center;padding:3rem;color:var(--text-muted);">
+                        <td colspan="6" style="text-align:center;padding:3rem;color:var(--text-muted);">
                             <div class="loading" style="margin:0 auto 1rem;"></div>
                             Loading SIM cards…
                         </td>
@@ -1377,7 +1375,7 @@
                         <label class="form-label">Phone Number / MSISDN <span style="color:var(--color-danger,#ef4444)">*</span></label>
                         <input type="text" id="simPhoneNumber" class="form-input" placeholder="+30 6900000000">
                     </div>
-                    <div class="form-row" style="display:flex;gap:0.75rem;">
+                    <div id="simPlanFieldsRow" class="form-row" style="display:flex;gap:0.75rem;">
                         <div class="form-group" style="flex:2;">
                             <label class="form-label">Plan Name</label>
                             <input type="text" id="simPlanName" class="form-input" placeholder="e.g. 500MB IoT">
@@ -1396,20 +1394,24 @@
                         <label class="form-label">Account / Label</label>
                         <input type="text" id="simAccountLabel" class="form-input" placeholder="e.g. Primary Fleet SIM">
                     </div>
-                    <div class="form-row" style="display:flex;gap:0.75rem;">
+                    <div id="simBalanceFieldsRow" class="form-row" style="display:flex;gap:0.75rem;">
                         <div class="form-group" style="flex:1;">
                             <label class="form-label">Balance</label>
                             <input type="number" id="simBalance" class="form-input" placeholder="0.00" step="0.01">
                         </div>
                         <div class="form-group" style="flex:1;">
-                            <label class="form-label">Expiry Date</label>
-                            <div class="datetime-picker-wrap">
-                                <input type="text" id="simExpiryDate" class="form-input" placeholder="YYYY-MM-DD" autocomplete="off">
-                                <button type="button" class="datetime-picker-btn" onclick="openSimDatePicker('simExpiryDate')" title="Select date">
-                                    <i class="mdi mdi-calendar"></i>
-                                </button>
-                                <input type="date" id="simExpiryDatePicker" class="datetime-picker-native" tabindex="-1" aria-hidden="true">
-                            </div>
+                            <label class="form-label">Remaining Data (MB)</label>
+                            <input type="number" id="simRemainingDataMb" class="form-input" placeholder="e.g. 500" step="0.01">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Expiry Date</label>
+                        <div class="datetime-picker-wrap">
+                            <input type="text" id="simExpiryDate" class="form-input" placeholder="YYYY-MM-DD" autocomplete="off">
+                            <button type="button" class="datetime-picker-btn" onclick="openSimDatePicker('simExpiryDate')" title="Select date">
+                                <i class="mdi mdi-calendar"></i>
+                            </button>
+                            <input type="date" id="simExpiryDatePicker" class="datetime-picker-native" tabindex="-1" aria-hidden="true">
                         </div>
                     </div>
                     <div class="form-group" id="simCompanyGroup" style="display:none;">

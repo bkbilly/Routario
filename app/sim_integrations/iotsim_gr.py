@@ -133,6 +133,8 @@ class IoTSimGrIntegration(BaseSimIntegration):
                         iccid=s.contract_id,
                         plan_name=s.plan_name,
                         balance=s.balance,
+                        remaining_data_mb=s.remaining_data_mb,
+                        remaining_data_bytes=s.remaining_data_bytes,
                         currency=s.currency or "EUR",
                         expiry_date=exp_str,
                         status=s.status or "Active",
@@ -146,15 +148,32 @@ class IoTSimGrIntegration(BaseSimIntegration):
         if BeautifulSoup is not None:
             soup = BeautifulSoup(html, "html.parser")
             sim_cards = []
-            card_elements = soup.find_all(class_="sim-card")
+            card_elements = soup.find_all(
+                class_=lambda c: c and any(
+                    cls == "sim-card" or (cls.startswith("sim-card") and "__" not in cls)
+                    for cls in (c if isinstance(c, list) else c.split())
+                )
+            )
+            if not card_elements:
+                card_elements = soup.find_all(
+                    class_=lambda c: c and any(
+                        cls in ("sim-card", "sim_card", "sim-item", "device-card")
+                        for cls in (c if isinstance(c, list) else c.split())
+                    )
+                )
+
             for card in card_elements:
-                msisdn_elem = card.find(class_="sim-card__msisdn")
+                msisdn_elem = card.find(class_=lambda c: c and any(k in c.lower() for k in ("sim-card__msisdn", "msisdn", "phone", "number")))
                 phone = msisdn_elem.get_text(strip=True) if msisdn_elem else ""
+                if not phone:
+                    m = re.search(r"\b(3069\d{8}|69\d{8}|\+3069\d{8})\b", card.get_text())
+                    if m:
+                        phone = m.group(1)
 
                 plan_name = None
                 expiry_date = None
                 auto_renew = None
-                plan_elem = card.find(class_="sim-card__plan")
+                plan_elem = card.find(class_=lambda c: c and any(k in c.lower() for k in ("sim-card__plan", "plan")))
                 if plan_elem:
                     b_plan = plan_elem.find("b")
                     if b_plan:
@@ -177,16 +196,48 @@ class IoTSimGrIntegration(BaseSimIntegration):
 
                 contract_id = None
                 balance = None
-                meta_elem = card.find(class_="sim-card__meta")
+                remaining_data_mb = None
+                remaining_data_bytes = None
+
+                # 1. Check for usage-tile (e.g. <div class="usage-tile usage-tile--data"> with <div class="usage-tile__value">496 MB</div>)
+                usage_tile = card.find(class_=lambda c: c and "usage-tile" in c and "data" in c)
+                if not usage_tile:
+                    for ut in card.find_all(class_=lambda c: c and "usage-tile" in c):
+                        lbl = ut.find(class_=lambda c: c and "usage-tile__label" in c)
+                        if lbl and any(w in lbl.get_text().strip().lower() for w in ("δεδομενα", "δεδομένα", "data")):
+                            usage_tile = ut
+                            break
+                if not usage_tile and len(card_elements) == 1:
+                    usage_tile = soup.find(class_=lambda c: c and "usage-tile" in c and "data" in c)
+
+                if usage_tile:
+                    val_elem = usage_tile.find(class_=lambda c: c and "usage-tile__value" in c)
+                    if val_elem:
+                        val_str = val_elem.get_text(strip=True)
+                        rem_bytes = parse_data_size_to_bytes(val_str)
+                        if rem_bytes > 0:
+                            remaining_data_mb = round(rem_bytes / (1024 * 1024), 2)
+                            remaining_data_bytes = rem_bytes
+
+                # 2. Check meta element for contract and monetary balance
+                meta_elem = card.find(class_=lambda c: c and any(k in c.lower() for k in ("sim-card__meta", "meta")))
                 if meta_elem:
                     meta_text = meta_elem.get_text(separator=" ", strip=True)
                     contract_match = re.search(r"Συμβόλαιο\s+(\d+)", meta_text)
                     if contract_match:
                         contract_id = contract_match.group(1)
 
-                    balance_elem = meta_elem.find(class_="sim-card__balance")
+                    balance_elem = meta_elem.find(class_=lambda c: c and any(k in c.lower() for k in ("sim-card__balance", "balance")))
                     if balance_elem:
-                        balance = parse_price(balance_elem.get_text(strip=True))
+                        bal_str = balance_elem.get_text(strip=True)
+                        if any(unit in bal_str.lower() for unit in ("mb", "gb", "kb")):
+                            if remaining_data_mb is None:
+                                rem_bytes = parse_data_size_to_bytes(bal_str)
+                                if rem_bytes > 0:
+                                    remaining_data_mb = round(rem_bytes / (1024 * 1024), 2)
+                                    remaining_data_bytes = rem_bytes
+                        else:
+                            balance = parse_price(bal_str)
 
                 sim_cards.append(
                     SimCardInfo(
@@ -196,15 +247,46 @@ class IoTSimGrIntegration(BaseSimIntegration):
                         auto_renew=auto_renew,
                         contract_id=contract_id,
                         balance=balance,
+                        remaining_data_mb=remaining_data_mb,
+                        remaining_data_bytes=remaining_data_bytes,
                         currency="EUR",
                         status="Active",
                     )
                 )
+
+            # If no structured card containers matched, try extracting global page info
+            if not sim_cards:
+                phone_m = re.search(r"\b(3069\d{8}|69\d{8}|\+3069\d{8})\b", soup.get_text())
+                phone = phone_m.group(1) if phone_m else ""
+                usage_tile = soup.find(class_=lambda c: c and "usage-tile" in c and "data" in c)
+                rem_mb = None
+                rem_b = None
+                if usage_tile:
+                    val_elem = usage_tile.find(class_=lambda c: c and "usage-tile__value" in c)
+                    if val_elem:
+                        rem_b = parse_data_size_to_bytes(val_elem.get_text(strip=True))
+                        if rem_b > 0:
+                            rem_mb = round(rem_b / (1024 * 1024), 2)
+                if phone or rem_mb is not None:
+                    sim_cards.append(
+                        SimCardInfo(
+                            phone_number=phone,
+                            plan_name=None,
+                            expiry_date=None,
+                            auto_renew=False,
+                            contract_id=None,
+                            balance=None,
+                            remaining_data_mb=rem_mb,
+                            remaining_data_bytes=rem_b,
+                            currency="EUR",
+                            status="Active",
+                        )
+                    )
             return sim_cards
 
         # Fallback pure-Python regex parser
         sim_cards = []
-        cards_raw = re.findall(r'<div[^>]+class=["\'][^"\']*sim-card(?:\s+[^"\']*)?["\'][^>]*>(.*?)(?=<div[^>]+class=["\'][^"\']*sim-card|\Z)', html, re.DOTALL)
+        cards_raw = re.findall(r'<div[^>]+class=["\'][^"\']*\bsim-card(?![a-zA-Z0-9_-])(?:\s+[^"\']*)?["\'][^>]*>(.*?)(?=<div[^>]+class=["\'][^"\']*\bsim-card(?![a-zA-Z0-9_-])|\Z)', html, re.DOTALL)
         for card_html in cards_raw:
             phone_m = re.search(r'class=["\'][^"\']*sim-card__msisdn[^"\']*["\'][^>]*>([^<]+)<', card_html)
             phone = phone_m.group(1).strip() if phone_m else ""
@@ -219,8 +301,39 @@ class IoTSimGrIntegration(BaseSimIntegration):
                     pass
             contract_m = re.search(r'Συμβόλαιο\s+(\d+)', card_html)
             contract_id = contract_m.group(1) if contract_m else None
+
+            balance = None
+            remaining_data_mb = None
+            remaining_data_bytes = None
+
+            # Check usage-tile
+            usage_tile_m = re.search(
+                r'class=["\'][^"\']*usage-tile(?:--data|\s+[^"\']*data)[^"\']*["\'][^>]*>.*?class=["\'][^"\']*usage-tile__value[^"\']*["\'][^>]*>([^<]+)<',
+                card_html,
+                re.DOTALL | re.IGNORECASE,
+            )
+            if not usage_tile_m:
+                usage_tile_m = re.search(
+                    r'(?:usage-tile__label[^>]*>\s*(?:ΔΕΔΟΜΕΝΑ|ΔΕΔΟΜΈΝΑ|DATA)\s*<.*?usage-tile__value[^>]*>([^<]+)<)',
+                    card_html,
+                    re.DOTALL | re.IGNORECASE,
+                )
+            if usage_tile_m:
+                rem_bytes = parse_data_size_to_bytes(usage_tile_m.group(1).strip())
+                remaining_data_mb = round(rem_bytes / (1024 * 1024), 2)
+                remaining_data_bytes = rem_bytes
+
             balance_m = re.search(r'class=["\'][^"\']*sim-card__balance[^"\']*["\'][^>]*>([^<]+)<', card_html)
-            balance = parse_price(balance_m.group(1)) if balance_m else None
+            if balance_m:
+                bal_raw = balance_m.group(1).strip()
+                if any(unit in bal_raw.lower() for unit in ("mb", "gb", "kb")):
+                    if remaining_data_mb is None:
+                        rem_bytes = parse_data_size_to_bytes(bal_raw)
+                        remaining_data_mb = round(rem_bytes / (1024 * 1024), 2)
+                        remaining_data_bytes = rem_bytes
+                else:
+                    balance = parse_price(bal_raw)
+
             sim_cards.append(
                 SimCardInfo(
                     phone_number=phone,
@@ -229,6 +342,8 @@ class IoTSimGrIntegration(BaseSimIntegration):
                     auto_renew="ανανεωθεί αυτόματα" in card_html,
                     contract_id=contract_id,
                     balance=balance,
+                    remaining_data_mb=remaining_data_mb,
+                    remaining_data_bytes=remaining_data_bytes,
                     currency="EUR",
                     status="Active",
                 )
@@ -276,32 +391,57 @@ class IoTSimGrIntegration(BaseSimIntegration):
         async with httpx.AsyncClient(follow_redirects=True, timeout=30.0, headers=self.DEFAULT_HEADERS) as client:
             await self._login(client, username, password)
 
-            # Discover current phone number and latest balance/expiry/plan
+            # Discover current phone number and latest balance/expiry/plan/remaining_data
             current_phone = msisdn
             latest_balance = None
             latest_expiry = None
             latest_plan = None
+            latest_remaining_mb = None
+            latest_remaining_bytes = None
             sim_balances = {}
             sim_expiries = {}
             sim_plans = {}
+            sim_rem_mb = {}
+            sim_rem_bytes = {}
             try:
                 home_resp = await client.get(self.HOME_URL)
                 home_cards = self.parse_sim_cards(home_resp.text)
+                norm_curr = re.sub(r"\D", "", str(current_phone)).lstrip("0") if current_phone else ""
                 for c in home_cards:
+                    norm_c = re.sub(r"\D", "", str(c.phone_number)).lstrip("0")
                     if c.balance is not None:
                         sim_balances[c.phone_number] = c.balance
+                        if norm_c:
+                            sim_balances[norm_c] = c.balance
+                    if c.remaining_data_mb is not None:
+                        sim_rem_mb[c.phone_number] = c.remaining_data_mb
+                        sim_rem_bytes[c.phone_number] = c.remaining_data_bytes
+                        if norm_c:
+                            sim_rem_mb[norm_c] = c.remaining_data_mb
+                            sim_rem_bytes[norm_c] = c.remaining_data_bytes
                     if c.expiry_date:
                         sim_expiries[c.phone_number] = c.expiry_date.isoformat()
+                        if norm_c:
+                            sim_expiries[norm_c] = c.expiry_date.isoformat()
                     if c.plan_name:
                         sim_plans[c.phone_number] = c.plan_name
+                        if norm_c:
+                            sim_plans[norm_c] = c.plan_name
+
                 if home_cards and not current_phone:
                     current_phone = home_cards[0].phone_number
+                    norm_curr = re.sub(r"\D", "", str(current_phone)).lstrip("0")
+
                 if current_phone:
-                    latest_balance = sim_balances.get(current_phone)
-                    latest_expiry = sim_expiries.get(current_phone)
-                    latest_plan = sim_plans.get(current_phone)
+                    latest_balance = sim_balances.get(current_phone) or (sim_balances.get(norm_curr) if norm_curr else None)
+                    latest_remaining_mb = sim_rem_mb.get(current_phone) or (sim_rem_mb.get(norm_curr) if norm_curr else None)
+                    latest_remaining_bytes = sim_rem_bytes.get(current_phone) or (sim_rem_bytes.get(norm_curr) if norm_curr else None)
+                    latest_expiry = sim_expiries.get(current_phone) or (sim_expiries.get(norm_curr) if norm_curr else None)
+                    latest_plan = sim_plans.get(current_phone) or (sim_plans.get(norm_curr) if norm_curr else None)
                 elif home_cards:
                     latest_balance = home_cards[0].balance
+                    latest_remaining_mb = home_cards[0].remaining_data_mb
+                    latest_remaining_bytes = home_cards[0].remaining_data_bytes
                     latest_expiry = home_cards[0].expiry_date.isoformat() if home_cards[0].expiry_date else None
                     latest_plan = home_cards[0].plan_name
             except Exception as e:
@@ -337,7 +477,13 @@ class IoTSimGrIntegration(BaseSimIntegration):
                 raise SimProviderError(f"Failed to query data sessions: {err}") from err
 
             stats = self.parse_data_sessions(resp.text)
+            if stats.remaining_data_mb is not None:
+                latest_remaining_mb = stats.remaining_data_mb
+                latest_remaining_bytes = stats.remaining_data_bytes
+
             stats.balance = latest_balance
+            stats.remaining_data_mb = latest_remaining_mb
+            stats.remaining_data_bytes = latest_remaining_bytes
             stats.expiry_date = latest_expiry
             stats.plan_name = latest_plan
             stats.currency = "EUR"
@@ -366,11 +512,22 @@ class IoTSimGrIntegration(BaseSimIntegration):
 
             if home_cards:
                 sim_map = {}
+                norm_curr = re.sub(r"\D", "", str(current_phone)).lstrip("0") if current_phone else ""
                 for c in home_cards:
-                    if c.phone_number == current_phone:
-                        sim_map[c.phone_number] = stats
+                    norm_c = re.sub(r"\D", "", str(c.phone_number)).lstrip("0")
+                    is_match = (c.phone_number == current_phone) or (bool(norm_curr) and norm_c == norm_curr)
+                    if is_match:
+                        stats.remaining_data_mb = c.remaining_data_mb if c.remaining_data_mb is not None else stats.remaining_data_mb
+                        stats.remaining_data_bytes = c.remaining_data_bytes if c.remaining_data_bytes is not None else stats.remaining_data_bytes
+                        if c.balance is not None:
+                            stats.balance = c.balance
+                        if c.plan_name:
+                            stats.plan_name = c.plan_name
+                        if c.expiry_date:
+                            stats.expiry_date = c.expiry_date.isoformat()
+                        c_stat = stats
                     else:
-                        sim_map[c.phone_number] = DataSessionStats(
+                        c_stat = DataSessionStats(
                             total_billsec="0 Bytes",
                             total_billsec_bytes=0,
                             total_user_price=0.0,
@@ -378,13 +535,24 @@ class IoTSimGrIntegration(BaseSimIntegration):
                             sessions_count=0,
                             status=c.status,
                             balance=c.balance,
+                            remaining_data_mb=c.remaining_data_mb,
+                            remaining_data_bytes=c.remaining_data_bytes,
                             expiry_date=c.expiry_date.isoformat() if c.expiry_date else None,
                             plan_name=c.plan_name,
                             sessions=[],
                         )
+                    sim_map[c.phone_number] = c_stat
+                    if norm_c:
+                        sim_map[norm_c] = c_stat
+                        sim_map[f"+30{norm_c}"] = c_stat
                 stats.sim_data_sessions = sim_map
             elif current_phone:
-                stats.sim_data_sessions = {current_phone: stats}
+                norm_curr = re.sub(r"\D", "", str(current_phone)).lstrip("0")
+                stats.sim_data_sessions = {
+                    current_phone: stats,
+                    norm_curr: stats,
+                    f"+30{norm_curr}": stats,
+                }
 
             return stats
 
@@ -413,9 +581,11 @@ class IoTSimGrIntegration(BaseSimIntegration):
 
     @classmethod
     def parse_data_sessions(cls, html: str) -> DataSessionStats:
-        """Parse total_billsec, total_user_price, and session rows from response HTML."""
+        """Parse total_billsec, total_user_price, remaining data, and session rows from response HTML."""
         total_billsec = "0.00 KB"
         total_user_price = 0.0
+        remaining_data_mb = None
+        remaining_data_bytes = None
         sessions = []
 
         if BeautifulSoup is not None:
@@ -430,7 +600,23 @@ class IoTSimGrIntegration(BaseSimIntegration):
             price_raw = price_elem.get_text(strip=True) if price_elem else "0.0000 €"
             total_user_price = parse_price(price_raw)
 
-            # 3. Session rows
+            # 3. Check for usage-tile on data sessions page
+            usage_tile = soup.find(class_=lambda c: c and "usage-tile" in c and "data" in c)
+            if not usage_tile:
+                for ut in soup.find_all(class_=lambda c: c and "usage-tile" in c):
+                    lbl = ut.find(class_=lambda c: c and "usage-tile__label" in c)
+                    if lbl and any(w in lbl.get_text().strip().lower() for w in ("δεδομενα", "δεδομένα", "data")):
+                        usage_tile = ut
+                        break
+            if usage_tile:
+                val_elem = usage_tile.find(class_=lambda c: c and "usage-tile__value" in c)
+                if val_elem:
+                    b_val = parse_data_size_to_bytes(val_elem.get_text(strip=True))
+                    if b_val > 0:
+                        remaining_data_bytes = b_val
+                        remaining_data_mb = round(b_val / (1024 * 1024), 2)
+
+            # 4. Session rows
             table = soup.find("table", class_="stats-table")
             if table and table.find("tbody"):
                 for tr in table.find("tbody").find_all("tr"):
@@ -483,11 +669,30 @@ class IoTSimGrIntegration(BaseSimIntegration):
             if price_m:
                 total_user_price = parse_price(price_m.group(1))
 
+            usage_tile_m = re.search(
+                r'class=["\'][^"\']*usage-tile(?:--data|\s+[^"\']*data)[^"\']*["\'][^>]*>.*?class=["\'][^"\']*usage-tile__value[^"\']*["\'][^>]*>([^<]+)<',
+                html,
+                re.DOTALL | re.IGNORECASE,
+            )
+            if not usage_tile_m:
+                usage_tile_m = re.search(
+                    r'(?:usage-tile__label[^>]*>\s*(?:ΔΕΔΟΜΕΝΑ|ΔΕΔΟΜΈΝΑ|DATA)\s*<.*?usage-tile__value[^>]*>([^<]+)<)',
+                    html,
+                    re.DOTALL | re.IGNORECASE,
+                )
+            if usage_tile_m:
+                b_val = parse_data_size_to_bytes(usage_tile_m.group(1).strip())
+                if b_val > 0:
+                    remaining_data_bytes = b_val
+                    remaining_data_mb = round(b_val / (1024 * 1024), 2)
+
         total_billsec_bytes = parse_data_size_to_bytes(total_billsec)
         return DataSessionStats(
             total_billsec=total_billsec,
             total_billsec_bytes=total_billsec_bytes,
             total_user_price=total_user_price,
+            remaining_data_mb=remaining_data_mb,
+            remaining_data_bytes=remaining_data_bytes,
             currency="EUR",
             sessions_count=len(sessions),
             status="Active",

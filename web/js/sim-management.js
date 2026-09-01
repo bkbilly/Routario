@@ -129,19 +129,16 @@ function _renderSimTable() {
         (s.phone_number || '').toLowerCase().includes(query) ||
         (s.account_label || '').toLowerCase().includes(query) ||
         (s.provider_id || '').toLowerCase().includes(query) ||
-        (s.plan_name || '').toLowerCase().includes(query) ||
         (s.device_name || '').toLowerCase().includes(query)
     )].sort((a, b) => {
         let av = '', bv = '';
         switch (_simSortCol) {
-            case 'account_label': av = a.account_label || ''; bv = b.account_label || ''; break;
-            case 'provider':      av = a.provider_id || ''; bv = b.provider_id || ''; break;
-            case 'plan':          av = a.plan_name || ''; bv = b.plan_name || ''; break;
-            case 'balance':       av = a.balance ?? -999999; bv = b.balance ?? -999999; return (av - bv) * _simSortDir;
-            case 'expiry_date':   av = a.expiry_date || ''; bv = b.expiry_date || ''; break;
-            case 'company':       av = _simCompanies.find(c => c.id === a.company_id)?.name || ''; bv = _simCompanies.find(c => c.id === b.company_id)?.name || ''; break;
-            case 'device':        av = a.device_name || ''; bv = b.device_name || ''; break;
-            default:              av = a.phone_number || ''; bv = b.phone_number || '';
+            case 'account_label':     av = a.account_label || ''; bv = b.account_label || ''; break;
+            case 'provider':          av = a.provider_id || ''; bv = b.provider_id || ''; break;
+            case 'expiry_date':       av = a.expiry_date || ''; bv = b.expiry_date || ''; break;
+            case 'company':           av = _simCompanies.find(c => c.id === a.company_id)?.name || ''; bv = _simCompanies.find(c => c.id === b.company_id)?.name || ''; break;
+            case 'device':            av = a.device_name || ''; bv = b.device_name || ''; break;
+            default:                  av = a.phone_number || ''; bv = b.phone_number || '';
         }
         return av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' }) * _simSortDir;
     });
@@ -149,7 +146,7 @@ function _renderSimTable() {
     const countEl = document.getElementById('simCardCount');
     if (countEl) countEl.textContent = `${list.length} SIM card${list.length !== 1 ? 's' : ''}`;
 
-    const colSpan = _simIsAdmin ? 9 : 8;
+    const colSpan = _simIsAdmin ? 7 : 6;
     const tbody = document.getElementById('simCardsTableBody');
     if (!tbody) return;
 
@@ -165,10 +162,6 @@ function _renderSimTable() {
             ? `<span style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:500;"><i class="mdi mdi-car"></i> ${RoutarioUI.escapeHtml(s.device_name)}</span>`
             : `<span style="color:var(--text-muted);font-style:italic;">— Unassigned —</span>`;
 
-        const balHtml = s.balance != null
-            ? `<span style="font-family:var(--font-mono);font-weight:600;color:${s.balance > 0 ? 'var(--color-success, #22c55e)' : 'var(--color-danger, #ef4444)'};">${s.balance.toFixed(2)} ${RoutarioUI.escapeHtml(s.currency || 'EUR')}</span>`
-            : `<span style="color:var(--text-muted);">—</span>`;
-
         const expHtml = s.expiry_date
             ? `<span style="font-size:0.85rem;color:var(--text-secondary);">${RoutarioUI.escapeHtml(formatDateValue(s.expiry_date))}</span>`
             : `<span style="color:var(--text-muted);">—</span>`;
@@ -177,8 +170,6 @@ function _renderSimTable() {
             <td style="font-weight:600;color:var(--text-primary);">${RoutarioUI.escapeHtml(s.account_label || s.phone_number || '—')}</td>
             <td>${_renderProviderBadge(s.provider_id)}</td>
             <td style="font-family:var(--font-mono);font-size:0.88rem;font-weight:600;">${RoutarioUI.escapeHtml(s.phone_number)}</td>
-            <td style="font-size:0.85rem;">${RoutarioUI.escapeHtml(s.plan_name || '—')}</td>
-            <td>${balHtml}</td>
             <td>${expHtml}</td>
             ${_simIsAdmin ? `<td style="font-size:0.85rem;color:var(--text-secondary);">${RoutarioUI.escapeHtml(compName)}</td>` : ''}
             <td>${devHtml}</td>
@@ -279,6 +270,7 @@ function openAddSimCardModal() {
     document.getElementById('simPhoneNumber').value = '';
     document.getElementById('simPlanName').value = '';
     document.getElementById('simBalance').value = '';
+    document.getElementById('simRemainingDataMb').value = '';
     document.getElementById('simCurrency').value = 'EUR';
 
     initSimDateInput();
@@ -321,6 +313,7 @@ function openEditSimCardModal(simId) {
     document.getElementById('simPhoneNumber').value = s.phone_number || '';
     document.getElementById('simPlanName').value = s.plan_name || '';
     document.getElementById('simBalance').value = s.balance != null ? s.balance : '';
+    document.getElementById('simRemainingDataMb').value = s.remaining_data_mb != null ? s.remaining_data_mb : '';
     document.getElementById('simCurrency').value = s.currency || 'EUR';
 
     initSimDateInput();
@@ -390,6 +383,12 @@ function onSimProviderChange(existingCreds = null) {
     const fetchBtn = document.getElementById('simFetchBtn');
     const resultEl = document.getElementById('simTestResult');
     const fetchGrp = document.getElementById('simRemoteFetchGroup');
+    const planRow = document.getElementById('simPlanFieldsRow');
+    const balRow = document.getElementById('simBalanceFieldsRow');
+    const isManual = !provId;
+
+    if (planRow) planRow.style.display = isManual ? 'flex' : 'none';
+    if (balRow) balRow.style.display = isManual ? 'flex' : 'none';
 
     if (!provider || !provId) {
         if (container) container.innerHTML = '';
@@ -520,7 +519,9 @@ async function fetchRemoteSims() {
         fetchGrp.style.display = 'block';
         sel.innerHTML = '<option value="">— Select Remote SIM to auto-fill —</option>' +
             remoteSims.map((s, idx) => {
-                return `<option value="${idx}">${RoutarioUI.escapeHtml(s.phone_number)}${s.plan_name ? ' (' + RoutarioUI.escapeHtml(s.plan_name) + ')' : ''}${s.balance != null ? ' - ' + s.balance + ' ' + (s.currency || 'EUR') : ''}</option>`;
+                const balPart = s.balance != null ? ` - ${s.balance} ${s.currency || 'EUR'}` : '';
+                const dataPart = s.remaining_data_mb != null ? ` [${s.remaining_data_mb} MB left]` : '';
+                return `<option value="${idx}">${RoutarioUI.escapeHtml(s.phone_number)}${s.plan_name ? ' (' + RoutarioUI.escapeHtml(s.plan_name) + ')' : ''}${balPart}${dataPart}</option>`;
             }).join('');
 
         sel.onchange = () => {
@@ -529,6 +530,7 @@ async function fetchRemoteSims() {
                 document.getElementById('simPhoneNumber').value = chosen.phone_number || '';
                 if (chosen.plan_name) document.getElementById('simPlanName').value = chosen.plan_name;
                 if (chosen.balance != null) document.getElementById('simBalance').value = chosen.balance;
+                if (chosen.remaining_data_mb != null) document.getElementById('simRemainingDataMb').value = chosen.remaining_data_mb;
                 if (chosen.currency) document.getElementById('simCurrency').value = chosen.currency;
                 if (chosen.expiry_date) setSimInputDate(chosen.expiry_date);
             }
@@ -563,6 +565,9 @@ async function saveSimCard(event) {
     const balRaw = document.getElementById('simBalance')?.value.trim();
     const balance = (balRaw !== '' && balRaw !== undefined && !isNaN(Number(balRaw))) ? parseFloat(balRaw) : null;
 
+    const remDataRaw = document.getElementById('simRemainingDataMb')?.value.trim();
+    const remaining_data_mb = (remDataRaw !== '' && remDataRaw !== undefined && !isNaN(Number(remDataRaw))) ? parseFloat(remDataRaw) : null;
+
     const payload = {
         provider_id: provId,
         account_label: accountLabel,
@@ -570,6 +575,7 @@ async function saveSimCard(event) {
         phone_number: phoneNumber,
         plan_name: document.getElementById('simPlanName')?.value.trim() || null,
         balance: balance,
+        remaining_data_mb: remaining_data_mb,
         currency: document.getElementById('simCurrency')?.value.trim() || 'EUR',
         expiry_date: getSimInputIso(),
         device_id: parseInt(document.getElementById('simAssignedDevice')?.value) || null,

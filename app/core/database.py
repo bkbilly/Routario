@@ -374,11 +374,13 @@ class DatabaseService:
                 phone_number VARCHAR(50) NOT NULL UNIQUE,
                 plan_name VARCHAR(100),
                 balance FLOAT,
+                remaining_data_mb FLOAT,
                 currency VARCHAR(10) DEFAULT 'EUR',
                 expiry_date VARCHAR(50),
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )""",
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_sim_cards_phone_number ON sim_cards (phone_number)",
+            "ALTER TABLE sim_cards ADD COLUMN remaining_data_mb FLOAT",
         ]
         if self._is_postgres:
             migrations.extend([
@@ -390,6 +392,7 @@ class DatabaseService:
                 "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS trigger_type VARCHAR(50) DEFAULT 'time'",
                 "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS trigger_options JSON DEFAULT '{}'",
                 "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS last_triggered_at TIMESTAMP",
+                "ALTER TABLE sim_cards ADD COLUMN IF NOT EXISTS remaining_data_mb FLOAT",
             ])
             migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP")
             migrations.append("ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)")
@@ -442,14 +445,17 @@ class DatabaseService:
                                 phone_number VARCHAR(50) NOT NULL UNIQUE,
                                 plan_name VARCHAR(100),
                                 balance FLOAT,
+                                remaining_data_mb FLOAT,
                                 currency VARCHAR(10) DEFAULT 'EUR',
                                 expiry_date VARCHAR(50),
                                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                             )
                         """))
-                        await conn.execute(text("""
-                            INSERT INTO sim_cards_dg_tmp (id, company_id, device_id, provider_id, account_label, credentials, phone_number, plan_name, balance, currency, expiry_date, created_at)
-                            SELECT id, company_id, device_id, provider_id, account_label, credentials, phone_number, plan_name, balance, currency, expiry_date, created_at FROM sim_cards
+                        has_rem = "remaining_data_mb" in cols
+                        rem_col_select = "remaining_data_mb" if has_rem else "NULL"
+                        await conn.execute(text(f"""
+                            INSERT INTO sim_cards_dg_tmp (id, company_id, device_id, provider_id, account_label, credentials, phone_number, plan_name, balance, remaining_data_mb, currency, expiry_date, created_at)
+                            SELECT id, company_id, device_id, provider_id, account_label, credentials, phone_number, plan_name, balance, {rem_col_select}, currency, expiry_date, created_at FROM sim_cards
                         """))
                         await conn.execute(text("DROP TABLE sim_cards"))
                         await conn.execute(text("ALTER TABLE sim_cards_dg_tmp RENAME TO sim_cards"))

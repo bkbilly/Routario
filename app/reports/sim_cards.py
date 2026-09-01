@@ -119,6 +119,11 @@ class SimCardsReport(Report):
                 elif stats and stats.plan_name:
                     sc.plan_name = stats.plan_name
 
+                if sim_stats and sim_stats.remaining_data_mb is not None:
+                    sc.remaining_data_mb = sim_stats.remaining_data_mb
+                elif stats and getattr(stats, "remaining_data_mb", None) is not None:
+                    sc.remaining_data_mb = stats.remaining_data_mb
+
                 status_error = None
                 if sim_stats and getattr(sim_stats, "error_message", None):
                     status_error = sim_stats.error_message
@@ -135,7 +140,7 @@ class SimCardsReport(Report):
                         status_text = "Connection Error"
                         status_error = provider_error or "Failed to connect to SIM provider."
                 else:
-                    status_text = "Active" if (sc.balance is None or sc.balance > 0) else "Low Balance"
+                    status_text = "Active" if (sc.balance is None or sc.balance > 0 or (sc.remaining_data_mb is not None and sc.remaining_data_mb > 0)) else "Low Balance"
 
                 rows.append({
                     "vehicle": device.name if device else "-",
@@ -145,6 +150,7 @@ class SimCardsReport(Report):
                     "account_label": sc.account_label or "-",
                     "plan_name": sc.plan_name or "-",
                     "balance": sc.balance,
+                    "remaining_data_mb": sc.remaining_data_mb,
                     "currency": currency,
                     "data_usage_mb": total_mb,
                     "cost": round(total_cost, 2),
@@ -175,6 +181,7 @@ class SimCardsReport(Report):
             {"key": "data_usage_mb", "label": "Data (MB)", "type": "number", "decimals": 2, "suffix": " MB"},
             {"key": "cost", "label": "Cost", "type": "number", "decimals": 2},
             {"key": "balance", "label": "Balance", "type": "number", "decimals": 2},
+            {"key": "remaining_data_mb", "label": "Remaining Data", "type": "number", "decimals": 2, "suffix": " MB", "empty": "—"},
             {"key": "expiry_date", "label": "Expiry", "type": "date", "empty": "—"},
             {"key": "status", "label": "Status", "type": "status"},
         ]

@@ -181,6 +181,7 @@ class SimCard(Base):
     phone_number:  Mapped[str]           = mapped_column(String(50), nullable=False, unique=True, index=True)
     plan_name:     Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     balance:       Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    remaining_data_mb: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     currency:      Mapped[str]           = mapped_column(String(10), default='EUR')
     expiry_date:   Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     created_at:    Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)

@@ -730,6 +730,7 @@ class SimCardCreate(BaseModel):
     phone_number: str
     plan_name: Optional[str] = None
     balance: Optional[float] = None
+    remaining_data_mb: Optional[float] = None
     currency: str = "EUR"
     expiry_date: Optional[str] = None
     company_id: Optional[int] = None
@@ -743,6 +744,7 @@ class SimCardUpdate(BaseModel):
     phone_number: Optional[str] = None
     plan_name: Optional[str] = None
     balance: Optional[float] = None
+    remaining_data_mb: Optional[float] = None
     currency: Optional[str] = None
     expiry_date: Optional[str] = None
     company_id: Optional[int] = None
@@ -761,6 +763,7 @@ class SimCardResponse(BaseModel):
     phone_number: str
     plan_name: Optional[str] = None
     balance: Optional[float] = None
+    remaining_data_mb: Optional[float] = None
     currency: str = "EUR"
     expiry_date: Optional[str] = None
     credentials: Optional[Dict[str, Any]] = None

@@ -60,6 +60,7 @@ def _sim_to_response(sim: SimCard) -> dict:
         "phone_number": sim.phone_number,
         "plan_name": sim.plan_name,
         "balance": sim.balance,
+        "remaining_data_mb": sim.remaining_data_mb,
         "currency": sim.currency or "EUR",
         "expiry_date": sim.expiry_date,
         "credentials": sim.credentials or {},
@@ -108,6 +109,7 @@ async def fetch_remote_sims(
                 "phone_number": s.phone_number,
                 "plan_name": s.plan_name,
                 "balance": s.balance,
+                "remaining_data_mb": s.remaining_data_mb,
                 "currency": s.currency,
                 "expiry_date": s.expiry_date,
             }
@@ -176,6 +178,7 @@ async def create_sim_card(
             phone_number=clean_phone,
             plan_name=data.plan_name,
             balance=data.balance,
+            remaining_data_mb=data.remaining_data_mb,
             currency=data.currency or "EUR",
             expiry_date=data.expiry_date,
         )
@@ -241,6 +244,8 @@ async def update_sim_card(
             sim.plan_name = data.plan_name
         if "balance" in data.model_fields_set:
             sim.balance = data.balance
+        if "remaining_data_mb" in data.model_fields_set:
+            sim.remaining_data_mb = data.remaining_data_mb
         if "currency" in data.model_fields_set and data.currency is not None:
             sim.currency = data.currency
         if "expiry_date" in data.model_fields_set:

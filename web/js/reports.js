@@ -1928,6 +1928,11 @@ function _formatValue(value, col = {}, row = {}) {
         const color = num > 0 ? 'var(--color-success, #22c55e)' : (num < 0 ? 'var(--color-danger, #ef4444)' : 'var(--text-muted)');
         return `<span style="font-family:var(--font-mono);font-weight:600;color:${color};">${num.toFixed(col.decimals ?? 2)} ${_esc(cur)}</span>`;
     }
+    if (col.key === 'remaining_data_mb') {
+        const num = Number(value);
+        if (isNaN(num)) return _esc(value || '—');
+        return `<span style="font-family:var(--font-mono);font-weight:600;color:var(--text-primary);">${num.toFixed(col.decimals ?? 2)} MB</span>`;
+    }
     if (col.type === 'number') return `${Number(value).toFixed(col.decimals ?? 1)}${col.suffix || ''}`;
     if (col.type === 'integer') return String(parseInt(value, 10));
     if (col.type === 'bool_on') return `<span style="color:${value ? 'var(--accent-success)' : 'var(--text-muted)'};">${value ? 'On' : 'Off'}</span>`;

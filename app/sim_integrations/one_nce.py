@@ -192,11 +192,14 @@ class OnceIntegration(BaseSimIntegration):
                 except Exception as err:
                     logger.debug("Could not fetch 1NCE quota for %s: %s", iccid, err)
 
+                rem_bytes = int(remaining_volume * 1024 * 1024) if remaining_volume is not None else None
                 remote_sims.append(
                     RemoteSimCard(
                         phone_number=msisdn,
                         plan_name=plan_name,
                         balance=remaining_volume,
+                        remaining_data_mb=remaining_volume,
+                        remaining_data_bytes=rem_bytes,
                         currency="MB",
                         expiry_date=expiry_iso,
                         status=status_formatted,
@@ -282,6 +285,7 @@ class OnceIntegration(BaseSimIntegration):
                 except Exception as err:
                     logger.debug("Could not fetch 1NCE quota for %s: %s", iccid, err)
 
+                rem_bytes = int(remaining_volume * 1024 * 1024) if remaining_volume is not None else None
                 sim_stat = DataSessionStats(
                     total_billsec=format_data_size(consumed_bytes),
                     total_billsec_bytes=consumed_bytes,
@@ -290,6 +294,8 @@ class OnceIntegration(BaseSimIntegration):
                     sessions_count=1 if consumed_bytes > 0 else 0,
                     status=status_formatted,
                     balance=remaining_volume,
+                    remaining_data_mb=remaining_volume,
+                    remaining_data_bytes=rem_bytes,
                     expiry_date=expiry_iso,
                     plan_name=plan_name,
                     sessions=[],

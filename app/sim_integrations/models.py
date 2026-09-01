@@ -15,6 +15,8 @@ class SimCardInfo:
     auto_renew: Optional[bool] = None
     contract_id: Optional[str] = None
     balance: Optional[float] = None
+    remaining_data_mb: Optional[float] = None
+    remaining_data_bytes: Optional[int] = None
     currency: str = "EUR"
     status: Optional[str] = None
 
@@ -43,6 +45,8 @@ class DataSessionStats:
     sessions_count: int = 0
     status: Optional[str] = None
     balance: Optional[float] = None
+    remaining_data_mb: Optional[float] = None
+    remaining_data_bytes: Optional[int] = None
     expiry_date: Optional[str] = None
     plan_name: Optional[str] = None
     error_message: Optional[str] = None
@@ -69,6 +73,8 @@ class RemoteSimCard:
     iccid: Optional[str] = None
     plan_name: Optional[str] = None
     balance: Optional[float] = None
+    remaining_data_mb: Optional[float] = None
+    remaining_data_bytes: Optional[int] = None
     currency: str = "EUR"
     expiry_date: Optional[str] = None
     status: Optional[str] = None
