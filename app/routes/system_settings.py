@@ -211,3 +211,54 @@ async def trigger_history_purge(
         "deleted_records": count,
         "message": f"Successfully truncated {count} position records older than {target_days} days.",
     }
+
+
+class SmtpTestRequest(BaseModel):
+    recipient_email: str = None
+    config_override: Dict[str, Any] = None
+
+
+@router.post("/test-smtp", response_model=Dict[str, Any])
+async def test_smtp_configuration(
+    payload: SmtpTestRequest = None,
+    current_user: User = Depends(require_admin),
+) -> Dict[str, Any]:
+    """Test SMTP email configuration by sending a test message."""
+    from core.email import send_email_async
+    recipient = ((payload.recipient_email if payload else None) or "").strip() or current_user.email
+    if not recipient or "@" not in recipient:
+        raise HTTPException(status_code=400, detail="A valid recipient email address is required.")
+
+    override = payload.config_override if payload else None
+
+    subject = "Routario SMTP Test Email"
+    body_text = (
+        f"Hello {current_user.username},\n\n"
+        f"This test email confirms that your outgoing SMTP server configuration in Routario is working properly.\n\n"
+        f"Sent at: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
+    )
+    body_html = f"""
+    <div style="font-family:'Outfit','Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;padding:28px 24px;background:#131825;color:#e5e7eb;border-radius:16px;border:1px solid #2a3447;">
+        <h2 style="color:#ffffff;margin-top:0;font-size:22px;font-weight:700;">Routario SMTP Test</h2>
+        <p style="color:#9ca3af;font-size:14px;line-height:1.5;">Hello <strong style="color:#ffffff;">{current_user.username}</strong>,</p>
+        <p style="color:#9ca3af;font-size:14px;line-height:1.5;">This test email confirms that your outgoing SMTP server configuration in Routario is working properly!</p>
+        <div style="background:#1a2035;padding:16px;border-radius:8px;border:1px solid #2a3447;margin:20px 0;font-size:13px;color:#cbd5e1;">
+            <div><strong>Status:</strong> <span style="color:#22c55e;">Connected & Verified</span></div>
+            <div style="margin-top:4px;"><strong>Sent at:</strong> {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}</div>
+            <div style="margin-top:4px;"><strong>Recipient:</strong> {recipient}</div>
+        </div>
+        <p style="color:#6b7280;font-size:12px;margin-bottom:0;">Routario GPS Telematics Platform</p>
+    </div>
+    """
+
+    ok = await send_email_async([recipient], subject, body_text, body_html, config_override=override)
+    if not ok:
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to send test email. Please check your SMTP host, port, username, password, or encryption settings.",
+        )
+
+    return {
+        "success": True,
+        "message": f"Test email sent successfully to {recipient}!",
+    }

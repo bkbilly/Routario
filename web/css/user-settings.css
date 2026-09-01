@@ -416,12 +416,63 @@ h1 {
     word-break: break-all;
 }
 
-#settingsMfaQr {
+#settingsMfaQr,
+#profileMfaQr,
+#userModalMfaQr {
     width: fit-content;
     padding: 0.75rem;
     background: #fff;
     border-radius: 8px;
     margin-bottom: 0.75rem;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+#profileMfaQr:hover,
+#userModalMfaQr:hover,
+#settingsMfaQr:hover {
+    transform: scale(1.03);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4) !important;
+}
+
+#qrZoomModal .modal-content {
+    max-width: 380px !important;
+    width: 90% !important;
+    height: auto !important;
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+    text-align: center;
+    padding: 1.5rem;
+    align-items: center;
+    margin: auto;
+}
+
+#qrZoomTarget {
+    display: inline-flex;
+    padding: 12px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    margin: 0 auto 1rem;
+    max-width: 100%;
+}
+
+#qrZoomTarget canvas,
+#qrZoomTarget img {
+    max-width: 100% !important;
+    height: auto !important;
+    display: block;
+}
+
+@media (max-height: 600px) {
+    #qrZoomModal .modal-content {
+        padding: 1rem;
+        max-height: 95vh !important;
+    }
+    #qrZoomTarget {
+        padding: 8px;
+        margin-bottom: 0.5rem;
+    }
 }
 
 .card-header {

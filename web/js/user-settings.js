@@ -92,6 +92,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
+    closeQrZoomModal();
     closeChannelModal();
     closeWebhookModal();
     if (typeof rtpCloseCreateTicketModal === 'function') rtpCloseCreateTicketModal();
@@ -105,7 +106,8 @@ document.addEventListener('keydown', e => {
 
 window.addEventListener('click', e => {
     if (e.target.classList && e.target.classList.contains('modal')) {
-        if (e.target.id === 'editApiKeyModal') closeEditApiKeyModal();
+        if (e.target.id === 'qrZoomModal') closeQrZoomModal();
+        else if (e.target.id === 'editApiKeyModal') closeEditApiKeyModal();
         else if (e.target.id === 'apiKeyModal') closeApiKeyModal();
         else if (e.target.id === 'webhookModal') closeWebhookModal();
         else if (e.target.id === 'notificationChannelModal') closeChannelModal();
@@ -501,11 +503,14 @@ async function initProfileMfaPanel() {
     }
 }
 
+let _currentMfaProvisioningUri = null;
+
 function renderProfileMfaControls(enabled, disabled = false, message = null) {
     const statusEl = document.getElementById('profileMfaStatus');
     const codeGroup = document.getElementById('profileMfaCodeGroup');
     const codeLabel = document.getElementById('profileMfaCodeLabel');
     const setupBtn = document.getElementById('profileMfaSetupBtn');
+    const cancelBtn = document.getElementById('profileMfaCancelBtn');
     const enableBtn = document.getElementById('profileMfaEnableBtn');
     const disableBtn = document.getElementById('profileMfaDisableBtn');
     const setupBox = document.getElementById('profileMfaSetupBox');
@@ -513,39 +518,100 @@ function renderProfileMfaControls(enabled, disabled = false, message = null) {
 
     statusEl.textContent = message || (enabled ? 'MFA is enabled for your account.' : 'MFA is not enabled for your account.');
     setupBtn.disabled = disabled;
+    if (cancelBtn) cancelBtn.disabled = disabled;
     enableBtn.disabled = disabled;
     disableBtn.disabled = disabled;
-    setupBtn.style.display = !enabled ? 'inline-flex' : 'none';
-    enableBtn.style.display = !enabled && profileMfaSetupPending ? 'inline-flex' : 'none';
-    disableBtn.style.display = enabled ? 'inline-flex' : 'none';
-    codeGroup.style.display = ((!enabled && profileMfaSetupPending) || enabled) ? '' : 'none';
-    codeLabel.textContent = enabled ? 'Authenticator or Recovery Code' : 'Authenticator Code';
-    if (enabled && setupBox) setupBox.style.display = 'none';
+
+    if (enabled) {
+        setupBtn.style.display = 'none';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        enableBtn.style.display = 'none';
+        disableBtn.style.display = 'inline-flex';
+        codeGroup.style.display = '';
+        codeLabel.textContent = 'Authenticator or Recovery Code';
+        if (setupBox) setupBox.style.display = 'none';
+    } else if (profileMfaSetupPending) {
+        setupBtn.style.display = 'none';
+        if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+        enableBtn.style.display = 'inline-flex';
+        disableBtn.style.display = 'none';
+        codeGroup.style.display = '';
+        codeLabel.textContent = 'Authenticator Code';
+    } else {
+        setupBtn.style.display = 'inline-flex';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        enableBtn.style.display = 'none';
+        disableBtn.style.display = 'none';
+        codeGroup.style.display = 'none';
+        if (setupBox) setupBox.style.display = 'none';
+    }
+}
+
+function profileCancelMfa() {
+    profileMfaSetupPending = false;
+    _currentMfaProvisioningUri = null;
+    const box = document.getElementById('profileMfaSetupBox');
+    if (box) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+    }
+    const codeInput = document.getElementById('profileMfaCode');
+    if (codeInput) codeInput.value = '';
+    renderProfileMfaControls(false);
+}
+
+function openQrZoomModal(uri) {
+    if (!uri) return;
+    const modal = document.getElementById('qrZoomModal');
+    const target = document.getElementById('qrZoomTarget');
+    if (!modal || !target) return;
+    target.innerHTML = '';
+    const size = Math.min(260, Math.max(160, Math.floor(window.innerHeight * 0.35)));
+    if (window.QRCode) {
+        new QRCode(target, {
+            text: uri,
+            width: size,
+            height: size,
+            colorDark: '#0a0e1a',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M,
+        });
+    }
+    modal.classList.add('active');
+}
+
+function closeQrZoomModal() {
+    const modal = document.getElementById('qrZoomModal');
+    if (modal) modal.classList.remove('active');
 }
 
 async function profileSetupMfa() {
     try {
         const data = await settingsJson(`${API_BASE}/mfa/setup`, { method: 'POST' });
+        _currentMfaProvisioningUri = data.provisioning_uri || null;
         const box = document.getElementById('profileMfaSetupBox');
         box.style.display = '';
         box.innerHTML = `
-            <div id="profileMfaQr" style="display:flex;justify-content:center;margin-bottom:0.75rem;"></div>
-            <div style="font-size:0.78rem;color:var(--text-secondary);font-family:var(--font-sans);margin-bottom:0.35rem;">Recovery codes</div>
-            <div>${(data.recovery_codes || []).map(settingsEsc).join('<br>')}</div>
+            <div style="text-align:center;margin-bottom:0.85rem;">
+                <div id="profileMfaQr" onclick="openQrZoomModal(_currentMfaProvisioningUri)" title="Click to enlarge" style="display:inline-flex;padding:10px;background:#ffffff;border-radius:10px;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.25);transition:transform 0.15s ease;"></div>
+            </div>
+            <div style="font-size:0.78rem;color:var(--text-secondary);font-family:var(--font-sans);margin-bottom:0.35rem;font-weight:600;">Recovery codes (Save these in a safe place):</div>
+            <div style="background:var(--bg-primary);padding:0.6rem 0.75rem;border-radius:6px;font-family:var(--font-mono);font-size:0.8rem;border:1px solid var(--border-color);line-height:1.6;color:var(--text-primary);">${(data.recovery_codes || []).map(settingsEsc).join('<br>')}</div>
         `;
         if (window.QRCode && data.provisioning_uri) {
             new QRCode(document.getElementById('profileMfaQr'), {
                 text: data.provisioning_uri,
-                width: 160,
-                height: 160,
+                width: 150,
+                height: 150,
                 colorDark: '#111827',
                 colorLight: '#ffffff',
-                correctLevel: QRCode.CorrectLevel.H,
+                correctLevel: QRCode.CorrectLevel.M,
             });
         }
         profileMfaSetupPending = true;
         document.getElementById('profileMfaCode').value = '';
         renderProfileMfaControls(false);
+        document.getElementById('profileMfaCode').focus();
     } catch (e) {
         showAlert(e.message || 'MFA setup failed', 'error');
     }
@@ -1135,6 +1201,12 @@ function toggleSystemDependencies(masterKey, isEnabled) {
             itemEl.style.display = isEnabled ? '' : 'none';
         }
     });
+    if (masterKey === 'smtp_enabled') {
+        const testContainer = document.getElementById('sys_smtp_test_container');
+        if (testContainer) {
+            testContainer.style.display = isEnabled ? 'flex' : 'none';
+        }
+    }
     if (masterKey === 'llm_enabled' && isEnabled) {
         updateLlmProviderFieldsVisibility();
     }
@@ -1347,6 +1419,19 @@ function renderSystemSettings(restoreScrollPos = null) {
             `;
         }).join('');
 
+        let categoryFooterHtml = '';
+        if (catName === 'Email & SMTP Notifications') {
+            const isSmtpActive = Boolean(masterStateMap['smtp_enabled']);
+            categoryFooterHtml = `
+                <div id="sys_smtp_test_container" style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border-color);display:${isSmtpActive ? 'flex' : 'none'};align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                    <button type="button" class="btn btn-secondary" id="testSmtpBtn" onclick="testSmtpSettings()" style="font-size:0.84rem;">
+                        <i class="mdi mdi-email-check-outline"></i> Send Test Email
+                    </button>
+                    <span id="testSmtpStatus" style="font-size:0.82rem;color:var(--text-muted);"></span>
+                </div>
+            `;
+        }
+
         cardHtmls.push(`
             <div class="system-category-card">
                 <div class="system-category-header">
@@ -1354,6 +1439,7 @@ function renderSystemSettings(restoreScrollPos = null) {
                     <div class="system-category-title">${settingsEsc(catName)}</div>
                 </div>
                 <div>${itemsHtml}</div>
+                ${categoryFooterHtml}
             </div>
         `);
     }
@@ -1528,6 +1614,75 @@ async function saveSystemSettings() {
         if (saveBtn) {
             saveBtn.disabled = false;
             saveBtn.innerHTML = originalText;
+        }
+    }
+}
+
+async function testSmtpSettings() {
+    const btn = document.getElementById('testSmtpBtn');
+    const statusEl = document.getElementById('testSmtpStatus');
+
+    const defaultEmail = profileUser?.email || document.getElementById('sys_smtp_from_email')?.value || '';
+    const recipient = prompt('Enter recipient email address for the test email:', defaultEmail);
+    if (!recipient || !recipient.trim()) return;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loading" style="display:inline-block;width:13px;height:13px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;margin-right:6px;animation:spin 0.8s linear infinite;"></span> Sending Test Email…';
+    }
+    if (statusEl) {
+        statusEl.textContent = 'Connecting to SMTP server…';
+        statusEl.style.color = 'var(--text-muted)';
+    }
+
+    const override = {};
+    const hostEl = document.getElementById('sys_smtp_host');
+    const portEl = document.getElementById('sys_smtp_port');
+    const userEl = document.getElementById('sys_smtp_username');
+    const passEl = document.getElementById('sys_smtp_password');
+    const tlsEl = document.getElementById('sys_smtp_use_tls');
+    const fromEmailEl = document.getElementById('sys_smtp_from_email');
+    const fromNameEl = document.getElementById('sys_smtp_from_name');
+    const enabledEl = document.getElementById('sys_smtp_enabled');
+
+    if (hostEl) override.smtp_host = hostEl.value.trim();
+    if (portEl) override.smtp_port = parseInt(portEl.value, 10) || 587;
+    if (userEl) override.smtp_username = userEl.value.trim();
+    if (passEl && passEl.value) override.smtp_password = passEl.value;
+    if (tlsEl) override.smtp_use_tls = tlsEl.checked;
+    if (fromEmailEl) override.smtp_from_email = fromEmailEl.value.trim();
+    if (fromNameEl) override.smtp_from_name = fromNameEl.value.trim();
+    if (enabledEl) override.smtp_enabled = enabledEl.checked;
+
+    try {
+        const res = await apiFetch(`${API_BASE}/system-settings/test-smtp`, {
+            method: 'POST',
+            body: JSON.stringify({ recipient_email: recipient.trim(), config_override: override }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showAlert(data.message || 'Test email sent successfully!', 'success');
+            if (statusEl) {
+                statusEl.textContent = '✓ Sent successfully!';
+                statusEl.style.color = 'var(--color-success, #22c55e)';
+            }
+        } else {
+            showAlert('SMTP Test Failed: ' + (data.detail || 'Could not send test email'), 'error');
+            if (statusEl) {
+                statusEl.textContent = '✗ ' + (data.detail || 'Failed');
+                statusEl.style.color = 'var(--accent-danger, #ef4444)';
+            }
+        }
+    } catch (e) {
+        showAlert('SMTP Test Error: ' + e.message, 'error');
+        if (statusEl) {
+            statusEl.textContent = '✗ ' + e.message;
+            statusEl.style.color = 'var(--accent-danger, #ef4444)';
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="mdi mdi-email-check-outline"></i> Send Test Email';
         }
     }
 }

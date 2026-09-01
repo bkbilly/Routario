@@ -152,88 +152,112 @@
             <!-- Profile -->
             <div class="settings-section" id="settings-section-profile">
                 <p class="settings-section-description">
-                    Update your account preferences and sign-in methods.
+                    Update your account details, display preferences, and sign-in security methods.
                 </p>
                 <div class="profile-settings-grid">
+                    <!-- Segment 1: Account Details & Password -->
                     <section class="profile-settings-panel">
-                        <h2 style="font-size:1rem;margin:0 0 1rem 0;">Profile</h2>
+                        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;padding-bottom:0.6rem;border-bottom:1px solid var(--border-color);">
+                            <i class="mdi mdi-account-circle-outline" style="font-size:1.25rem;color:var(--accent-primary);"></i>
+                            <h2 style="font-size:1rem;margin:0;font-weight:700;">Account & Password</h2>
+                        </div>
                         <div class="form-group">
                             <label class="form-label">Username</label>
                             <input type="text" id="profileUsername" class="form-input profile-readonly-input" disabled>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Email</label>
+                            <label class="form-label">Email Address</label>
                             <input type="email" id="profileEmail" class="form-input">
                         </div>
                         <div class="form-group">
                             <label class="form-label">New Password</label>
                             <input type="password" id="profilePassword" class="form-input" autocomplete="new-password" placeholder="Leave blank to keep current password">
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">Unit System</label>
-                            <select id="profileUnits" class="form-input">
-                                <option value="metric">Metric (km, km/h, m)</option>
-                                <option value="imperial">Imperial (mi, mph, ft)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Currency</label>
-                            <select id="profileCurrency" class="form-input"></select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Theme</label>
-                            <select id="profileTheme" class="form-input">
-                                <option value="dark">Dark Theme (Default)</option>
-                                <option value="light">Light Theme</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Sidebar Layout</label>
-                            <select id="profileSidebarCompact" class="form-input">
-                                <option value="false">Standard (Detailed)</option>
-                                <option value="true">Compact (Single line per device)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Time Format</label>
-                            <select id="profileTimeFormat" class="form-input">
-                                <option value="auto">System Default</option>
-                                <option value="24h">24-hour (14:30)</option>
-                                <option value="12h">12-hour (2:30 PM)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Date Format</label>
-                            <select id="profileDateFormat" class="form-input">
-                                <option value="auto">System Default</option>
-                                <option value="YYYY-MM-DD">YYYY-MM-DD (2026-08-30)</option>
-                                <option value="DD/MM/YYYY">DD/MM/YYYY (30/08/2026)</option>
-                                <option value="MM/DD/YYYY">MM/DD/YYYY (08/30/2026)</option>
-                                <option value="DD.MM.YYYY">DD.MM.YYYY (30.08.2026)</option>
-                            </select>
-                        </div>
-                        <button type="button" class="btn btn-primary" id="profileSaveBtn" onclick="saveProfile()"><i class="mdi mdi-content-save"></i> Save Profile</button>
+                        <button type="button" class="btn btn-primary" id="profileSaveBtn" onclick="saveProfile()" style="margin-top:0.5rem;"><i class="mdi mdi-content-save"></i> Save Account</button>
                     </section>
 
+                    <!-- Segment 2: Regional & Display Preferences -->
                     <section class="profile-settings-panel">
-                        <div style="margin-bottom:1.25rem;">
-                            <h2 style="font-size:1rem;margin:0 0 1rem 0;">Multi-Factor Authentication</h2>
-                            <div id="profileMfaStatus" style="font-size:0.86rem;color:var(--text-secondary);margin-bottom:0.7rem;"></div>
-                            <div id="profileMfaSetupBox" class="secret-box" style="display:none;margin:0 0 0.75rem 0;"></div>
-                            <div id="profileMfaCodeGroup" style="display:none;margin-bottom:0.75rem;">
-                                <label class="form-label" id="profileMfaCodeLabel" style="font-size:0.78rem;">Authenticator Code</label>
-                                <input type="text" id="profileMfaCode" class="form-input" placeholder="123456" inputmode="numeric" autocomplete="one-time-code">
+                        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;padding-bottom:0.6rem;border-bottom:1px solid var(--border-color);">
+                            <i class="mdi mdi-tune-vertical" style="font-size:1.25rem;color:var(--accent-secondary);"></i>
+                            <h2 style="font-size:1rem;margin:0;font-weight:700;">Preferences & Regional</h2>
+                        </div>
+                        <div class="form-grid" style="margin-bottom:0.5rem;">
+                            <div class="form-group">
+                                <label class="form-label">Unit System</label>
+                                <select id="profileUnits" class="form-input">
+                                    <option value="metric">Metric (km, km/h, m)</option>
+                                    <option value="imperial">Imperial (mi, mph, ft)</option>
+                                </select>
                             </div>
-                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                                <button type="button" class="btn btn-secondary" id="profileMfaSetupBtn" onclick="profileSetupMfa()"><i class="mdi mdi-qrcode"></i> Setup</button>
-                                <button type="button" class="btn btn-primary" id="profileMfaEnableBtn" onclick="profileEnableMfa()" style="display:none;"><i class="mdi mdi-shield-check"></i> Enable</button>
-                                <button type="button" class="btn btn-danger" id="profileMfaDisableBtn" onclick="profileDisableMfa()" style="display:none;"><i class="mdi mdi-shield-off"></i> Disable</button>
+                            <div class="form-group">
+                                <label class="form-label">Currency</label>
+                                <select id="profileCurrency" class="form-input"></select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Theme</label>
+                                <select id="profileTheme" class="form-input">
+                                    <option value="dark">Dark Theme (Default)</option>
+                                    <option value="light">Light Theme</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Sidebar Layout</label>
+                                <select id="profileSidebarCompact" class="form-input">
+                                    <option value="false">Standard (Detailed)</option>
+                                    <option value="true">Compact (Single line)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Time Format</label>
+                                <select id="profileTimeFormat" class="form-input">
+                                    <option value="auto">System Default</option>
+                                    <option value="24h">24-hour (14:30)</option>
+                                    <option value="12h">12-hour (2:30 PM)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Date Format</label>
+                                <select id="profileDateFormat" class="form-input">
+                                    <option value="auto">System Default</option>
+                                    <option value="YYYY-MM-DD">YYYY-MM-DD (2026-08-30)</option>
+                                    <option value="DD/MM/YYYY">DD/MM/YYYY (30/08/2026)</option>
+                                    <option value="MM/DD/YYYY">MM/DD/YYYY (08/30/2026)</option>
+                                    <option value="DD.MM.YYYY">DD.MM.YYYY (30.08.2026)</option>
+                                </select>
                             </div>
                         </div>
+                        <button type="button" class="btn btn-primary" id="profileSaveBtn2" onclick="saveProfile()" style="margin-top:0.5rem;"><i class="mdi mdi-content-save"></i> Save Preferences</button>
+                    </section>
 
-                        <div class="profile-passkey-header">
-                            <h2 style="font-size:1rem;margin:0;">Passkeys</h2>
-                            <button type="button" class="btn btn-primary btn-small" id="passkeyRegisterBtn" onclick="registerPasskey()"><i class="mdi mdi-fingerprint"></i> Add Passkey</button>
+                    <!-- Segment 3: Multi-Factor Authentication -->
+                    <section class="profile-settings-panel">
+                        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;padding-bottom:0.6rem;border-bottom:1px solid var(--border-color);">
+                            <i class="mdi mdi-shield-key-outline" style="font-size:1.25rem;color:var(--accent-success);"></i>
+                            <h2 style="font-size:1rem;margin:0;font-weight:700;">Multi-Factor Authentication</h2>
+                        </div>
+                        <div id="profileMfaStatus" style="font-size:0.86rem;color:var(--text-secondary);margin-bottom:0.7rem;"></div>
+                        <div id="profileMfaSetupBox" class="secret-box" style="display:none;margin:0 0 0.75rem 0;"></div>
+                        <div id="profileMfaCodeGroup" style="display:none;margin-bottom:0.75rem;">
+                            <label class="form-label" id="profileMfaCodeLabel" style="font-size:0.78rem;">Authenticator Code</label>
+                            <input type="text" id="profileMfaCode" class="form-input" placeholder="123456" inputmode="numeric" autocomplete="one-time-code">
+                        </div>
+                        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                            <button type="button" class="btn btn-secondary" id="profileMfaSetupBtn" onclick="profileSetupMfa()"><i class="mdi mdi-qrcode"></i> Setup 2FA</button>
+                            <button type="button" class="btn btn-secondary" id="profileMfaCancelBtn" onclick="profileCancelMfa()" style="display:none;"><i class="mdi mdi-close"></i> Cancel</button>
+                            <button type="button" class="btn btn-primary" id="profileMfaEnableBtn" onclick="profileEnableMfa()" style="display:none;"><i class="mdi mdi-shield-check"></i> Enable</button>
+                            <button type="button" class="btn btn-danger" id="profileMfaDisableBtn" onclick="profileDisableMfa()" style="display:none;"><i class="mdi mdi-shield-off"></i> Disable</button>
+                        </div>
+                    </section>
+
+                    <!-- Segment 4: Passkeys & Biometrics -->
+                    <section class="profile-settings-panel">
+                        <div class="profile-passkey-header" style="padding-bottom:0.6rem;border-bottom:1px solid var(--border-color);">
+                            <div style="display:flex;align-items:center;gap:0.5rem;">
+                                <i class="mdi mdi-fingerprint" style="font-size:1.25rem;color:var(--accent-primary);"></i>
+                                <h2 style="font-size:1rem;margin:0;font-weight:700;">Passkeys & Biometrics</h2>
+                            </div>
+                            <button type="button" class="btn btn-primary btn-small" id="passkeyRegisterBtn" onclick="registerPasskey()"><i class="mdi mdi-plus"></i> Add Passkey</button>
                         </div>
                         <div id="passkeySupportNote" style="display:none;color:var(--text-muted);font-size:0.86rem;margin-bottom:0.75rem;">Passkeys are not supported by this browser.</div>
                         <div id="passkeyList" class="profile-passkey-list"></div>
@@ -706,6 +730,21 @@
                     <button type="button" class="btn btn-primary" onclick="saveSettingsApiKey()"><i class="mdi mdi-content-save"></i> Save</button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- QR Code Zoom Modal -->
+    <div class="modal" id="qrZoomModal" onclick="if(event.target===this)closeQrZoomModal()">
+        <div class="modal-content" style="max-width:380px;height:auto !important;max-height:90vh;overflow-y:auto;text-align:center;padding:1.5rem;align-items:center;">
+            <div style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:1rem;">
+                <h3 style="font-size:1.1rem;margin:0;font-weight:700;"><i class="mdi mdi-qrcode-scan"></i> Scan QR Code</h3>
+                <button type="button" class="modal-close" onclick="closeQrZoomModal()" style="border:none;background:transparent;cursor:pointer;font-size:1.25rem;color:var(--text-secondary);"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div id="qrZoomTarget" style="display:inline-flex;padding:12px;background:#ffffff;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.35);margin:0 auto 1rem;max-width:100%;"></div>
+            <div style="font-size:0.85rem;color:var(--text-secondary);line-height:1.4;">
+                Scan this enlarged code with your Authenticator app (e.g. Google Authenticator, Authy, 1Password).
+            </div>
+            <button type="button" class="btn btn-secondary" onclick="closeQrZoomModal()" style="margin-top:1.25rem;width:100%;">Close</button>
         </div>
     </div>
 

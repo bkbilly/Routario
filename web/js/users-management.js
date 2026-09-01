@@ -334,53 +334,116 @@ async function usrInitMfaPanel() {
     }
 }
 
+let _usrMfaProvisioningUri = null;
+
 function _usrRenderMfaControls(enabled, disabled = false, message = null) {
     const isSelf = _usrEditing?.id === _usrMyId;
     const statusEl = document.getElementById('userModalMfaStatus');
     const codeGroup = document.getElementById('userModalMfaCodeGroup');
     const codeLabel = document.getElementById('userModalMfaCodeLabel');
     const setupBtn = document.getElementById('userModalMfaSetupBtn');
+    const cancelBtn = document.getElementById('userModalMfaCancelBtn');
     const enableBtn = document.getElementById('userModalMfaEnableBtn');
     const disableBtn = document.getElementById('userModalMfaDisableBtn');
     const setupBox = document.getElementById('userModalMfaSetupBox');
 
     statusEl.textContent = message || (enabled ? 'MFA is enabled for this user.' : 'MFA is not enabled for this user.');
     setupBtn.disabled = disabled;
+    if (cancelBtn) cancelBtn.disabled = disabled;
     enableBtn.disabled = disabled;
     disableBtn.disabled = disabled;
 
-    setupBtn.style.display = !enabled ? 'inline-flex' : 'none';
-    enableBtn.style.display = !enabled && _usrMfaSetupPending ? 'inline-flex' : 'none';
-    disableBtn.style.display = enabled ? 'inline-flex' : 'none';
-    codeGroup.style.display = ((!enabled && _usrMfaSetupPending) || (enabled && isSelf)) ? '' : 'none';
-    codeLabel.textContent = enabled && isSelf ? 'Authenticator or Recovery Code' : 'Authenticator Code';
-    if (enabled) setupBox.style.display = 'none';
+    if (enabled) {
+        setupBtn.style.display = 'none';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        enableBtn.style.display = 'none';
+        disableBtn.style.display = 'inline-flex';
+        codeGroup.style.display = isSelf ? '' : 'none';
+        codeLabel.textContent = 'Authenticator or Recovery Code';
+        if (setupBox) setupBox.style.display = 'none';
+    } else if (_usrMfaSetupPending) {
+        setupBtn.style.display = 'none';
+        if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+        enableBtn.style.display = 'inline-flex';
+        disableBtn.style.display = 'none';
+        codeGroup.style.display = '';
+        codeLabel.textContent = 'Authenticator Code';
+    } else {
+        setupBtn.style.display = 'inline-flex';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        enableBtn.style.display = 'none';
+        disableBtn.style.display = 'none';
+        codeGroup.style.display = 'none';
+        if (setupBox) setupBox.style.display = 'none';
+    }
+}
+
+function usrCancelMfa() {
+    _usrMfaSetupPending = false;
+    _usrMfaProvisioningUri = null;
+    const box = document.getElementById('userModalMfaSetupBox');
+    if (box) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+    }
+    const code = document.getElementById('userModalMfaCode');
+    if (code) code.value = '';
+    _usrRenderMfaControls(false);
+}
+
+function openQrZoomModal(uri) {
+    if (!uri) return;
+    const modal = document.getElementById('qrZoomModal');
+    const target = document.getElementById('qrZoomTarget');
+    if (!modal || !target) return;
+    target.innerHTML = '';
+    const size = Math.min(260, Math.max(160, Math.floor(window.innerHeight * 0.35)));
+    if (window.QRCode) {
+        new QRCode(target, {
+            text: uri,
+            width: size,
+            height: size,
+            colorDark: '#0a0e1a',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M,
+        });
+    }
+    modal.classList.add('active');
+}
+
+function closeQrZoomModal() {
+    const modal = document.getElementById('qrZoomModal');
+    if (modal) modal.classList.remove('active');
 }
 
 async function usrSetupMfa() {
     if (!_usrEditing) return;
     try {
         const data = await _usrJson(`${API_BASE}/mfa/users/${_usrEditing.id}/setup`, { method: 'POST' });
+        _usrMfaProvisioningUri = data.provisioning_uri || null;
         const box = document.getElementById('userModalMfaSetupBox');
         box.style.display = '';
         box.innerHTML = `
-            <div id="userModalMfaQr" style="display:flex;justify-content:center;margin-bottom:0.75rem;"></div>
-            <div style="font-size:0.78rem;color:var(--text-secondary);font-family:var(--font-sans);margin-bottom:0.35rem;">Recovery codes</div>
-            <div>${(data.recovery_codes || []).map(_usrEsc).join('<br>')}</div>
+            <div style="text-align:center;margin-bottom:0.85rem;">
+                <div id="userModalMfaQr" onclick="openQrZoomModal(_usrMfaProvisioningUri)" title="Click to enlarge" style="display:inline-flex;padding:10px;background:#ffffff;border-radius:10px;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.25);transition:transform 0.15s ease;"></div>
+            </div>
+            <div style="font-size:0.78rem;color:var(--text-secondary);font-family:var(--font-sans);margin-bottom:0.35rem;font-weight:600;">Recovery codes (Save these in a safe place):</div>
+            <div style="background:var(--bg-primary);padding:0.6rem 0.75rem;border-radius:6px;font-family:var(--font-mono);font-size:0.8rem;border:1px solid var(--border-color);line-height:1.6;color:var(--text-primary);">${(data.recovery_codes || []).map(_usrEsc).join('<br>')}</div>
         `;
         if (window.QRCode && data.provisioning_uri) {
             new QRCode(document.getElementById('userModalMfaQr'), {
                 text: data.provisioning_uri,
-                width: 160,
-                height: 160,
+                width: 150,
+                height: 150,
                 colorDark: '#111827',
                 colorLight: '#ffffff',
-                correctLevel: QRCode.CorrectLevel.H,
+                correctLevel: QRCode.CorrectLevel.M,
             });
         }
         _usrMfaSetupPending = true;
         document.getElementById('userModalMfaCode').value = '';
         _usrRenderMfaControls(false);
+        document.getElementById('userModalMfaCode').focus();
     } catch (e) {
         showAlert(e.message || 'MFA setup failed', 'error');
     }

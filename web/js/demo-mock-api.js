@@ -51,7 +51,7 @@
             'view_dashboard', 'view_management', 'view_devices', 'edit_devices', 'send_commands',
             'manage_alerts', 'manage_integrations', 'manage_geofences', 'view_history',
             'manage_routes', 'manage_logbook', 'manage_fuel', 'manage_maintenance',
-            'voice_ptt', 'live_share', 'manage_users', 'manage_drivers', 'manage_mfa',
+            'voice_ptt', 'live_share', 'manage_users', 'manage_drivers', 'manage_sim_cards', 'manage_mfa',
             'view_reports', 'llm', 'view_health', 'view_audit',
             'manage_api_keys', 'manage_tickets', 'manage_webhooks', 'manage_backups',
         ],
@@ -60,6 +60,125 @@
     const now = new Date();
     const iso = minutesAgo => new Date(now.getTime() - minutesAgo * 60000).toISOString();
     const dateIn = days => new Date(now.getTime() + days * 86400000).toISOString().split('T')[0];
+
+    const demoSimProviders = [
+        {
+            provider_id: '1nce',
+            display_name: '1NCE IoT Connectivity',
+            description: 'Global cellular IoT flat-rate connectivity with lifetime 500MB / 10-year plans.',
+            fields: [
+                { key: 'client_id', label: 'Client ID', field_type: 'text', required: true, placeholder: 'OAuth2 Client ID' },
+                { key: 'client_secret', label: 'Client Secret', field_type: 'password', required: true, placeholder: 'OAuth2 Client Secret' },
+            ],
+            supports_remote_sim_discovery: true,
+            supports_live_stats: true,
+        },
+        {
+            provider_id: 'thingsmobile',
+            display_name: 'Things Mobile',
+            description: 'Global M2M / IoT roaming operator supporting pay-per-use and shared bundles.',
+            fields: [
+                { key: 'username', label: 'Username (Email)', field_type: 'text', required: true, placeholder: 'user@example.com' },
+                { key: 'token', label: 'API Token', field_type: 'password', required: true, placeholder: 'Things Mobile API token' },
+            ],
+            supports_remote_sim_discovery: true,
+            supports_live_stats: true,
+        },
+        {
+            provider_id: 'iotsim_gr',
+            display_name: 'IoTSim.gr',
+            description: 'Greek and European M2M portal with local Cosmote/Vodafone roaming.',
+            fields: [
+                { key: 'username', label: 'Portal Username', field_type: 'text', required: true, placeholder: 'Username' },
+                { key: 'password', label: 'Portal Password', field_type: 'password', required: true, placeholder: 'Password' },
+            ],
+            supports_remote_sim_discovery: true,
+            supports_live_stats: true,
+        },
+    ];
+
+    let demoSimCards = [
+        {
+            id: 1,
+            company_id: 1,
+            provider_id: '1nce',
+            account_label: 'Main Fleet SIM 1',
+            phone_number: '+4915788881201',
+            plan_name: '500MB IoT Flex',
+            balance: null,
+            remaining_data_mb: 432.5,
+            currency: 'EUR',
+            expiry_date: dateIn(730),
+            device_id: 1,
+            device_name: 'Athens Van 12',
+            credentials: { client_id: 'demo_1nce_client', client_secret: '********' },
+            created_at: iso(10080),
+        },
+        {
+            id: 2,
+            company_id: 1,
+            provider_id: 'thingsmobile',
+            account_label: 'Truck Delivery SIM',
+            phone_number: '882360024412345',
+            plan_name: 'Pay-per-use plan',
+            balance: 18.75,
+            remaining_data_mb: null,
+            currency: 'EUR',
+            expiry_date: dateIn(365),
+            device_id: 2,
+            device_name: 'Piraeus Truck 4',
+            credentials: { username: 'demo_tm_user', token: '********' },
+            created_at: iso(20160),
+        },
+        {
+            id: 3,
+            company_id: 2,
+            provider_id: 'iotsim_gr',
+            account_label: 'IoTSim Fleet Primary',
+            phone_number: '+306901234567',
+            plan_name: '500MB IoT',
+            balance: 6.50,
+            remaining_data_mb: 488.2,
+            currency: 'EUR',
+            expiry_date: dateIn(540),
+            device_id: 3,
+            device_name: 'Thessaloniki Courier 08',
+            credentials: { username: 'demo_iotsim', password: '********' },
+            created_at: iso(30240),
+        },
+        {
+            id: 4,
+            company_id: 1,
+            provider_id: null,
+            account_label: 'Local Backup SIM',
+            phone_number: '+306945557890',
+            plan_name: 'Vodafone IoT 2GB',
+            balance: 24.00,
+            remaining_data_mb: 1850.0,
+            currency: 'EUR',
+            expiry_date: dateIn(180),
+            device_id: 4,
+            device_name: 'Patras Reefer 02',
+            credentials: {},
+            created_at: iso(40320),
+        },
+        {
+            id: 5,
+            company_id: null,
+            provider_id: '1nce',
+            account_label: 'Warehouse Spare SIM',
+            phone_number: '+4915788889999',
+            plan_name: '500MB IoT Flex',
+            balance: null,
+            remaining_data_mb: 500.0,
+            currency: 'EUR',
+            expiry_date: dateIn(1000),
+            device_id: null,
+            device_name: null,
+            credentials: { client_id: 'demo_1nce_client', client_secret: '********' },
+            created_at: iso(50400),
+        },
+    ];
     const devices = [
         {
             id: 1, name: 'Athens Van 12', imei: 'demo-0001', protocol: 'teltonika',
@@ -1346,6 +1465,70 @@
                 return json(normalizeTicket(touchTicket(ticket)));
             }
             return json(normalizeTicket(ticket));
+        }
+        if (apiPath === '/system-settings/test-smtp' && method === 'POST') {
+            return json({ success: true, message: `Test email sent successfully to ${body.recipient_email || 'demo@routario.local'}!` });
+        }
+        if (apiPath === '/auth-methods') {
+            return json({ email_magic_link: true, passkeys: true });
+        }
+        if (apiPath === '/auth/magic-link/request' && method === 'POST') {
+            return json({ message: 'If an account exists with this email address, a sign-in link has been sent to your inbox.' });
+        }
+        if (apiPath === '/auth/magic-link/verify' && method === 'POST') {
+            return json({ access_token: 'demo-token', user_id: 1, username: 'demo', is_admin: true, is_company_admin: true, company_id: null, units: 'metric', currency: 'EUR', theme: DEMO_USER.theme || 'dark', permissions: DEMO_USER.permissions });
+        }
+        if (apiPath === '/sim-cards/providers') return json(demoSimProviders);
+        if (apiPath === '/sim-cards/test-connection' && method === 'POST') {
+            return json({ ok: true, message: `Authentication with ${body.provider_id || 'SIM provider'} was successful.` });
+        }
+        if (apiPath === '/sim-cards/remote-sims') {
+            return json([
+                { phone_number: '+4915788881201', label: '1NCE SIM #1 (Active)', plan_name: '500MB IoT Flex', balance: null, remaining_data_mb: 432.5, currency: 'EUR', expiry_date: dateIn(730) },
+                { phone_number: '+4915788881202', label: '1NCE SIM #2 (Active)', plan_name: '500MB IoT Flex', balance: null, remaining_data_mb: 380.0, currency: 'EUR', expiry_date: dateIn(730) },
+                { phone_number: '+4915788889999', label: '1NCE SIM #3 (Unassigned)', plan_name: '500MB IoT Flex', balance: null, remaining_data_mb: 500.0, currency: 'EUR', expiry_date: dateIn(1000) },
+            ]);
+        }
+        if (apiPath === '/sim-cards') {
+            if (method === 'POST') {
+                const newSim = {
+                    id: Date.now(),
+                    company_id: body.company_id || null,
+                    provider_id: body.provider_id || null,
+                    account_label: body.account_label || '',
+                    phone_number: body.phone_number || '',
+                    plan_name: body.plan_name || null,
+                    balance: body.balance !== undefined ? body.balance : null,
+                    remaining_data_mb: body.remaining_data_mb !== undefined ? body.remaining_data_mb : null,
+                    currency: body.currency || 'EUR',
+                    expiry_date: body.expiry_date || null,
+                    device_id: body.device_id || null,
+                    device_name: devices.find(d => d.id === body.device_id)?.name || null,
+                    credentials: body.credentials || {},
+                    created_at: iso(0),
+                };
+                demoSimCards.push(newSim);
+                return json(newSim, 201);
+            }
+            return json(demoSimCards);
+        }
+        if (apiPath.match(/^\/sim-cards\/\d+$/)) {
+            const id = Number(apiPath.split('/')[2]);
+            const idx = demoSimCards.findIndex(s => s.id === id);
+            if (idx < 0) return json({ detail: 'SIM card not found' }, 404);
+            if (method === 'DELETE') {
+                demoSimCards.splice(idx, 1);
+                return text('', 204);
+            }
+            if (method === 'PUT') {
+                demoSimCards[idx] = {
+                    ...demoSimCards[idx],
+                    ...body,
+                    device_name: body.device_id ? (devices.find(d => d.id === body.device_id)?.name || null) : null,
+                };
+                return json(demoSimCards[idx]);
+            }
+            return json(demoSimCards[idx]);
         }
         if (apiPath === '/currency/rates') {
             if (method === 'PUT') {

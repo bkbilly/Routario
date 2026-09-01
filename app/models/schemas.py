@@ -233,6 +233,15 @@ class UserLogin(BaseModel):
     mfa_code: Optional[str] = None
 
 
+class MagicLinkRequest(BaseModel):
+    email: str
+
+
+class MagicLinkVerify(BaseModel):
+    token: str
+    mfa_code: Optional[str] = None
+
+
 class Token(BaseModel):
     access_token: str = ""
     token_type: str

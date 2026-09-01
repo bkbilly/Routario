@@ -588,6 +588,7 @@ async def get_protocols():
 async def root():
     return FileResponse("web/gps-dashboard.html")
 
+@app.get("/login")
 @app.get("/login.html")
 async def login_page():
     return FileResponse("web/login.html")

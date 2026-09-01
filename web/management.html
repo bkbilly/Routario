@@ -1605,6 +1605,7 @@
                             </div>
                             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
                                 <button type="button" class="btn btn-secondary" id="userModalMfaSetupBtn" onclick="usrSetupMfa()"><i class="mdi mdi-qrcode"></i> Setup</button>
+                                <button type="button" class="btn btn-secondary" id="userModalMfaCancelBtn" onclick="usrCancelMfa()" style="display:none;"><i class="mdi mdi-close"></i> Cancel</button>
                                 <button type="button" class="btn btn-primary" id="userModalMfaEnableBtn" onclick="usrEnableMfa()" style="display:none;"><i class="mdi mdi-shield-check"></i> Enable</button>
                                 <button type="button" class="btn btn-danger" id="userModalMfaDisableBtn" onclick="usrDisableMfa()" style="display:none;"><i class="mdi mdi-shield-off"></i> Disable</button>
                             </div>
@@ -1720,6 +1721,21 @@
             <button type="button" class="btn btn-secondary" onclick="rtpCloseExchangeRatesModal()">Cancel</button>
             <button type="button" class="btn btn-primary" onclick="rtpSaveExchangeRates()"><i class="mdi mdi-content-save"></i> Save Rates</button>
         </div>
+    </div>
+</div>
+
+<!-- QR Code Zoom Modal -->
+<div class="modal" id="qrZoomModal" onclick="if(event.target===this)closeQrZoomModal()">
+    <div class="modal-content" style="max-width:380px;height:auto !important;max-height:90vh;overflow-y:auto;text-align:center;padding:1.5rem;align-items:center;">
+        <div style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:1rem;">
+            <h3 style="font-size:1.1rem;margin:0;font-weight:700;"><i class="mdi mdi-qrcode-scan"></i> Scan QR Code</h3>
+            <button type="button" class="modal-close" onclick="closeQrZoomModal()" style="border:none;background:transparent;cursor:pointer;font-size:1.25rem;color:var(--text-secondary);"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div id="qrZoomTarget" style="display:inline-flex;padding:12px;background:#ffffff;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.35);margin:0 auto 1rem;max-width:100%;"></div>
+        <div style="font-size:0.85rem;color:var(--text-secondary);line-height:1.4;">
+            Scan this enlarged code with your Authenticator app (e.g. Google Authenticator, Authy, 1Password).
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="closeQrZoomModal()" style="margin-top:1.25rem;width:100%;">Close</button>
     </div>
 </div>
 
@@ -1896,6 +1912,7 @@
             return;
         }
         const closers = [
+            ['qrZoomModal', () => closeQrZoomModal()],
             ['alertProfileMergeModal', () => closeAlertProfileMergeChoice()],
             ['alertProfileDevicePickerModal', () => closeAlertProfileDevicePicker()],
             ['exchangeRatesModal', () => rtpCloseExchangeRatesModal()],
