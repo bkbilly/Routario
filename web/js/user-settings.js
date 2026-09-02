@@ -1224,16 +1224,17 @@ function toggleSystemDependencies(masterKey, isEnabled) {
         if (testContainer) {
             testContainer.style.display = isEnabled ? 'flex' : 'none';
         }
-        if (isEnabled) {
-            updateVoipTtsFieldsVisibility();
-        }
+        updateVoipTtsFieldsVisibility();
     }
-    if (masterKey === 'llm_enabled' && isEnabled) {
+    if (masterKey === 'llm_enabled') {
         updateLlmProviderFieldsVisibility();
     }
 }
 
 function updateVoipTtsFieldsVisibility() {
+    const voipEnabledEl = document.getElementById('sys_voip_enabled');
+    const isVoipEnabled = voipEnabledEl ? voipEnabledEl.checked : false;
+
     const engineEl = document.getElementById('sys_voip_tts_engine');
     const engine = engineEl ? engineEl.value : 'gtts';
 
@@ -1247,13 +1248,16 @@ function updateVoipTtsFieldsVisibility() {
         fieldKeys.forEach(fKey => {
             const el = document.getElementById(`sys_item_${fKey}`);
             if (el) {
-                el.style.display = (eKey === engine) ? '' : 'none';
+                el.style.display = (isVoipEnabled && eKey === engine) ? '' : 'none';
             }
         });
     });
 }
 
 function updateLlmProviderFieldsVisibility() {
+    const llmEnabledEl = document.getElementById('sys_llm_enabled');
+    const isLlmEnabled = llmEnabledEl ? llmEnabledEl.checked : false;
+
     const activeEl = document.getElementById('sys_llm_active_provider');
     const provider = activeEl ? activeEl.value : 'gemini';
 
@@ -1268,7 +1272,7 @@ function updateLlmProviderFieldsVisibility() {
         fieldKeys.forEach(fKey => {
             const el = document.getElementById(`sys_item_${fKey}`);
             if (el) {
-                el.style.display = (pKey === provider) ? '' : 'none';
+                el.style.display = (isLlmEnabled && pKey === provider) ? '' : 'none';
             }
         });
     });
