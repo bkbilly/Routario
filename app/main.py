@@ -31,7 +31,7 @@ from core.database import get_db, init_database
 from core.gateway import connection_manager, protocol_server_manager, sync_active_protocol_servers
 from core.push_notifications import get_push_service
 from core.runtime_health import register_task, set_runtime_state
-from core.runtime_logs import install_runtime_log_handler
+from core.runtime_logs import WebSocketLogFilter, install_runtime_log_handler
 from core.valhalla import check_valhalla_health, set_valhalla_url
 from integrations.engine import integration_poll_task
 from models import AlertHistory, Company, Device, User
@@ -1135,6 +1135,14 @@ def run_server():
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
+    for ws_l in ("websockets", "websockets.server", "websockets.protocol", "websockets.client"):
+        logging.getLogger(ws_l).setLevel(logging.WARNING)
+
+    ws_filter = WebSocketLogFilter()
+    for l_name in ("", "uvicorn", "uvicorn.error", "websockets", "websockets.server", "websockets.protocol"):
+        l = logging.getLogger(l_name)
+        if not any(isinstance(f, WebSocketLogFilter) for f in l.filters):
+            l.addFilter(ws_filter)
 
     server = uvicorn.Server(uvicorn.Config(
         app,
@@ -1158,6 +1166,8 @@ if __name__ == "__main__":
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
+    ws_filter = WebSocketLogFilter()
+    logging.getLogger().addFilter(ws_filter)
     # FCM library logs ConnectionResetError at ERROR level on routine MCS reconnects; suppress it.
     logging.getLogger("firebase_messaging.fcmpushclient").setLevel(logging.CRITICAL)
     run_server()

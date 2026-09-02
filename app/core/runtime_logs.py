@@ -102,6 +102,21 @@ class RuntimeLogHandler(logging.Handler):
         return text[-8000:]
 
 
+class WebSocketLogFilter(logging.Filter):
+    """Filter out routine WebSocket connection handshake and open/close info messages."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno <= logging.INFO:
+            msg = record.getMessage()
+            if "connection open" in msg or "connection closed" in msg:
+                return False
+            if "WebSocket" in msg and ("[accepted]" in msg or "[rejected]" in msg):
+                return False
+            if record.name.startswith("websockets"):
+                return False
+        return True
+
+
 def install_runtime_log_handler() -> RuntimeLogHandler:
     root = logging.getLogger()
     if root.level > logging.INFO:
@@ -110,6 +125,23 @@ def install_runtime_log_handler() -> RuntimeLogHandler:
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+    ws_filter = WebSocketLogFilter()
+    for logger_name in (
+        "",  # root
+        "uvicorn",
+        "uvicorn.error",
+        "uvicorn.access",
+        "websockets",
+        "websockets.server",
+        "websockets.protocol",
+        "websockets.client",
+    ):
+        l = logging.getLogger(logger_name)
+        if logger_name.startswith("websockets"):
+            l.setLevel(logging.WARNING)
+        if not any(isinstance(f, WebSocketLogFilter) for f in l.filters):
+            l.addFilter(ws_filter)
 
     # Ensure uvicorn error and server logs propagate to the root logger
     logging.getLogger("uvicorn").propagate = True
