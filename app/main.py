@@ -16,9 +16,10 @@ from typing import Any, Callable, Dict, List, Optional
 import httpx
 import jwt
 import uvicorn
-from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi.exceptions import ResponseValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
@@ -547,6 +548,15 @@ for router in ROUTE_REGISTRY:
     app.include_router(router)
 app.include_router(page_router)
 app.include_router(integrations_router)
+
+
+@app.exception_handler(ResponseValidationError)
+async def response_validation_exception_handler(request: Request, exc: ResponseValidationError):
+    logger.error("Response validation error on %s %s: %s", request.method, request.url.path, exc, exc_info=exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error: Response serialization failed"},
+    )
 
 
 @app.get("/api/protocols")

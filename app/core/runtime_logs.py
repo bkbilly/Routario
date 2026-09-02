@@ -111,6 +111,10 @@ def install_runtime_log_handler() -> RuntimeLogHandler:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
+    # Ensure uvicorn error and server logs propagate to the root logger
+    logging.getLogger("uvicorn").propagate = True
+    logging.getLogger("uvicorn.error").propagate = True
+
     for handler in root.handlers:
         if isinstance(handler, RuntimeLogHandler):
             return handler
