@@ -969,6 +969,7 @@ class DatabaseService:
                 .options(
                     selectinload(Device.state).selectinload(DeviceState.current_driver),
                     selectinload(Device.users),
+                    selectinload(Device.sim_card),
                 )
             )
             return result.scalar_one()
@@ -981,6 +982,7 @@ class DatabaseService:
                 .options(
                     selectinload(Device.state).selectinload(DeviceState.current_driver),
                     selectinload(Device.users),
+                    selectinload(Device.sim_card),
                 )
             )
             return result.scalar_one_or_none()
@@ -1016,7 +1018,10 @@ class DatabaseService:
             user = await session.get(User, user_id)
             if not user:
                 return []
-            q = select(Device).options(selectinload(Device.state).selectinload(DeviceState.current_driver))
+            q = select(Device).options(
+                selectinload(Device.state).selectinload(DeviceState.current_driver),
+                selectinload(Device.sim_card),
+            )
             if user.is_admin:
                 result = await session.execute(q)
                 return result.scalars().all()
@@ -1038,6 +1043,7 @@ class DatabaseService:
                 .options(
                     selectinload(Device.state).selectinload(DeviceState.current_driver),
                     selectinload(Device.users),
+                    selectinload(Device.sim_card),
                 )
             )
             device = result.scalar_one_or_none()

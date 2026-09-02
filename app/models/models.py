@@ -166,7 +166,10 @@ class Device(Base):
 
     @property
     def sim_card_id(self) -> Optional[int]:
-        return self.sim_card.id if self.sim_card else None
+        try:
+            return self.sim_card.id if self.sim_card else None
+        except Exception:
+            return None
 
 
 class SimCard(Base):
@@ -220,7 +223,10 @@ class DeviceState(Base):
 
     @property
     def current_driver_name(self) -> "Optional[str]":
-        return self.current_driver.name if self.current_driver else None
+        try:
+            return self.current_driver.name if self.current_driver else None
+        except Exception:
+            return None
 
 
 class PositionRecord(Base):
@@ -267,7 +273,10 @@ class Trip(Base):
 
     @property
     def driver_name(self) -> Optional[str]:
-        return self.driver.name if self.driver else None
+        try:
+            return self.driver.name if self.driver else None
+        except Exception:
+            return None
 
 
 class Geofence(Base):

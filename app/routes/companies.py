@@ -256,7 +256,10 @@ async def get_company_devices(company_id: int, admin: User = Depends(require_adm
         result = await session.execute(
             select(Device)
             .where(Device.company_id == company_id)
-            .options(selectinload(Device.state).selectinload(DeviceState.current_driver))
+            .options(
+                selectinload(Device.state).selectinload(DeviceState.current_driver),
+                selectinload(Device.sim_card),
+            )
         )
         return result.scalars().all()
 

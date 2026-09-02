@@ -178,7 +178,8 @@ async def update_device(
             )
     await sync_active_protocol_servers()
     await write_audit_log("device.updated", actor=caller, company_id=device.company_id, target_type="device", target_id=device.id, request=request)
-    return device
+    updated_device = await db.get_device_by_id(device_id)
+    return updated_device if updated_device else device
 
 
 @router.delete("/{device_id}")
