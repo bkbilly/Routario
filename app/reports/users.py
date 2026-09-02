@@ -112,6 +112,7 @@ class UserFleetReportModule(Report):
                 "user_id": user.id,
                 "username": user.username,
                 "email": user.email,
+                "phone_number": user.phone_number,
                 "role": role,
                 "company_id": user.company_id,
                 "company_name": company_map.get(user.company_id) if current_user.is_admin else (user.company.name if user.company else None),

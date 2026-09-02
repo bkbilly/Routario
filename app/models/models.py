@@ -70,6 +70,7 @@ class User(Base):
     id:               Mapped[int]           = mapped_column(Integer, primary_key=True)
     username:         Mapped[str]           = mapped_column(String(100), unique=True, nullable=False)
     email:            Mapped[str]           = mapped_column(String(255), unique=True, nullable=False)
+    phone_number:     Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     password_hash:    Mapped[str]           = mapped_column(String(255), nullable=False)
     is_admin:         Mapped[bool]          = mapped_column(Boolean, default=False, nullable=False)
     company_id:       Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('companies.id', ondelete='SET NULL'), nullable=True)

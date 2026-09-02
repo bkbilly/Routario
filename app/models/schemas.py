@@ -98,6 +98,7 @@ class AlertRow(BaseModel):
     notify_user_ids: Optional[List[int]]     = None
     send_push:              bool                    = True
     send_email:             bool                    = False
+    send_voip:              bool                    = False
     action_command:         Optional[str]           = None
     action_command_payload: Optional[str]           = None
 
@@ -195,6 +196,7 @@ class DeviceStateResponse(BaseModel):
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=100)
     email: str = Field(..., pattern=r'^[^@]+@[^@]+\.[^@]+$')
+    phone_number: Optional[str] = None
     password: str = Field(..., min_length=8)
     notification_channels: List[Dict[str, str]] = Field(default_factory=list)
     language: Optional[str] = "en"
@@ -210,6 +212,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     """Schema for updating user details"""
     email: Optional[str] = Field(None, pattern=r'^[^@]+@[^@]+\.[^@]+$')
+    phone_number: Optional[str] = None
     password: Optional[str] = Field(None, min_length=8)
     notification_channels: Optional[List[Dict[str, str]]] = None
     language: Optional[str] = None
@@ -280,6 +283,7 @@ class UserResponse(BaseModel):
     id: int
     username: str
     email: str
+    phone_number: Optional[str] = None
     is_admin: bool = False
     is_company_admin: bool = False
     company_id: Optional[int] = None
@@ -668,6 +672,7 @@ class UserFleetReportRow(BaseModel):
     user_id: int
     username: str
     email: str
+    phone_number: Optional[str] = None
     role: str
     company_id: Optional[int] = None
     company_name: Optional[str] = None

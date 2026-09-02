@@ -3,7 +3,7 @@ System Settings Routes
 Superuser management of platform-wide configuration settings.
 """
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -48,6 +48,7 @@ async def get_public_system_settings() -> Dict[str, Any]:
         "trip_min_duration_seconds": getattr(settings_obj, "trip_min_duration_seconds", 60),
         "llm_enabled": getattr(settings_obj, "llm_enabled", False),
         "smtp_enabled": getattr(settings_obj, "smtp_enabled", False),
+        "voip_enabled": getattr(settings_obj, "voip_enabled", False),
     }
 
 
@@ -214,13 +215,13 @@ async def trigger_history_purge(
 
 
 class SmtpTestRequest(BaseModel):
-    recipient_email: str = None
-    config_override: Dict[str, Any] = None
+    recipient_email: Optional[str] = None
+    config_override: Optional[Dict[str, Any]] = None
 
 
 @router.post("/test-smtp", response_model=Dict[str, Any])
 async def test_smtp_configuration(
-    payload: SmtpTestRequest = None,
+    payload: Optional[SmtpTestRequest] = None,
     current_user: User = Depends(require_admin),
 ) -> Dict[str, Any]:
     """Test SMTP email configuration by sending a test message."""
@@ -261,4 +262,45 @@ async def test_smtp_configuration(
     return {
         "success": True,
         "message": f"Test email sent successfully to {recipient}!",
+    }
+
+
+class VoipTestRequest(BaseModel):
+    target_extension: Optional[str] = None
+    config_override: Optional[Dict[str, Any]] = None
+
+
+@router.post("/test-voip", response_model=Dict[str, Any])
+async def test_voip_configuration(
+    payload: Optional[VoipTestRequest] = None,
+    current_user: User = Depends(require_admin),
+) -> Dict[str, Any]:
+    """Test VoIP / SIP calling configuration by placing a test call with TTS message."""
+    from core.voip import test_voip_call_async
+    target = ((payload.target_extension if payload else None) or "").strip()
+    if not target:
+        target = getattr(current_user, "phone_number", None) or ""
+        target = target.strip()
+    if not target:
+        raise HTTPException(
+            status_code=400,
+            detail="A target phone number or SIP extension is required for the test call.",
+        )
+
+    override = payload.config_override if payload else None
+    msg = f"Hello {current_user.username}. This test voice call confirms that your outgoing VoIP SIP configuration in Routario is working properly."
+    ok, error_msg = await test_voip_call_async(
+        target_extension=target,
+        message=msg,
+        config_override=override,
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=400,
+            detail=f"VoIP test call failed: {error_msg}",
+        )
+
+    return {
+        "success": True,
+        "message": f"Test VoIP voice call completed successfully to '{target}'!",
     }

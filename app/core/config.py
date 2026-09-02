@@ -85,6 +85,18 @@ class Settings(BaseSettings):
     smtp_from_email: str = ""
     smtp_from_name: str = "Routario Telematics"
 
+    # VoIP & SIP Voice Calls
+    voip_enabled: bool = False
+    voip_server: str = ""
+    voip_port: int = 5060
+    voip_username: str = ""
+    voip_password: str = ""
+    voip_from_extension: str = ""
+    voip_tts_engine: str = "gtts"
+    voip_tts_language: str = "en"
+    voip_repeat: int = 2
+    voip_pause_seconds: int = 2
+
     # Admin User (for initial setup)
     admin_username: str = "admin"
     admin_email: str = "admin@example.com"
@@ -139,6 +151,18 @@ SYSTEM_SETTINGS_METADATA = {
     "smtp_use_tls": {"type": "bool", "category": "Email & SMTP Notifications", "label": "Use STARTTLS", "description": "Enable TLS encryption for outgoing emails", "secret": False, "default": True},
     "smtp_from_email": {"type": "str", "category": "Email & SMTP Notifications", "label": "Sender Email (From)", "description": "Email address shown as the sender (e.g. noreply@example.com)", "secret": False, "default": ""},
     "smtp_from_name": {"type": "str", "category": "Email & SMTP Notifications", "label": "Sender Display Name", "description": "Display name shown in recipient email clients", "secret": False, "default": "Routario Telematics"},
+
+    # VoIP & SIP Voice Calls
+    "voip_enabled": {"type": "bool", "category": "VoIP & SIP Voice Calls", "label": "VoIP Calling Enabled", "description": "Enable placing automated SIP / VoIP voice call alarms for critical alerts", "secret": False, "default": False},
+    "voip_server": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "SIP Server Host", "description": "SIP PBX server host address or IP (e.g. 192.168.1.100 or sip.example.com)", "secret": False, "default": ""},
+    "voip_port": {"type": "int", "category": "VoIP & SIP Voice Calls", "label": "SIP Server Port", "description": "SIP signaling port (default 5060 for UDP/TCP, 5061 for TLS)", "secret": False, "default": 5060},
+    "voip_username": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "SIP Username", "description": "SIP account username or registration ID", "secret": False, "default": ""},
+    "voip_password": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "SIP Password", "description": "SIP account authentication password", "secret": True, "default": ""},
+    "voip_from_extension": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "Caller ID / Extension", "description": "Outbound caller extension / ID (optional, defaults to username)", "secret": False, "default": ""},
+    "voip_tts_engine": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "TTS Engine", "description": "Text-to-speech generation engine for voice alarms", "secret": False, "options": ["gtts", "espeak"], "default": "gtts"},
+    "voip_tts_language": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "TTS Voice Language", "description": "Language code for speech synthesis (e.g. en, el, de, fr, es)", "secret": False, "default": "en"},
+    "voip_repeat": {"type": "int", "category": "VoIP & SIP Voice Calls", "label": "Message Repeat Count", "description": "Number of times voice alarm message repeats on answer", "secret": False, "default": 2},
+    "voip_pause_seconds": {"type": "int", "category": "VoIP & SIP Voice Calls", "label": "Repeat Pause Duration (Seconds)", "description": "Seconds of silence between voice message repetitions", "secret": False, "default": 2},
 
     # AI Copilot & LLM Engine
     "llm_enabled": {"type": "bool", "category": "AI Copilot & LLM Engine", "label": "LLM Enabled", "description": "Enable or disable platform-wide AI Copilot and custom LLM reports", "secret": False, "default": False},

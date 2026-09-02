@@ -178,6 +178,7 @@ class DatabaseService:
             "ALTER TABLE users ADD COLUMN company_id INTEGER",
             "ALTER TABLE users ADD COLUMN is_company_admin BOOLEAN DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT NULL",
+            "ALTER TABLE users ADD COLUMN phone_number VARCHAR(50)",
             "ALTER TABLE companies ADD COLUMN app_name VARCHAR(100)",
             "ALTER TABLE companies ADD COLUMN login_slug VARCHAR(100)",
             "ALTER TABLE companies ADD COLUMN icon_filename VARCHAR(255)",
@@ -395,6 +396,7 @@ class DatabaseService:
                 "ALTER TABLE sim_cards ADD COLUMN IF NOT EXISTS remaining_data_mb FLOAT",
             ])
             migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP")
+            migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(50)")
             migrations.append("ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)")
             migrations.append("ALTER TABLE alert_history ALTER COLUMN device_id DROP NOT NULL")
             migrations.append("ALTER TABLE sim_cards ALTER COLUMN provider_id DROP NOT NULL")
@@ -419,6 +421,7 @@ class DatabaseService:
                 "ALTER TABLE scheduled_reports ADD COLUMN last_triggered_at DATETIME",
             ])
             migrations.append("ALTER TABLE users ADD COLUMN last_activity DATETIME")
+            migrations.append("ALTER TABLE users ADD COLUMN phone_number VARCHAR(50)")
 
         for stmt in migrations:
             try:
@@ -734,6 +737,7 @@ class DatabaseService:
             user = User(
                 username=user_data.username,
                 email=user_data.email,
+                phone_number=user_data.phone_number.strip() if (user_data.phone_number and user_data.phone_number.strip()) else None,
                 password_hash=pw_hash,
                 is_admin=user_data.is_admin,
                 company_id=user_data.company_id,
@@ -789,6 +793,8 @@ class DatabaseService:
                 return None
             if user_data.email:
                 user.email = user_data.email
+            if user_data.phone_number is not None:
+                user.phone_number = user_data.phone_number.strip() if user_data.phone_number.strip() else None
             if user_data.password:
                 user.password_hash = bcrypt.hashpw(
                     user_data.password.encode(), bcrypt.gensalt()

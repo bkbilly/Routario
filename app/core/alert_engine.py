@@ -120,11 +120,13 @@ class AlertEngine:
                 notify_ids = row.get('notify_user_ids')
                 send_push = row.get('send_push', True)
                 send_email = row.get('send_email', False)
+                send_voip = row.get('send_voip', False)
                 action_cmd = row.get('action_command')
                 action_cmd_payload = row.get('action_command_payload')
                 for r in results:
                     r.setdefault('send_push', send_push)
                     r.setdefault('send_email', send_email)
+                    r.setdefault('send_voip', send_voip)
                     if action_cmd and action_cmd != 'disabled':
                         r.setdefault('action_command', action_cmd)
                         if action_cmd_payload:
@@ -327,38 +329,85 @@ class AlertEngine:
 
             # 5. System Email notification
             send_email = alert_data.get('send_email', False)
-            if send_email and getattr(user, 'email', None) and user.email.strip():
-                try:
-                    from core.email import send_email_async
-                    rule_title = alert_data.get('alert_metadata', {}).get('rule_name')
-                    alert_type_label = alert_data['type'].value.upper() if hasattr(alert_data['type'], 'value') else str(alert_data['type']).upper()
-                    alert_label = rule_title if rule_title else alert_type_label
-                    subject = f"⚠️ Alert: {device.name} - {alert_label}"
-                    body = (
-                        f"Hello {user.username},\n\n"
-                        f"An alert was triggered for vehicle '{device.name}':\n\n"
-                        f"- Vehicle: {device.name}\n"
-                        f"- Alert Type: {alert_label}\n"
-                        f"- Severity: {alert_data.get('severity', 'info')}\n"
-                        f"- Message: {alert_data['message']}\n"
-                        f"- Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n"
-                        f"Best regards,\n"
-                        f"Routario Telematics Platform"
-                    )
-                    ok = await send_email_async([user.email], subject, body)
-                    if ok:
-                        channel_status.append({"name": "System Email", "status": "sent"})
-                    else:
-                        channel_status.append({"name": "System Email", "status": "skipped", "error": "Email disabled or SMTP not configured"})
-                except Exception as e:
-                    channel_status.append({"name": "System Email", "status": "failed", "error": str(e)})
+            if send_email:
+                user_email = getattr(user, 'email', None)
+                if not user_email or not user_email.strip():
+                    logger.debug("System email alert skipped for user '%s' — no email address configured.", getattr(user, 'username', user.id))
+                    channel_status.append({"name": "System Email", "status": "skipped", "error": "No email address configured for user"})
+                else:
+                    try:
+                        from core.config import get_settings
+                        from core.email import send_email_async
 
-            # 6. Alert webhooks
+                        settings = get_settings()
+                        smtp_enabled = getattr(settings, 'smtp_enabled', False)
+                        if isinstance(smtp_enabled, str):
+                            smtp_enabled = smtp_enabled.lower() in ('true', '1', 'yes', 'on')
+
+                        if not smtp_enabled:
+                            logger.debug("System email alert skipped — email notifications are disabled on system settings.")
+                        else:
+                            rule_title = alert_data.get('alert_metadata', {}).get('rule_name')
+                            alert_type_label = alert_data['type'].value.upper() if hasattr(alert_data['type'], 'value') else str(alert_data['type']).upper()
+                            alert_label = rule_title if rule_title else alert_type_label
+                            subject = f"⚠️ Alert: {device.name} - {alert_label}"
+                            body = (
+                                f"Hello {user.username},\n\n"
+                                f"An alert was triggered for vehicle '{device.name}':\n\n"
+                                f"- Vehicle: {device.name}\n"
+                                f"- Alert Type: {alert_label}\n"
+                                f"- Severity: {alert_data.get('severity', 'info')}\n"
+                                f"- Message: {alert_data['message']}\n"
+                                f"- Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n"
+                                f"Best regards,\n"
+                                f"Routario Telematics Platform"
+                            )
+                            ok = await send_email_async([user_email.strip()], subject, body)
+                            if ok:
+                                channel_status.append({"name": "System Email", "status": "sent"})
+                            else:
+                                channel_status.append({"name": "System Email", "status": "skipped", "error": "Email disabled or SMTP not configured"})
+                    except Exception as e:
+                        channel_status.append({"name": "System Email", "status": "failed", "error": str(e)})
+
+            # 6. VoIP Voice Call Alarm notification
+            send_voip = alert_data.get('send_voip', False)
+            if send_voip:
+                user_phone = getattr(user, 'phone_number', None)
+                if not user_phone or not user_phone.strip():
+                    logger.debug("VoIP voice call alarm skipped for user '%s' — no phone number configured.", getattr(user, 'username', user.id))
+                    channel_status.append({"name": "VoIP Call", "status": "skipped", "error": "No phone number configured for user"})
+                else:
+                    try:
+                        from core.config import get_settings
+                        from core.voip import send_voip_call_async
+
+                        settings = get_settings()
+                        voip_enabled = getattr(settings, 'voip_enabled', False)
+                        if isinstance(voip_enabled, str):
+                            voip_enabled = voip_enabled.lower() in ('true', '1', 'yes', 'on')
+
+                        if not voip_enabled:
+                            logger.debug("VoIP voice call alarm skipped — VoIP calling is disabled on system settings.")
+                        else:
+                            rule_title = alert_data.get('alert_metadata', {}).get('rule_name')
+                            alert_type_label = alert_data['type'].value.upper() if hasattr(alert_data['type'], 'value') else str(alert_data['type']).upper()
+                            alert_label = rule_title if rule_title else alert_type_label
+                            tts_msg = f"Alert warning for vehicle {device.name}. {alert_label}. {alert_data['message']}."
+                            ok = await send_voip_call_async(user_phone.strip(), tts_msg)
+                            if ok:
+                                channel_status.append({"name": "VoIP Call", "status": "sent"})
+                            else:
+                                channel_status.append({"name": "VoIP Call", "status": "failed", "error": "Call failed or server unreachable"})
+                    except Exception as e:
+                        channel_status.append({"name": "VoIP Call", "status": "failed", "error": str(e)})
+
+            # 7. Alert webhooks
             wh_status = await self._send_alert_webhooks(user, device, alert_data)
             if wh_status is not None:
                 channel_status.append({"name": "Webhooks", "status": "sent" if wh_status else "failed"})
 
-            # 6. Save channel_status into AlertHistory record if alert_id is provided
+            # 8. Save channel_status into AlertHistory record if alert_id is provided
             if alert_id and channel_status:
                 db = get_db()
                 await db.update_alert_channel_status(alert_id, channel_status)
@@ -366,17 +415,22 @@ class AlertEngine:
         except Exception as e:
             logger.error(f"Notify error: {e}")
 
-    async def _send_alert_webhooks(self, user: User, device: Device, alert_data: Dict[str, Any]) -> Optional[bool]:
-        urls = user.webhook_urls or []
-        if not urls:
+
+    @staticmethod
+    async def _send_alert_webhooks(user, device, alert_data: dict) -> Optional[bool]:
+        """Dispatch JSON alert payload to any configured user webhook URLs."""
+        webhooks = getattr(user, 'webhook_urls', None)
+        if not webhooks:
             return None
+
+        clean_urls = [u.strip() for u in webhooks if isinstance(u, str) and u.strip()]
+        if not clean_urls:
+            return None
+
+        rule_title = alert_data.get('alert_metadata', {}).get('rule_name')
+        alert_type_label = alert_data['type'].value if hasattr(alert_data['type'], 'value') else str(alert_data['type'])
+
         payload = {
-            "event":         "alert",
-            "device_id":     device.id,
-            "device_name":   device.name,
-            "imei":          device.imei,
-            "vehicle_type":  device.vehicle_type,
-            "license_plate":     device.license_plate,
             "custom_attributes": device.custom_attributes or {},
             "alert_type":    alert_data['type'].value,
             "severity":      alert_data.get('severity', Severity.WARNING).value
@@ -390,7 +444,7 @@ class AlertEngine:
         }
         any_success = False
         async with httpx.AsyncClient(timeout=5) as client:
-            for url in urls:
+            for url in clean_urls:
                 try:
                     res = await client.post(url, json=payload)
                     if res.is_success:
@@ -442,6 +496,7 @@ async def periodic_alert_task():
                             result.setdefault('longitude', state.last_longitude)
                             result.setdefault('send_push', row.get('send_push', True))
                             result.setdefault('send_email', row.get('send_email', False))
+                            result.setdefault('send_voip', row.get('send_voip', False))
                             action_cmd = row.get('action_command')
                             if action_cmd and action_cmd != 'disabled':
                                 result.setdefault('action_command', action_cmd)

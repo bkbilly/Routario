@@ -235,6 +235,8 @@ function renderProfile() {
     if (!profileUser) return;
     document.getElementById('profileUsername').value = profileUser.username || '';
     document.getElementById('profileEmail').value = profileUser.email || '';
+    const phoneEl = document.getElementById('profilePhone');
+    if (phoneEl) phoneEl.value = profileUser.phone_number || '';
     document.getElementById('profilePassword').value = '';
     document.getElementById('profileUnits').value = profileUser.units || 'metric';
     const themeEl = document.getElementById('profileTheme');
@@ -306,8 +308,10 @@ async function saveProfile() {
     const dateFmtEl = document.getElementById('profileDateFormat');
     const timeFormat = timeFmtEl ? timeFmtEl.value : (profileUser?.time_format || 'auto');
     const dateFormat = dateFmtEl ? dateFmtEl.value : (profileUser?.date_format || 'auto');
+    const phoneEl = document.getElementById('profilePhone');
     const payload = {
         email: document.getElementById('profileEmail').value.trim(),
+        phone_number: phoneEl ? (phoneEl.value.trim() || null) : null,
         units: document.getElementById('profileUnits').value,
         currency: document.getElementById('profileCurrency').value,
         theme: themeEl ? themeEl.value : (profileUser?.theme || 'dark'),
@@ -1183,6 +1187,7 @@ const SYSTEM_DEPENDENCIES = {
     history_retention_enabled: ['history_retention_days'],
     llm_enabled: ['llm_active_provider', 'llm_gemini_api_key', 'llm_gemini_model', 'llm_openai_api_key', 'llm_openai_model', 'llm_anthropic_api_key', 'llm_anthropic_model', 'llm_ollama_base_url', 'llm_ollama_model', 'llm_ollama_api_key', 'llm_temperature'],
     smtp_enabled: ['smtp_host', 'smtp_port', 'smtp_username', 'smtp_password', 'smtp_use_tls', 'smtp_from_email', 'smtp_from_name'],
+    voip_enabled: ['voip_server', 'voip_port', 'voip_username', 'voip_password', 'voip_from_extension', 'voip_tts_engine', 'voip_tts_language', 'voip_repeat', 'voip_pause_seconds'],
 };
 
 const SYSTEM_MASTER_TOGGLES = {};
@@ -1203,6 +1208,12 @@ function toggleSystemDependencies(masterKey, isEnabled) {
     });
     if (masterKey === 'smtp_enabled') {
         const testContainer = document.getElementById('sys_smtp_test_container');
+        if (testContainer) {
+            testContainer.style.display = isEnabled ? 'flex' : 'none';
+        }
+    }
+    if (masterKey === 'voip_enabled') {
+        const testContainer = document.getElementById('sys_voip_test_container');
         if (testContainer) {
             testContainer.style.display = isEnabled ? 'flex' : 'none';
         }
@@ -1294,6 +1305,9 @@ async function loadSystemSettings(preserveScroll = true) {
                 if (item.key === 'smtp_enabled') {
                     window.smtpEnabled = item.value === true || String(item.value).toLowerCase() === 'true' || item.value === 1;
                 }
+                if (item.key === 'voip_enabled') {
+                    window.voipEnabled = item.value === true || String(item.value).toLowerCase() === 'true' || item.value === 1;
+                }
             }
         }
         renderSystemSettings(preserveScroll ? scrollPos : null);
@@ -1318,6 +1332,7 @@ function renderSystemSettings(restoreScrollPos = null) {
     const categoryIcons = {
         'Core System & Operations': 'mdi-tune-variant',
         'Email & SMTP Notifications': 'mdi-email-outline',
+        'VoIP & SIP Voice Calls': 'mdi-phone-voip',
         'AI Copilot & LLM Engine': 'mdi-robot-excited-outline',
         'Web Push Notifications': 'mdi-cellphone-arrow-down',
         'Telematics & Trip Rules': 'mdi-car-speed-limiter',
@@ -1428,6 +1443,16 @@ function renderSystemSettings(restoreScrollPos = null) {
                         <i class="mdi mdi-email-check-outline"></i> Send Test Email
                     </button>
                     <span id="testSmtpStatus" style="font-size:0.82rem;color:var(--text-muted);"></span>
+                </div>
+            `;
+        } else if (catName === 'VoIP & SIP Voice Calls') {
+            const isVoipActive = Boolean(masterStateMap['voip_enabled']);
+            categoryFooterHtml = `
+                <div id="sys_voip_test_container" style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border-color);display:${isVoipActive ? 'flex' : 'none'};align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                    <button type="button" class="btn btn-secondary" id="testVoipBtn" onclick="testVoipSettings()" style="font-size:0.84rem;">
+                        <i class="mdi mdi-phone-outgoing"></i> Make Test Call
+                    </button>
+                    <span id="testVoipStatus" style="font-size:0.82rem;color:var(--text-muted);"></span>
                 </div>
             `;
         }
@@ -1683,6 +1708,79 @@ async function testSmtpSettings() {
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = '<i class="mdi mdi-email-check-outline"></i> Send Test Email';
+        }
+    }
+}
+
+async function testVoipSettings() {
+    const btn = document.getElementById('testVoipBtn');
+    const statusEl = document.getElementById('testVoipStatus');
+
+    const defaultTarget = profileUser?.phone_number || document.getElementById('sys_voip_from_extension')?.value || '';
+    const target = prompt('Enter recipient phone number or SIP extension for the test voice call:', defaultTarget);
+    if (!target || !target.trim()) return;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loading" style="display:inline-block;width:13px;height:13px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;margin-right:6px;animation:spin 0.8s linear infinite;"></span> Calling…';
+    }
+    if (statusEl) {
+        statusEl.textContent = 'Connecting to SIP server…';
+        statusEl.style.color = 'var(--text-muted)';
+    }
+
+    const override = {};
+    const serverEl = document.getElementById('sys_voip_server');
+    const portEl = document.getElementById('sys_voip_port');
+    const userEl = document.getElementById('sys_voip_username');
+    const passEl = document.getElementById('sys_voip_password');
+    const fromExtEl = document.getElementById('sys_voip_from_extension');
+    const ttsEngineEl = document.getElementById('sys_voip_tts_engine');
+    const ttsLangEl = document.getElementById('sys_voip_tts_language');
+    const repeatEl = document.getElementById('sys_voip_repeat');
+    const pauseEl = document.getElementById('sys_voip_pause_seconds');
+    const enabledEl = document.getElementById('sys_voip_enabled');
+
+    if (serverEl) override.voip_server = serverEl.value.trim();
+    if (portEl) override.voip_port = parseInt(portEl.value, 10) || 5060;
+    if (userEl) override.voip_username = userEl.value.trim();
+    if (passEl && passEl.value) override.voip_password = passEl.value;
+    if (fromExtEl) override.voip_from_extension = fromExtEl.value.trim();
+    if (ttsEngineEl) override.voip_tts_engine = ttsEngineEl.value;
+    if (ttsLangEl) override.voip_tts_language = ttsLangEl.value.trim();
+    if (repeatEl) override.voip_repeat = parseInt(repeatEl.value, 10) || 2;
+    if (pauseEl) override.voip_pause_seconds = parseInt(pauseEl.value, 10) || 2;
+    if (enabledEl) override.voip_enabled = enabledEl.checked;
+
+    try {
+        const res = await apiFetch(`${API_BASE}/system-settings/test-voip`, {
+            method: 'POST',
+            body: JSON.stringify({ target_extension: target.trim(), config_override: override }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showAlert(data.message || 'Test call placed successfully!', 'success');
+            if (statusEl) {
+                statusEl.textContent = '✓ Call completed successfully!';
+                statusEl.style.color = 'var(--color-success, #22c55e)';
+            }
+        } else {
+            showAlert('VoIP Test Failed: ' + (data.detail || 'Could not place test call'), 'error');
+            if (statusEl) {
+                statusEl.textContent = '✗ ' + (data.detail || 'Failed');
+                statusEl.style.color = 'var(--accent-danger, #ef4444)';
+            }
+        }
+    } catch (e) {
+        showAlert('VoIP Test Error: ' + e.message, 'error');
+        if (statusEl) {
+            statusEl.textContent = '✗ ' + e.message;
+            statusEl.style.color = 'var(--accent-danger, #ef4444)';
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="mdi mdi-phone-outgoing"></i> Make Test Call';
         }
     }
 }

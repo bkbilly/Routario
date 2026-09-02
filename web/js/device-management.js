@@ -25,6 +25,8 @@ let cachedGeofenceOptions = [];  // { value, label } for current device
 let cachedDriverOptions   = [];  // { value, label } — loaded once per modal open
 let ALERT_TYPES     = {};
 let protocolInfo = {};
+let smtpEnabled          = false;
+let voipEnabled          = false;
 
 // Raw data tab
 let rawData            = [];
@@ -182,6 +184,7 @@ async function initDeviceSection() {
 
     await Promise.all([
         loadAlertTypes(),
+        loadPublicSettings(),
         loadAvailableProtocols(),
         loadUserChannels(),
         loadDevices(),
@@ -193,6 +196,36 @@ async function initDeviceSection() {
 }
 
 // ── API Loaders ───────────────────────────────────────────────────
+async function loadPublicSettings(signal = null) {
+    try {
+        const res = await apiFetch(`${API_BASE}/system-settings/public`, signal ? { signal } : {});
+        if (res.ok) {
+            const data = await res.json();
+            smtpEnabled = data.smtp_enabled === true || String(data.smtp_enabled).toLowerCase() === 'true' || data.smtp_enabled === 1;
+            voipEnabled = data.voip_enabled === true || String(data.voip_enabled).toLowerCase() === 'true' || data.voip_enabled === 1;
+            if (typeof window !== 'undefined') {
+                window.smtpEnabled = smtpEnabled;
+                window.voipEnabled = voipEnabled;
+            }
+        }
+    } catch (e) {
+        if (e.name === 'AbortError') throw e;
+        console.warn('Public settings load failed:', e);
+    }
+}
+
+if (typeof window !== 'undefined' && !window.syncPublicSystemSettings) {
+    window.syncPublicSystemSettings = loadPublicSettings;
+}
+
+function isEmailNotificationAvailable() {
+    return smtpEnabled === true || (typeof window !== 'undefined' && window.smtpEnabled === true);
+}
+
+function isVoipNotificationAvailable() {
+    return voipEnabled === true || (typeof window !== 'undefined' && window.voipEnabled === true);
+}
+
 async function loadAlertTypes() {
     try {
         const res = await apiFetch(`${API_BASE}/alerts/types`);
@@ -498,6 +531,10 @@ function openAddDeviceModal() {
 
     if (isAdmin) populateDeviceCompanySelect();
     populateDeviceSimCardSelect(null, null, isAdmin ? null : (parseInt(localStorage.getItem('company_id')) || null));
+
+    loadPublicSettings().then(() => {
+        if (typeof renderAlertsTable === 'function') renderAlertsTable();
+    });
 
     alertRows = [];
     renderAlertsTable();
@@ -1689,6 +1726,7 @@ function addSelectedAlert() {
                 notify_user_ids: _curUid ? [_curUid] : null,
                 send_push: true,
                 send_email: false,
+                send_voip: false,
             });
         } catch(e) {
             console.error('Failed to parse native event def', e);
@@ -1702,7 +1740,7 @@ function addSelectedAlert() {
     if (!def) return;
     const params = {};
     (def.fields || []).forEach(f => { params[f.key] = f.default; });
-    alertRows.push({ uid: nextUid(), alertKey: val, params, channels: [], schedule: null, notify_user_ids: _curUid ? [_curUid] : null, send_push: true, send_email: false });
+    alertRows.push({ uid: nextUid(), alertKey: val, params, channels: [], schedule: null, notify_user_ids: _curUid ? [_curUid] : null, send_push: true, send_email: false, send_voip: false });
     renderAlertsTable();
     sel.value = '';
 }
@@ -1723,7 +1761,7 @@ function addCustomRule() {
         return;
     }
     const _curUid = parseInt(localStorage.getItem('user_id'), 10) || null;
-    alertRows.push({ uid: nextUid(), alertKey: '__custom__', name, rule, channels: [], schedule: null, duration: null, notify_user_ids: _curUid ? [_curUid] : null, send_push: true, send_email: false });
+    alertRows.push({ uid: nextUid(), alertKey: '__custom__', name, rule, channels: [], schedule: null, duration: null, notify_user_ids: _curUid ? [_curUid] : null, send_push: true, send_email: false, send_voip: false });
     nameEl.value = '';
     ruleEl.value = '';
     // Reset dropdown and hide custom fields
@@ -1868,8 +1906,11 @@ function renderAlertsTable() {
         if (row.send_push !== false) {
             activePills.push(`<span class="channel-pill active" title="Web Push Notification Enabled" style="pointer-events:none;"><i class="mdi mdi-cellphone-arrow-down"></i> Push</span>`);
         }
-        if (row.send_email === true) {
+        if (isEmailNotificationAvailable() && row.send_email === true) {
             activePills.push(`<span class="channel-pill active" title="System Email Notification Enabled" style="pointer-events:none;"><i class="mdi mdi-email-outline"></i> Email</span>`);
+        }
+        if (isVoipNotificationAvailable() && row.send_voip === true) {
+            activePills.push(`<span class="channel-pill active" title="VoIP Voice Call Alarm Enabled" style="pointer-events:none;"><i class="mdi mdi-phone-in-talk"></i> Voice Call</span>`);
         }
         if (Array.isArray(row.channels)) {
             const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
@@ -2009,6 +2050,8 @@ function renderAlertEditorCommandOptions(cmdKey, supportData, currentPayload = '
 async function openAlertEditor(uid) {
     if (typeof syncPublicSystemSettings === 'function') {
         await syncPublicSystemSettings();
+    } else {
+        await loadPublicSettings();
     }
     const row = alertRows.find(r => r.uid === uid);
     if (!row) return;
@@ -2184,12 +2227,21 @@ async function openAlertEditor(uid) {
         </label>
     `;
 
-    const emailPillHtml = `
+    const isEmailAvailable = isEmailNotificationAvailable();
+    const emailPillHtml = isEmailAvailable ? `
         <label class="channel-pill${row.send_email === true ? ' active' : ''}">
             <input type="checkbox" id="editor-send-email" ${row.send_email === true ? 'checked' : ''}>
             <i class="mdi mdi-email-outline"></i> Email
         </label>
-    `;
+    ` : '';
+
+    const isVoipAvailable = isVoipNotificationAvailable();
+    const voipPillHtml = isVoipAvailable ? `
+        <label class="channel-pill${row.send_voip === true ? ' active' : ''}">
+            <input type="checkbox" id="editor-send-voip" ${row.send_voip === true ? 'checked' : ''}>
+            <i class="mdi mdi-phone-in-talk"></i> Voice Call
+        </label>
+    ` : '';
 
     const selectedCh = row.channels || [];
     const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
@@ -2213,14 +2265,14 @@ async function openAlertEditor(uid) {
         </label>`;
     }).join('');
 
-    const totalChannelCount = 2 + visibleChannels.length;
+    const totalChannelCount = 1 + (isEmailAvailable ? 1 : 0) + (isVoipAvailable ? 1 : 0) + visibleChannels.length;
     const channelSearchHtml = totalChannelCount >= 6 ? `
         <div style="position:relative;margin-bottom:0.5rem;">
             <input type="search" class="form-input" id="alertEditorChannelSearch" placeholder="Search channels..." oninput="filterAlertEditorChannels()" style="padding:0.35rem 0.65rem 0.35rem 2rem;font-size:0.8rem;width:100%;">
             <i class="mdi mdi-magnify" style="position:absolute;left:0.65rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:1rem;pointer-events:none;"></i>
         </div>` : '';
 
-    const chHtml = pushPillHtml + emailPillHtml + userChannelPills +
+    const chHtml = pushPillHtml + emailPillHtml + voipPillHtml + userChannelPills +
         `<input type="hidden" id="alertEditorHiddenChannels" value="${_escAttrJson(hiddenChannels)}">`;
 
     let notifyUsersHtml = '';
@@ -2502,9 +2554,20 @@ function saveAlertFromEditor() {
         row.send_push = sendPushCb.checked;
     }
 
+    const isEmailAvailable = isEmailNotificationAvailable();
     const sendEmailCb = document.getElementById('editor-send-email');
-    if (sendEmailCb) {
+    if (sendEmailCb && isEmailAvailable) {
         row.send_email = sendEmailCb.checked;
+    } else {
+        row.send_email = false;
+    }
+
+    const isVoipAvailable = isVoipNotificationAvailable();
+    const sendVoipCb = document.getElementById('editor-send-voip');
+    if (sendVoipCb && isVoipAvailable) {
+        row.send_voip = sendVoipCb.checked;
+    } else {
+        row.send_voip = false;
     }
 
     const actionCmdSel = document.getElementById('editor-action-command');
@@ -2560,8 +2623,17 @@ function buildConfigFromAlertRows(existing = {}) {
     const config = { ...existing, alert_rows: [], alert_channels: {}, custom_rules: [] };
     ['speed_tolerance', 'idle_timeout_minutes', 'offline_timeout_hours',
      'towing_threshold_meters', 'speed_duration_seconds'].forEach(k => delete config[k]);
+    const isEmailAvailable = isEmailNotificationAvailable();
+    const isVoipAvailable = isVoipNotificationAvailable();
     alertRows.forEach(row => {
-        config.alert_rows.push({ ...row });
+        const rowCopy = { ...row };
+        if (!isEmailAvailable) {
+            rowCopy.send_email = false;
+        }
+        if (!isVoipAvailable) {
+            rowCopy.send_voip = false;
+        }
+        config.alert_rows.push(rowCopy);
         if (row.alertKey === '__custom__')
             config.custom_rules.push({ name: row.name, rule: row.rule, channels: row.channels || [] });
         else

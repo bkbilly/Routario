@@ -32,6 +32,7 @@
         id: 1,
         username: 'demo',
         email: 'demo@routario.local',
+        phone_number: '+30 691 234 5678',
         is_admin: true,
         is_company_admin: true,
         company_id: null,
@@ -259,6 +260,18 @@
             { key: 'smtp_from_email', label: 'Sender Email (From)', type: 'str', category: 'Email & SMTP Notifications', description: 'Email address shown as the sender', secret: false, readonly: false, value: 'noreply@routario.local', has_value: true },
             { key: 'smtp_from_name', label: 'Sender Name', type: 'str', category: 'Email & SMTP Notifications', description: 'Display name for sent emails', secret: false, readonly: false, value: 'Routario Telematics', has_value: true }
         ],
+        'VoIP & SIP Voice Calls': [
+            { key: 'voip_enabled', label: 'VoIP Calling Enabled', type: 'bool', category: 'VoIP & SIP Voice Calls', description: 'Enable placing automated SIP / VoIP voice call alarms for critical alerts', secret: false, readonly: false, value: true, has_value: true },
+            { key: 'voip_server', label: 'SIP Server Host', type: 'str', category: 'VoIP & SIP Voice Calls', description: 'SIP PBX server host address or IP (e.g. 192.168.1.100 or sip.example.com)', secret: false, readonly: false, value: 'sip.routario.local', has_value: true },
+            { key: 'voip_port', label: 'SIP Server Port', type: 'int', category: 'VoIP & SIP Voice Calls', description: 'SIP signaling port (default 5060 for UDP/TCP, 5061 for TLS)', secret: false, readonly: false, value: 5060, has_value: true },
+            { key: 'voip_username', label: 'SIP Username', type: 'str', category: 'VoIP & SIP Voice Calls', description: 'SIP account username or registration ID', secret: false, readonly: false, value: 'routario_bot', has_value: true },
+            { key: 'voip_password', label: 'SIP Password', type: 'str', category: 'VoIP & SIP Voice Calls', description: 'SIP account authentication password', secret: true, readonly: false, value: '', has_value: true },
+            { key: 'voip_from_extension', label: 'Caller ID / Extension', type: 'str', category: 'VoIP & SIP Voice Calls', description: 'Outbound caller extension / ID (optional, defaults to username)', secret: false, readonly: false, value: '1000', has_value: true },
+            { key: 'voip_tts_engine', label: 'TTS Engine', type: 'str', category: 'VoIP & SIP Voice Calls', description: 'Text-to-speech generation engine for voice alarms', secret: false, readonly: false, value: 'gtts', has_value: true, options: ['gtts', 'espeak'] },
+            { key: 'voip_tts_language', label: 'TTS Voice Language', type: 'str', category: 'VoIP & SIP Voice Calls', description: 'Language code for speech synthesis (e.g. en, el, de, fr, es)', secret: false, readonly: false, value: 'en', has_value: true },
+            { key: 'voip_repeat', label: 'Message Repeat Count', type: 'int', category: 'VoIP & SIP Voice Calls', description: 'Number of times voice alarm message repeats on answer', secret: false, readonly: false, value: 2, has_value: true },
+            { key: 'voip_pause_seconds', label: 'Repeat Pause Duration (Seconds)', type: 'int', category: 'VoIP & SIP Voice Calls', description: 'Seconds of silence between voice message repetitions', secret: false, readonly: false, value: 2, has_value: true }
+        ],
         'AI Copilot & LLM Engine': [
             { key: 'llm_enabled', label: 'LLM Copilot Enabled', type: 'bool', category: 'AI Copilot & LLM Engine', description: 'Enable AI-driven custom reports and natural language queries', secret: false, readonly: false, value: true, has_value: true },
             { key: 'llm_active_provider', label: 'Active LLM Provider', type: 'str', category: 'AI Copilot & LLM Engine', description: 'Selected LLM backend service', secret: false, readonly: false, value: 'gemini', has_value: true, options: ['gemini', 'openai', 'claude'] },
@@ -290,11 +303,12 @@
 
     const users = [
         DEMO_USER,
-        { id: 2, username: 'dispatcher', email: 'dispatch@routario.local', is_admin: false, is_company_admin: false, company_id: 1, permissions: ['view_reports', 'view_devices'], units: 'metric', currency: 'EUR', theme: 'dark' },
+        { id: 2, username: 'dispatcher', email: 'dispatch@routario.local', phone_number: '+30 692 345 6789', is_admin: false, is_company_admin: false, company_id: 1, permissions: ['view_reports', 'view_devices'], units: 'metric', currency: 'EUR', theme: 'dark' },
         {
             id: 3,
             username: 'fleetadmin',
             email: 'fleetadmin@routario.local',
+            phone_number: '+30 693 456 7890',
             is_admin: false,
             is_company_admin: true,
             company_id: 1,
@@ -1324,28 +1338,34 @@
 
         const apiPath = path.slice(path.indexOf('/api/') + 4);
         if (apiPath === '/system-settings/public') {
+            const smtpItem = demoSystemSettingsCategories['Email & SMTP Notifications']?.find(i => i.key === 'smtp_enabled');
+            const smtpEnabled = smtpItem ? (smtpItem.value === true || String(smtpItem.value).toLowerCase() === 'true' || smtpItem.value === 1) : false;
+            const voipItem = demoSystemSettingsCategories['VoIP & SIP Voice Calls']?.find(i => i.key === 'voip_enabled');
+            const voipEnabled = voipItem ? (voipItem.value === true || String(voipItem.value).toLowerCase() === 'true' || voipItem.value === 1) : false;
             return json({
                 history_batch_size: 2000,
                 history_max_api_limit: 10000,
                 trip_min_distance_km: 0.1,
                 trip_min_duration_seconds: 60,
                 llm_enabled: true,
-                smtp_enabled: true,
+                smtp_enabled: smtpEnabled,
+                voip_enabled: voipEnabled,
             });
         }
         if (apiPath === '/system-settings') {
             if (method === 'POST' || method === 'PUT') {
-                const key = body.key;
-                const value = body.value;
-                for (const catList of Object.values(demoSystemSettingsCategories)) {
-                    const item = catList.find(i => i.key === key);
-                    if (item) {
-                        item.value = value;
-                        item.has_value = Boolean(value);
-                        break;
+                const settingsToUpdate = body.settings || (body.key ? { [body.key]: body.value } : {});
+                for (const [key, value] of Object.entries(settingsToUpdate)) {
+                    for (const catList of Object.values(demoSystemSettingsCategories)) {
+                        const item = catList.find(i => i.key === key);
+                        if (item) {
+                            item.value = value;
+                            item.has_value = Boolean(value);
+                            break;
+                        }
                     }
                 }
-                return json({ status: 'ok', key: body.key, value: body.value });
+                return json({ status: 'ok', message: 'System settings saved successfully!' });
             }
             return json({ categories: demoSystemSettingsCategories });
         }
@@ -1360,10 +1380,35 @@
                 if (body.theme !== undefined) targetUser.theme = body.theme;
                 if (body.email !== undefined) targetUser.email = body.email;
                 if (body.username !== undefined) targetUser.username = body.username;
+                if (body.phone_number !== undefined) targetUser.phone_number = body.phone_number;
+                if (body.is_admin !== undefined) targetUser.is_admin = Boolean(body.is_admin);
+                if (body.is_company_admin !== undefined) targetUser.is_company_admin = Boolean(body.is_company_admin);
+                if (body.company_id !== undefined) targetUser.company_id = body.company_id;
+                if (body.permissions !== undefined) targetUser.permissions = body.permissions;
             }
             return json(targetUser);
         }
-        if (apiPath === '/users') return json(users);
+        if (apiPath === '/users') {
+            if (method === 'POST') {
+                const newUser = {
+                    id: Date.now(),
+                    username: body.username,
+                    email: body.email,
+                    phone_number: body.phone_number || null,
+                    is_admin: Boolean(body.is_admin),
+                    is_company_admin: Boolean(body.is_company_admin),
+                    company_id: body.company_id || null,
+                    units: body.units || 'metric',
+                    currency: body.currency || 'EUR',
+                    theme: body.theme || 'dark',
+                    permissions: body.permissions || [],
+                    created_at: new Date().toISOString(),
+                };
+                users.push(newUser);
+                return json(newUser);
+            }
+            return json(users);
+        }
         if (apiPath === '/runtime-logs') {
             const limit = parseInt(url.searchParams.get('limit') || '1000', 10);
             return json(runtimeLogPayload(limit));
@@ -1700,6 +1745,9 @@
         }
         if (apiPath === '/system-settings/test-smtp' && method === 'POST') {
             return json({ success: true, message: `Test email sent successfully to ${body.recipient_email || 'demo@routario.local'}!` });
+        }
+        if (apiPath === '/system-settings/test-voip' && method === 'POST') {
+            return json({ success: true, message: `Test VoIP voice call completed successfully to '${body.target_extension || '+491701234567'}'!` });
         }
         if (apiPath === '/auth-methods') {
             return json({ email_magic_link: true, passkeys: true });

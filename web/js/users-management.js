@@ -74,7 +74,8 @@ function _usrRender() {
     const query = (document.getElementById('userSearch')?.value || '').toLowerCase();
     const list  = [..._usrUsers.filter(u =>
         u.username.toLowerCase().includes(query) ||
-        u.email.toLowerCase().includes(query)
+        u.email.toLowerCase().includes(query) ||
+        (u.phone_number && u.phone_number.toLowerCase().includes(query))
     )].sort((a, b) => {
         let av, bv;
         switch (_usrSortCol) {
@@ -163,6 +164,8 @@ function openUserModal(userId = null) {
     usernameEl.style.opacity = isNew ? '' : '0.6';
 
     document.getElementById('userModalEmail').value    = _usrEditing?.email || '';
+    const phoneEl = document.getElementById('userModalPhone');
+    if (phoneEl) phoneEl.value = _usrEditing?.phone_number || '';
     document.getElementById('userModalPassword').value = '';
     document.getElementById('userPasswordLabel').textContent = isNew ? 'Password *' : 'Password (leave blank to keep)';
     document.getElementById('userModalUnits').value = _usrEditing?.units || 'metric';
@@ -630,8 +633,11 @@ async function saveUser() {
         permissions = [...document.querySelectorAll('.usr-perm-cb:checked:not(:disabled)')].map(cb => cb.dataset.perm);
     }
 
+    const phone = document.getElementById('userModalPhone')?.value.trim() || null;
+
     const payload = {
         email,
+        phone_number: phone,
         units,
         currency,
         theme,
