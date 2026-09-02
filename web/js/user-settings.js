@@ -1187,7 +1187,14 @@ const SYSTEM_DEPENDENCIES = {
     history_retention_enabled: ['history_retention_days'],
     llm_enabled: ['llm_active_provider', 'llm_gemini_api_key', 'llm_gemini_model', 'llm_openai_api_key', 'llm_openai_model', 'llm_anthropic_api_key', 'llm_anthropic_model', 'llm_ollama_base_url', 'llm_ollama_model', 'llm_ollama_api_key', 'llm_temperature'],
     smtp_enabled: ['smtp_host', 'smtp_port', 'smtp_username', 'smtp_password', 'smtp_use_tls', 'smtp_from_email', 'smtp_from_name'],
-    voip_enabled: ['voip_server', 'voip_port', 'voip_username', 'voip_password', 'voip_from_extension', 'voip_tts_engine', 'voip_tts_language', 'voip_repeat', 'voip_pause_seconds'],
+    voip_enabled: [
+        'voip_server', 'voip_port', 'voip_username', 'voip_password', 'voip_from_extension',
+        'voip_repeat', 'voip_pause_seconds', 'voip_tts_engine',
+        'voip_gtts_language',
+        'voip_espeak_voice', 'voip_espeak_speed', 'voip_espeak_pitch',
+        'voip_gemini_api_key', 'voip_gemini_model', 'voip_gemini_voice', 'voip_gemini_language',
+        'voip_tts_cache_retention_days',
+    ],
 };
 
 const SYSTEM_MASTER_TOGGLES = {};
@@ -1217,10 +1224,33 @@ function toggleSystemDependencies(masterKey, isEnabled) {
         if (testContainer) {
             testContainer.style.display = isEnabled ? 'flex' : 'none';
         }
+        if (isEnabled) {
+            updateVoipTtsFieldsVisibility();
+        }
     }
     if (masterKey === 'llm_enabled' && isEnabled) {
         updateLlmProviderFieldsVisibility();
     }
+}
+
+function updateVoipTtsFieldsVisibility() {
+    const engineEl = document.getElementById('sys_voip_tts_engine');
+    const engine = engineEl ? engineEl.value : 'gtts';
+
+    const engineFields = {
+        gtts: ['voip_gtts_language'],
+        espeak: ['voip_espeak_voice', 'voip_espeak_speed', 'voip_espeak_pitch'],
+        gemini: ['voip_gemini_api_key', 'voip_gemini_model', 'voip_gemini_voice', 'voip_gemini_language'],
+    };
+
+    Object.entries(engineFields).forEach(([eKey, fieldKeys]) => {
+        fieldKeys.forEach(fKey => {
+            const el = document.getElementById(`sys_item_${fKey}`);
+            if (el) {
+                el.style.display = (eKey === engine) ? '' : 'none';
+            }
+        });
+    });
 }
 
 function updateLlmProviderFieldsVisibility() {
@@ -1386,7 +1416,12 @@ function renderSystemSettings(restoreScrollPos = null) {
                     </label>
                 `;
             } else if (item.options && Array.isArray(item.options)) {
-                const optionsHtml = item.options.map(opt => `<option value="${settingsEsc(opt)}" ${String(item.value) === String(opt) ? 'selected' : ''}>${settingsEsc(opt)}</option>`).join('');
+                const optionsHtml = item.options.map(opt => {
+                    const optVal = (typeof opt === 'object' && opt !== null && opt.value !== undefined) ? opt.value : opt;
+                    const optLabel = (typeof opt === 'object' && opt !== null && opt.label !== undefined) ? opt.label : opt;
+                    const isSelected = String(item.value) === String(optVal);
+                    return `<option value="${settingsEsc(optVal)}" ${isSelected ? 'selected' : ''}>${settingsEsc(optLabel)}</option>`;
+                }).join('');
                 controlHtml = `<select id="sys_${item.key}" data-key="${item.key}" data-type="str" class="form-input">${optionsHtml}</select>`;
             } else if (item.type === 'int' || item.type === 'float') {
                 const step = item.type === 'float' ? '0.01' : '1';
@@ -1494,6 +1529,9 @@ function renderSystemSettings(restoreScrollPos = null) {
             if (e.target && e.target.id === 'sys_llm_active_provider') {
                 updateLlmProviderFieldsVisibility();
             }
+            if (e.target && e.target.id === 'sys_voip_tts_engine') {
+                updateVoipTtsFieldsVisibility();
+            }
             checkSystemSettingsDirty();
         });
         container.addEventListener('input', checkSystemSettingsDirty);
@@ -1501,6 +1539,7 @@ function renderSystemSettings(restoreScrollPos = null) {
     }
 
     updateLlmProviderFieldsVisibility();
+    updateVoipTtsFieldsVisibility();
     checkSystemSettingsDirty();
 
     if (restoreScrollPos !== null) {
@@ -1736,7 +1775,14 @@ async function testVoipSettings() {
     const passEl = document.getElementById('sys_voip_password');
     const fromExtEl = document.getElementById('sys_voip_from_extension');
     const ttsEngineEl = document.getElementById('sys_voip_tts_engine');
-    const ttsLangEl = document.getElementById('sys_voip_tts_language');
+    const gttsLangEl = document.getElementById('sys_voip_gtts_language');
+    const espeakVoiceEl = document.getElementById('sys_voip_espeak_voice');
+    const espeakSpeedEl = document.getElementById('sys_voip_espeak_speed');
+    const espeakPitchEl = document.getElementById('sys_voip_espeak_pitch');
+    const geminiKeyEl = document.getElementById('sys_voip_gemini_api_key');
+    const geminiModelEl = document.getElementById('sys_voip_gemini_model');
+    const geminiVoiceEl = document.getElementById('sys_voip_gemini_voice');
+    const geminiLangEl = document.getElementById('sys_voip_gemini_language');
     const repeatEl = document.getElementById('sys_voip_repeat');
     const pauseEl = document.getElementById('sys_voip_pause_seconds');
     const enabledEl = document.getElementById('sys_voip_enabled');
@@ -1747,7 +1793,14 @@ async function testVoipSettings() {
     if (passEl && passEl.value) override.voip_password = passEl.value;
     if (fromExtEl) override.voip_from_extension = fromExtEl.value.trim();
     if (ttsEngineEl) override.voip_tts_engine = ttsEngineEl.value;
-    if (ttsLangEl) override.voip_tts_language = ttsLangEl.value.trim();
+    if (gttsLangEl) override.voip_gtts_language = gttsLangEl.value.trim();
+    if (espeakVoiceEl) override.voip_espeak_voice = espeakVoiceEl.value.trim();
+    if (espeakSpeedEl) override.voip_espeak_speed = parseInt(espeakSpeedEl.value, 10) || 150;
+    if (espeakPitchEl) override.voip_espeak_pitch = parseInt(espeakPitchEl.value, 10) || 50;
+    if (geminiKeyEl && geminiKeyEl.value) override.voip_gemini_api_key = geminiKeyEl.value;
+    if (geminiModelEl) override.voip_gemini_model = geminiModelEl.value;
+    if (geminiVoiceEl) override.voip_gemini_voice = geminiVoiceEl.value;
+    if (geminiLangEl) override.voip_gemini_language = geminiLangEl.value;
     if (repeatEl) override.voip_repeat = parseInt(repeatEl.value, 10) || 2;
     if (pauseEl) override.voip_pause_seconds = parseInt(pauseEl.value, 10) || 2;
     if (enabledEl) override.voip_enabled = enabledEl.checked;

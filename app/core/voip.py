@@ -74,12 +74,57 @@ def _send_voip_call_sync(
         config_override.get("voip_tts_engine")
         if config_override and "voip_tts_engine" in config_override
         else getattr(settings_obj, "voip_tts_engine", "gtts")
-    )
-    tts_lang = (
-        config_override.get("voip_tts_language")
-        if config_override and "voip_tts_language" in config_override
-        else getattr(settings_obj, "voip_tts_language", "en")
-    )
+    ) or "gtts"
+
+    # gTTS Settings
+    gtts_language = (
+        config_override.get("voip_gtts_language")
+        if config_override and "voip_gtts_language" in config_override
+        else getattr(settings_obj, "voip_gtts_language", "en")
+    ) or "en"
+
+    # eSpeak Settings
+    espeak_voice = (
+        config_override.get("voip_espeak_voice")
+        if config_override and "voip_espeak_voice" in config_override
+        else getattr(settings_obj, "voip_espeak_voice", "en")
+    ) or "en"
+    espeak_speed = (
+        config_override.get("voip_espeak_speed")
+        if config_override and "voip_espeak_speed" in config_override
+        else getattr(settings_obj, "voip_espeak_speed", 150)
+    ) or 150
+    espeak_pitch = (
+        config_override.get("voip_espeak_pitch")
+        if config_override and "voip_espeak_pitch" in config_override
+        else getattr(settings_obj, "voip_espeak_pitch", 50)
+    ) or 50
+
+    # Gemini Audio Settings
+    gemini_api_key = (
+        config_override.get("voip_gemini_api_key")
+        if config_override and "voip_gemini_api_key" in config_override
+        else getattr(settings_obj, "voip_gemini_api_key", "")
+    ) or getattr(settings_obj, "llm_gemini_api_key", "") or ""
+
+    gemini_model = (
+        config_override.get("voip_gemini_model")
+        if config_override and "voip_gemini_model" in config_override
+        else getattr(settings_obj, "voip_gemini_model", "gemini-2.5-flash-preview-tts")
+    ) or "gemini-2.5-flash-preview-tts"
+
+    gemini_voice = (
+        config_override.get("voip_gemini_voice")
+        if config_override and "voip_gemini_voice" in config_override
+        else getattr(settings_obj, "voip_gemini_voice", "Aoede")
+    ) or "Aoede"
+
+    gemini_language = (
+        config_override.get("voip_gemini_language")
+        if config_override and "voip_gemini_language" in config_override
+        else getattr(settings_obj, "voip_gemini_language", "en")
+    ) or "en"
+
     repeat_val = (
         config_override.get("voip_repeat")
         if config_override and "voip_repeat" in config_override
@@ -111,6 +156,18 @@ def _send_voip_call_sync(
         logger.warning(err)
         return False, err
 
+    tts_params = {
+        "tts": tts_engine,
+        "voip_gtts_language": gtts_language,
+        "voip_espeak_voice": espeak_voice,
+        "voip_espeak_speed": espeak_speed,
+        "voip_espeak_pitch": espeak_pitch,
+        "voip_gemini_api_key": gemini_api_key,
+        "voip_gemini_model": gemini_model,
+        "voip_gemini_voice": gemini_voice,
+        "voip_gemini_language": gemini_language,
+    }
+
     call_params = {
         "server": server,
         "port": port,
@@ -121,7 +178,7 @@ def _send_voip_call_sync(
         "repeat": repeat,
         "pause": pause,
         "tts": tts_engine,
-        "lang": tts_lang,
+        **tts_params,
     }
 
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
@@ -131,17 +188,17 @@ def _send_voip_call_sync(
         tts_ok = SipChannel._generate_tts(
             text=message,
             engine=tts_engine,
-            lang=tts_lang,
+            params=tts_params,
             output_path=audio_path,
         )
         if not tts_ok:
-            err = f"Text-to-speech generation failed using engine '{tts_engine}' and language '{tts_lang}'."
+            err = f"Text-to-speech generation failed using engine '{tts_engine}'."
             logger.error(f"VoIP: {err}")
             return False, err
 
         logger.info(
             f"VoIP: Placing voice call to '{clean_target}' via {username}@{server}:{port} "
-            f"(repeat={repeat}, pause={pause}s)"
+            f"(repeat={repeat}, pause={pause}s, engine={tts_engine})"
         )
         call_ok = SipChannel._call(call_params, audio_path)
         if call_ok:

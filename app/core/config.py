@@ -92,10 +92,26 @@ class Settings(BaseSettings):
     voip_username: str = ""
     voip_password: str = ""
     voip_from_extension: str = ""
-    voip_tts_engine: str = "gtts"
-    voip_tts_language: str = "en"
     voip_repeat: int = 2
     voip_pause_seconds: int = 2
+    voip_tts_engine: str = "gtts"
+
+    # gTTS Settings
+    voip_gtts_language: str = "en"
+
+    # eSpeak Settings
+    voip_espeak_voice: str = "en"
+    voip_espeak_speed: int = 150
+    voip_espeak_pitch: int = 50
+
+    # Gemini Audio Settings
+    voip_gemini_api_key: str = ""
+    voip_gemini_model: str = "gemini-2.5-flash-preview-tts"
+    voip_gemini_voice: str = "Aoede"
+    voip_gemini_language: str = "en"
+
+    # TTS Cache & Audio Storage
+    voip_tts_cache_retention_days: int = 30
 
     # Admin User (for initial setup)
     admin_username: str = "admin"
@@ -134,6 +150,194 @@ def get_settings() -> Settings:
     return settings
 
 
+GTTS_LANGUAGES = [
+    {"value": "af", "label": "Afrikaans"},
+    {"value": "sq", "label": "Albanian"},
+    {"value": "am", "label": "Amharic"},
+    {"value": "ar", "label": "Arabic"},
+    {"value": "eu", "label": "Basque"},
+    {"value": "bn", "label": "Bengali"},
+    {"value": "bs", "label": "Bosnian"},
+    {"value": "bg", "label": "Bulgarian"},
+    {"value": "yue", "label": "Cantonese"},
+    {"value": "ca", "label": "Catalan"},
+    {"value": "zh-CN", "label": "Chinese (Simplified)"},
+    {"value": "zh-TW", "label": "Chinese (Traditional)"},
+    {"value": "hr", "label": "Croatian"},
+    {"value": "cs", "label": "Czech"},
+    {"value": "da", "label": "Danish"},
+    {"value": "nl", "label": "Dutch"},
+    {"value": "en", "label": "English"},
+    {"value": "et", "label": "Estonian"},
+    {"value": "tl", "label": "Filipino"},
+    {"value": "fi", "label": "Finnish"},
+    {"value": "fr", "label": "French"},
+    {"value": "fr-CA", "label": "French (Canada)"},
+    {"value": "gl", "label": "Galician"},
+    {"value": "de", "label": "German"},
+    {"value": "el", "label": "Greek"},
+    {"value": "gu", "label": "Gujarati"},
+    {"value": "ha", "label": "Hausa"},
+    {"value": "iw", "label": "Hebrew"},
+    {"value": "hi", "label": "Hindi"},
+    {"value": "hu", "label": "Hungarian"},
+    {"value": "is", "label": "Icelandic"},
+    {"value": "id", "label": "Indonesian"},
+    {"value": "it", "label": "Italian"},
+    {"value": "ja", "label": "Japanese"},
+    {"value": "jw", "label": "Javanese"},
+    {"value": "kn", "label": "Kannada"},
+    {"value": "km", "label": "Khmer"},
+    {"value": "ko", "label": "Korean"},
+    {"value": "la", "label": "Latin"},
+    {"value": "lv", "label": "Latvian"},
+    {"value": "lt", "label": "Lithuanian"},
+    {"value": "ms", "label": "Malay"},
+    {"value": "ml", "label": "Malayalam"},
+    {"value": "mr", "label": "Marathi"},
+    {"value": "my", "label": "Myanmar (Burmese)"},
+    {"value": "ne", "label": "Nepali"},
+    {"value": "no", "label": "Norwegian"},
+    {"value": "pl", "label": "Polish"},
+    {"value": "pt", "label": "Portuguese (Brazil)"},
+    {"value": "pt-PT", "label": "Portuguese (Portugal)"},
+    {"value": "pa", "label": "Punjabi (Gurmukhi)"},
+    {"value": "ro", "label": "Romanian"},
+    {"value": "ru", "label": "Russian"},
+    {"value": "sr", "label": "Serbian"},
+    {"value": "si", "label": "Sinhala"},
+    {"value": "sk", "label": "Slovak"},
+    {"value": "es", "label": "Spanish"},
+    {"value": "su", "label": "Sundanese"},
+    {"value": "sw", "label": "Swahili"},
+    {"value": "sv", "label": "Swedish"},
+    {"value": "ta", "label": "Tamil"},
+    {"value": "te", "label": "Telugu"},
+    {"value": "th", "label": "Thai"},
+    {"value": "tr", "label": "Turkish"},
+    {"value": "uk", "label": "Ukrainian"},
+    {"value": "ur", "label": "Urdu"},
+    {"value": "vi", "label": "Vietnamese"},
+    {"value": "cy", "label": "Welsh"},
+]
+
+ESPEAK_VOICES = [
+    {"value": "af", "label": "Afrikaans"},
+    {"value": "sq", "label": "Albanian"},
+    {"value": "am", "label": "Amharic"},
+    {"value": "ar", "label": "Arabic"},
+    {"value": "hy", "label": "Armenian"},
+    {"value": "az", "label": "Azerbaijani"},
+    {"value": "eu", "label": "Basque"},
+    {"value": "bn", "label": "Bengali"},
+    {"value": "bs", "label": "Bosnian"},
+    {"value": "bg", "label": "Bulgarian"},
+    {"value": "my", "label": "Burmese"},
+    {"value": "ca", "label": "Catalan"},
+    {"value": "zh", "label": "Chinese (Mandarin)"},
+    {"value": "zh-yue", "label": "Chinese (Cantonese)"},
+    {"value": "hr", "label": "Croatian"},
+    {"value": "cs", "label": "Czech"},
+    {"value": "da", "label": "Danish"},
+    {"value": "nl", "label": "Dutch"},
+    {"value": "en", "label": "English (Default)"},
+    {"value": "en-us", "label": "English (US)"},
+    {"value": "en-uk", "label": "English (UK)"},
+    {"value": "en-sc", "label": "English (Scotland)"},
+    {"value": "eo", "label": "Esperanto"},
+    {"value": "et", "label": "Estonian"},
+    {"value": "tl", "label": "Filipino"},
+    {"value": "fi", "label": "Finnish"},
+    {"value": "fr", "label": "French"},
+    {"value": "fr-be", "label": "French (Belgium)"},
+    {"value": "gl", "label": "Galician"},
+    {"value": "ka", "label": "Georgian"},
+    {"value": "de", "label": "German"},
+    {"value": "el", "label": "Greek"},
+    {"value": "gu", "label": "Gujarati"},
+    {"value": "ha", "label": "Hausa"},
+    {"value": "he", "label": "Hebrew"},
+    {"value": "hi", "label": "Hindi"},
+    {"value": "hu", "label": "Hungarian"},
+    {"value": "is", "label": "Icelandic"},
+    {"value": "id", "label": "Indonesian"},
+    {"value": "ga", "label": "Irish"},
+    {"value": "it", "label": "Italian"},
+    {"value": "ja", "label": "Japanese"},
+    {"value": "kn", "label": "Kannada"},
+    {"value": "kk", "label": "Kazakh"},
+    {"value": "ko", "label": "Korean"},
+    {"value": "la", "label": "Latin"},
+    {"value": "lv", "label": "Latvian"},
+    {"value": "lt", "label": "Lithuanian"},
+    {"value": "ms", "label": "Malay"},
+    {"value": "ml", "label": "Malayalam"},
+    {"value": "mr", "label": "Marathi"},
+    {"value": "ne", "label": "Nepali"},
+    {"value": "no", "label": "Norwegian"},
+    {"value": "fa", "label": "Persian (Farsi)"},
+    {"value": "pl", "label": "Polish"},
+    {"value": "pt", "label": "Portuguese (Brazil)"},
+    {"value": "pt-pt", "label": "Portuguese (Portugal)"},
+    {"value": "pa", "label": "Punjabi"},
+    {"value": "ro", "label": "Romanian"},
+    {"value": "ru", "label": "Russian"},
+    {"value": "sr", "label": "Serbian"},
+    {"value": "si", "label": "Sinhala"},
+    {"value": "sk", "label": "Slovak"},
+    {"value": "es", "label": "Spanish"},
+    {"value": "es-la", "label": "Spanish (Latin America)"},
+    {"value": "sw", "label": "Swahili"},
+    {"value": "sv", "label": "Swedish"},
+    {"value": "ta", "label": "Tamil"},
+    {"value": "te", "label": "Telugu"},
+    {"value": "th", "label": "Thai"},
+    {"value": "tr", "label": "Turkish"},
+    {"value": "uk", "label": "Ukrainian"},
+    {"value": "ur", "label": "Urdu"},
+    {"value": "uz", "label": "Uzbek"},
+    {"value": "vi", "label": "Vietnamese"},
+    {"value": "cy", "label": "Welsh"},
+]
+
+GEMINI_TTS_LANGUAGES = [
+    {"value": "en", "label": "English (Original / Default)"},
+    {"value": "sq", "label": "Albanian"},
+    {"value": "ar", "label": "Arabic"},
+    {"value": "bg", "label": "Bulgarian"},
+    {"value": "zh", "label": "Chinese"},
+    {"value": "hr", "label": "Croatian"},
+    {"value": "cs", "label": "Czech"},
+    {"value": "da", "label": "Danish"},
+    {"value": "nl", "label": "Dutch"},
+    {"value": "et", "label": "Estonian"},
+    {"value": "fi", "label": "Finnish"},
+    {"value": "fr", "label": "French"},
+    {"value": "de", "label": "German"},
+    {"value": "el", "label": "Greek"},
+    {"value": "he", "label": "Hebrew"},
+    {"value": "hi", "label": "Hindi"},
+    {"value": "hu", "label": "Hungarian"},
+    {"value": "id", "label": "Indonesian"},
+    {"value": "it", "label": "Italian"},
+    {"value": "ja", "label": "Japanese"},
+    {"value": "ko", "label": "Korean"},
+    {"value": "no", "label": "Norwegian"},
+    {"value": "pl", "label": "Polish"},
+    {"value": "pt", "label": "Portuguese"},
+    {"value": "ro", "label": "Romanian"},
+    {"value": "ru", "label": "Russian"},
+    {"value": "sr", "label": "Serbian"},
+    {"value": "sk", "label": "Slovak"},
+    {"value": "es", "label": "Spanish"},
+    {"value": "sv", "label": "Swedish"},
+    {"value": "th", "label": "Thai"},
+    {"value": "tr", "label": "Turkish"},
+    {"value": "uk", "label": "Ukrainian"},
+    {"value": "vi", "label": "Vietnamese"},
+]
+
+
 SYSTEM_SETTINGS_METADATA = {
     # Core System & Operations
     "log_level": {"type": "str", "category": "Core System & Operations", "label": "System Log Level", "description": "Global logging verbosity level", "secret": False, "options": ["DEBUG", "INFO", "WARNING", "ERROR"]},
@@ -159,10 +363,24 @@ SYSTEM_SETTINGS_METADATA = {
     "voip_username": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "SIP Username", "description": "SIP account username or registration ID", "secret": False, "default": ""},
     "voip_password": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "SIP Password", "description": "SIP account authentication password", "secret": True, "default": ""},
     "voip_from_extension": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "Caller ID / Extension", "description": "Outbound caller extension / ID (optional, defaults to username)", "secret": False, "default": ""},
-    "voip_tts_engine": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "TTS Engine", "description": "Text-to-speech generation engine for voice alarms", "secret": False, "options": ["gtts", "espeak"], "default": "gtts"},
-    "voip_tts_language": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "TTS Voice Language", "description": "Language code for speech synthesis (e.g. en, el, de, fr, es)", "secret": False, "default": "en"},
     "voip_repeat": {"type": "int", "category": "VoIP & SIP Voice Calls", "label": "Message Repeat Count", "description": "Number of times voice alarm message repeats on answer", "secret": False, "default": 2},
     "voip_pause_seconds": {"type": "int", "category": "VoIP & SIP Voice Calls", "label": "Repeat Pause Duration (Seconds)", "description": "Seconds of silence between voice message repetitions", "secret": False, "default": 2},
+    "voip_tts_engine": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "TTS Engine", "description": "Text-to-speech generation engine for voice alarms", "secret": False, "options": ["gtts", "espeak", "gemini"], "default": "gtts"},
+
+    # gTTS Settings
+    "voip_gtts_language": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "gTTS Language", "description": "Voice language for Google Translate TTS synthesis", "secret": False, "options": GTTS_LANGUAGES, "default": "en"},
+
+    # eSpeak Settings
+    "voip_espeak_voice": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "eSpeak Voice / Language", "description": "Voice language variant for eSpeak synthesis", "secret": False, "options": ESPEAK_VOICES, "default": "en"},
+    "voip_espeak_speed": {"type": "int", "category": "VoIP & SIP Voice Calls", "label": "eSpeak Speech Speed (WPM)", "description": "Speech speed in words per minute (50 to 300, default 150)", "secret": False, "default": 150},
+    "voip_espeak_pitch": {"type": "int", "category": "VoIP & SIP Voice Calls", "label": "eSpeak Voice Pitch", "description": "Voice pitch level from 0 to 99 (default 50)", "secret": False, "default": 50},
+
+    # Gemini Audio Settings
+    "voip_gemini_api_key": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "Gemini API Key (Optional)", "description": "Leave blank to use the platform's Gemini API key configured in AI Copilot", "secret": True, "default": ""},
+    "voip_gemini_model": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "Gemini Audio Model", "description": "Google Gemini Text-to-Speech audio model", "secret": False, "options": ["gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview", "gemini-2.5-pro-preview-tts"], "default": "gemini-2.5-flash-preview-tts"},
+    "voip_gemini_voice": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "Gemini Neural Voice", "description": "Persona and voice timbre for audio synthesis", "secret": False, "options": ["Aoede", "Puck", "Charon", "Kore", "Fenrir"], "default": "Aoede"},
+    "voip_gemini_language": {"type": "str", "category": "VoIP & SIP Voice Calls", "label": "Gemini Voice Language", "description": "Voice language for synthesis (alerts will be automatically translated if not in English)", "secret": False, "options": GEMINI_TTS_LANGUAGES, "default": "en"},
+    "voip_tts_cache_retention_days": {"type": "int", "category": "VoIP & SIP Voice Calls", "label": "TTS Audio Cache Retention (Days)", "description": "Number of days to keep cached TTS audio files in uploads/tts before auto-purging unused files (0 to disable purge)", "secret": False, "default": 30},
 
     # AI Copilot & LLM Engine
     "llm_enabled": {"type": "bool", "category": "AI Copilot & LLM Engine", "label": "LLM Enabled", "description": "Enable or disable platform-wide AI Copilot and custom LLM reports", "secret": False, "default": False},

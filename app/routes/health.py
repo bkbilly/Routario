@@ -165,7 +165,7 @@ def _disk_usage_row(path: Path) -> dict:
 
 
 def _check_disk_capacity() -> dict:
-    paths = [Path("web/uploads"), Path("web/uploads/dashcam"), Path("web/uploads/voice"), Path("web/uploads/tickets")]
+    paths = [Path("web/uploads"), Path("web/uploads/dashcam"), Path("web/uploads/voice"), Path("web/uploads/tickets"), Path("web/uploads/tts")]
     rows = []
     for path in paths:
         try:
