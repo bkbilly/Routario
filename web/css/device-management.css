@@ -920,6 +920,63 @@ h1 {
 }
 .schedule-badge small { display: block; color: var(--text-muted); font-family: var(--font-mono); font-size: 0.7rem; }
 
+/* ── Alert History Table ────────────────────────────────────────── */
+
+.alert-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+.alert-history-table th,
+.alert-history-table td {
+    padding: 0.75rem 0.9rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+.alert-history-table thead th {
+    background: var(--bg-tertiary);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    white-space: nowrap;
+}
+.alert-history-table tr:hover td { background: var(--bg-hover); }
+.alert-history-table tr:last-child td { border-bottom: none; }
+
+.alert-hist-channel-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.74rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: 6px;
+    line-height: 1.2;
+    white-space: nowrap;
+    transition: transform 0.15s ease;
+}
+.alert-hist-channel-badge.sent {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.28);
+}
+.alert-hist-channel-badge.failed {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.28);
+}
+.alert-hist-channel-badge.skipped {
+    background: rgba(156, 163, 175, 0.12);
+    color: var(--text-muted);
+    border: 1px solid rgba(156, 163, 175, 0.25);
+}
+
 /* ── Day Picker ────────────────────────────────────────────────── */
 
 .day-picker { display: flex; flex-wrap: wrap; gap: 0.4rem; }

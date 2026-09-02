@@ -1982,11 +1982,312 @@ function renderAlertsTable() {
             ${notifyUsersCell}
             <td>${schedHtml}</td>
             <td style="text-align:center;white-space:nowrap;">
-                <button type="button" class="btn btn-secondary tbl-btn" onclick="openAlertEditor(${row.uid})"><i class="mdi mdi-pencil"></i></button>
-                <button type="button" class="btn btn-danger    tbl-btn" onclick="removeAlertRow(${row.uid})"><i class="mdi mdi-close"></i></button>
+                <button type="button" class="btn btn-secondary tbl-btn" title="View Alert History & Test Trigger" onclick="openAlertHistoryForAlert(${row.uid})"><i class="mdi mdi-history"></i></button>
+                <button type="button" class="btn btn-secondary tbl-btn" title="Edit Alert" onclick="openAlertEditor(${row.uid})"><i class="mdi mdi-pencil"></i></button>
+                <button type="button" class="btn btn-danger    tbl-btn" title="Delete Alert" onclick="removeAlertRow(${row.uid})"><i class="mdi mdi-close"></i></button>
             </td>`;
         tbody.appendChild(tr);
     });
+}
+
+// ── Alert Rule History & Manual Test Modal ─────────────────────────────────
+let currentHistoryAlertUid = null;
+
+function openAlertHistoryForAlert(uid) {
+    const row = alertRows.find(r => r.uid === uid);
+    if (!row) return;
+    currentHistoryAlertUid = uid;
+
+    const isCustom = row.alertKey === '__custom__';
+    const def = isCustom ? null : ALERT_TYPES[row.alertKey];
+    const isDeviceEvent = row.alertKey === 'device_event';
+    const alertTitle = isCustom
+        ? (row.name || 'Custom Rule')
+        : isDeviceEvent
+        ? (row.params?.event_label || row.params?.sensor_key || 'Device Event')
+        : (def?.label || row.alertKey);
+
+    const device = devices.find(d => d.id === editingDeviceId);
+    const devName = device ? device.name : (editingDeviceId ? `Device #${editingDeviceId}` : 'New Vehicle');
+
+    let modal = document.getElementById('alertRuleHistoryModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'alertRuleHistoryModal';
+        modal.style.zIndex = '10050';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width:960px;width:95%;height:auto;max-height:86vh;display:flex;flex-direction:column;border-radius:16px;box-shadow:0 20px 40px rgba(0,0,0,0.45);">
+                <div class="modal-header" style="padding:1.1rem 1.4rem;border-bottom:1px solid var(--border-color);">
+                    <div>
+                        <h2 class="modal-title" style="display:flex;align-items:center;gap:0.5rem;" id="alertRuleHistoryTitle">
+                            <i class="mdi mdi-history" style="color:var(--accent-primary);"></i>
+                            <span>Alert History</span>
+                        </h2>
+                        <div id="alertRuleHistorySubtitle" style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text-muted);margin-top:0.35rem;"></div>
+                    </div>
+                    <button type="button" class="modal-close" onclick="closeAlertRuleHistoryModal()"><i class="mdi mdi-close"></i></button>
+                </div>
+
+                <div style="padding:0.85rem 1.4rem;background:var(--bg-tertiary);border-bottom:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;">
+                    <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.84rem;color:var(--text-secondary);">
+                        <i class="mdi mdi-broadcast" style="color:var(--accent-primary);font-size:1.1rem;"></i>
+                        <span>Trigger a real-time test alert across all configured channels & recipients.</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <button type="button" class="btn btn-primary" id="btnTriggerTestAlert" onclick="triggerTestAlertForCurrentRule()" style="font-size:0.84rem;padding:0.42rem 0.95rem;font-weight:600;">
+                            <i class="mdi mdi-bell-ring-outline"></i> Trigger Test Alert
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="loadAlertRuleHistoryData()" title="Refresh history" style="font-size:0.84rem;padding:0.42rem 0.75rem;">
+                            <i class="mdi mdi-refresh"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <div class="modal-scrollable" style="padding:1.2rem 1.4rem;flex:1;overflow-y:auto;">
+                    <div id="alertRuleHistoryLoading" style="text-align:center;padding:3rem;color:var(--text-muted);">
+                        <i class="mdi mdi-loading mdi-spin" style="font-size:2rem;color:var(--accent-primary);margin-bottom:0.5rem;display:inline-block;"></i>
+                        <div style="font-size:0.9rem;">Loading alert history...</div>
+                    </div>
+                    <div id="alertRuleHistoryEmpty" style="display:none;text-align:center;padding:3.5rem 2rem;color:var(--text-muted);background:var(--bg-secondary);border:1px dashed var(--border-color);border-radius:12px;">
+                        <i class="mdi mdi-bell-off-outline" style="font-size:2.8rem;opacity:0.45;margin-bottom:0.75rem;display:inline-block;color:var(--text-secondary);"></i>
+                        <div style="font-weight:600;font-size:1rem;color:var(--text-primary);margin-bottom:0.35rem;">No alert history recorded yet</div>
+                        <div style="font-size:0.85rem;color:var(--text-secondary);">Click <strong>"Trigger Test Alert"</strong> above to dispatch and verify notifications.</div>
+                    </div>
+                    <div class="alerts-table-wrap" id="alertRuleHistoryTableWrap" style="display:none;border:1px solid var(--border-color);border-radius:12px;overflow:hidden;background:var(--bg-secondary);">
+                        <table class="alert-history-table raw-data-table" id="alertRuleHistoryTable" style="width:100%;">
+                            <thead>
+                                <tr>
+                                    <th style="width:145px;">Date / Time</th>
+                                    <th style="width:105px;">Severity</th>
+                                    <th>Message</th>
+                                    <th style="width:250px;">Channels Triggered</th>
+                                    <th style="width:85px;text-align:center;">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alertRuleHistoryTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="modal-footer" style="padding:0.85rem 1.4rem;border-top:1px solid var(--border-color);">
+                    <button type="button" class="btn btn-secondary" onclick="closeAlertRuleHistoryModal()">Close</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+    }
+
+    const titleEl = document.getElementById('alertRuleHistoryTitle');
+    if (titleEl) {
+        titleEl.innerHTML = `
+            <i class="mdi mdi-history" style="color:var(--accent-primary);"></i>
+            <span>${_esc(alertTitle)} History</span>
+        `;
+    }
+    const subEl = document.getElementById('alertRuleHistorySubtitle');
+    if (subEl) {
+        subEl.innerHTML = `
+            <span style="background:var(--bg-hover);border:1px solid var(--border-color);padding:0.15rem 0.5rem;border-radius:6px;font-size:0.78rem;font-weight:600;color:var(--text-primary);"><i class="mdi mdi-car"></i> ${_esc(devName)}</span>
+            <span style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);padding:0.15rem 0.5rem;border-radius:6px;font-size:0.78rem;font-weight:600;color:var(--accent-primary);"><i class="mdi mdi-bell-ring-outline"></i> ${_esc(alertTitle)}</span>
+        `;
+    }
+
+    modal.classList.add('active');
+    loadAlertRuleHistoryData();
+}
+
+function closeAlertRuleHistoryModal() {
+    currentHistoryAlertUid = null;
+    document.getElementById('alertRuleHistoryModal')?.classList.remove('active');
+}
+window.closeAlertRuleHistoryModal = closeAlertRuleHistoryModal;
+
+async function loadAlertRuleHistoryData() {
+    const row = alertRows.find(r => r.uid === currentHistoryAlertUid);
+    if (!row) return;
+
+    const loadingEl = document.getElementById('alertRuleHistoryLoading');
+    const emptyEl   = document.getElementById('alertRuleHistoryEmpty');
+    const wrapEl    = document.getElementById('alertRuleHistoryTableWrap');
+    const tableEl   = document.getElementById('alertRuleHistoryTable');
+    const tbody     = document.getElementById('alertRuleHistoryTableBody');
+
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (emptyEl) emptyEl.style.display = 'none';
+    if (wrapEl) wrapEl.style.display = 'none';
+    if (tableEl) tableEl.style.display = 'none';
+
+    try {
+        const isCustom = row.alertKey === '__custom__';
+        const alertType = isCustom ? 'custom' : row.alertKey;
+        const deviceId = editingDeviceId;
+
+        let url = `${API_BASE}/alerts/report?limit=100`;
+        if (deviceId) url += `&device_ids=${deviceId}`;
+        if (alertType) url += `&alert_type=${encodeURIComponent(alertType)}`;
+
+        const res = await apiFetch(url);
+        if (!res.ok) throw new Error('Failed to load alert history');
+        let data = await res.json();
+
+        // If custom alert, filter by rule_name if set
+        if (isCustom && row.name && Array.isArray(data)) {
+            data = data.filter(a => {
+                const meta = a.alert_metadata || {};
+                return meta.rule_name === row.name || a.message?.includes(row.name);
+            });
+        }
+
+        if (loadingEl) loadingEl.style.display = 'none';
+
+        if (!data || !data.length) {
+            if (emptyEl) emptyEl.style.display = 'block';
+            if (wrapEl) wrapEl.style.display = 'none';
+            if (tableEl) tableEl.style.display = 'none';
+            return;
+        }
+
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (wrapEl) wrapEl.style.display = 'block';
+        if (tableEl) tableEl.style.display = 'table';
+        if (tbody) {
+            tbody.innerHTML = data.map(item => {
+                let ts = '—';
+                if (item.created_at) {
+                    const raw = String(item.created_at);
+                    const dtObj = new Date(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z');
+                    if (!isNaN(dtObj.getTime())) {
+                        const datePart = typeof formatDateValue === 'function' ? formatDateValue(dtObj) : dtObj.toLocaleDateString();
+                        const timePart = typeof formatTimeValue === 'function' ? formatTimeValue(dtObj, { withSeconds: true }) : dtObj.toLocaleTimeString();
+                        ts = `<span style="display:block;font-weight:600;color:var(--text-primary);font-size:0.84rem;">${_esc(datePart)}</span><span style="display:block;color:var(--text-muted);font-size:0.75rem;">${_esc(timePart)}</span>`;
+                    }
+                }
+                const sev = (item.severity || 'warning').toLowerCase();
+                const sevClass = (sev === 'critical' || sev === 'high') ? 'sev-critical' : (sev === 'warning' ? 'sev-warning' : 'sev-info');
+                const isRead = item.is_read
+                    ? '<span class="badge" style="background:rgba(255,255,255,0.05);color:var(--text-muted);border:1px solid var(--border-color);font-size:0.72rem;padding:0.2rem 0.55rem;border-radius:6px;font-weight:500;">Read</span>'
+                    : '<span class="badge" style="background:rgba(59,130,246,0.12);color:var(--accent-primary);border:1px solid rgba(59,130,246,0.28);font-size:0.72rem;padding:0.2rem 0.55rem;border-radius:6px;font-weight:700;">Unread</span>';
+
+                // Format channel badges matching the enhanced design
+                const channelStatuses = item.channel_status || item.alert_metadata?.channel_status || [];
+                let chHtml = '';
+                if (channelStatuses && channelStatuses.length) {
+                    chHtml = channelStatuses.map(ch => {
+                        const name = ch.name || 'Channel';
+                        const nameLower = name.toLowerCase();
+                        let icon = 'mdi-bullhorn-outline';
+                        if (nameLower.includes('push')) icon = 'mdi-bell-ring-outline';
+                        else if (nameLower.includes('email') || nameLower.includes('mail')) icon = 'mdi-email-outline';
+                        else if (nameLower.includes('voip') || nameLower.includes('call') || nameLower.includes('phone') || nameLower.includes('sip')) icon = 'mdi-phone-in-talk-outline';
+                        else if (nameLower.includes('telegram')) icon = 'mdi-telegram';
+                        else if (nameLower.includes('discord')) icon = 'mdi-discord';
+                        else if (nameLower.includes('slack')) icon = 'mdi-slack';
+                        else if (nameLower.includes('webhook')) icon = 'mdi-webhook';
+
+                        const isOk = ch.status === 'sent' || ch.status === 'delivered' || ch.status === 'success';
+                        const isSkipped = ch.status === 'skipped';
+                        const stateClass = isOk ? 'sent' : (isSkipped ? 'skipped' : 'failed');
+                        const stateIcon = isOk ? 'mdi-check' : (isSkipped ? 'mdi-minus' : 'mdi-close');
+
+                        let titleText = `${name}: ${ch.status || 'unknown'}`;
+                        if (ch.error) titleText += ` (${ch.error})`;
+
+                        return `<span class="alert-hist-channel-badge ${stateClass}" title="${_esc(titleText)}"><i class="mdi ${icon}"></i> <span>${_esc(name)}</span> <i class="mdi ${stateIcon}" style="font-size:0.7rem;opacity:0.85;"></i></span>`;
+                    }).join(' ');
+                } else {
+                    chHtml = '<span style="color:var(--text-muted);font-size:0.78rem;">—</span>';
+                }
+
+                return `
+                    <tr>
+                        <td style="white-space:nowrap;line-height:1.35;">${ts}</td>
+                        <td><span class="severity-badge ${sevClass}" style="font-size:0.72rem;padding:0.2rem 0.55rem;text-transform:capitalize;font-weight:700;">${_esc(sev)}</span></td>
+                        <td style="font-size:0.85rem;color:var(--text-primary);max-width:280px;line-height:1.45;word-break:break-word;font-weight:500;">${_esc(item.message || '')}</td>
+                        <td><div style="display:flex;flex-wrap:wrap;gap:0.3rem;">${chHtml}</div></td>
+                        <td style="text-align:center;">${isRead}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    } catch (err) {
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (emptyEl) {
+            emptyEl.style.display = 'block';
+            emptyEl.innerHTML = `<span style="color:var(--accent-danger);">Failed to load history: ${_esc(err.message)}</span>`;
+        }
+    }
+}
+
+async function triggerTestAlertForCurrentRule() {
+    const row = alertRows.find(r => r.uid === currentHistoryAlertUid);
+    if (!row) return;
+
+    if (!editingDeviceId) {
+        showAlert({ title: 'Device not saved', message: 'Please save the vehicle before triggering test alerts.', type: 'warning' });
+        return;
+    }
+
+    const btn = document.getElementById('btnTriggerTestAlert');
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Dispatching...';
+    }
+
+    try {
+        const isCustom = row.alertKey === '__custom__';
+        const isDeviceEvent = row.alertKey === 'device_event';
+        const alertType = isCustom ? 'custom' : row.alertKey;
+        const ruleName = isCustom
+            ? row.name
+            : isDeviceEvent
+            ? (row.params?.event_label || row.params?.sensor_key || 'Device Event')
+            : (ALERT_TYPES[row.alertKey]?.label || row.alertKey);
+
+        let ruleParams = row.params ? { ...row.params } : (row.value != null ? { value: row.value } : {});
+        if (row.alertKey === 'geofence_alert' || ruleParams.geofence_id) {
+            const foundGf = cachedGeofenceOptions.find(o => String(o.value) === String(ruleParams.geofence_id));
+            if (foundGf && foundGf.label) {
+                ruleParams.geofence_name = foundGf.label;
+            }
+        }
+
+        const payload = {
+            device_id: editingDeviceId,
+            alert_type: alertType,
+            rule_name: ruleName,
+            severity: row.severity || 'warning',
+            params: ruleParams,
+            channels: row.channels || [],
+            notify_user_ids: row.notify_user_ids || null,
+            send_push: row.send_push !== false,
+            send_email: row.send_email === true,
+            send_voip: row.send_voip === true,
+        };
+
+        const res = await apiFetch(`${API_BASE}/alerts/test-trigger`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || 'Test alert dispatch failed');
+        }
+
+        const result = await res.json();
+        showAlert('Test alert triggered and dispatched successfully!', 'success');
+
+        // Refresh history table
+        await loadAlertRuleHistoryData();
+    } catch (err) {
+        showAlert(err.message || 'Failed to trigger test alert', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
 }
 
 function renderAlertEditorCommandOptions(cmdKey, supportData, currentPayload = '') {

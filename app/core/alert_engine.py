@@ -230,6 +230,213 @@ class AlertEngine:
             # 3. External notifications (Email, Telegram, SIP call, etc. per user)
             await self._send_notification(user, device, alert_data, alert_id=alert.id)
 
+    @staticmethod
+    def _extract_alert_thresholds(alert_data: Dict[str, Any], device: Device) -> List[tuple[str, str]]:
+        """Extract and format all frontend-configured thresholds & parameters dynamically."""
+        from alerts import ALERT_DEFINITIONS
+
+        thresholds: List[tuple[str, str]] = []
+        metadata = alert_data.get('alert_metadata') or {}
+        params = dict(alert_data.get('params') or metadata.get('params') or {})
+
+        alert_type_val = alert_data.get('type')
+        if hasattr(alert_type_val, 'value'):
+            alert_type_val = alert_type_val.value
+        alert_type_str = str(alert_type_val).lower() if alert_type_val else ""
+
+        # 1. Match the specific alert row from device.config.alert_rows
+        matched_row = None
+        if device and device.config:
+            rule_name = metadata.get('rule_name')
+            for r in device.config.get('alert_rows', []):
+                if not isinstance(r, dict):
+                    continue
+                r_key = str(r.get('alertKey', '')).lower()
+                r_name = r.get('name')
+                if rule_name and r_name and r_name.strip() == rule_name.strip():
+                    matched_row = r
+                    break
+                if not rule_name and r_key and (r_key == alert_type_str or (alert_type_str and alert_type_str in r_key)):
+                    matched_row = r
+                    break
+
+        if matched_row:
+            if isinstance(matched_row.get('params'), dict):
+                for k, v in matched_row['params'].items():
+                    if k not in params and v is not None and v != "":
+                        params[k] = v
+            if 'duration' in matched_row and matched_row['duration'] is not None and 'duration' not in params:
+                params['duration'] = matched_row['duration']
+            if 'rule' in matched_row and matched_row['rule'] and 'rule' not in params:
+                params['rule'] = matched_row['rule']
+            if 'action_command' in matched_row and matched_row['action_command'] and matched_row['action_command'] != 'disabled':
+                params['action_command'] = matched_row['action_command']
+            if 'schedule' in matched_row and matched_row['schedule']:
+                params['schedule'] = matched_row['schedule']
+
+        is_custom = (matched_row and matched_row.get('alertKey') == '__custom__') or alert_type_str in ('custom', '__custom__')
+        is_device_event = (matched_row and matched_row.get('alertKey') == 'device_event') or alert_type_str in ('device_event', 'sensor')
+
+        # Check for definition in registry
+        alert_def = None
+        if not is_custom:
+            candidates = [
+                alert_type_str,
+                matched_row.get('alertKey') if matched_row else None,
+                metadata.get('config_key')
+            ]
+            for cand in candidates:
+                if not cand:
+                    continue
+                cand_str = str(cand).lower()
+                if cand_str in ALERT_DEFINITIONS:
+                    alert_def = ALERT_DEFINITIONS[cand_str]
+                    break
+                for k_def, v_def in ALERT_DEFINITIONS.items():
+                    if cand_str == k_def or cand_str in k_def or k_def in cand_str:
+                        alert_def = v_def
+                        break
+                if alert_def:
+                    break
+
+        rendered_keys = set()
+
+        # 2. Extract defined fields dynamically using AlertDefinition schema (matching frontend)
+        if alert_def and alert_def.fields:
+            for f in alert_def.fields:
+                if f.field_type == 'checkbox':
+                    continue
+
+                # Check conditional visibility (show_if)
+                if f.show_if:
+                    cond_key = f.show_if.get('key')
+                    cur_val = str(params.get(cond_key, ''))
+                    if 'values' in f.show_if:
+                        allowed = [str(x) for x in f.show_if['values']]
+                        if cur_val not in allowed:
+                            continue
+                    elif 'value' in f.show_if:
+                        if cur_val != str(f.show_if['value']):
+                            continue
+
+                val = params.get(f.key)
+                if val is None or str(val).strip() == "":
+                    continue
+
+                rendered_keys.add(f.key)
+                display_val = str(val)
+
+                # Special handling for Geofence name
+                if f.key in ('geofence_id', 'geofence'):
+                    g_name = params.get('geofence_name') or metadata.get('geofence_name')
+                    if g_name:
+                        display_val = str(g_name)
+                    elif str(val).isdigit():
+                        display_val = f"Geofence #{val}"
+                    rendered_keys.add('geofence_id')
+                    rendered_keys.add('geofence_name')
+                    rendered_keys.add('geofence')
+
+                # Special handling for Driver name
+                elif f.key in ('driver_id', 'driver'):
+                    d_name = params.get('driver_name') or metadata.get('driver_name')
+                    if d_name:
+                        display_val = str(d_name)
+                    elif str(val).isdigit():
+                        display_val = f"Driver #{val}"
+                    rendered_keys.add('driver_id')
+                    rendered_keys.add('driver_name')
+                    rendered_keys.add('driver')
+
+                # Format select / multiselect options
+                elif f.field_type in ('select', 'multiselect', 'driver_select') and f.options:
+                    if isinstance(val, list):
+                        labels = []
+                        for item in val:
+                            match_opt = next((opt['label'] for opt in f.options if str(opt.get('value')) == str(item)), None)
+                            labels.append(match_opt if match_opt else str(item))
+                        display_val = ", ".join(labels)
+                    else:
+                        match_opt = next((opt['label'] for opt in f.options if str(opt.get('value')) == str(val)), None)
+                        if match_opt:
+                            display_val = match_opt
+
+                if f.unit and not str(display_val).endswith(f.unit):
+                    display_val = f"{display_val} {f.unit}"
+
+                thresholds.append((f.label, display_val))
+
+        elif is_custom:
+            if params.get('rule'):
+                thresholds.append(("Condition Rule", str(params['rule'])))
+                rendered_keys.add('rule')
+
+        elif is_device_event:
+            if params.get('sensor_key'):
+                thresholds.append(("Sensor Key", str(params['sensor_key'])))
+                rendered_keys.add('sensor_key')
+            tv = params.get('trigger_values') or params.get('trigger_value')
+            if tv:
+                val_str = ", ".join(str(x) for x in tv) if isinstance(tv, list) else str(tv)
+                thresholds.append(("Trigger Value", val_str))
+                rendered_keys.add('trigger_values')
+                rendered_keys.add('trigger_value')
+
+        # Ensure Geofence name is always displayed if present in metadata/params
+        if ('geofence_name' in params or 'geofence_name' in metadata) and not any(k == 'Geofence' for k, _ in thresholds):
+            g_name = params.get('geofence_name') or metadata.get('geofence_name')
+            if g_name:
+                thresholds.insert(0, ("Geofence", str(g_name)))
+                rendered_keys.add('geofence_name')
+                rendered_keys.add('geofence_id')
+
+        # 3. Add common gates & parameters
+        if params.get('duration') is not None and str(params.get('duration')).strip() != "":
+            thresholds.append(("Minimum Duration", f"{params['duration']}s"))
+            rendered_keys.add('duration')
+
+        if params.get('action_command') and str(params.get('action_command')).lower() != 'disabled':
+            thresholds.append(("Trigger Command", str(params['action_command']).replace('_', ' ').title()))
+            rendered_keys.add('action_command')
+
+        # 4. Add Schedule if present
+        if 'schedule' in params and isinstance(params['schedule'], dict):
+            sch = params['schedule']
+            day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+            days = sch.get('days') or []
+            formatted_days = ", ".join([day_names[d] for d in sorted(days) if 0 <= d < 7]) if days else "All Days"
+            hs = sch.get('hourStart', 0)
+            he = sch.get('hourEnd', 24)
+            time_str = f"{hs:02d}:00 - {he:02d}:00"
+            thresholds.append(("Active Schedule", f"{formatted_days} ({time_str})"))
+            rendered_keys.add('schedule')
+
+        # 5. Include any extra parameters that were not part of the schema but sent in params
+        skip_internal = {
+            'is_test', 'triggered_by', 'channel_status', 'selected_channels',
+            'config_key', 'rule_name', 'event_icon', 'notify_user_ids',
+            'send_push', 'send_email', 'send_voip', 'channels'
+        }
+        for k, v in params.items():
+            if k not in rendered_keys and k not in skip_internal and v is not None and str(v).strip() != "":
+                label = k.replace('_', ' ').title()
+                val_str = str(v)
+                if k == 'speed_limit' and not val_str.endswith('km/h'):
+                    val_str = f"{val_str} km/h"
+                elif k == 'speed_tolerance' and not val_str.endswith('%'):
+                    val_str = f"+{val_str}%"
+                elif k in ('idle_timeout_minutes', 'timeout_minutes') and not val_str.endswith('min'):
+                    val_str = f"{val_str} min"
+                elif k in ('voltage_threshold', 'voltage') and not val_str.endswith('V'):
+                    val_str = f"{val_str} V"
+                elif k == 'offline_timeout_hours' and not val_str.endswith('hours'):
+                    val_str = f"{val_str} hours"
+                elif k == 'towing_threshold_meters' and not val_str.endswith('m'):
+                    val_str = f"{val_str} m"
+                thresholds.append((label, val_str))
+
+        return thresholds
+
     async def _send_notification(self, user: User, device: Device, alert_data: Dict[str, Any], alert_id: Optional[int] = None):
         channel_status = []
         try:
@@ -238,8 +445,9 @@ class AlertEngine:
             send_push = alert_data.get('send_push', True)
 
             # 1. Determine which channel names are selected
-            if 'selected_channels' in metadata:
-                # Direct selection (usually from custom rules)
+            if 'channels' in alert_data and alert_data['channels']:
+                selected_names = alert_data['channels']
+            elif 'selected_channels' in metadata and metadata['selected_channels']:
                 selected_names = metadata['selected_channels']
             elif 'config_key' in metadata:
                 # Keyed configuration (Speeding, Idling, etc)
@@ -253,22 +461,22 @@ class AlertEngine:
             user_ch = user.notification_channels or []
 
             # 2. Filter channels by selected IDs / names
-            if selected_names is not None:
-                selected_keys = set(selected_names)
+            if selected_names:
+                selected_keys = set(str(k) for k in selected_names)
                 active_channels = [
                     c for c in user_ch
                     if isinstance(c, dict) and c.get('url') and (
-                        (c.get('id') and c.get('id') in selected_keys) or
-                        (c.get('name') and c.get('name') in selected_keys)
+                        (c.get('id') and str(c.get('id')) in selected_keys) or
+                        (c.get('name') and str(c.get('name')) in selected_keys)
                     )
                 ]
                 found_keys = set()
                 for c in active_channels:
                     if c.get('id'):
-                        found_keys.add(c['id'])
+                        found_keys.add(str(c['id']))
                     if c.get('name'):
-                        found_keys.add(c['name'])
-                missing_keys = [k for k in selected_names if k not in found_keys]
+                        found_keys.add(str(c['name']))
+                missing_keys = [k for k in selected_names if str(k) not in found_keys]
 
                 # Fallback: if selected channel was created by admin/superadmin and not in target user's channels
                 if missing_keys:
@@ -277,14 +485,24 @@ class AlertEngine:
                         names=missing_keys,
                         company_id=device.company_id,
                     )
+                    for ac in additional_channels:
+                        if ac.get('id'):
+                            found_keys.add(str(ac['id']))
+                        if ac.get('name'):
+                            found_keys.add(str(ac['name']))
                     active_channels.extend(additional_channels)
+
+                # Record any unconfigured/missing channels
+                for k in selected_names:
+                    if str(k) not in found_keys:
+                        channel_status.append({"name": str(k), "status": "failed", "error": "Channel not found or unconfigured"})
             else:
                 active_channels = []
 
             # 3. Dispatch each URL to the matching channel handler
             if active_channels:
                 rule_title = alert_data.get('alert_metadata', {}).get('rule_name')
-                alert_label = rule_title if rule_title else alert_data['type'].value.upper()
+                alert_label = rule_title if rule_title else (alert_data['type'].value.upper() if hasattr(alert_data['type'], 'value') else str(alert_data['type']).upper())
                 title = f"🚗 {device.name} - {alert_label}"
                 message = alert_data['message']
 
@@ -312,10 +530,11 @@ class AlertEngine:
             if send_push:
                 try:
                     push = get_push_service()
+                    type_str = alert_data['type'].value if hasattr(alert_data['type'], 'value') else str(alert_data['type'])
                     ok = await push.notify_user(
                         db_service=get_db(),
                         user_id=user.id,
-                        alert_type=alert_data['type'].value,
+                        alert_type=type_str,
                         message=alert_data['message'],
                         severity=alert_data.get('severity', 'info'),
                         device_name=device.name,
@@ -346,23 +565,110 @@ class AlertEngine:
 
                         if not smtp_enabled:
                             logger.debug("System email alert skipped — email notifications are disabled on system settings.")
+                            channel_status.append({"name": "System Email", "status": "skipped", "error": "Email notifications are disabled in System Settings"})
                         else:
                             rule_title = alert_data.get('alert_metadata', {}).get('rule_name')
                             alert_type_label = alert_data['type'].value.upper() if hasattr(alert_data['type'], 'value') else str(alert_data['type']).upper()
                             alert_label = rule_title if rule_title else alert_type_label
                             subject = f"⚠️ Alert: {device.name} - {alert_label}"
+
+                            thresholds = self._extract_alert_thresholds(alert_data, device)
+                            thresholds_text = ""
+                            if thresholds:
+                                thresholds_text = "\n\nConfigured Thresholds & Rules:\n" + "\n".join([f"• {k}: {v}" for k, v in thresholds])
+
                             body = (
                                 f"Hello {user.username},\n\n"
                                 f"An alert was triggered for vehicle '{device.name}':\n\n"
                                 f"- Vehicle: {device.name}\n"
-                                f"- Alert Type: {alert_label}\n"
+                                f"- Alert Rule: {alert_label}\n"
                                 f"- Severity: {alert_data.get('severity', 'info')}\n"
                                 f"- Message: {alert_data['message']}\n"
-                                f"- Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n"
+                                f"- Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                                f"{thresholds_text}\n\n"
                                 f"Best regards,\n"
                                 f"Routario Telematics Platform"
                             )
-                            ok = await send_email_async([user_email.strip()], subject, body)
+                            sev_raw = alert_data.get('severity', 'warning')
+                            sev = sev_raw.value if hasattr(sev_raw, 'value') else str(sev_raw).lower()
+                            sev_color = "#ef4444" if sev in ("critical", "high") else ("#f59e0b" if sev == "warning" else "#3b82f6")
+
+                            lat = alert_data.get('latitude')
+                            lon = alert_data.get('longitude')
+                            addr = alert_data.get('address') or (alert_data.get('alert_metadata') or {}).get('address')
+                            loc_html = ""
+                            if addr:
+                                loc_html = f"""<tr>
+                                    <td style="padding:5px 0;color:#94a3b8;font-size:13px;">Location:</td>
+                                    <td style="padding:5px 0;color:#ffffff;font-size:13px;text-align:right;font-weight:500;">{addr}</td>
+                                </tr>"""
+                            elif lat is not None and lon is not None:
+                                map_url = f"https://www.google.com/maps?q={lat},{lon}"
+                                loc_html = f"""<tr>
+                                    <td style="padding:5px 0;color:#94a3b8;font-size:13px;">Location:</td>
+                                    <td style="padding:5px 0;text-align:right;"><a href="{map_url}" target="_blank" style="color:#38bdf8;text-decoration:none;font-size:13px;font-family:monospace;font-weight:600;">{lat:.5f}, {lon:.5f} ↗</a></td>
+                                </tr>"""
+
+                            thresholds_html = ""
+                            if thresholds:
+                                th_rows = "".join([
+                                    f"""<tr>
+                                        <td style="padding:6px 0;color:#94a3b8;font-size:13px;border-bottom:1px solid #232d43;width:46%;">{k}</td>
+                                        <td style="padding:6px 0;font-weight:600;color:#ffffff;font-size:13px;text-align:right;border-bottom:1px solid #232d43;">{v}</td>
+                                    </tr>"""
+                                    for k, v in thresholds
+                                ])
+                                thresholds_html = f"""
+                                <div style="margin-top:16px;background:#151c2e;padding:14px 16px;border-radius:10px;border:1px solid #2a3447;">
+                                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                                        <span>⚙️ Configured Thresholds & Rule Details</span>
+                                    </div>
+                                    <table style="width:100%;border-collapse:collapse;line-height:1.45;">
+                                        <tbody>
+                                            {th_rows}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                """
+
+                            body_html = f"""
+                            <div style="font-family:'Outfit','Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:540px;margin:0 auto;padding:28px 24px;background:#131825;color:#e5e7eb;border-radius:16px;border:1px solid #2a3447;box-shadow:0 12px 30px rgba(0,0,0,0.5);">
+                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+                                    <h2 style="color:#ffffff;margin:0;font-size:20px;font-weight:700;display:flex;align-items:center;gap:8px;">⚠️ Vehicle Alert</h2>
+                                    <span style="background:{sev_color}22;color:{sev_color};border:1px solid {sev_color}55;font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;text-transform:uppercase;letter-spacing:0.04em;">{sev.upper()}</span>
+                                </div>
+                                <p style="color:#9ca3af;font-size:14px;line-height:1.5;margin-top:0;">Hello <strong style="color:#ffffff;">{user.username}</strong>,</p>
+                                <div style="background:#1e273e;padding:13px 16px;border-left:4px solid {sev_color};border-radius:6px;margin:14px 0 16px;font-size:14px;font-weight:500;color:#ffffff;line-height:1.5;">
+                                    {alert_data['message']}
+                                </div>
+                                <div style="background:#1a2035;padding:14px 16px;border-radius:10px;border:1px solid #2a3447;font-size:13px;color:#cbd5e1;line-height:1.6;">
+                                    <table style="width:100%;border-collapse:collapse;">
+                                        <tbody>
+                                            <tr>
+                                                <td style="padding:4px 0;color:#94a3b8;width:40%;">Vehicle:</td>
+                                                <td style="padding:4px 0;font-weight:600;color:#ffffff;text-align:right;">{device.name}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:4px 0;color:#94a3b8;">Alert Rule:</td>
+                                                <td style="padding:4px 0;font-weight:600;color:#ffffff;text-align:right;">{alert_label}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:4px 0;color:#94a3b8;">Severity:</td>
+                                                <td style="padding:4px 0;font-weight:600;color:{sev_color};text-align:right;">{sev.capitalize()}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:4px 0;color:#94a3b8;">Triggered At:</td>
+                                                <td style="padding:4px 0;color:#cbd5e1;text-align:right;">{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}</td>
+                                            </tr>
+                                            {loc_html}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {thresholds_html}
+                                <p style="color:#6b7280;font-size:12px;margin-bottom:0;margin-top:22px;border-top:1px solid #1f2738;padding-top:14px;">Routario GPS Telematics Platform</p>
+                            </div>
+                            """
+                            ok = await send_email_async([user_email.strip()], subject, body, body_html)
                             if ok:
                                 channel_status.append({"name": "System Email", "status": "sent"})
                             else:
@@ -376,7 +682,7 @@ class AlertEngine:
                 user_phone = getattr(user, 'phone_number', None)
                 if not user_phone or not user_phone.strip():
                     logger.debug("VoIP voice call alarm skipped for user '%s' — no phone number configured.", getattr(user, 'username', user.id))
-                    channel_status.append({"name": "VoIP Call", "status": "skipped", "error": "No phone number configured for user"})
+                    channel_status.append({"name": "VoIP Call", "status": "skipped", "error": "No phone number configured for user profile"})
                 else:
                     try:
                         from core.config import get_settings
@@ -389,6 +695,7 @@ class AlertEngine:
 
                         if not voip_enabled:
                             logger.debug("VoIP voice call alarm skipped — VoIP calling is disabled on system settings.")
+                            channel_status.append({"name": "VoIP Call", "status": "skipped", "error": "VoIP calling is disabled in System Settings"})
                         else:
                             rule_title = alert_data.get('alert_metadata', {}).get('rule_name')
                             alert_type_label = alert_data['type'].value.upper() if hasattr(alert_data['type'], 'value') else str(alert_data['type']).upper()

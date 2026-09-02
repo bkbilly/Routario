@@ -220,7 +220,7 @@
                                     <th>Notify Via</th>
                                     <th id="alertsNotifyUsersHeader" style="display:none;">Notify Users</th>
                                     <th style="width:160px;">Schedule</th>
-                                    <th style="width:84px;text-align:center;">Actions</th>
+                                    <th style="width:115px;text-align:center;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="alertsTableBody">
@@ -387,6 +387,7 @@
 document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
     const closers = [
+        ['alertRuleHistoryModal', () => (typeof closeAlertRuleHistoryModal === 'function' ? closeAlertRuleHistoryModal() : document.getElementById('alertRuleHistoryModal')?.classList.remove('active'))],
         ['alertProfileMergeModal', () => closeAlertProfileMergeChoice()],
         ['alertProfileDevicePickerModal', () => closeAlertProfileDevicePicker()],
         ['alertEditorModal', () => closeAlertEditor()],

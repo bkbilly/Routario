@@ -1542,15 +1542,88 @@
             demoAlerts = demoAlerts.map(alert => alert.id === id ? { ...alert, is_read: true } : alert);
             return json({ ok: true });
         }
-        if (apiPath.startsWith('/alerts')) {
+        if (apiPath === '/alerts/test-trigger' && method === 'POST') {
+            const dev = demoDevices.find(d => d.id === Number(body?.device_id)) || demoDevices[0];
+            const channelStatus = [];
+            if (body?.send_push !== false) channelStatus.push({ name: 'Web Push', status: 'sent' });
+            if (body?.send_email) channelStatus.push({ name: 'System Email', status: 'sent' });
+            if (body?.send_voip) channelStatus.push({ name: 'VoIP Call', status: 'sent' });
+            (body?.channels || []).forEach(ch => channelStatus.push({ name: ch, status: 'sent' }));
+            if (channelStatus.length === 0) channelStatus.push({ name: 'Web Push', status: 'sent' });
+
+            let alertMsg = body?.message;
+            if (!alertMsg) {
+                const k = (body?.alert_type || '').toLowerCase();
+                const p = body?.params || {};
+                if (k.includes('speed')) {
+                    const lim = Number(p.speed_limit || p.limit || p.value || 90);
+                    alertMsg = `Speeding: ${(lim + 12).toFixed(1)} km/h — road limit ${lim.toFixed(0)} km/h.`;
+                } else if (k.includes('idle')) {
+                    const t = Number(p.idle_timeout_minutes || p.value || 10);
+                    alertMsg = `Idle Alert: Vehicle idling for ${t} min.`;
+                } else if (k.includes('battery')) {
+                    const v = Number(p.voltage_threshold || p.value || 11.8);
+                    alertMsg = `Low Battery: ${(v - 0.4).toFixed(2)}V (threshold ${v.toFixed(1)}V)`;
+                } else if (k.includes('offline')) {
+                    const h = Number(p.offline_timeout_hours || p.value || 2);
+                    alertMsg = `Device offline for over ${h}h.`;
+                } else if (k.includes('tow')) {
+                    const m = Number(p.towing_threshold_meters || p.value || 50);
+                    alertMsg = `Towing Alert: Vehicle moved ${m}m while parked.`;
+                } else if (k.includes('geofence')) {
+                    alertMsg = `Geofence Enter: ${p.geofence_name || 'Main Yard'}`;
+                } else if (k.includes('event')) {
+                    alertMsg = `Device Event: ${p.event_label || p.sensor_key || 'Panic Button'}`;
+                } else if (body?.rule_name) {
+                    alertMsg = `${body.rule_name} triggered.`;
+                } else {
+                    alertMsg = `${body?.alert_type || 'Alert'} triggered.`;
+                }
+            }
+
+            const newAlert = {
+                id: demoAlerts.length ? Math.max(...demoAlerts.map(a => a.id)) + 1 : 1,
+                device_id: dev ? dev.id : 1,
+                device_name: dev ? dev.name : 'Demo Vehicle',
+                alert_type: body?.alert_type || 'custom',
+                severity: body?.severity || 'warning',
+                message: alertMsg,
+                created_at: new Date().toISOString(),
+                latitude: dev?.last_latitude || 37.97,
+                longitude: dev?.last_longitude || 23.688,
+                address: dev?.last_address || 'Athens, Greece',
+                is_read: false,
+                alert_metadata: {
+                    rule_name: body?.rule_name,
+                    is_test: true,
+                    channel_status: channelStatus,
+                },
+                channel_status: channelStatus,
+            };
+            demoAlerts.unshift(newAlert);
+            return json(newAlert);
+        }
+        if (apiPath === '/alerts/report' || apiPath.startsWith('/alerts')) {
+            const deviceIdsParam = url.searchParams.get('device_ids');
+            const alertTypeParam = url.searchParams.get('alert_type');
             const readOnly = url.searchParams.get('read_only') === 'true';
             const unreadOnly = url.searchParams.get('unread_only') === 'true';
             let rows = demoAlerts.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            if (deviceIdsParam) {
+                const devIds = deviceIdsParam.split(',').map(Number);
+                rows = rows.filter(a => devIds.includes(Number(a.device_id)));
+            }
+            if (alertTypeParam) {
+                rows = rows.filter(a => a.alert_type === alertTypeParam);
+            }
             if (readOnly) rows = rows.filter(alert => alert.is_read);
             if (unreadOnly) rows = rows.filter(alert => !alert.is_read);
             const offset = parseInt(url.searchParams.get('offset') || '0', 10);
             const limit = parseInt(url.searchParams.get('limit') || String(rows.length), 10);
-            return json(rows.slice(offset, offset + limit));
+            return json(rows.slice(offset, offset + limit).map(a => ({
+                ...a,
+                channel_status: a.channel_status || a.alert_metadata?.channel_status || [],
+            })));
         }
         if (apiPath === '/voice/users') return json(users.map(u => ({ id: u.id, username: u.username, is_admin: !!u.is_admin, is_company_admin: !!u.is_company_admin })));
         if (apiPath === '/voice/messages') {

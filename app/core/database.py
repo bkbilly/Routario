@@ -1460,6 +1460,8 @@ class DatabaseService:
                     "message":     a.message,
                     "is_read":     a.is_read,
                     "created_at":  a.created_at.isoformat() if a.created_at else None,
+                    "alert_metadata": a.alert_metadata or {},
+                    "channel_status": (a.alert_metadata or {}).get("channel_status", []),
                 }
                 for a, username, device_name in result.all()
             ]
