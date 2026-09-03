@@ -95,10 +95,16 @@ class VehicleSensorsReport(Report):
                 .limit(5000)
             )
             for p in pos_r.scalars().all():
+                gps_time_iso = p.device_time.isoformat() if p.device_time else None
+                server_time_iso = p.server_time.isoformat() if p.server_time else None
+                time_diff_sec = round((p.server_time - p.device_time).total_seconds(), 1) if (p.server_time and p.device_time) else None
                 row = {
                     "device_id": d.id,
                     "vehicle": d.name,
-                    "time": p.device_time.isoformat(),
+                    "time": gps_time_iso,
+                    "gps_time": gps_time_iso,
+                    "server_time": server_time_iso,
+                    "time_diff": time_diff_sec,
                     "speed": p.speed,
                     "altitude": p.altitude,
                     "ignition": p.ignition,
@@ -123,7 +129,9 @@ class VehicleSensorsReport(Report):
             rows,
             [
                 {"key": "vehicle", "label": "Vehicle", "type": "text"},
-                {"key": "time", "label": "Time", "type": "datetime"},
+                {"key": "gps_time", "label": "GPS Time", "type": "datetime"},
+                {"key": "server_time", "label": "Server Time", "type": "datetime"},
+                {"key": "time_diff", "label": "Time Difference", "type": "time_diff"},
                 {"key": "driver_name", "label": "Driver", "type": "text"},
                 {"key": "ignition", "label": "Ignition", "type": "bool_on"},
                 {"key": "speed", "label": "Speed", "type": "number", "decimals": 1, "suffix": " km/h"},
@@ -133,7 +141,7 @@ class VehicleSensorsReport(Report):
             [],
             start_date,
             end_date,
-            default_sort={"key": "time", "dir": -1},
+            default_sort={"key": "gps_time", "dir": -1},
             csv_filename=(
                 f"vehicle_sensors_history_{start_date.date()}_{end_date.date()}.csv"
                 if start_date and end_date

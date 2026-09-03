@@ -36,7 +36,7 @@ class TripListReport(Report):
                 self.definition.key,
                 rows,
                 [
-                    {"key": "start_time", "label": "Date", "type": "datetime"},
+                    {"key": "start_time", "label": "Start Date", "type": "datetime"},
                     {"key": "device_name", "label": "Vehicle", "type": "text", "detail_key": "license_plate"},
                     {"key": "start_address", "label": "From", "type": "text", "max_width": 200},
                     {"key": "end_address", "label": "To", "type": "text", "max_width": 200},

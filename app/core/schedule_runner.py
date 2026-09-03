@@ -446,6 +446,23 @@ def _pdf_cell_value(value, column: dict | None = None, timezone_name: str | None
         return "Read" if value else "Unread"
     if column.get("type") == "severity":
         return str(value).title()
+    if column.get("type") == "time_diff":
+        try:
+            sec = float(value)
+            abs_sec = abs(sec)
+            sign = "+" if sec > 0 else ("-" if sec < 0 else "")
+            if abs_sec < 60:
+                return f"{sign}{abs_sec:.1f}s" if abs_sec % 1 != 0 else f"{sign}{int(abs_sec)}s"
+            elif abs_sec < 3600:
+                m = int(abs_sec // 60)
+                s = int(round(abs_sec % 60))
+                return f"{sign}{m}m {s}s"
+            else:
+                h = int(abs_sec // 3600)
+                m = int(round((abs_sec % 3600) / 60))
+                return f"{sign}{h}h {m}m"
+        except Exception:
+            return str(value)
     if isinstance(value, bool):
         return "Yes" if value else "No"
     if isinstance(value, list):

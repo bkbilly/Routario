@@ -219,7 +219,7 @@ class SensorGraphsReport(Report):
         # Columns for table view
         columns = [
             {"key": "vehicle", "label": "Vehicle", "type": "text"},
-            {"key": "time", "label": "Time", "type": "datetime"},
+            {"key": "time", "label": "GPS Time", "type": "datetime"},
         ]
         for s_key in active_sensor_keys:
             meta = get_sensor_meta(s_key)

@@ -922,8 +922,29 @@ h1 {
 
 /* ── Alert History Table ────────────────────────────────────────── */
 
+.alert-history-wrap {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+.alert-history-wrap::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+.alert-history-wrap::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 0 0 12px 12px;
+}
+.alert-history-wrap::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+}
+.alert-history-wrap::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+
 .alert-history-table {
     width: 100%;
+    min-width: 720px;
     border-collapse: collapse;
     font-size: 0.85rem;
 }

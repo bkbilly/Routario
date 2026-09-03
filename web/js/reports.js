@@ -1089,7 +1089,7 @@ function _buildSensorDatasets(minX, maxX) {
             if (!veh._parsedPoints) {
                 veh._parsedPoints = (veh.points || [])
                     .map(pt => {
-                        const d = _parseUtcDate(pt.time);
+                        const d = _parseUtcDate(pt.gps_time || pt.time || pt.device_time);
                         return d ? { t: d.getTime(), raw: pt } : null;
                     })
                     .filter(Boolean);
@@ -1188,7 +1188,7 @@ function _renderSensorChart(payload) {
 
     seriesList.forEach(veh => {
         (veh.points || []).forEach(pt => {
-            const d = _parseUtcDate(pt.time);
+            const d = _parseUtcDate(pt.gps_time || pt.time || pt.device_time);
             if (d) {
                 const t = d.getTime();
                 if (dataMin == null || t < dataMin) dataMin = t;
@@ -1206,6 +1206,12 @@ function _renderSensorChart(payload) {
             type: 'time',
             min: _sensorDataMinTime != null ? _sensorDataMinTime : undefined,
             max: _sensorDataMaxTime != null ? _sensorDataMaxTime : undefined,
+            title: {
+                display: true,
+                text: 'GPS Time',
+                color: textMuted,
+                font: { family: 'Outfit, sans-serif', size: 11, weight: '600' },
+            },
             time: {
                 tooltipFormat: 'yyyy-MM-dd HH:mm:ss',
                 displayFormats: {
@@ -1248,6 +1254,12 @@ function _renderSensorChart(payload) {
             type: 'linear',
             min: _sensorDataMinTime != null ? _sensorDataMinTime : undefined,
             max: _sensorDataMaxTime != null ? _sensorDataMaxTime : undefined,
+            title: {
+                display: true,
+                text: 'GPS Time',
+                color: textMuted,
+                font: { family: 'Outfit, sans-serif', size: 11, weight: '600' },
+            },
             ticks: {
                 color: tickColor,
                 font: { family: 'Outfit, sans-serif', size: 11 },
@@ -1343,10 +1355,11 @@ function _renderSensorChart(payload) {
                             const xVal = items[0].parsed.x;
                             const d = new Date(xVal);
                             if (isNaN(d.getTime())) return items[0].label || '';
-                            return typeof formatDateTimeValue === 'function'
+                            const dtStr = typeof formatDateTimeValue === 'function'
                                 ? formatDateTimeValue(d, { withSeconds: true })
                                 : (d.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })
                                     + '  •  ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+                            return `GPS Time: ${dtStr}`;
                         },
                         label: function(item) {
                             const label = item.dataset.label || '';
@@ -1952,6 +1965,26 @@ function _formatValue(value, col = {}, row = {}) {
     if (col.type === 'datetime' || col.type === 'datetime_split') return _fmtDatetimeSplit(value);
     if (col.type === 'date' || col.key === 'expiry_date') return _esc(formatDateValue(value));
     if (col.type === 'duration_minutes') return _fmtDuration(Number(value));
+    if (col.type === 'time_diff') {
+        const sec = Number(value);
+        if (isNaN(sec)) return _esc(value || '—');
+        const absSec = Math.abs(sec);
+        const sign = sec > 0 ? '+' : (sec < 0 ? '-' : '');
+        let text = '';
+        if (absSec < 60) {
+            text = `${sign}${absSec.toFixed(absSec % 1 === 0 ? 0 : 1)}s`;
+        } else if (absSec < 3600) {
+            const m = Math.floor(absSec / 60);
+            const s = Math.round(absSec % 60);
+            text = `${sign}${m}m ${s}s`;
+        } else {
+            const h = Math.floor(absSec / 3600);
+            const m = Math.round((absSec % 3600) / 60);
+            text = `${sign}${h}h ${m}m`;
+        }
+        const color = absSec > 300 ? 'var(--accent-danger, #ef4444)' : (absSec > 60 ? 'var(--accent-warning, #f59e0b)' : 'var(--text-primary)');
+        return `<span style="font-family:var(--font-mono);font-weight:600;color:${color};">${_esc(text)}</span>`;
+    }
     if (col.type === 'currency_cents') {
         const currency = col.currency_key ? row[col.currency_key] : col.currency;
         return _fmtMoneyCents(value, currency || 'EUR');
@@ -2222,6 +2255,15 @@ function _plainValue(value, col = {}) {
     if (value === null || value === undefined) return '';
     if (col.type === 'datetime' || col.type === 'datetime_split') return _fmtDatetime(value);
     if (col.type === 'duration_minutes') return String(value);
+    if (col.type === 'time_diff') {
+        const sec = Number(value);
+        if (isNaN(sec)) return String(value || '');
+        const absSec = Math.abs(sec);
+        const sign = sec > 0 ? '+' : (sec < 0 ? '-' : '');
+        if (absSec < 60) return `${sign}${absSec.toFixed(absSec % 1 === 0 ? 0 : 1)}s`;
+        if (absSec < 3600) return `${sign}${Math.floor(absSec / 60)}m ${Math.round(absSec % 60)}s`;
+        return `${sign}${Math.floor(absSec / 3600)}h ${Math.round((absSec % 3600) / 60)}m`;
+    }
     if (col.type === 'currency_cents') return String((Number(value) || 0) / 100);
     if (col.type === 'bool_on') return value ? 'On' : 'Off';
     if (col.type === 'bool_active') return value ? 'Active' : 'Missing';

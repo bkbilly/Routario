@@ -938,7 +938,7 @@
             return {
                 type: 'trips',
                 columns: [
-                    { key: 'start_time', label: 'Date', type: 'datetime' },
+                    { key: 'start_time', label: 'Start Date', type: 'datetime' },
                     { key: 'device_name', label: 'Vehicle', type: 'text', detail_key: 'license_plate' },
                     { key: 'start_address', label: 'From', type: 'text', max_width: 200 },
                     { key: 'end_address', label: 'To', type: 'text', max_width: 200 },
@@ -1061,7 +1061,7 @@
 
             const columns = [
                 { key: 'vehicle', label: 'Vehicle', type: 'text' },
-                { key: 'time', label: 'Time', type: 'datetime' },
+                { key: 'time', label: 'GPS Time', type: 'datetime' },
             ];
             active_sensors.forEach(k => {
                 const s = available_sensors.find(x => x.key === k) || { label: k, unit: '', decimals: 1, type: 'number' };
@@ -1192,11 +1192,15 @@
                 const rows = [];
                 for (let i = 20; i >= 0; i--) {
                     const t = iso(i * 30);
+                    const serverT = iso(i * 30 - 2);
                     devs.forEach((d, idx) => {
                         rows.push({
                             device_id: d.id,
                             vehicle: d.name,
                             time: t,
+                            gps_time: t,
+                            server_time: serverT,
+                            time_diff: 2.0,
                             driver_name: drivers[idx % drivers.length]?.name || 'Driver',
                             ignition: (i % 3 !== 0),
                             speed: Math.max(0, Math.round(45 + Math.sin(i + idx) * 30)),
@@ -1212,7 +1216,9 @@
                     historical: true,
                     columns: [
                         { key: 'vehicle', label: 'Vehicle', type: 'text' },
-                        { key: 'time', label: 'Time', type: 'datetime' },
+                        { key: 'gps_time', label: 'GPS Time', type: 'datetime' },
+                        { key: 'server_time', label: 'Server Time', type: 'datetime' },
+                        { key: 'time_diff', label: 'Time Difference', type: 'time_diff' },
                         { key: 'driver_name', label: 'Driver', type: 'text' },
                         { key: 'ignition', label: 'Ignition', type: 'bool_on' },
                         { key: 'speed', label: 'Speed', type: 'number', decimals: 1, suffix: ' km/h' },
@@ -1226,7 +1232,7 @@
                         { label: 'Total Records', value: rows.length },
                     ],
                     rows,
-                    default_sort: { key: 'time', dir: -1 },
+                    default_sort: { key: 'gps_time', dir: -1 },
                     csv_filename: 'vehicle_sensors_history.csv',
                 };
             }

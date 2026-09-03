@@ -2044,7 +2044,7 @@ function openAlertHistoryForAlert(uid) {
                     </div>
                 </div>
 
-                <div class="modal-scrollable" style="padding:1.2rem 1.4rem;flex:1;overflow-y:auto;">
+                <div class="modal-scrollable" style="padding:1.2rem 1.4rem;flex:1;overflow-y:auto;min-height:0;">
                     <div id="alertRuleHistoryLoading" style="text-align:center;padding:3rem;color:var(--text-muted);">
                         <i class="mdi mdi-loading mdi-spin" style="font-size:2rem;color:var(--accent-primary);margin-bottom:0.5rem;display:inline-block;"></i>
                         <div style="font-size:0.9rem;">Loading alert history...</div>
@@ -2054,8 +2054,8 @@ function openAlertHistoryForAlert(uid) {
                         <div style="font-weight:600;font-size:1rem;color:var(--text-primary);margin-bottom:0.35rem;">No alert history recorded yet</div>
                         <div style="font-size:0.85rem;color:var(--text-secondary);">Click <strong>"Trigger Test Alert"</strong> above to dispatch and verify notifications.</div>
                     </div>
-                    <div class="alerts-table-wrap" id="alertRuleHistoryTableWrap" style="display:none;border:1px solid var(--border-color);border-radius:12px;overflow:hidden;background:var(--bg-secondary);">
-                        <table class="alert-history-table raw-data-table" id="alertRuleHistoryTable" style="width:100%;">
+                    <div class="alerts-table-wrap alert-history-wrap" id="alertRuleHistoryTableWrap" style="display:none;border:1px solid var(--border-color);border-radius:12px;overflow-x:auto;background:var(--bg-secondary);">
+                        <table class="alert-history-table raw-data-table" id="alertRuleHistoryTable" style="width:100%;min-width:720px;">
                             <thead>
                                 <tr>
                                     <th style="width:145px;">Date / Time</th>
