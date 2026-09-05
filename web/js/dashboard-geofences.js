@@ -537,7 +537,20 @@ async function _populateOwnerDropdown(selectedUserId) {
     if (!select) return;
 
     const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
+    const currentUsername = localStorage.getItem('username') || 'me';
     select.innerHTML = '';
+
+    const canManageUsers = (localStorage.getItem('is_admin') === 'true') ||
+        (localStorage.getItem('is_company_admin') === 'true' && (typeof hasPermission === 'function' ? hasPermission('manage_users') : false));
+
+    if (!canManageUsers) {
+        const opt = document.createElement('option');
+        opt.value = currentUserId;
+        opt.textContent = `${currentUsername} (you)`;
+        opt.selected = true;
+        select.appendChild(opt);
+        return;
+    }
 
     try {
         if (!_cachedUsers) {
@@ -556,7 +569,7 @@ async function _populateOwnerDropdown(selectedUserId) {
     } catch {
         const opt = document.createElement('option');
         opt.value = currentUserId;
-        opt.textContent = 'me';
+        opt.textContent = `${currentUsername} (you)`;
         opt.selected = true;
         select.appendChild(opt);
     }

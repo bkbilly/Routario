@@ -348,6 +348,22 @@ class CompanyUpdate(BaseModel):
     billing_plan_id: Optional[int] = None
 
 
+class CompanyUserSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    username: str
+    email: Optional[str] = None
+    is_company_admin: bool = False
+
+
+class CompanyDeviceSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    imei: Optional[str] = None
+    license_plate: Optional[str] = None
+
+
 class CompanyResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -363,6 +379,8 @@ class CompanyResponse(BaseModel):
     created_at: datetime
     user_count: Optional[int] = None
     device_count: Optional[int] = None
+    users: List[CompanyUserSummary] = Field(default_factory=list)
+    devices: List[CompanyDeviceSummary] = Field(default_factory=list)
 
 
 # ==================== Position Schemas ====================

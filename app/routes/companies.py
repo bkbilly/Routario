@@ -17,7 +17,7 @@ from core.database import get_db
 from core.auth import require_admin
 from core.audit import write_audit_log
 from models import BillingPlan, Company, User, Device, DeviceState
-from models.schemas import CompanyCreate, CompanyUpdate, CompanyResponse, UserResponse, DeviceResponse
+from models.schemas import CompanyCreate, CompanyUpdate, CompanyResponse, CompanyUserSummary, CompanyDeviceSummary, UserResponse, DeviceResponse
 
 router = APIRouter(prefix="/api/companies", tags=["companies"])
 
@@ -110,21 +110,29 @@ def _delete_branding_file(filename: str | None):
 @router.get("", response_model=List[CompanyResponse])
 async def get_all_companies(admin: User = Depends(require_admin)):
     db = get_db()
-    companies = await db.get_all_companies()
-    result = []
-    for c in companies:
-        async with db.get_session() as session:
-            uc = (await session.execute(
-                select(func.count(User.id)).where(User.company_id == c.id)
-            )).scalar_one()
-            dc = (await session.execute(
-                select(func.count(Device.id)).where(Device.company_id == c.id)
-            )).scalar_one()
-        cr = CompanyResponse.model_validate(c)
-        cr.user_count = uc
-        cr.device_count = dc
-        result.append(cr)
-    return result
+    async with db.get_session() as session:
+        result = await session.execute(
+            select(Company)
+            .options(
+                selectinload(Company.users),
+                selectinload(Company.devices),
+            )
+            .order_by(Company.name)
+        )
+        companies = result.scalars().all()
+        response_list = []
+        for c in companies:
+            cr = CompanyResponse.model_validate(c)
+            sorted_users = sorted(
+                c.users or [],
+                key=lambda u: (not getattr(u, "is_company_admin", False), (u.username or "").lower())
+            )
+            cr.users = [CompanyUserSummary.model_validate(u) for u in sorted_users]
+            cr.devices = [CompanyDeviceSummary.model_validate(d) for d in (c.devices or [])]
+            cr.user_count = len(cr.users)
+            cr.device_count = len(cr.devices)
+            response_list.append(cr)
+        return response_list
 
 
 @router.post("", response_model=CompanyResponse)
@@ -142,10 +150,28 @@ async def create_company(data: CompanyCreate, request: Request, admin: User = De
 @router.get("/{company_id}", response_model=CompanyResponse)
 async def get_company(company_id: int, admin: User = Depends(require_admin)):
     db = get_db()
-    company = await db.get_company(company_id)
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
-    return company
+    async with db.get_session() as session:
+        result = await session.execute(
+            select(Company)
+            .where(Company.id == company_id)
+            .options(
+                selectinload(Company.users),
+                selectinload(Company.devices),
+            )
+        )
+        company = result.scalar_one_or_none()
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+        cr = CompanyResponse.model_validate(company)
+        sorted_users = sorted(
+            company.users or [],
+            key=lambda u: (not getattr(u, "is_company_admin", False), (u.username or "").lower())
+        )
+        cr.users = [CompanyUserSummary.model_validate(u) for u in sorted_users]
+        cr.devices = [CompanyDeviceSummary.model_validate(d) for d in (company.devices or [])]
+        cr.user_count = len(cr.users)
+        cr.device_count = len(cr.devices)
+        return cr
 
 
 @router.put("/{company_id}", response_model=CompanyResponse)

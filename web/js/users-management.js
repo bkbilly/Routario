@@ -29,17 +29,26 @@ const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap(g => g.perms.map(p => p[0]));
 
 let _usrSectionInitialized = false;
 
+function _usrCanManage() {
+    return _usrIsAdmin || (_usrIsCompanyAdmin && hasPermission('manage_users'));
+}
+
 async function initUsersSection() {
     const ch = document.getElementById('userCompanyHeader');
     if (ch) ch.style.display = _usrIsAdmin ? '' : 'none';
     if (_usrSectionInitialized) return;
     _usrSectionInitialized = true;
-    if (!hasPermission('manage_users')) return;
+    if (!_usrCanManage()) return;
     if (_usrIsAdmin) await _usrLoadCompanies();
     await Promise.all([_usrLoad(), _usrLoadDevices()]);
 }
 
 async function _usrLoad() {
+    if (!_usrCanManage()) {
+        _usrUsers = [];
+        _usrRender();
+        return;
+    }
     try {
         const res = await apiFetch(`${API_BASE}/users`);
         if (res.ok) _usrUsers = await res.json();
@@ -678,6 +687,7 @@ async function saveUser() {
             showAlert(isNew ? 'User created' : 'User updated', 'success');
             closeUserModal();
             await _usrLoad();
+            window.dispatchEvent(new CustomEvent('routario:users-updated'));
         }
     } catch (e) {
         showAlert(e.message || 'Save failed', 'error');
@@ -709,6 +719,7 @@ async function usrDelete(userId) {
         if (!res.ok) throw new Error((await res.json()).detail || 'Delete failed');
         if (_usrEditing?.id === userId) closeUserModal();
         await _usrLoad();
+        window.dispatchEvent(new CustomEvent('routario:users-updated'));
     } catch (e) { showAlert(e.message || 'Delete failed', 'error'); }
 }
 
@@ -719,9 +730,40 @@ async function usrImpersonate(userId) {
         const res = await apiFetch(`${API_BASE}/users/${userId}/impersonate`, { method: 'POST' });
         if (!res.ok) throw new Error((await res.json()).detail || 'Impersonation failed');
         const data = await res.json();
-        localStorage.setItem('impersonating_admin_token',    localStorage.getItem('auth_token'));
-        localStorage.setItem('impersonating_admin_user_id',  localStorage.getItem('user_id'));
-        localStorage.setItem('impersonating_admin_username', localStorage.getItem('username'));
+
+        const currentSession = {
+            auth_token:       localStorage.getItem('auth_token'),
+            user_id:          localStorage.getItem('user_id'),
+            username:         localStorage.getItem('username'),
+            is_admin:         localStorage.getItem('is_admin'),
+            is_company_admin: localStorage.getItem('is_company_admin'),
+            company_id:       localStorage.getItem('company_id') || '',
+            permissions:      localStorage.getItem('permissions') || '[]',
+        };
+        let stack = [];
+        try {
+            stack = JSON.parse(localStorage.getItem('impersonation_stack') || '[]');
+            if (!Array.isArray(stack)) stack = [];
+        } catch (_) {
+            stack = [];
+        }
+        if (stack.length === 0 && localStorage.getItem('impersonating_admin_token')) {
+            stack.push({
+                auth_token:       localStorage.getItem('impersonating_admin_token'),
+                user_id:          localStorage.getItem('impersonating_admin_user_id'),
+                username:         localStorage.getItem('impersonating_admin_username'),
+                is_admin:         'true',
+                is_company_admin: 'false',
+                company_id:       '',
+                permissions:      '[]',
+            });
+        }
+        stack.push(currentSession);
+        localStorage.setItem('impersonation_stack', JSON.stringify(stack));
+        localStorage.setItem('impersonating_admin_token',    stack[0].auth_token);
+        localStorage.setItem('impersonating_admin_user_id',  stack[0].user_id);
+        localStorage.setItem('impersonating_admin_username', stack[0].username);
+
         localStorage.setItem('auth_token',       data.access_token);
         localStorage.setItem('user_id',          data.user_id);
         localStorage.setItem('username',         data.username);
@@ -789,11 +831,20 @@ async function _usrToggleAssignment(deviceId, assign) {
         if (res.ok) {
             if (assign) _usrAssignedDevices.add(deviceId);
             else        _usrAssignedDevices.delete(deviceId);
+            window.dispatchEvent(new CustomEvent('routario:users-updated'));
+            window.dispatchEvent(new CustomEvent('routario:devices-updated'));
         } else {
             _usrRenderAssignList();
         }
     } catch (e) { console.error(e); _usrRenderAssignList(); }
 }
+
+window.addEventListener('routario:companies-updated', () => {
+    if (_usrIsAdmin) _usrLoadCompanies();
+});
+window.addEventListener('routario:devices-updated', () => {
+    _usrLoadDevices();
+});
 
 // ── Notify User ───────────────────────────────────────────────────
 

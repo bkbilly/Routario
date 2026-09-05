@@ -1437,7 +1437,11 @@
         }
         if (apiPath === '/users/me' || apiPath === '/users/1' || apiPath.match(/^\/users\/\d+$/)) {
             const uid = apiPath === '/users/me' ? 1 : Number(apiPath.split('/').pop());
-            const targetUser = users.find(u => u.id === uid) || DEMO_USER;
+            if (method === 'DELETE') {
+                const idx = users.findIndex(u => u.id === uid);
+                if (idx >= 0) users.splice(idx, 1);
+                return json({ status: 'deleted' });
+            }
             if (method === 'PUT' || method === 'PATCH') {
                 if (Array.isArray(body.webhook_urls)) targetUser.webhook_urls = body.webhook_urls;
                 if (Array.isArray(body.notification_channels)) targetUser.notification_channels = body.notification_channels;
@@ -1489,24 +1493,93 @@
         }
         if (apiPath.match(/^\/devices\/\d+\/trips$/)) return json(historyTrips(Number(apiPath.split('/')[2])));
         if (apiPath.match(/^\/devices\/\d+\/state$/)) return json(devices.find(d => d.id === Number(apiPath.split('/')[2]))?.state || {});
-        if (apiPath.match(/^\/devices\/\d+\/users$/)) return json(users);
+        if (apiPath.match(/^\/devices\/\d+\/users$/)) {
+            if (method === 'POST') return json({ status: 'success' });
+            return json(users);
+        }
         if (apiPath === '/drivers') return json(drivers);
         if (apiPath === '/companies') {
             if (method === 'POST') {
-                const company = { id: Date.now(), user_count: 0, device_count: 0, created_at: iso(0), branding_version: 1, icon_url: null, badge_url: null, ...body };
+                const company = { id: Date.now(), user_count: 0, device_count: 0, users: [], devices: [], created_at: iso(0), branding_version: 1, icon_url: null, badge_url: null, ...body };
                 demoCompanies.push(company);
                 return json(company);
             }
-            return json(demoCompanies);
+            return json(demoCompanies.map(c => {
+                const coUsers = users.filter(u => u.company_id === c.id).sort((a, b) => {
+                    const aAdmin = Boolean(a.is_company_admin);
+                    const bAdmin = Boolean(b.is_company_admin);
+                    if (aAdmin && !bAdmin) return -1;
+                    if (!aAdmin && bAdmin) return 1;
+                    return (a.username || '').localeCompare(b.username || '');
+                });
+                const coDevices = devices.filter(d => d.company_id === c.id);
+                return {
+                    ...c,
+                    user_count: coUsers.length,
+                    device_count: coDevices.length,
+                    users: coUsers.map(u => ({ id: u.id, username: u.username, email: u.email, is_company_admin: Boolean(u.is_company_admin) })),
+                    devices: coDevices.map(d => ({ id: d.id, name: d.name, imei: d.imei, license_plate: d.license_plate })),
+                };
+            }));
         }
-        if (apiPath.match(/^\/companies\/\d+\/users$/)) return json(users);
-        if (apiPath.match(/^\/companies\/\d+\/devices$/)) return json(devices);
+        if (apiPath.match(/^\/companies\/\d+\/users$/)) {
+            const id = Number(apiPath.split('/')[2]);
+            if (method === 'POST') {
+                const userId = Number(url.searchParams.get('user_id'));
+                const action = url.searchParams.get('action') || 'add';
+                const u = users.find(x => x.id === userId);
+                if (u) {
+                    if (action === 'add') {
+                        u.company_id = id;
+                    } else {
+                        u.company_id = null;
+                        u.is_company_admin = false;
+                    }
+                }
+                return json({ status: 'success' });
+            }
+            return json(users.filter(u => u.company_id === id).sort((a, b) => {
+                const aAdmin = Boolean(a.is_company_admin);
+                const bAdmin = Boolean(b.is_company_admin);
+                if (aAdmin && !bAdmin) return -1;
+                if (!aAdmin && bAdmin) return 1;
+                return (a.username || '').localeCompare(b.username || '');
+            }));
+        }
+        if (apiPath.match(/^\/companies\/\d+\/devices$/)) {
+            const id = Number(apiPath.split('/')[2]);
+            if (method === 'POST') {
+                const devId = Number(url.searchParams.get('device_id'));
+                const action = url.searchParams.get('action') || 'add';
+                const d = devices.find(x => x.id === devId);
+                if (d) {
+                    d.company_id = action === 'add' ? id : null;
+                }
+                return json({ status: 'success' });
+            }
+            return json(devices.filter(d => d.company_id === id));
+        }
         if (apiPath.match(/^\/companies\/\d+$/)) {
             const id = Number(apiPath.split('/')[2]);
             const idx = demoCompanies.findIndex(c => c.id === id);
             if (idx < 0) return json({ detail: 'Not found' }, 404);
             if (method === 'PUT') demoCompanies[idx] = { ...demoCompanies[idx], ...body };
-            return json(demoCompanies[idx]);
+            const c = demoCompanies[idx];
+            const coUsers = users.filter(u => u.company_id === c.id).sort((a, b) => {
+                const aAdmin = Boolean(a.is_company_admin);
+                const bAdmin = Boolean(b.is_company_admin);
+                if (aAdmin && !bAdmin) return -1;
+                if (!aAdmin && bAdmin) return 1;
+                return (a.username || '').localeCompare(b.username || '');
+            });
+            const coDevices = devices.filter(d => d.company_id === c.id);
+            return json({
+                ...c,
+                user_count: coUsers.length,
+                device_count: coDevices.length,
+                users: coUsers.map(u => ({ id: u.id, username: u.username, email: u.email, is_company_admin: Boolean(u.is_company_admin) })),
+                devices: coDevices.map(d => ({ id: d.id, name: d.name, imei: d.imei, license_plate: d.license_plate })),
+            });
         }
         if (apiPath === '/billing/plans') {
             if (method === 'POST') {

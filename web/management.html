@@ -571,8 +571,8 @@
                 <thead>
                     <tr>
                         <th data-sort="name" data-sort-dir="asc" onclick="sortCompanies('name')">Name</th>
-                        <th data-sort="users" style="text-align:center;" onclick="sortCompanies('users')">Users</th>
-                        <th data-sort="devices" style="text-align:center;" onclick="sortCompanies('devices')">Devices</th>
+                        <th data-sort="users" onclick="sortCompanies('users')">Users</th>
+                        <th data-sort="devices" onclick="sortCompanies('devices')">Devices</th>
                         <th data-sort="billing" onclick="sortCompanies('billing')">Billing Plan</th>
                         <th data-sort="created" onclick="sortCompanies('created')">Created</th>
                         <th style="width:180px;text-align:center;">Actions</th>
@@ -822,7 +822,6 @@
                 <button type="button" class="modal-tab active" data-tab="general" onclick="switchModalTab('general',this)"><i class="mdi mdi-clipboard-outline"></i> General</button>
                 <button type="button" class="modal-tab" data-tab="alerts"  onclick="switchModalTab('alerts',this)"><i class="mdi mdi-bell"></i> Alerts</button>
                 <button type="button" class="modal-tab" data-tab="rawdata" onclick="switchModalTab('rawdata',this)"><i class="mdi mdi-chart-bar"></i> Raw Data</button>
-                <button type="button" class="modal-tab" data-tab="users"     id="usersTabBtn"    onclick="switchModalTab('users',this)"    style="display:none;"><i class="mdi mdi-account-group"></i> Users</button>
                 <button type="button" class="modal-tab" data-tab="commands" id="commandsTabBtn" onclick="switchModalTab('commands',this)" style="display:none;"><i class="mdi mdi-antenna"></i> Commands</button>
             </div>
 
@@ -884,6 +883,27 @@
                                 <select class="form-input" id="deviceCompany" onchange="onDeviceCompanyChange()">
                                     <option value="">— None —</option>
                                 </select>
+                            </div>
+                            <div class="form-group" id="deviceAssignedUsersGroup" style="display:none;">
+                                <label class="form-label">Assigned Users</label>
+                                <div class="custom-multi-select" id="deviceUsersMultiSelect">
+                                    <button type="button" class="form-input multi-select-btn" id="deviceUsersSelectBtn" onclick="toggleDeviceUsersDropdown(event)">
+                                        <span id="deviceUsersSelectLabel" class="multi-select-label placeholder">Select users…</span>
+                                        <i class="mdi mdi-chevron-down multi-select-arrow"></i>
+                                    </button>
+                                    <div class="multi-select-dropdown" id="deviceUsersDropdown">
+                                        <div class="multi-select-search-wrap" id="deviceUsersSearchWrap">
+                                            <i class="mdi mdi-magnify"></i>
+                                            <input type="text" class="multi-select-search" id="deviceUsersSearch" placeholder="Search users…" oninput="filterDeviceUsersDropdown()" onclick="event.stopPropagation()">
+                                        </div>
+                                        <div class="multi-select-actions">
+                                            <button type="button" class="multi-select-action-btn" onclick="selectAllDeviceUsers(event)">Select all</button>
+                                            <button type="button" class="multi-select-action-btn" onclick="clearAllDeviceUsers(event)">Clear all</button>
+                                        </div>
+                                        <div class="multi-select-options" id="deviceUsersOptionsList"></div>
+                                    </div>
+                                </div>
+                                <div class="form-help">Regular users with access to this device. Admins have access automatically.</div>
                             </div>
                             <div class="form-group">
                                 <label class="form-label">
@@ -989,14 +1009,6 @@
                         <span class="page-info" id="pageInfo"></span>
                         <button type="button" class="btn btn-secondary" id="nextPageBtn" onclick="changeRawDataPage(1)">Next</button>
                     </div>
-                </div>
-
-                <!-- TAB: USERS -->
-                <div class="modal-tab-content" id="tab-users">
-                    <div class="form-group">
-                        <input type="text" class="form-input" id="usersTabSearch" placeholder="Search users&#8230;" oninput="filterUsersTab()">
-                    </div>
-                    <div id="usersAssignList" style="display:flex;flex-direction:column;gap:0.5rem;"></div>
                 </div>
 
                 <!-- TAB: COMMANDS -->

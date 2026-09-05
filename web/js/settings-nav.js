@@ -59,14 +59,13 @@
             box-shadow: 0 4px 20px rgba(15, 23, 42, 0.03);
         }
         .settings-nav-inner {
-            max-width: 1400px;
+            width: 100%;
             margin: 0 auto;
             padding: 0 2rem;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 0.75rem;
-            width: 100%;
         }
         @media (max-width: 768px) {
             .settings-nav-inner {

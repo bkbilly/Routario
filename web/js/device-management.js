@@ -42,8 +42,9 @@ let allUsersLoadFailed      = false;
 let notifyUsersResolvePromise = null;
 let notifyUserLoadPromises  = new Map();
 let notifyUserLoadFailedIds = new Set();
-let deviceAlertUsers        = [];
-let deviceAssignedUserIds   = new Set();
+let deviceAlertUsers             = [];
+let deviceAssignedUserIds        = new Set();
+let initialDeviceAssignedUserIds = new Set();
 
 // Companies & SIM cards
 let allCompanies            = [];
@@ -174,13 +175,14 @@ async function initDeviceSection() {
         btn.style.display = hasPermission('edit_devices') ? '' : 'none';
     });
 
-    const usersTabBtn = document.getElementById('usersTabBtn');
-    if (usersTabBtn) usersTabBtn.style.display = 'none';
 
     if (isAdmin) {
         document.querySelector('.devices-table')?.classList.add('show-company-col');
         document.getElementById('deviceCompanyGroup').style.display = '';
     }
+
+    const canManageSim = isAdmin || (isCompanyAdmin && hasPermission('manage_sim_cards'));
+    const canManageUsr = isAdmin || (isCompanyAdmin && hasPermission('manage_users'));
 
     await Promise.all([
         loadAlertTypes(),
@@ -188,9 +190,9 @@ async function initDeviceSection() {
         loadAvailableProtocols(),
         loadUserChannels(),
         loadDevices(),
-        loadSimCards(),
+        ...(canManageSim ? [loadSimCards()] : []),
         ...(isAdmin ? [loadAllCompanies()] : []),
-        loadAllUsers(),
+        ...(canManageUsr ? [loadAllUsers()] : []),
     ]);
     populateAddAlertDropdown();
 }
@@ -332,6 +334,14 @@ window.addEventListener('routario:notification-channels-updated', (evt) => {
     }
 });
 
+window.addEventListener('routario:users-updated', () => {
+    loadAllUsers(true);
+});
+
+window.addEventListener('routario:companies-updated', () => {
+    if (isAdmin) loadAllCompanies();
+});
+
 async function loadDevices() {
     try {
         const userId = localStorage.getItem('user_id') || 1;
@@ -468,7 +478,6 @@ function switchModalTab(tabId, btn) {
     if (commandTabsBar) commandTabsBar.style.display = tabId === 'commands' ? 'flex' : 'none';
     if (tabId !== 'commands') { clearInterval(commandHistoryInterval); commandHistoryInterval = null; }
     if (tabId === 'rawdata'  && editingDeviceId) loadRawDataForModal(editingDeviceId);
-    if (tabId === 'users'    && editingDeviceId) loadUsersForDevice(editingDeviceId);
     if (tabId === 'commands' && editingDeviceId) {
         currentCommandDeviceId = editingDeviceId;
         currentCommandDevice   = devices.find(d => d.id === editingDeviceId);
@@ -503,8 +512,6 @@ function openAddDeviceModal() {
     document.getElementById('submitIcon').className         = 'mdi mdi-plus';
     document.getElementById('deleteDeviceBtn').style.display = 'none';
     document.getElementById('submitBtn').style.display       = '';
-    const usersTabBtnAdd = document.getElementById('usersTabBtn');
-    if (usersTabBtnAdd) usersTabBtnAdd.style.display = 'none';
     const commandsTabBtnAdd = document.getElementById('commandsTabBtn');
     if (commandsTabBtnAdd) commandsTabBtnAdd.style.display = 'none';
     const rawDataTabBtnAdd = document.querySelector('.modal-tab[data-tab="rawdata"]');
@@ -531,6 +538,10 @@ function openAddDeviceModal() {
 
     if (isAdmin) populateDeviceCompanySelect();
     populateDeviceSimCardSelect(null, null, isAdmin ? null : (parseInt(localStorage.getItem('company_id')) || null));
+
+    deviceAssignedUserIds = new Set();
+    initialDeviceAssignedUserIds = new Set();
+    renderDeviceUsersMultiSelect();
 
     loadPublicSettings().then(() => {
         if (typeof renderAlertsTable === 'function') renderAlertsTable();
@@ -565,8 +576,6 @@ function openDeviceModal(deviceId, startTab = 'general') {
     document.getElementById('submitBtn').style.display       = canEditDevice ? '' : 'none';
     const exportBtnEdit = document.getElementById('exportDeviceProfileBtn');
     if (exportBtnEdit) exportBtnEdit.style.display = 'inline-flex';
-    const usersTabBtnEdit = document.getElementById('usersTabBtn');
-    if (usersTabBtnEdit) usersTabBtnEdit.style.display = ((isCompanyAdmin || (isAdmin && d.company_id)) && hasPermission('manage_users')) ? '' : 'none';
     const commandsTabBtnEdit = document.getElementById('commandsTabBtn');
     if (commandsTabBtnEdit) commandsTabBtnEdit.style.display = (d.supports_commands && hasPermission('send_commands')) ? '' : 'none';
     const rawDataTabBtnEdit = document.querySelector('.modal-tab[data-tab="rawdata"]');
@@ -574,6 +583,7 @@ function openDeviceModal(deviceId, startTab = 'general') {
     const alertsTabBtnEdit = document.querySelector('.modal-tab[data-tab="alerts"]');
     if (alertsTabBtnEdit) alertsTabBtnEdit.style.display = hasPermission('manage_alerts') ? '' : 'none';
     deviceAssignedUserIds = new Set();
+    initialDeviceAssignedUserIds = new Set();
 
     document.getElementById('deviceName').value          = d.name;
     document.getElementById('deviceImei').value          = d.imei;
@@ -582,6 +592,10 @@ function openDeviceModal(deviceId, startTab = 'general') {
     renderCustomAttributes(d.custom_attributes || {});
     if (isAdmin) populateDeviceCompanySelect(d.company_id);
     populateDeviceSimCardSelect(d.sim_card_id, d.id, d.company_id);
+    renderDeviceUsersMultiSelect();
+    if (d.id && hasAdminAccess && (isCompanyAdmin || d.company_id)) {
+        loadDeviceAssignedUsers(d.id);
+    }
     document.getElementById('currentOdometer').value     =
         d.state?.total_odometer != null ? toDisplayDist(d.state.total_odometer) : '0.0';
     document.getElementById('offlineTimeoutHours').value =
@@ -639,17 +653,19 @@ function openDeviceModal(deviceId, startTab = 'general') {
 
 function _snapshotDeviceModal() {
     return JSON.stringify({
-        name:         document.getElementById('deviceName')?.value,
-        imei:         document.getElementById('deviceImei')?.value,
-        protocol:     document.getElementById('deviceProtocol')?.value,
-        plate:        document.getElementById('licensePlate')?.value,
-        vehicleType:  document.getElementById('vehicleType')?.value,
-        odometer:     document.getElementById('currentOdometer')?.value,
-        offline:      document.getElementById('offlineTimeoutHours')?.value,
-        mergeGap:     document.getElementById('tripMergeGapMinutes')?.value,
-        simCard:      document.getElementById('deviceSimCard')?.value,
-        customAttrs:  readCustomAttributes(),
-        alertRows:    alertRows,
+        name:          document.getElementById('deviceName')?.value,
+        imei:          document.getElementById('deviceImei')?.value,
+        protocol:      document.getElementById('deviceProtocol')?.value,
+        plate:         document.getElementById('licensePlate')?.value,
+        vehicleType:   document.getElementById('vehicleType')?.value,
+        odometer:      document.getElementById('currentOdometer')?.value,
+        offline:       document.getElementById('offlineTimeoutHours')?.value,
+        mergeGap:      document.getElementById('tripMergeGapMinutes')?.value,
+        simCard:       document.getElementById('deviceSimCard')?.value,
+        company:       document.getElementById('deviceCompany')?.value,
+        assignedUsers: Array.from(deviceAssignedUserIds).sort(),
+        customAttrs:   readCustomAttributes(),
+        alertRows:     alertRows,
     });
 }
 
@@ -658,6 +674,7 @@ function closeDeviceModal(force = false) {
         if (!confirm('You have unsaved changes. Discard them?')) return;
     }
     _deviceModalSnapshot = null;
+    closeDeviceUsersDropdown();
     document.getElementById('deviceModal').classList.remove('active');
     clearInterval(commandHistoryInterval);
     commandHistoryInterval = null;
@@ -849,10 +866,23 @@ async function handleSubmit(event) {
         }
 
         if (response.ok) {
+            let targetDeviceId = editingDeviceId;
+            if (!targetDeviceId) {
+                try {
+                    const created = await response.clone().json();
+                    targetDeviceId = created?.id;
+                } catch (_) {}
+            }
+            if (targetDeviceId && hasAdminAccess && (isCompanyAdmin || payload.company_id)) {
+                await syncDeviceUserAssignments(targetDeviceId);
+            }
+
             showAlert(editingDeviceId ? 'Device updated' : 'Device added', 'success');
             _deviceModalSnapshot = null;
             closeDeviceModal(true);
             await loadDevices();
+            window.dispatchEvent(new CustomEvent('routario:devices-updated'));
+            window.dispatchEvent(new CustomEvent('routario:users-updated'));
         } else {
             const err = await response.json();
             showAlert(err.detail || 'Failed to save device', 'error');
@@ -878,6 +908,7 @@ async function deleteCurrentDevice() {
             showAlert('Device deleted', 'success');
             closeDeviceModal();
             await loadDevices();
+            window.dispatchEvent(new CustomEvent('routario:devices-updated'));
         } else {
             const err = await res.json();
             showAlert(err.detail || 'Failed to delete device', 'error');
@@ -1201,6 +1232,7 @@ function toggleAlertProfileMenu(event) {
 
 document.addEventListener('click', (event) => {
     if (!event.target.closest?.('.alert-profile-menu-wrap')) closeAlertProfileMenu();
+    if (!event.target.closest?.('#deviceUsersMultiSelect')) closeDeviceUsersDropdown();
 });
 window.addEventListener('resize', repositionAlertProfileMenu);
 window.addEventListener('scroll', repositionAlertProfileMenu, true);
@@ -2948,6 +2980,12 @@ function buildConfigFromAlertRows(existing = {}) {
 // ================================================================
 
 async function loadAllUsers(force = false) {
+    if (!isAdmin && !(isCompanyAdmin && hasPermission('manage_users'))) {
+        allUsers = [];
+        allUsersLoaded = true;
+        allUsersLoadFailed = false;
+        return allUsers;
+    }
     if (!force && allUsersLoaded) return allUsers;
     if (allUsersLoadPromise) return allUsersLoadPromise;
 
@@ -2959,6 +2997,7 @@ async function loadAllUsers(force = false) {
                 allUsers = Array.isArray(fetched) ? fetched : [];
                 allUsersLoaded = true;
                 allUsersLoadFailed = false;
+                renderDeviceUsersMultiSelect();
             } else {
                 allUsersLoadFailed = true;
             }
@@ -2977,6 +3016,10 @@ async function loadAllUsers(force = false) {
 async function loadNotifyUserById(userId) {
     const id = _toId(userId);
     if (id === null || _findUserById(id)) return _findUserById(id);
+    if (!isAdmin && !isCompanyAdmin) {
+        notifyUserLoadFailedIds.add(id);
+        return null;
+    }
     if (isCompanyAdmin || allUsersLoaded || notifyUserLoadFailedIds.has(id)) {
         notifyUserLoadFailedIds.add(id);
         return null;
@@ -3043,12 +3086,7 @@ async function loadAllCompanies() {
 
 function onDeviceCompanyChange() {
     const companyId = parseInt(document.getElementById('deviceCompany').value) || null;
-    const usersTabBtn = document.getElementById('usersTabBtn');
-    if (usersTabBtn) usersTabBtn.style.display = companyId ? '' : 'none';
-    if (!companyId && document.querySelector('.modal-tab.active')?.dataset.tab === 'users') {
-        switchModalTab('general');
-    }
-    renderUsersTab();
+    renderDeviceUsersMultiSelect();
     populateDeviceSimCardSelect(null, editingDeviceId, companyId);
 }
 
@@ -3060,6 +3098,10 @@ function populateDeviceCompanySelect(selectedId) {
 }
 
 async function loadSimCards() {
+    if (!isAdmin && !(isCompanyAdmin && hasPermission('manage_sim_cards'))) {
+        allSimCards = [];
+        return;
+    }
     try {
         const res = await apiFetch(`${API_BASE}/sim-cards`);
         if (res.ok) {
@@ -3094,76 +3136,260 @@ function populateDeviceSimCardSelect(selectedSimId = null, currentDeviceId = nul
         }).join('');
 }
 
-async function loadUsersForDevice(deviceId) {
-    try {
-        const res = await apiFetch(`${API_BASE}/devices/${deviceId}/users`);
-        deviceAssignedUserIds = res.ok
-            ? new Set((await res.json()).map(u => u.id))
-            : new Set();
-    } catch (e) { deviceAssignedUserIds = new Set(); }
-    renderUsersTab();
+// ================================================================
+//  ASSIGNED USERS (GENERAL TAB MULTI-SELECT)
+// ================================================================
+
+function _getCurrentDeviceCompanyId() {
+    if (isCompanyAdmin) {
+        return parseInt(localStorage.getItem('company_id'), 10) || null;
+    }
+    if (isAdmin) {
+        const compVal = document.getElementById('deviceCompany')?.value;
+        return compVal ? parseInt(compVal, 10) : null;
+    }
+    if (editingDeviceId) {
+        const d = devices.find(x => _sameId(x.id, editingDeviceId));
+        if (d?.company_id) return parseInt(d.company_id, 10);
+    }
+    return parseInt(localStorage.getItem('company_id'), 10) || null;
 }
 
-function filterUsersTab() { renderUsersTab(); }
+function renderDeviceUsersMultiSelect() {
+    const group = document.getElementById('deviceAssignedUsersGroup');
+    if (!group) return;
 
-function renderUsersTab() {
-    const list = document.getElementById('usersAssignList');
-    if (!list) return;
-    const query = (document.getElementById('usersTabSearch')?.value || '').toLowerCase().trim();
-    const deviceObj = editingDeviceId ? devices.find(d => _sameId(d.id, editingDeviceId)) : null;
-    const devCompanyId = deviceObj?.company_id || (parseInt(document.getElementById('deviceCompany')?.value) || null);
-    const targetCompanyId = isCompanyAdmin
-        ? (parseInt(localStorage.getItem('company_id')) || devCompanyId)
-        : devCompanyId;
+    const companyId = _getCurrentDeviceCompanyId();
+    const canManageUsers = hasAdminAccess;
 
-    const filtered = allUsers.filter(u =>
-        (!targetCompanyId || _sameId(u.company_id, targetCompanyId) || u.is_admin) &&
-        (!query ||
-            (u.username || '').toLowerCase().includes(query) ||
-            (u.email    || '').toLowerCase().includes(query)
-        )
-    );
-    if (!filtered.length) {
-        list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No users found.</div>';
+    if (!canManageUsers || !companyId) {
+        group.style.display = 'none';
+        closeDeviceUsersDropdown();
         return;
     }
-    list.innerHTML = '';
-    filtered.forEach(u => {
-        const assigned = deviceAssignedUserIds.has(u.id);
-        const div = document.createElement('div');
-        div.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.8rem;background:var(--bg-tertiary);border-radius:8px;';
-        div.innerHTML = `
-            <div>
-                <div style="font-weight:500;">${_esc(u.username)}</div>
-                <div style="font-size:0.8rem;color:var(--text-muted);">${_esc(u.email || '')}</div>
-            </div>
-            <label class="toggle-switch">
-                <input type="checkbox" ${assigned ? 'checked' : ''} onchange="toggleUserAssignment(${u.id}, this.checked)">
-                <span class="toggle-slider"></span>
-            </label>`;
-        list.appendChild(div);
-    });
+
+    group.style.display = '';
+
+    const eligibleUsers = allUsers.filter(u =>
+        !u.is_admin &&
+        !u.is_company_admin &&
+        _sameId(u.company_id, companyId)
+    );
+
+    const eligibleIdSet = new Set(eligibleUsers.map(u => u.id));
+    for (const uid of Array.from(deviceAssignedUserIds)) {
+        if (!eligibleIdSet.has(uid)) {
+            deviceAssignedUserIds.delete(uid);
+        }
+    }
+
+    updateDeviceUsersSelectLabel(eligibleUsers);
+    renderDeviceUsersOptionsList(eligibleUsers);
 }
 
-async function toggleUserAssignment(userId, assign) {
-    const action = assign ? 'add' : 'remove';
-    try {
-        const res = await apiFetch(
-            `${API_BASE}/devices/${editingDeviceId}/users?user_id=${userId}&action=${action}`,
-            { method: 'POST' }
+function updateDeviceUsersSelectLabel(eligibleUsers) {
+    const labelEl = document.getElementById('deviceUsersSelectLabel');
+    if (!labelEl) return;
+
+    if (!eligibleUsers) {
+        const companyId = _getCurrentDeviceCompanyId();
+        eligibleUsers = allUsers.filter(u =>
+            !u.is_admin &&
+            !u.is_company_admin &&
+            _sameId(u.company_id, companyId)
         );
-        if (res.ok) {
-            if (assign) deviceAssignedUserIds.add(userId);
-            else deviceAssignedUserIds.delete(userId);
-        } else {
-            showAlert('Failed to update user assignment', 'error');
-            renderUsersTab();
-        }
-    } catch (e) {
-        showAlert('Error updating user assignment', 'error');
-        renderUsersTab();
+    }
+
+    const count = deviceAssignedUserIds.size;
+    if (count === 0) {
+        labelEl.textContent = 'Select users…';
+        labelEl.classList.add('placeholder');
+    } else if (count === 1) {
+        const singleId = Array.from(deviceAssignedUserIds)[0];
+        const u = eligibleUsers.find(x => _sameId(x.id, singleId)) || allUsers.find(x => _sameId(x.id, singleId));
+        labelEl.textContent = u?.username || '1 user selected';
+        labelEl.classList.remove('placeholder');
+    } else if (count === eligibleUsers.length && eligibleUsers.length > 1) {
+        labelEl.textContent = `All users selected (${count})`;
+        labelEl.classList.remove('placeholder');
+    } else {
+        labelEl.textContent = `${count} users selected`;
+        labelEl.classList.remove('placeholder');
     }
 }
+
+function renderDeviceUsersOptionsList(eligibleUsers) {
+    const optionsContainer = document.getElementById('deviceUsersOptionsList');
+    if (!optionsContainer) return;
+
+    if (!eligibleUsers) {
+        const companyId = _getCurrentDeviceCompanyId();
+        eligibleUsers = allUsers.filter(u =>
+            !u.is_admin &&
+            !u.is_company_admin &&
+            _sameId(u.company_id, companyId)
+        );
+    }
+
+    if (!eligibleUsers.length) {
+        optionsContainer.innerHTML = '<div class="multi-select-empty">No regular users in this company</div>';
+        return;
+    }
+
+    const query = (document.getElementById('deviceUsersSearch')?.value || '').toLowerCase().trim();
+    const filtered = query
+        ? eligibleUsers.filter(u =>
+            (u.username || '').toLowerCase().includes(query) ||
+            (u.email || '').toLowerCase().includes(query)
+          )
+        : eligibleUsers;
+
+    if (!filtered.length) {
+        optionsContainer.innerHTML = '<div class="multi-select-empty">No matching users</div>';
+        return;
+    }
+
+    const sorted = [...filtered].sort((a, b) => {
+        const aSel = deviceAssignedUserIds.has(a.id);
+        const bSel = deviceAssignedUserIds.has(b.id);
+        if (aSel && !bSel) return -1;
+        if (!aSel && bSel) return 1;
+        return (a.username || '').localeCompare(b.username || '');
+    });
+
+    optionsContainer.innerHTML = sorted.map(u => {
+        const checked = deviceAssignedUserIds.has(u.id);
+        return `
+            <label class="multi-select-opt" onclick="event.stopPropagation()">
+                <input type="checkbox" value="${u.id}" ${checked ? 'checked' : ''} onchange="toggleDeviceUserSelection(${u.id}, this.checked)">
+                <span class="multi-select-opt-text">
+                    <span class="multi-select-opt-name">${_esc(u.username)}</span>
+                    ${u.email ? `<span class="multi-select-opt-email">${_esc(u.email)}</span>` : ''}
+                </span>
+            </label>
+        `;
+    }).join('');
+}
+
+function toggleDeviceUsersDropdown(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    const wrap = document.getElementById('deviceUsersMultiSelect');
+    if (!wrap) return;
+    const isOpen = wrap.classList.contains('open');
+    if (isOpen) {
+        closeDeviceUsersDropdown();
+    } else {
+        openDeviceUsersDropdown();
+    }
+}
+
+function openDeviceUsersDropdown() {
+    const wrap = document.getElementById('deviceUsersMultiSelect');
+    if (!wrap) return;
+    wrap.classList.add('open');
+    const searchInput = document.getElementById('deviceUsersSearch');
+    if (searchInput) {
+        searchInput.value = '';
+        renderDeviceUsersOptionsList();
+    }
+}
+
+function closeDeviceUsersDropdown() {
+    const wrap = document.getElementById('deviceUsersMultiSelect');
+    if (wrap) wrap.classList.remove('open');
+}
+
+function filterDeviceUsersDropdown() {
+    renderDeviceUsersOptionsList();
+}
+
+function selectAllDeviceUsers(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    const companyId = _getCurrentDeviceCompanyId();
+    const eligibleUsers = allUsers.filter(u =>
+        !u.is_admin &&
+        !u.is_company_admin &&
+        _sameId(u.company_id, companyId)
+    );
+    eligibleUsers.forEach(u => deviceAssignedUserIds.add(u.id));
+    updateDeviceUsersSelectLabel(eligibleUsers);
+    renderDeviceUsersOptionsList(eligibleUsers);
+}
+
+function clearAllDeviceUsers(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    deviceAssignedUserIds.clear();
+    updateDeviceUsersSelectLabel();
+    renderDeviceUsersOptionsList();
+}
+
+function toggleDeviceUserSelection(userId, checked) {
+    if (checked) {
+        deviceAssignedUserIds.add(userId);
+    } else {
+        deviceAssignedUserIds.delete(userId);
+    }
+    updateDeviceUsersSelectLabel();
+}
+
+async function loadDeviceAssignedUsers(deviceId) {
+    try {
+        const res = await apiFetch(`${API_BASE}/devices/${deviceId}/users`);
+        if (res.ok) {
+            const users = await res.json();
+            deviceAssignedUserIds = new Set(users.map(u => u.id));
+            initialDeviceAssignedUserIds = new Set(deviceAssignedUserIds);
+        } else {
+            deviceAssignedUserIds = new Set();
+            initialDeviceAssignedUserIds = new Set();
+        }
+    } catch (e) {
+        deviceAssignedUserIds = new Set();
+        initialDeviceAssignedUserIds = new Set();
+    }
+    renderDeviceUsersMultiSelect();
+    if (_deviceModalSnapshot) {
+        _deviceModalSnapshot = _snapshotDeviceModal();
+    }
+}
+
+async function syncDeviceUserAssignments(deviceId) {
+    const toAdd = [];
+    const toRemove = [];
+
+    deviceAssignedUserIds.forEach(userId => {
+        if (!initialDeviceAssignedUserIds.has(userId)) {
+            toAdd.push(userId);
+        }
+    });
+
+    initialDeviceAssignedUserIds.forEach(userId => {
+        if (!deviceAssignedUserIds.has(userId)) {
+            toRemove.push(userId);
+        }
+    });
+
+    const requests = [
+        ...toAdd.map(uid => apiFetch(`${API_BASE}/devices/${deviceId}/users?user_id=${uid}&action=add`, { method: 'POST' })),
+        ...toRemove.map(uid => apiFetch(`${API_BASE}/devices/${deviceId}/users?user_id=${uid}&action=remove`, { method: 'POST' })),
+    ];
+
+    if (requests.length > 0) {
+        await Promise.allSettled(requests);
+    }
+}
+
+const loadUsersForDevice = loadDeviceAssignedUsers;
+
 
 // ================================================================
 //  RAW DATA TAB

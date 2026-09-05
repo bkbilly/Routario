@@ -50,7 +50,7 @@ const _REPORT_TABS = [
 
 const _IS_ADMIN         = localStorage.getItem('is_admin') === 'true';
 const _IS_COMPANY_ADMIN = localStorage.getItem('is_company_admin') === 'true';
-const _CAN_SEE_USERS    = _IS_ADMIN || _IS_COMPANY_ADMIN;
+const _CAN_SEE_USERS    = _IS_ADMIN || (_IS_COMPANY_ADMIN && (typeof hasPermission === 'function' ? hasPermission('manage_users') : false));
 const _CAN_SEE_LOGS     = _IS_ADMIN;
 
 function isDateFormatDefault() {
@@ -268,6 +268,7 @@ async function _loadDevices() {
 }
 
 async function _loadUsers() {
+    if (!_CAN_SEE_USERS) return;
     try {
         const res = await apiFetch(`${API_BASE}/users`);
         if (!res.ok) return;

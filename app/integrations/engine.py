@@ -35,7 +35,7 @@ from typing import Callable, Coroutine, Any
 from core.database import get_db
 from core.runtime_health import mark_task_error, mark_task_success
 from sqlalchemy import select, update
-from models.models import Device, user_device_association, PositionRecord
+from models.models import Device, PositionRecord
 from integrations.integration_model import IntegrationAccount
 
 from integrations.registry import IntegrationRegistry
@@ -127,8 +127,13 @@ async def _init_last_seen(db) -> None:
 
         for device in all_devices:
             intg = (device.config or {}).get("integration") or {}
-            provider_id = intg.get("provider", "")
+            provider_id = intg.get("provider", "") or device.protocol
             remote_id   = intg.get("remote_id", "")
+
+            if not remote_id:
+                provider_cls = IntegrationRegistry.get(provider_id)
+                if provider_cls and not getattr(provider_cls, "SUPPORTS_BROWSE", True):
+                    remote_id = device.imei
 
             if not provider_id or not remote_id:
                 continue
@@ -190,14 +195,25 @@ async def _run_poll_cycle(
     groups: dict[tuple, list[dict]] = {}
 
     async with db.get_session() as session:
-        result = await session.execute(
+        dev_result = await session.execute(
             select(Device).where(Device.is_active == True)
         )
-        all_devices = result.scalars().all()
+        all_devices = dev_result.scalars().all()
+
+        acc_result = await session.execute(
+            select(IntegrationAccount).where(IntegrationAccount.is_active == True)
+        )
+        active_accounts = acc_result.scalars().all()
+
+        accounts_by_key: dict[tuple[str, str], list[IntegrationAccount]] = {}
+        accounts_by_provider: dict[str, list[IntegrationAccount]] = {}
+        for acc in active_accounts:
+            accounts_by_key.setdefault((acc.provider_id, acc.account_label), []).append(acc)
+            accounts_by_provider.setdefault(acc.provider_id, []).append(acc)
 
         for device in all_devices:
             intg = (device.config or {}).get("integration") or {}
-            provider_id   = intg.get("provider", "")
+            provider_id   = intg.get("provider", "") or device.protocol
             account_label = intg.get("account_label", "")
             remote_id     = intg.get("remote_id", "")
 
@@ -216,21 +232,21 @@ async def _run_poll_cycle(
             if not _is_due(device.imei):
                 continue
 
-            # Find the owning user_id via the association table
-            ua = await session.execute(
-                select(user_device_association).where(
-                    user_device_association.c.device_id == device.id
-                )
-            )
-            row = ua.first()
-            if not row:
-                logger.warning(
-                    f"Integration engine: device {device.id} has no associated user, skipping"
-                )
-                continue
-            user_id = row.user_id
+            candidate_accounts = (
+                accounts_by_key.get((provider_id, account_label))
+                if account_label
+                else accounts_by_provider.get(provider_id)
+            ) or []
 
-            key = (user_id, provider_id, account_label)
+            matched_account = candidate_accounts[0] if candidate_accounts else None
+            if not matched_account:
+                logger.warning(
+                    f"Integration engine: device {device.id} ({device.imei}) has no active IntegrationAccount for {provider_id}/{account_label}, skipping"
+                )
+                _reschedule_group([{"imei": device.imei}], provider_id, ignition=None)
+                continue
+
+            key = (matched_account.id, matched_account.user_id, provider_id, matched_account.account_label)
             groups.setdefault(key, []).append({
                 "remote_id": remote_id,
                 "imei":      device.imei,
@@ -244,19 +260,16 @@ async def _run_poll_cycle(
     # ── Authenticate and fetch for each group ─────────────────────────────────
     # Each DB operation uses its own short-lived session so the connection is
     # never held across network I/O (authenticate / fetch_positions).
-    for (user_id, provider_id, account_label), devices in groups.items():
+    for (account_id, user_id, provider_id, account_label), devices in groups.items():
 
         # ── Load account (short session, released before any network call) ─────
-        account_id      = None
         credentials     = None
         account_state   = {}
         async with db.get_session() as session:
             result = await session.execute(
                 select(IntegrationAccount).where(
-                    IntegrationAccount.user_id       == user_id,
-                    IntegrationAccount.provider_id   == provider_id,
-                    IntegrationAccount.account_label == account_label,
-                    IntegrationAccount.is_active     == True,
+                    IntegrationAccount.id        == account_id,
+                    IntegrationAccount.is_active == True,
                 )
             )
             account = result.scalar_one_or_none()
@@ -266,7 +279,6 @@ async def _run_poll_cycle(
                 )
                 _reschedule_group(devices, provider_id, ignition=None)
                 continue
-            account_id    = account.id
             credentials   = account.get_decrypted_credentials()
             raw_state = account.state or {}
             if isinstance(raw_state, str):

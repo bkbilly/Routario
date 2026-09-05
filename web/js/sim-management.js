@@ -1,6 +1,9 @@
-'use strict';
-
 const _simIsAdmin = localStorage.getItem('is_admin') === 'true';
+const _simIsCompanyAdmin = localStorage.getItem('is_company_admin') === 'true';
+
+function _simCanManage() {
+    return _simIsAdmin || (_simIsCompanyAdmin && hasPermission('manage_sim_cards'));
+}
 
 let _simCards           = [];
 let _simProviders       = [];
@@ -17,7 +20,7 @@ async function initSimCardsSection() {
         return;
     }
     _simSectionInitialized = true;
-    if (!hasPermission('manage_sim_cards')) return;
+    if (!_simCanManage()) return;
 
     await Promise.all([
         _loadSimProviders(),
@@ -66,6 +69,11 @@ async function _loadSimDevices() {
 }
 
 async function _loadSimCards() {
+    if (!_simCanManage()) {
+        _simCards = [];
+        _renderSimTable();
+        return;
+    }
     const tbody = document.getElementById('simCardsTableBody');
     if (tbody && !_simCards.length) {
         tbody.innerHTML = `<tr><td colspan="${_simIsAdmin ? 9 : 8}" style="text-align:center;padding:3rem;color:var(--text-muted);"><div class="loading" style="margin:0 auto 1rem;"></div>Loading SIM cards…</td></tr>`;

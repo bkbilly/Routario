@@ -137,6 +137,7 @@ function handleLogout() {
         : '/login.html';
     ['auth_token','user_id','username','is_admin','units','currency','theme','is_company_admin','company_id',
      'permissions',
+     'impersonation_stack',
      'impersonating_admin_token','impersonating_admin_user_id','impersonating_admin_username']
         .forEach(k => localStorage.removeItem(k));
     applyTheme('dark');

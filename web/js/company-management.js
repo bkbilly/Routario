@@ -29,14 +29,30 @@ function formatDate(str) {
     return `<div style="font-weight:600;">${dateStr}</div><div style="font-size:0.75rem;color:var(--text-muted);">${timeStr}</div>`;
 }
 
-let _cmpSectionInitialized = false;
-
 async function initCompanySection() {
-    if (_cmpSectionInitialized) return;
-    _cmpSectionInitialized = true;
     if (localStorage.getItem('is_admin') !== 'true') return;
     await Promise.all([cmpLoadCompanies(), cmpLoadAllUsers(), cmpLoadAllDevices(), cmpLoadCompanyBillingPlans()]);
 }
+
+window.addEventListener('routario:users-updated', () => {
+    if (localStorage.getItem('is_admin') === 'true') {
+        cmpLoadCompanies();
+        cmpLoadAllUsers();
+    }
+});
+
+window.addEventListener('routario:devices-updated', () => {
+    if (localStorage.getItem('is_admin') === 'true') {
+        cmpLoadCompanies();
+        cmpLoadAllDevices();
+    }
+});
+
+window.addEventListener('routario:companies-updated', () => {
+    if (localStorage.getItem('is_admin') === 'true') {
+        cmpLoadCompanies();
+    }
+});
 
 // ── Loaders ───────────────────────────────────────────────────────
 
@@ -53,17 +69,27 @@ async function cmpLoadCompanies() {
     }
 }
 
+const MAX_VISIBLE_CHIPS = 3;
+let cmpExpandedUsers   = new Set();
+let cmpExpandedDevices = new Set();
+
 async function cmpLoadAllUsers() {
     try {
         const res = await apiFetch(`${API_BASE}/users`);
-        if (res.ok) cmpAllUsers = (await res.json()).filter(u => !u.is_admin);
+        if (res.ok) {
+            cmpAllUsers = await res.json();
+            filterCompanies();
+        }
     } catch (e) { console.error(e); }
 }
 
 async function cmpLoadAllDevices() {
     try {
         const res = await apiFetch(`${API_BASE}/devices/all`);
-        if (res.ok) cmpAllDevices = await res.json();
+        if (res.ok) {
+            cmpAllDevices = await res.json();
+            filterCompanies();
+        }
     } catch (e) { console.error(e); }
 }
 
@@ -76,6 +102,115 @@ async function cmpLoadCompanyBillingPlans() {
             filterCompanies();
         }
     } catch (e) { console.error(e); }
+}
+
+function getCompanyUsers(company) {
+    let list = [];
+    if (Array.isArray(company.users) && company.users.length) {
+        list = [...company.users];
+    } else {
+        const cId = Number(company.id);
+        list = cmpAllUsers.filter(u => Number(u.company_id) === cId);
+    }
+    return list.sort((a, b) => {
+        const aAdmin = Boolean(a.is_company_admin || a.is_admin);
+        const bAdmin = Boolean(b.is_company_admin || b.is_admin);
+        if (aAdmin && !bAdmin) return -1;
+        if (!aAdmin && bAdmin) return 1;
+        return (a.username || '').localeCompare(b.username || '');
+    });
+}
+
+function getCompanyDevices(company) {
+    let list = [];
+    if (Array.isArray(company.devices) && company.devices.length) {
+        list = [...company.devices];
+    } else {
+        const cId = Number(company.id);
+        list = cmpAllDevices.filter(d => Number(d.company_id) === cId);
+    }
+    return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+}
+
+function toggleCompanyChips(event, companyId, type) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    const set = type === 'users' ? cmpExpandedUsers : cmpExpandedDevices;
+    const cid = Number(companyId);
+    if (set.has(cid)) {
+        set.delete(cid);
+    } else {
+        set.add(cid);
+    }
+    filterCompanies();
+}
+
+function renderUserChips(company) {
+    const users = getCompanyUsers(company);
+    if (!users || !users.length) {
+        return '<span class="cmp-empty-text">No users</span>';
+    }
+
+    const isExpanded = cmpExpandedUsers.has(Number(company.id));
+    const showAll = isExpanded || users.length <= MAX_VISIBLE_CHIPS;
+    const visibleUsers = showAll ? users : users.slice(0, MAX_VISIBLE_CHIPS);
+    const hiddenCount = users.length - MAX_VISIBLE_CHIPS;
+
+    const chipsHtml = visibleUsers.map(u => {
+        const isAdmin = Boolean(u.is_company_admin);
+        const iconClass = isAdmin ? 'mdi mdi-shield-account' : 'mdi mdi-account';
+        const tooltip = `${_esc(u.username)}${u.email ? ' · ' + _esc(u.email) : ''}${isAdmin ? ' (Company Admin)' : ''}`;
+        return `<span class="cmp-chip${isAdmin ? ' user-admin' : ''}" title="${tooltip}">
+            <i class="${iconClass}"></i>
+            <span class="cmp-chip-text">${_esc(u.username)}</span>
+        </span>`;
+    }).join('');
+
+    let toggleBtn = '';
+    if (users.length > MAX_VISIBLE_CHIPS) {
+        if (!isExpanded) {
+            const remainingNames = users.slice(MAX_VISIBLE_CHIPS).map(u => u.username).join(', ');
+            toggleBtn = `<button type="button" class="cmp-more-btn" onclick="toggleCompanyChips(event, ${company.id}, 'users')" title="${_esc(remainingNames)}">+${hiddenCount} more</button>`;
+        } else {
+            toggleBtn = `<button type="button" class="cmp-less-btn" onclick="toggleCompanyChips(event, ${company.id}, 'users')">Show less</button>`;
+        }
+    }
+
+    return `<div class="cmp-entity-list${isExpanded ? ' expanded' : ''}">${chipsHtml}${toggleBtn}</div>`;
+}
+
+function renderDeviceChips(company) {
+    const devices = getCompanyDevices(company);
+    if (!devices || !devices.length) {
+        return '<span class="cmp-empty-text">No devices</span>';
+    }
+
+    const isExpanded = cmpExpandedDevices.has(Number(company.id));
+    const showAll = isExpanded || devices.length <= MAX_VISIBLE_CHIPS;
+    const visibleDevices = showAll ? devices : devices.slice(0, MAX_VISIBLE_CHIPS);
+    const hiddenCount = devices.length - MAX_VISIBLE_CHIPS;
+
+    const chipsHtml = visibleDevices.map(d => {
+        const tooltip = `${_esc(d.name)}${d.license_plate ? ' [' + _esc(d.license_plate) + ']' : ''}${d.imei ? ' · IMEI: ' + _esc(d.imei) : ''}`;
+        return `<span class="cmp-chip" title="${tooltip}">
+            <i class="mdi mdi-car"></i>
+            <span class="cmp-chip-text">${_esc(d.name)}</span>
+        </span>`;
+    }).join('');
+
+    let toggleBtn = '';
+    if (devices.length > MAX_VISIBLE_CHIPS) {
+        if (!isExpanded) {
+            const remainingNames = devices.slice(MAX_VISIBLE_CHIPS).map(d => d.name).join(', ');
+            toggleBtn = `<button type="button" class="cmp-more-btn" onclick="toggleCompanyChips(event, ${company.id}, 'devices')" title="${_esc(remainingNames)}">+${hiddenCount} more</button>`;
+        } else {
+            toggleBtn = `<button type="button" class="cmp-less-btn" onclick="toggleCompanyChips(event, ${company.id}, 'devices')">Show less</button>`;
+        }
+    }
+
+    return `<div class="cmp-entity-list${isExpanded ? ' expanded' : ''}">${chipsHtml}${toggleBtn}</div>`;
 }
 
 // ── Table ─────────────────────────────────────────────────────────
@@ -96,8 +231,8 @@ function updateCompanySortHeaders() {
 function _companySortValue(c, col) {
     switch (col) {
         case 'name':    return (c.name || '').toLowerCase();
-        case 'users':   return c.user_count ?? -Infinity;
-        case 'devices': return c.device_count ?? -Infinity;
+        case 'users':   return getCompanyUsers(c).length || (c.user_count ?? -Infinity);
+        case 'devices': return getCompanyDevices(c).length || (c.device_count ?? -Infinity);
         case 'billing': return (_companyBillingPlanName(c) || '').toLowerCase();
         case 'created': return c.created_at ? new Date(c.created_at).getTime() : -Infinity;
         default:        return '';
@@ -123,8 +258,18 @@ function renderCompanyBillingPlanOptions(selectedPlanId = '') {
 }
 
 function filterCompanies() {
-    const q = (document.getElementById('companySearch').value || '').toLowerCase().trim();
-    const filtered = q ? cmpAllCompanies.filter(c => c.name.toLowerCase().includes(q)) : cmpAllCompanies;
+    const q = (document.getElementById('companySearch')?.value || '').toLowerCase().trim();
+    const filtered = q ? cmpAllCompanies.filter(c => {
+        if ((c.name || '').toLowerCase().includes(q)) return true;
+        if ((c.app_name || '').toLowerCase().includes(q)) return true;
+        if ((c.login_slug || '').toLowerCase().includes(q)) return true;
+        const users = getCompanyUsers(c);
+        if (users.some(u => (u.username || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q))) return true;
+        const devices = getCompanyDevices(c);
+        if (devices.some(d => (d.name || '').toLowerCase().includes(q) || (d.imei || '').toLowerCase().includes(q) || (d.license_plate || '').toLowerCase().includes(q))) return true;
+        return false;
+    }) : cmpAllCompanies;
+
     const sorted = [...filtered].sort((a, b) => {
         const av = _companySortValue(a, companySortCol);
         const bv = _companySortValue(b, companySortCol);
@@ -147,11 +292,11 @@ function renderTable(list) {
 
     tbody.innerHTML = list.map(c => `
         <tr class="device-row" ondblclick="openEditModal(${c.id})" style="cursor:pointer;">
-            <td><span class="device-row-name">${_esc(c.name)}</span></td>
-            <td style="text-align:center;font-family:var(--font-mono);">${c.user_count ?? 0}</td>
-            <td style="text-align:center;font-family:var(--font-mono);">${c.device_count ?? 0}</td>
-            <td>${c.billing_plan_id ? `<span class="proto-badge">${_esc(_companyBillingPlanName(c) || 'Assigned')}</span>` : '<span style="color:var(--text-muted);">No active plan</span>'}</td>
-            <td style="font-size:0.85rem;color:var(--text-secondary);">${formatDate(c.created_at)}</td>
+            <td style="font-weight:600;min-width:140px;"><span class="device-row-name">${_esc(c.name)}</span></td>
+            <td style="min-width:180px;">${renderUserChips(c)}</td>
+            <td style="min-width:180px;">${renderDeviceChips(c)}</td>
+            <td style="white-space:nowrap;">${c.billing_plan_id ? `<span class="proto-badge">${_esc(_companyBillingPlanName(c) || 'Assigned')}</span>` : '<span style="color:var(--text-muted);">No active plan</span>'}</td>
+            <td style="font-size:0.85rem;color:var(--text-secondary);white-space:nowrap;">${formatDate(c.created_at)}</td>
             <td style="text-align:right;white-space:nowrap;">
                 <button class="btn btn-secondary tbl-btn" onclick="openEditModal(${c.id})"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Edit</span></button>
             </td>
@@ -261,6 +406,7 @@ async function saveCompany() {
             if (saved?.id === parseInt(localStorage.getItem('company_id') || '0', 10)) applyCompanyBranding(saved.id);
             closeCompanyModal();
             await cmpLoadCompanies();
+            window.dispatchEvent(new CustomEvent('routario:companies-updated'));
         } else {
             const err = await res.json();
             showAlert(err.detail || 'Failed to save', 'error');
@@ -349,6 +495,7 @@ async function deleteCurrentCompany() {
             showAlert('Company deleted', 'success');
             closeCompanyModal();
             await cmpLoadCompanies();
+            window.dispatchEvent(new CustomEvent('routario:companies-updated'));
         } else {
             const err = await res.json();
             showAlert(err.detail || 'Failed to delete', 'error');
@@ -363,6 +510,7 @@ async function confirmDelete(companyId, name) {
         if (res.ok) {
             showAlert('Company deleted', 'success');
             await cmpLoadCompanies();
+            window.dispatchEvent(new CustomEvent('routario:companies-updated'));
         } else {
             const err = await res.json();
             showAlert(err.detail || 'Failed to delete', 'error');
@@ -378,16 +526,29 @@ function renderUserTab() {
     const list  = document.getElementById('userTabList');
     const query = (document.getElementById('userTabSearch')?.value || '').toLowerCase().trim();
     const filtered = cmpAllUsers.filter(u =>
-        !query ||
-        (u.username || '').toLowerCase().includes(query) ||
-        (u.email    || '').toLowerCase().includes(query)
+        !u.is_admin && (
+            !query ||
+            (u.username || '').toLowerCase().includes(query) ||
+            (u.email    || '').toLowerCase().includes(query)
+        )
     );
     if (!filtered.length) {
         list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No users found.</div>';
         return;
     }
+    const sorted = [...filtered].sort((a, b) => {
+        const aIn = companyUserIds.has(a.id);
+        const bIn = companyUserIds.has(b.id);
+        if (aIn && !bIn) return -1;
+        if (!aIn && bIn) return 1;
+        const aAdmin = companyAdminUserIds.has(a.id);
+        const bAdmin = companyAdminUserIds.has(b.id);
+        if (aAdmin && !bAdmin) return -1;
+        if (!aAdmin && bAdmin) return 1;
+        return (a.username || '').localeCompare(b.username || '');
+    });
     list.innerHTML = '';
-    filtered.forEach(u => {
+    sorted.forEach(u => {
         const inCompany  = companyUserIds.has(u.id);
         const isCoAdmin  = companyAdminUserIds.has(u.id);
         const div = document.createElement('div');
@@ -425,7 +586,11 @@ async function toggleUserMembership(userId, add) {
         if (res.ok) {
             if (add) companyUserIds.add(userId);
             else { companyUserIds.delete(userId); companyAdminUserIds.delete(userId); }
+            const targetUser = cmpAllUsers.find(u => u.id === userId);
+            if (targetUser) targetUser.company_id = add ? editingCompanyId : null;
             renderUserTab();
+            await Promise.all([cmpLoadCompanies(), cmpLoadAllUsers()]);
+            window.dispatchEvent(new CustomEvent('routario:users-updated'));
         } else {
             showAlert('Failed to update membership', 'error');
             renderUserTab();
@@ -443,7 +608,11 @@ async function toggleCompanyAdmin(userId, makeAdmin) {
         if (res.ok) {
             if (makeAdmin) companyAdminUserIds.add(userId);
             else companyAdminUserIds.delete(userId);
+            const targetUser = cmpAllUsers.find(u => u.id === userId);
+            if (targetUser) targetUser.is_company_admin = makeAdmin;
             renderUserTab();
+            await Promise.all([cmpLoadCompanies(), cmpLoadAllUsers()]);
+            window.dispatchEvent(new CustomEvent('routario:users-updated'));
         } else {
             showAlert('Failed to update admin status', 'error');
             renderUserTab();
@@ -497,7 +666,11 @@ async function toggleDeviceMembership(deviceId, add) {
         if (res.ok) {
             if (add) companyDeviceIds.add(deviceId);
             else companyDeviceIds.delete(deviceId);
+            const targetDev = cmpAllDevices.find(d => d.id === deviceId);
+            if (targetDev) targetDev.company_id = add ? editingCompanyId : null;
             renderDeviceTab();
+            await Promise.all([cmpLoadCompanies(), cmpLoadAllDevices()]);
+            window.dispatchEvent(new CustomEvent('routario:devices-updated'));
         } else {
             showAlert('Failed to update device assignment', 'error');
             renderDeviceTab();

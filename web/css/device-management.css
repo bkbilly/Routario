@@ -83,7 +83,7 @@ body {
 /* ── Layout ────────────────────────────────────────────────────── */
 
 .container {
-    max-width: 1400px;
+    width: 100%;
     margin: 0 auto;
     padding: 2rem;
 }
@@ -1543,3 +1543,290 @@ h1 {
 .datetime-picker-wrap.is-native .form-input {
     padding-right: 0.75rem;
 }
+
+/* ── Company Management Entity Chips (Users & Devices) ───────────── */
+.cmp-entity-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 320px;
+}
+
+.cmp-entity-list.expanded {
+    max-height: 140px;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+    scrollbar-width: thin;
+}
+
+.cmp-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.18rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.76rem;
+    font-weight: 500;
+    line-height: 1.35;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    max-width: 140px;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+    user-select: none;
+}
+
+.cmp-chip-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cmp-chip i {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.cmp-chip.user-admin {
+    border-color: rgba(59, 130, 246, 0.35);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.cmp-chip.user-admin i {
+    color: var(--accent-primary);
+}
+
+.cmp-chip:hover {
+    background: var(--bg-hover);
+    border-color: var(--text-muted);
+}
+
+.cmp-more-btn,
+.cmp-less-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.35;
+    background: var(--bg-tertiary);
+    border: 1px dashed var(--border-color);
+    color: var(--accent-primary);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    user-select: none;
+    font-family: inherit;
+}
+
+.cmp-more-btn:hover,
+.cmp-less-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary-hover, var(--accent-primary));
+}
+
+.cmp-empty-text {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-style: italic;
+}
+
+/* ── Custom Multi-Select Dropdown ────────────────────────────────── */
+.custom-multi-select {
+    position: relative;
+    width: 100%;
+}
+
+.custom-multi-select.open {
+    z-index: 1050;
+}
+
+#deviceAssignedUsersGroup:has(.custom-multi-select.open) {
+    position: relative;
+    z-index: 1050;
+}
+
+.multi-select-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    cursor: pointer;
+    text-align: left;
+    user-select: none;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.6rem 0.85rem;
+    font-size: 0.9rem;
+    min-height: 40px;
+    width: 100%;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    font-family: inherit;
+    color: var(--text-primary);
+}
+
+.multi-select-btn:focus,
+.custom-multi-select.open .multi-select-btn {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+}
+
+.multi-select-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+}
+
+.multi-select-label.placeholder {
+    color: var(--text-muted);
+}
+
+.multi-select-arrow {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+}
+
+.custom-multi-select.open .multi-select-arrow {
+    transform: rotate(180deg);
+}
+
+.multi-select-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--bg-card, var(--bg-secondary));
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+    z-index: 2000;
+    max-height: 260px;
+    overflow: hidden;
+    flex-direction: column;
+}
+
+.custom-multi-select:not(.open) .multi-select-dropdown {
+    display: none !important;
+}
+
+.custom-multi-select.open .multi-select-dropdown {
+    display: flex !important;
+}
+
+.multi-select-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+}
+
+.multi-select-search-wrap i {
+    color: var(--text-muted);
+    font-size: 1rem;
+}
+
+.multi-select-search {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 0.84rem;
+    font-family: inherit;
+}
+
+.multi-select-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.35rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.multi-select-action-btn {
+    background: none;
+    border: none;
+    padding: 0.15rem 0.35rem;
+    font-size: 0.75rem;
+    color: var(--accent-primary);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.15s;
+    font-family: inherit;
+}
+
+.multi-select-action-btn:hover {
+    background: var(--bg-hover);
+}
+
+.multi-select-options {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.3rem 0;
+    max-height: 180px;
+    scrollbar-width: thin;
+}
+
+.multi-select-opt {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0.85rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.15s;
+    user-select: none;
+    color: var(--text-primary);
+}
+
+.multi-select-opt:hover {
+    background: var(--bg-hover);
+}
+
+.multi-select-opt input[type="checkbox"] {
+    accent-color: var(--accent-primary);
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.multi-select-opt-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.multi-select-opt-name {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.multi-select-opt-email {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+

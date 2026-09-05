@@ -9,7 +9,7 @@ from .models import (
 from .schemas import (
     NormalizedPosition, DeviceCreate, DeviceResponse, DeviceStateResponse,
     UserCreate, UserUpdate, UserResponse, UserLogin, Token,
-    CompanyCreate, CompanyUpdate, CompanyResponse,
+    CompanyCreate, CompanyUpdate, CompanyResponse, CompanyUserSummary, CompanyDeviceSummary,
     AlertCreate, AlertResponse, AlertType, Severity,
     CommandCreate, CommandResponse, CommandStatus,
     PositionHistoryRequest, PositionHistoryResponse, PositionGeoJSON,
