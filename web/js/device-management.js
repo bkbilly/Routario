@@ -371,16 +371,21 @@ async function loadGeofencesForDevice(deviceId) {
     } catch { return []; }
 }
 
-async function _loadDriverOptions() {
+async function _loadDriverOptions(targetCompanyId = undefined) {
+    if (!hasPermission('manage_drivers')) return [{ value: '', label: '— Any driver —' }];
     try {
         const res = await apiFetch(`${API_BASE}/drivers`);
-        if (!res.ok) return [];
+        if (!res.ok) return [{ value: '', label: '— Any driver —' }];
         const drivers = await res.json();
+        const compId = targetCompanyId !== undefined ? targetCompanyId : _getCurrentDeviceCompanyId();
+        const filtered = (compId != null)
+            ? drivers.filter(d => _sameId(d.company_id, compId))
+            : drivers;
         return [
             { value: '', label: '— Any driver —' },
-            ...drivers.map(d => ({ value: String(d.id), label: d.name })),
+            ...filtered.map(d => ({ value: String(d.id), label: d.name })),
         ];
-    } catch { return []; }
+    } catch { return [{ value: '', label: '— Any driver —' }]; }
 }
 
 // ── Device Table ──────────────────────────────────────────────────
@@ -468,6 +473,29 @@ function renderDeviceTable(list) {
     }).join('');
 }
 
+let _alertsOptionsLoadedForDevice = null;
+let _alertsOptionsLoadedCompanyId = null;
+async function _ensureAlertOptionsLoaded(deviceId) {
+    const compId = _getCurrentDeviceCompanyId();
+    if (_alertsOptionsLoadedForDevice === deviceId && _alertsOptionsLoadedCompanyId === compId) return;
+    _alertsOptionsLoadedForDevice = deviceId;
+    _alertsOptionsLoadedCompanyId = compId;
+    if (hasPermission('manage_alerts')) {
+        if (deviceId) {
+            loadGeofencesForDevice(deviceId).then(opts => {
+                cachedGeofenceOptions = opts;
+                renderAlertsTable();
+            });
+        }
+        if (hasPermission('manage_drivers')) {
+            _loadDriverOptions(compId).then(opts => {
+                cachedDriverOptions = opts;
+                renderAlertsTable();
+            });
+        }
+    }
+}
+
 // ── Modal Tab Switcher ────────────────────────────────────────────
 function switchModalTab(tabId, btn) {
     document.querySelectorAll('.modal-tab-content').forEach(el => el.classList.remove('active'));
@@ -477,6 +505,7 @@ function switchModalTab(tabId, btn) {
     const commandTabsBar = document.getElementById('commandTabsBar');
     if (commandTabsBar) commandTabsBar.style.display = tabId === 'commands' ? 'flex' : 'none';
     if (tabId !== 'commands') { clearInterval(commandHistoryInterval); commandHistoryInterval = null; }
+    if (tabId === 'alerts') _ensureAlertOptionsLoaded(editingDeviceId);
     if (tabId === 'rawdata'  && editingDeviceId) loadRawDataForModal(editingDeviceId);
     if (tabId === 'commands' && editingDeviceId) {
         currentCommandDeviceId = editingDeviceId;
@@ -541,6 +570,8 @@ function openAddDeviceModal() {
 
     deviceAssignedUserIds = new Set();
     initialDeviceAssignedUserIds = new Set();
+    _alertsOptionsLoadedForDevice = null;
+    _alertsOptionsLoadedCompanyId = null;
     renderDeviceUsersMultiSelect();
 
     loadPublicSettings().then(() => {
@@ -561,6 +592,8 @@ function openDeviceModal(deviceId, startTab = 'general') {
     const d = devices.find(x => x.id == deviceId);
     if (!d) return;
     editingDeviceId = d.id;
+    _alertsOptionsLoadedForDevice = null;
+    _alertsOptionsLoadedCompanyId = null;
     deviceAlertUsers = [];
 
     if (typeof syncPublicSystemSettings === 'function') {
@@ -632,19 +665,8 @@ function openDeviceModal(deviceId, startTab = 'general') {
     }
 
     loadAlertsFromConfig(d.config || {});
-
-    loadGeofencesForDevice(d.id).then(opts => {
-        cachedGeofenceOptions = opts;
-        renderAlertsTable();
-    });
-    _loadDriverOptions().then(opts => {
-        cachedDriverOptions = opts;
-        renderAlertsTable();
-    });
-    if (!allUsersLoaded) {
-        loadAllUsers().then(() => renderAlertsTable());
-    }
     populateAlertProfileDeviceSelect();
+    _alertsOptionsLoadedForDevice = null;
     switchModalTab(startTab);
     refreshNativeEventAlerts();
     document.getElementById('deviceModal').classList.add('active');
@@ -3088,6 +3110,12 @@ function onDeviceCompanyChange() {
     const companyId = parseInt(document.getElementById('deviceCompany').value) || null;
     renderDeviceUsersMultiSelect();
     populateDeviceSimCardSelect(null, editingDeviceId, companyId);
+    _alertsOptionsLoadedForDevice = null;
+    _alertsOptionsLoadedCompanyId = null;
+    const alertsTab = document.getElementById('tab-alerts');
+    if (alertsTab && alertsTab.classList.contains('active')) {
+        _ensureAlertOptionsLoaded(editingDeviceId);
+    }
 }
 
 function populateDeviceCompanySelect(selectedId) {
@@ -3168,13 +3196,19 @@ function renderDeviceUsersMultiSelect() {
         return;
     }
 
-    group.style.display = '';
-
     const eligibleUsers = allUsers.filter(u =>
         !u.is_admin &&
         !u.is_company_admin &&
         _sameId(u.company_id, companyId)
     );
+
+    if (!eligibleUsers.length) {
+        group.style.display = 'none';
+        closeDeviceUsersDropdown();
+        return;
+    }
+
+    group.style.display = '';
 
     const eligibleIdSet = new Set(eligibleUsers.map(u => u.id));
     for (const uid of Array.from(deviceAssignedUserIds)) {
@@ -3249,13 +3283,9 @@ function renderDeviceUsersOptionsList(eligibleUsers) {
         return;
     }
 
-    const sorted = [...filtered].sort((a, b) => {
-        const aSel = deviceAssignedUserIds.has(a.id);
-        const bSel = deviceAssignedUserIds.has(b.id);
-        if (aSel && !bSel) return -1;
-        if (!aSel && bSel) return 1;
-        return (a.username || '').localeCompare(b.username || '');
-    });
+    const sorted = [...filtered].sort((a, b) =>
+        (a.username || '').localeCompare(b.username || '', undefined, { numeric: true, sensitivity: 'base' })
+    );
 
     optionsContainer.innerHTML = sorted.map(u => {
         const checked = deviceAssignedUserIds.has(u.id);

@@ -39,6 +39,7 @@ from models.models import (
     Trip,
     User,
     UserPasskey,
+    Driver,
     user_device_association,
 )
 from models.schemas import (
@@ -824,10 +825,26 @@ class DatabaseService:
                 user.is_admin = user_data.is_admin
             if user_data.is_company_admin is not None:
                 user.is_company_admin = user_data.is_company_admin
-            if user_data.company_id is not None:
+            if "company_id" in user_data.model_fields_set:
+                user.company_id = user_data.company_id
+            elif user_data.company_id is not None:
                 user.company_id = user_data.company_id
             if user_data.permissions is not None:
                 user.permissions = user_data.permissions
+
+            # Keep any linked driver in sync with the user's company and username
+            if user.is_admin or user.is_company_admin:
+                await session.execute(
+                    delete(Driver).where(Driver.user_id == user_id)
+                )
+            else:
+                driver_sync = {"company_id": user.company_id}
+                if getattr(user_data, "username", None):
+                    driver_sync["name"] = user.username
+                await session.execute(
+                    update(Driver).where(Driver.user_id == user_id).values(**driver_sync)
+                )
+
             await session.flush()
             await session.refresh(user)
             return user

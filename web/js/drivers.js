@@ -12,7 +12,10 @@ let _drvSortDir    = 1;
 let _drvSectionInitialized = false;
 
 async function initDriversSection() {
-    if (_drvSectionInitialized) return;
+    if (_drvSectionInitialized) {
+        if (hasPermission('manage_drivers')) _loadDrivers();
+        return;
+    }
     _drvSectionInitialized = true;
     if (!hasPermission('manage_drivers')) return;
     await _loadDevices();
@@ -23,6 +26,12 @@ async function initDriversSection() {
     }
     await _loadDrivers();
 }
+
+window.addEventListener('routario:users-updated', () => {
+    if (_drvSectionInitialized && hasPermission('manage_drivers')) {
+        _loadDrivers();
+    }
+});
 
 async function _loadCompanies() {
     try {

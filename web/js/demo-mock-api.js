@@ -1453,7 +1453,11 @@
                 if (body.phone_number !== undefined) targetUser.phone_number = body.phone_number;
                 if (body.is_admin !== undefined) targetUser.is_admin = Boolean(body.is_admin);
                 if (body.is_company_admin !== undefined) targetUser.is_company_admin = Boolean(body.is_company_admin);
-                if (body.company_id !== undefined) targetUser.company_id = body.company_id;
+                if (body.company_id !== undefined) {
+                    targetUser.company_id = body.company_id;
+                    const drv = drivers.find(d => d.user_id === targetUser.id);
+                    if (drv) drv.company_id = targetUser.company_id;
+                }
                 if (body.permissions !== undefined) targetUser.permissions = body.permissions;
             }
             return json(targetUser);
@@ -1535,6 +1539,8 @@
                         u.company_id = null;
                         u.is_company_admin = false;
                     }
+                    const drv = drivers.find(d => d.user_id === u.id);
+                    if (drv) drv.company_id = u.company_id;
                 }
                 return json({ status: 'success' });
             }

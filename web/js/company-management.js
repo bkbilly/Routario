@@ -536,17 +536,9 @@ function renderUserTab() {
         list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No users found.</div>';
         return;
     }
-    const sorted = [...filtered].sort((a, b) => {
-        const aIn = companyUserIds.has(a.id);
-        const bIn = companyUserIds.has(b.id);
-        if (aIn && !bIn) return -1;
-        if (!aIn && bIn) return 1;
-        const aAdmin = companyAdminUserIds.has(a.id);
-        const bAdmin = companyAdminUserIds.has(b.id);
-        if (aAdmin && !bAdmin) return -1;
-        if (!aAdmin && bAdmin) return 1;
-        return (a.username || '').localeCompare(b.username || '');
-    });
+    const sorted = [...filtered].sort((a, b) =>
+        (a.username || '').localeCompare(b.username || '', undefined, { numeric: true, sensitivity: 'base' })
+    );
     list.innerHTML = '';
     sorted.forEach(u => {
         const inCompany  = companyUserIds.has(u.id);
@@ -637,8 +629,11 @@ function renderDeviceTab() {
         list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No devices found.</div>';
         return;
     }
+    const sorted = [...filtered].sort((a, b) =>
+        (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' })
+    );
     list.innerHTML = '';
-    filtered.forEach(d => {
+    sorted.forEach(d => {
         const inCompany = companyDeviceIds.has(d.id);
         const div = document.createElement('div');
         div.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.8rem;background:var(--bg-tertiary);border-radius:8px;gap:0.75rem;';

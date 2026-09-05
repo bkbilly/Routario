@@ -36,6 +36,25 @@ def _check_driver_access(driver: Driver, user: User):
 async def list_drivers(current_user: User = Depends(require_permission("manage_drivers"))):
     db = get_db()
     async with db.get_session() as session:
+        # ── Pre-sync all user-linked drivers with their user records ────
+        all_user_drivers = list((await session.execute(
+            select(Driver).where(Driver.user_id.isnot(None))
+        )).scalars().all())
+        all_users = list((await session.execute(
+            select(User)
+        )).scalars().all())
+        user_by_id = {u.id: u for u in all_users}
+        for d in all_user_drivers:
+            u = user_by_id.get(d.user_id)
+            if not u or u.is_admin or u.is_company_admin:
+                await session.delete(d)
+            else:
+                if d.company_id != u.company_id:
+                    d.company_id = u.company_id
+                if d.name != u.username:
+                    d.name = u.username
+        await session.flush()
+
         # ── Regular drivers ───────────────────────────────────────────
         dq = select(Driver)
         if not current_user.is_admin:
@@ -47,16 +66,6 @@ async def list_drivers(current_user: User = Depends(require_permission("manage_d
         if not current_user.is_admin:
             uq = uq.where(User.company_id == current_user.company_id)
         users = list((await session.execute(uq)).scalars().all())
-
-        valid_user_ids = {u.id for u in users}
-
-        # ── Remove stale shadow drivers ───────────────────────────────
-        # Delete shadow drivers whose user no longer exists or is now an
-        # admin / company-admin (and therefore should not be a driver).
-        stale = [d for d in drivers if d.user_id is not None and d.user_id not in valid_user_ids]
-        for d in stale:
-            await session.delete(d)
-            drivers.remove(d)
 
         # ── Create missing shadow drivers ─────────────────────────────
         existing_user_ids = {d.user_id for d in drivers if d.user_id is not None}
@@ -75,12 +84,6 @@ async def list_drivers(current_user: User = Depends(require_permission("manage_d
                     drivers.append(shadow)
                 except Exception:
                     pass  # already created by a concurrent request
-
-        # Sync shadow driver names with current usernames
-        user_map = {u.id: u.username for u in users}
-        for d in drivers:
-            if d.user_id and d.user_id in user_map and d.name != user_map[d.user_id]:
-                d.name = user_map[d.user_id]
 
         return sorted(drivers, key=lambda d: d.name.lower())
 

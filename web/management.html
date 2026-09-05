@@ -794,7 +794,7 @@
                         <th data-sort="included" onclick="rtpSortBilling('included')">Included</th>
                         <th data-sort="overage" onclick="rtpSortBilling('overage')">Overage</th>
                         <th data-sort="companies" onclick="rtpSortBilling('companies')">Companies</th>
-                        <th style="width:360px;text-align:center;">Actions</th>
+                        <th style="width:180px;text-align:center;">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="billingPlansTableBody">
@@ -1493,34 +1493,47 @@
 </div>
 
 <div class="modal" id="billingPlanModal">
-    <div class="modal-content" style="max-width:820px;height:auto;max-height:90vh;">
+    <div class="modal-content wide">
         <div class="modal-header">
             <h2 class="modal-title" id="billingPlanModalTitle">Billing Plan</h2>
             <button type="button" class="modal-close" onclick="rtpClosePlanModal()"><i class="mdi mdi-close"></i></button>
         </div>
-        <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
-            <div class="form-grid">
-                <label><span>Name</span><input id="billPlanName" class="form-input" placeholder="Growth"><div class="form-help">Internal plan name shown in billing tables and company assignments.</div></label>
-                <label><span id="billBaseLabel">Base Price</span><input id="billBase" class="form-input" type="number" min="0" placeholder="0"><div class="form-help">Fixed monthly amount charged before any usage overages.</div></label>
-                <label><span>Included Devices</span><input id="billIncDevices" class="form-input" type="number" min="0" value="0"><div class="form-help">Active devices included in the base monthly price.</div></label>
-                <label><span id="billDevicePriceLabel">Per Device</span><input id="billDevicePrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Monthly charge for each active device above the included amount.</div></label>
-                <label><span>Included Positions</span><input id="billIncPositions" class="form-input" type="number" min="0" value="0"><div class="form-help">Position messages included per month before overage billing starts.</div></label>
-                <label><span id="billPositionPriceLabel">Per 1000 Positions</span><input id="billPositionPrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Charge per started block of 1000 extra position messages.</div></label>
-                <label><span>Included API Calls</span><input id="billIncApi" class="form-input" type="number" min="0" value="0"><div class="form-help">REST API calls included per month for companies on this plan.</div></label>
-                <label><span id="billApiPriceLabel">Per 1000 API Calls</span><input id="billApiPrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Charge per started block of 1000 API calls above the included amount.</div></label>
-                <label style="grid-column:1 / -1;">
-                    <span>Companies</span>
-                    <input id="billPlanCompanySearch" class="form-input" placeholder="Search companies..." oninput="rtpFilterPlanCompanies()" style="margin-bottom:0.5rem;">
-                    <div id="billPlanCompanies" class="company-checklist"></div>
-                    <div class="form-help">A plan can be assigned to multiple companies. Saving updates all selected assignments.</div>
-                </label>
+
+        <div class="modal-tabs">
+            <button type="button" class="modal-tab active" data-tab="bill-general" onclick="rtpSwitchPlanTab('general',this)"><i class="mdi mdi-currency-usd"></i> General</button>
+            <button type="button" class="modal-tab" id="billPlanCompaniesTabBtn" data-tab="bill-companies" onclick="rtpSwitchPlanTab('companies',this)" style="display:none;"><i class="mdi mdi-office-building"></i> Companies</button>
+        </div>
+
+        <div class="modal-scrollable">
+            <!-- TAB: GENERAL -->
+            <div class="modal-tab-content active" id="tab-bill-general">
+                <div class="form-grid">
+                    <label><span>Name *</span><input id="billPlanName" class="form-input" placeholder="Growth" required><div class="form-help">Internal plan name shown in billing tables and company assignments.</div></label>
+                    <label><span id="billBaseLabel">Base Price</span><input id="billBase" class="form-input" type="number" min="0" placeholder="0"><div class="form-help">Fixed monthly amount charged before any usage overages.</div></label>
+                    <label><span>Included Devices</span><input id="billIncDevices" class="form-input" type="number" min="0" value="0"><div class="form-help">Active devices included in the base monthly price.</div></label>
+                    <label><span id="billDevicePriceLabel">Per Device</span><input id="billDevicePrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Monthly charge for each active device above the included amount.</div></label>
+                    <label><span>Included Positions</span><input id="billIncPositions" class="form-input" type="number" min="0" value="0"><div class="form-help">Position messages included per month before overage billing starts.</div></label>
+                    <label><span id="billPositionPriceLabel">Per 1000 Positions</span><input id="billPositionPrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Charge per started block of 1000 extra position messages.</div></label>
+                    <label><span>Included API Calls</span><input id="billIncApi" class="form-input" type="number" min="0" value="0"><div class="form-help">REST API calls included per month for companies on this plan.</div></label>
+                    <label><span id="billApiPriceLabel">Per 1000 API Calls</span><input id="billApiPrice" class="form-input" type="number" min="0" value="0"><div class="form-help">Charge per started block of 1000 API calls above the included amount.</div></label>
+                </div>
+            </div>
+
+            <!-- TAB: COMPANIES -->
+            <div class="modal-tab-content" id="tab-bill-companies">
+                <div class="form-group">
+                    <input type="text" class="form-input" id="billPlanCompanySearch"
+                        placeholder="Search companies&#8230;" oninput="rtpFilterPlanCompanies()">
+                </div>
+                <div id="billPlanCompanies" style="display:flex;flex-direction:column;gap:0.4rem;"></div>
             </div>
         </div>
+
         <div class="modal-footer">
             <button type="button" class="btn btn-danger" id="billPlanDeleteBtn" onclick="rtpDeletePlan(_rtpEditingPlanId)" style="display:none;"><i class="mdi mdi-delete"></i> Delete</button>
             <div style="display:flex;gap:0.75rem;margin-left:auto;">
                 <button type="button" class="btn btn-secondary" onclick="rtpClosePlanModal()">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="rtpCreatePlan()"><i class="mdi mdi-content-save"></i> <span id="billPlanSaveLabel">Create Plan</span></button>
+                <button type="button" class="btn btn-primary" onclick="rtpCreatePlan()"><i class="mdi mdi-content-save"></i> <span id="billPlanSaveLabel">Save</span></button>
             </div>
         </div>
     </div>

@@ -138,6 +138,16 @@ window.addEventListener('routario:currencychange', () => {
     }
 });
 
+window.addEventListener('routario:companies-updated', async () => {
+    try {
+        _rtpCompanies = await rtpJson(`${API_BASE}/companies`);
+        if (typeof rtpRenderBillingTable === 'function') rtpRenderBillingTable();
+        if (document.getElementById('billingPlanModal')?.classList.contains('active')) {
+            rtpRenderPlanCompanyChecklist();
+        }
+    } catch {}
+});
+
 function rtpCompareValues(a, b, dir = 'asc') {
     const av = a ?? '';
     const bv = b ?? '';
@@ -1552,6 +1562,54 @@ async function rtpLoadPlans() {
     rtpRenderBillingTable();
 }
 
+const RTP_MAX_VISIBLE_CHIPS = 3;
+const _rtpExpandedPlanCompanies = new Set();
+
+function rtpTogglePlanCompanyChips(event, planId) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    const pid = Number(planId);
+    if (_rtpExpandedPlanCompanies.has(pid)) {
+        _rtpExpandedPlanCompanies.delete(pid);
+    } else {
+        _rtpExpandedPlanCompanies.add(pid);
+    }
+    rtpRenderBillingTable();
+}
+
+function rtpRenderPlanCompanyChips(plan) {
+    const companies = rtpCompaniesForPlan(plan.id);
+    if (!companies || !companies.length) {
+        return '<span class="cmp-empty-text">No companies</span>';
+    }
+    const isExpanded = _rtpExpandedPlanCompanies.has(Number(plan.id));
+    const showAll = isExpanded || companies.length <= RTP_MAX_VISIBLE_CHIPS;
+    const visible = showAll ? companies : companies.slice(0, RTP_MAX_VISIBLE_CHIPS);
+    const hiddenCount = companies.length - RTP_MAX_VISIBLE_CHIPS;
+
+    const chipsHtml = visible.map(c => {
+        const tooltip = `${rtpEsc(c.name)}${c.device_count != null ? ` · ${c.device_count} device${c.device_count !== 1 ? 's' : ''}` : ''}`;
+        return `<span class="cmp-chip" title="${tooltip}">
+            <i class="mdi mdi-office-building"></i>
+            <span class="cmp-chip-text">${rtpEsc(c.name)}</span>
+        </span>`;
+    }).join('');
+
+    let toggleBtn = '';
+    if (companies.length > RTP_MAX_VISIBLE_CHIPS) {
+        if (!isExpanded) {
+            const remainingNames = companies.slice(RTP_MAX_VISIBLE_CHIPS).map(c => c.name).join(', ');
+            toggleBtn = `<button type="button" class="cmp-more-btn" onclick="rtpTogglePlanCompanyChips(event, '${plan.id}')" title="${rtpEsc(remainingNames)}">+${hiddenCount} more</button>`;
+        } else {
+            toggleBtn = `<button type="button" class="cmp-less-btn" onclick="rtpTogglePlanCompanyChips(event, '${plan.id}')">Show less</button>`;
+        }
+    }
+
+    return `<div class="cmp-entity-list${isExpanded ? ' expanded' : ''}" style="min-width:180px;">${chipsHtml}${toggleBtn}</div>`;
+}
+
 function rtpBillingValue(plan, col) {
     const assigned = rtpCompaniesForPlan(plan.id);
     const values = {
@@ -1581,17 +1639,16 @@ function rtpRenderBillingTable() {
         if (count) count.textContent = `${rows.length} plan${rows.length !== 1 ? 's' : ''}`;
         rtpUpdateSortHeaders('section-billing', _rtpBillingSort);
         body.innerHTML = rows.length ? rows.map(p => {
-            const assigned = rtpCompaniesForPlan(p.id);
             return `
                 <tr class="device-row" ondblclick="rtpEditPlan(${p.id})" style="cursor:pointer;">
                     <td>${rtpEsc(p.name)}</td>
                     <td>${rtpMoney(p.base_price_cents, p.currency)}</td>
                     <td>${p.included_devices} devices<br>${p.included_positions} positions<br>${p.included_api_calls} API calls</td>
                     <td>${rtpMoney(p.price_per_device_cents, p.currency)} / device<br>${rtpMoney(p.price_per_1000_positions_cents, p.currency)} / 1000 positions<br>${rtpMoney(p.price_per_1000_api_calls_cents, p.currency)} / 1000 API calls</td>
-                    <td>${assigned.length ? assigned.map(c => rtpEsc(c.name)).join('<br>') : '<span class="stack-item-meta">Unassigned</span>'}</td>
+                    <td>${rtpRenderPlanCompanyChips(p)}</td>
                     <td style="text-align:center;">
                         <div class="table-actions" onclick="event.stopPropagation()">
-                            <button class="btn btn-secondary" onclick="rtpEditPlan(${p.id})"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Edit</span></button>
+                            <button class="btn btn-secondary tbl-btn" onclick="rtpEditPlan(${p.id})"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Edit</span></button>
                         </div>
                     </td>
                 </tr>
@@ -1706,6 +1763,16 @@ function rtpCompaniesForPlan(planId) {
     return rtpBillingCompanies().filter(c => Number(c.billing_plan_id) === Number(planId));
 }
 
+function rtpSwitchPlanTab(tabId, btn) {
+    const modal = document.getElementById('billingPlanModal');
+    if (!modal) return;
+    modal.querySelectorAll('.modal-tab-content').forEach(el => el.classList.remove('active'));
+    modal.querySelectorAll('.modal-tab').forEach(el => el.classList.remove('active'));
+    document.getElementById(`tab-bill-${tabId}`)?.classList.add('active');
+    (btn || modal.querySelector(`.modal-tab[data-tab="bill-${tabId}"]`))?.classList.add('active');
+    if (tabId === 'companies') rtpRenderPlanCompanyChecklist();
+}
+
 function rtpFillPlanForm(plan = null) {
     rtpApplyBillingCurrencyLabels();
     _rtpEditingPlanId = plan?.id || null;
@@ -1720,34 +1787,101 @@ function rtpFillPlanForm(plan = null) {
     const search = document.getElementById('billPlanCompanySearch');
     if (search) search.value = '';
     _rtpPlanCompanySelection = new Set(plan ? rtpCompaniesForPlan(plan.id).map(c => Number(c.id)) : []);
-    rtpRenderPlanCompanyChecklist(plan);
+    const tabBtn = document.getElementById('billPlanCompaniesTabBtn');
+    if (tabBtn) tabBtn.style.display = plan ? '' : 'none';
     const label = document.getElementById('billPlanSaveLabel');
-    if (label) label.textContent = plan ? 'Update Plan' : 'Create Plan';
+    if (label) label.textContent = plan ? 'Save' : 'Create Plan';
     const deleteBtn = document.getElementById('billPlanDeleteBtn');
     if (deleteBtn) deleteBtn.style.display = plan ? '' : 'none';
+    rtpSwitchPlanTab('general');
 }
 
 function rtpRenderPlanCompanyChecklist(plan = _rtpPlans.find(p => p.id === _rtpEditingPlanId) || null) {
-    const box = document.getElementById('billPlanCompanies');
-    if (!box) return;
-    const q = (document.getElementById('billPlanCompanySearch')?.value || '').toLowerCase();
-    const companies = rtpBillingCompanies().filter(c => String(c.name || '').toLowerCase().includes(q));
-    box.innerHTML = companies.length ? companies.map(c => `
-        <label class="company-check-item">
-            <input type="checkbox" value="${c.id}" ${_rtpPlanCompanySelection.has(Number(c.id)) ? 'checked' : ''} onchange="rtpTogglePlanCompany(this)">
-            <span>${rtpEsc(c.name)}</span>
-        </label>
-    `).join('') : '<div class="stack-item-meta" style="padding:0.4rem 0.55rem;">No companies match.</div>';
+    const list = document.getElementById('billPlanCompanies');
+    if (!list) return;
+    const query = (document.getElementById('billPlanCompanySearch')?.value || '').toLowerCase().trim();
+    const companies = rtpBillingCompanies().filter(c =>
+        !query ||
+        (c.name || '').toLowerCase().includes(query) ||
+        (c.app_name || '').toLowerCase().includes(query) ||
+        (c.login_slug || '').toLowerCase().includes(query)
+    );
+    if (!companies.length) {
+        list.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">No companies found.</div>';
+        return;
+    }
+    const currentPlanId = _rtpEditingPlanId ? Number(_rtpEditingPlanId) : null;
+    const sorted = [...companies].sort((a, b) =>
+        (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' })
+    );
+
+    list.innerHTML = '';
+    sorted.forEach(c => {
+        const cId = Number(c.id);
+        const isAssigned = _rtpPlanCompanySelection.has(cId);
+        const otherPlan = c.billing_plan_id && (!currentPlanId || Number(c.billing_plan_id) !== currentPlanId)
+            ? _rtpPlans.find(p => Number(p.id) === Number(c.billing_plan_id))
+            : null;
+        const otherPlanName = otherPlan?.name;
+
+        const div = document.createElement('div');
+        div.className = 'co-user-row';
+
+        let subtitleParts = [];
+        if (c.device_count != null) subtitleParts.push(`${c.device_count} device${c.device_count !== 1 ? 's' : ''}`);
+        if (c.user_count != null) subtitleParts.push(`${c.user_count} user${c.user_count !== 1 ? 's' : ''}`);
+        if (otherPlanName && !isAssigned) subtitleParts.push(`<span>Assigned to: ${rtpEsc(otherPlanName)}</span>`);
+        else if (isAssigned) subtitleParts.push(`<span style="color:var(--accent-primary,#818cf8);">Active on this plan</span>`);
+        else subtitleParts.push(`<span>No active plan</span>`);
+
+        div.innerHTML = `
+            <div class="co-user-info">
+                <div class="co-user-name">${rtpEsc(c.name)}</div>
+                <div class="co-user-email">${subtitleParts.join(' · ')}</div>
+            </div>
+            <div class="co-user-actions">
+                <label class="toggle-switch">
+                    <input type="checkbox" ${isAssigned ? 'checked' : ''}
+                        onchange="rtpTogglePlanCompany(${c.id}, this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>`;
+        list.appendChild(div);
+    });
 }
 
 function rtpFilterPlanCompanies() {
     rtpRenderPlanCompanyChecklist();
 }
 
-function rtpTogglePlanCompany(input) {
-    const id = Number(input.value);
-    if (input.checked) _rtpPlanCompanySelection.add(id);
-    else _rtpPlanCompanySelection.delete(id);
+async function rtpTogglePlanCompany(companyId, checked) {
+    companyId = Number(companyId);
+    if (checked) {
+        _rtpPlanCompanySelection.add(companyId);
+    } else {
+        _rtpPlanCompanySelection.delete(companyId);
+    }
+    if (_rtpEditingPlanId) {
+        const nextPlanId = checked ? Number(_rtpEditingPlanId) : null;
+        try {
+            await rtpJson(`${API_BASE}/billing/companies/${companyId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ plan_id: nextPlanId }),
+            });
+            const comp = _rtpCompanies.find(c => Number(c.id) === companyId);
+            if (comp) comp.billing_plan_id = nextPlanId;
+            rtpRenderPlanCompanyChecklist();
+            rtpRenderBillingTable();
+            window.dispatchEvent(new CustomEvent('routario:companies-updated'));
+        } catch (e) {
+            showAlert('Failed to update company plan assignment', 'error');
+            if (checked) _rtpPlanCompanySelection.delete(companyId);
+            else _rtpPlanCompanySelection.add(companyId);
+            rtpRenderPlanCompanyChecklist();
+        }
+    } else {
+        rtpRenderPlanCompanyChecklist();
+    }
 }
 
 function rtpEditPlan(id) {

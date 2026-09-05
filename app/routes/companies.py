@@ -7,16 +7,16 @@ Access rules:
 """
 from pathlib import Path
 import re
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends, File, UploadFile, Request
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update, delete
 from sqlalchemy.orm import selectinload
 
 from core.database import get_db
 from core.auth import require_admin
 from core.audit import write_audit_log
-from models import BillingPlan, Company, User, Device, DeviceState
+from models import BillingPlan, Company, User, Device, DeviceState, Driver
 from models.schemas import CompanyCreate, CompanyUpdate, CompanyResponse, CompanyUserSummary, CompanyDeviceSummary, UserResponse, DeviceResponse
 
 router = APIRouter(prefix="/api/companies", tags=["companies"])
@@ -107,6 +107,49 @@ def _delete_branding_file(filename: str | None):
         pass
 
 
+def _build_company_response(c: Company) -> CompanyResponse:
+    sorted_users = sorted(
+        c.users or [],
+        key=lambda u: (not getattr(u, "is_company_admin", False), (u.username or "").lower())
+    )
+    users_summary = [CompanyUserSummary.model_validate(u) for u in sorted_users]
+    devices_summary = [CompanyDeviceSummary.model_validate(d) for d in (c.devices or [])]
+    return CompanyResponse(
+        id=c.id,
+        name=c.name,
+        app_name=c.app_name,
+        login_slug=c.login_slug,
+        icon_url=c.icon_url,
+        badge_url=c.badge_url,
+        branding_version=c.branding_version or 1,
+        billing_plan_id=c.billing_plan_id,
+        billing_email=c.billing_email,
+        billing_status=c.billing_status or "active",
+        created_at=c.created_at,
+        user_count=len(users_summary),
+        device_count=len(devices_summary),
+        users=users_summary,
+        devices=devices_summary,
+    )
+
+
+async def _fetch_company_response(company_id: int) -> Optional[CompanyResponse]:
+    db = get_db()
+    async with db.get_session() as session:
+        result = await session.execute(
+            select(Company)
+            .where(Company.id == company_id)
+            .options(
+                selectinload(Company.users),
+                selectinload(Company.devices),
+            )
+        )
+        company = result.scalar_one_or_none()
+        if not company:
+            return None
+        return _build_company_response(company)
+
+
 @router.get("", response_model=List[CompanyResponse])
 async def get_all_companies(admin: User = Depends(require_admin)):
     db = get_db()
@@ -120,19 +163,7 @@ async def get_all_companies(admin: User = Depends(require_admin)):
             .order_by(Company.name)
         )
         companies = result.scalars().all()
-        response_list = []
-        for c in companies:
-            cr = CompanyResponse.model_validate(c)
-            sorted_users = sorted(
-                c.users or [],
-                key=lambda u: (not getattr(u, "is_company_admin", False), (u.username or "").lower())
-            )
-            cr.users = [CompanyUserSummary.model_validate(u) for u in sorted_users]
-            cr.devices = [CompanyDeviceSummary.model_validate(d) for d in (c.devices or [])]
-            cr.user_count = len(cr.users)
-            cr.device_count = len(cr.devices)
-            response_list.append(cr)
-        return response_list
+        return [_build_company_response(c) for c in companies]
 
 
 @router.post("", response_model=CompanyResponse)
@@ -144,34 +175,18 @@ async def create_company(data: CompanyCreate, request: Request, admin: User = De
     await _ensure_billing_plan_exists(data.billing_plan_id)
     company = await db.create_company(data)
     await write_audit_log("company.created", actor=admin, company_id=company.id, target_type="company", target_id=company.id, request=request)
-    return company
+    resp = await _fetch_company_response(company.id)
+    if not resp:
+        raise HTTPException(status_code=500, detail="Failed to load created company")
+    return resp
 
 
 @router.get("/{company_id}", response_model=CompanyResponse)
 async def get_company(company_id: int, admin: User = Depends(require_admin)):
-    db = get_db()
-    async with db.get_session() as session:
-        result = await session.execute(
-            select(Company)
-            .where(Company.id == company_id)
-            .options(
-                selectinload(Company.users),
-                selectinload(Company.devices),
-            )
-        )
-        company = result.scalar_one_or_none()
-        if not company:
-            raise HTTPException(status_code=404, detail="Company not found")
-        cr = CompanyResponse.model_validate(company)
-        sorted_users = sorted(
-            company.users or [],
-            key=lambda u: (not getattr(u, "is_company_admin", False), (u.username or "").lower())
-        )
-        cr.users = [CompanyUserSummary.model_validate(u) for u in sorted_users]
-        cr.devices = [CompanyDeviceSummary.model_validate(d) for d in (company.devices or [])]
-        cr.user_count = len(cr.users)
-        cr.device_count = len(cr.devices)
-        return cr
+    resp = await _fetch_company_response(company_id)
+    if not resp:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return resp
 
 
 @router.put("/{company_id}", response_model=CompanyResponse)
@@ -188,7 +203,10 @@ async def update_company(company_id: int, data: CompanyUpdate, request: Request,
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     await write_audit_log("company.updated", actor=admin, company_id=company_id, target_type="company", target_id=company_id, request=request)
-    return company
+    resp = await _fetch_company_response(company_id)
+    if not resp:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return resp
 
 
 @router.post("/{company_id}/branding/icon", response_model=CompanyResponse)
@@ -205,8 +223,10 @@ async def upload_company_icon(
         company.icon_filename = await _store_branding_file(company, file, "icon")
         company.branding_version = (company.branding_version or 1) + 1
         await session.flush()
-        await session.refresh(company)
-        return company
+    resp = await _fetch_company_response(company_id)
+    if not resp:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return resp
 
 
 @router.delete("/{company_id}/branding/icon", response_model=CompanyResponse)
@@ -220,8 +240,10 @@ async def delete_company_icon(company_id: int, admin: User = Depends(require_adm
         company.icon_filename = None
         company.branding_version = (company.branding_version or 1) + 1
         await session.flush()
-        await session.refresh(company)
-        return company
+    resp = await _fetch_company_response(company_id)
+    if not resp:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return resp
 
 
 @router.post("/{company_id}/branding/badge", response_model=CompanyResponse)
@@ -238,8 +260,10 @@ async def upload_company_badge(
         company.badge_filename = await _store_branding_file(company, file, "badge")
         company.branding_version = (company.branding_version or 1) + 1
         await session.flush()
-        await session.refresh(company)
-        return company
+    resp = await _fetch_company_response(company_id)
+    if not resp:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return resp
 
 
 @router.delete("/{company_id}/branding/badge", response_model=CompanyResponse)
@@ -253,8 +277,10 @@ async def delete_company_badge(company_id: int, admin: User = Depends(require_ad
         company.badge_filename = None
         company.branding_version = (company.branding_version or 1) + 1
         await session.flush()
-        await session.refresh(company)
-        return company
+    resp = await _fetch_company_response(company_id)
+    if not resp:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return resp
 
 
 @router.delete("/{company_id}")
@@ -309,6 +335,9 @@ async def assign_user_to_company(
         elif action == "remove":
             user.company_id = None
             user.is_company_admin = False
+        await session.execute(
+            update(Driver).where(Driver.user_id == user_id).values(company_id=user.company_id)
+        )
         await session.flush()
     return {"status": "success"}
 
