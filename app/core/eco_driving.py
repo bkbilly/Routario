@@ -25,8 +25,10 @@ DEFAULT_HARSH_ACCEL_THRESHOLD_MS2 = 2.8   # m/s² (~10.0 km/h/s)
 DEFAULT_HARSH_BRAKE_THRESHOLD_MS2 = -3.2  # m/s² (~-11.5 km/h/s)
 DEFAULT_HARSH_CORNER_DEG_PER_S = 32.0     # °/s at speed >= 35 km/h
 
+# Speeding tolerance buffer (grace margin for GPS noise & traffic flow before counting as speeding)
+SPEEDING_TOLERANCE_BUFFER_KMH = 3.0   # e.g. 53 km/h on a 50 limit is within buffer, not penalized
+
 # Speeding severity thresholds (km/h over posted limit)
-SPEEDING_MINOR_KMH = 0.0      # > 0 and <= 10 km/h over
 SPEEDING_MODERATE_KMH = 10.0  # > 10 and <= 20 km/h over
 SPEEDING_SEVERE_KMH = 20.0    # > 20 km/h over (or > 15 km/h over on <= 60 km/h roads)
 
@@ -132,7 +134,7 @@ def evaluate_consecutive_positions(
     t2 = normalize_datetime(getattr(curr_pos, "device_time", None) or getattr(curr_pos, "timestamp", None))
 
     # Check speeding and classify severity
-    if speed2 > speed_limit_kmh:
+    if speed2 > (speed_limit_kmh + SPEEDING_TOLERANCE_BUFFER_KMH):
         result["is_speeding"] = True
         overspeed = speed2 - speed_limit_kmh
         result["overspeed_kmh"] = round(overspeed, 1)
@@ -247,8 +249,20 @@ def calculate_trip_eco_score(
         }
 
     harsh_accels = 0
+    accel_minor_count = 0
+    accel_moderate_count = 0
+    accel_severe_count = 0
+
     harsh_brakes = 0
+    brake_minor_count = 0
+    brake_moderate_count = 0
+    brake_severe_count = 0
+
     harsh_corners = 0
+    corner_minor_count = 0
+    corner_moderate_count = 0
+    corner_severe_count = 0
+
     speeding_minor_seconds = 0.0
     speeding_moderate_seconds = 0.0
     speeding_severe_seconds = 0.0
@@ -319,45 +333,78 @@ def calculate_trip_eco_score(
             if epoch - last_event_time["accel"] > 5.0:
                 harsh_accels += 1
                 last_event_time["accel"] = epoch
+                accel_val = eval_res["acceleration_ms2"]
+                sev = "severe" if accel_val > 4.2 else ("moderate" if accel_val > 3.4 else "minor")
+                if sev == "severe":
+                    accel_severe_count += 1
+                elif sev == "moderate":
+                    accel_moderate_count += 1
+                else:
+                    accel_minor_count += 1
+
                 if lat is not None and lng is not None:
+                    sev_title = "Severe" if sev == "severe" else ("Harsh" if sev == "moderate" else "Moderate")
                     events.append({
                         "type": "harsh_accel",
-                        "label": "Harsh Acceleration",
+                        "severity": sev,
+                        "label": f"{sev_title} Acceleration (+{accel_val:.2f} m/s²)",
                         "latitude": float(lat),
                         "longitude": float(lng),
                         "speed": round(speed, 1),
                         "time": t_curr.isoformat().replace("T", " ") if t_curr else None,
-                        "acceleration_ms2": eval_res["acceleration_ms2"],
+                        "acceleration_ms2": accel_val,
                     })
 
         if eval_res["harsh_brake"]:
             if epoch - last_event_time["brake"] > 5.0:
                 harsh_brakes += 1
                 last_event_time["brake"] = epoch
+                brake_val = eval_res["acceleration_ms2"]
+                sev = "severe" if brake_val < -4.6 else ("moderate" if brake_val < -3.8 else "minor")
+                if sev == "severe":
+                    brake_severe_count += 1
+                elif sev == "moderate":
+                    brake_moderate_count += 1
+                else:
+                    brake_minor_count += 1
+
                 if lat is not None and lng is not None:
+                    sev_title = "Severe" if sev == "severe" else ("Harsh" if sev == "moderate" else "Hard")
                     events.append({
                         "type": "harsh_brake",
-                        "label": "Harsh Braking",
+                        "severity": sev,
+                        "label": f"{sev_title} Braking ({brake_val:.2f} m/s²)",
                         "latitude": float(lat),
                         "longitude": float(lng),
                         "speed": round(speed, 1),
                         "time": t_curr.isoformat().replace("T", " ") if t_curr else None,
-                        "acceleration_ms2": eval_res["acceleration_ms2"],
+                        "acceleration_ms2": brake_val,
                     })
 
         if eval_res["harsh_corner"]:
             if epoch - last_event_time["corner"] > 5.0:
                 harsh_corners += 1
                 last_event_time["corner"] = epoch
+                turn_rate = eval_res.get("turn_rate_deg_s", 0.0)
+                sev = "severe" if turn_rate >= 50.0 else ("moderate" if turn_rate >= 40.0 else "minor")
+                if sev == "severe":
+                    corner_severe_count += 1
+                elif sev == "moderate":
+                    corner_moderate_count += 1
+                else:
+                    corner_minor_count += 1
+
                 if lat is not None and lng is not None:
+                    sev_title = "Aggressive" if sev == "severe" else ("Harsh" if sev == "moderate" else "Sharp")
                     events.append({
                         "type": "harsh_corner",
-                        "label": "Sharp Cornering",
+                        "severity": sev,
+                        "label": f"{sev_title} Turn ({turn_rate:.1f} °/s)",
                         "latitude": float(lat),
                         "longitude": float(lng),
                         "speed": round(speed, 1),
                         "time": t_curr.isoformat().replace("T", " ") if t_curr else None,
-                        "turn_rate_deg_s": eval_res.get("turn_rate_deg_s", 0.0),
+                        "turn_rate_deg_s": turn_rate,
                     })
 
         # Tiered Speeding Accumulation & Event Tagging
@@ -412,9 +459,20 @@ def calculate_trip_eco_score(
     # Scale penalty by trip length (standardized per 100km factor)
     dist_factor = min(1.5, max(0.4, math.sqrt(dist / 10.0)))
 
-    accel_penalty = (harsh_accels * 4.0) / dist_factor
-    brake_penalty = (harsh_brakes * 5.0) / dist_factor
-    corner_penalty = (harsh_corners * 3.5) / dist_factor
+    # Tiered Acceleration Penalty (Moderate: 1.5 pts, Harsh: 3.5 pts, Severe: 6.0 pts)
+    accel_penalty = (
+        (accel_minor_count * 1.5) + (accel_moderate_count * 3.5) + (accel_severe_count * 6.0)
+    ) / dist_factor
+
+    # Tiered Braking Penalty (Hard/Minor: 2.0 pts, Harsh/Moderate: 4.5 pts, Severe: 7.5 pts)
+    brake_penalty = (
+        (brake_minor_count * 2.0) + (brake_moderate_count * 4.5) + (brake_severe_count * 7.5)
+    ) / dist_factor
+
+    # Tiered Cornering Penalty (Sharp/Minor: 1.5 pts, Harsh/Moderate: 3.0 pts, Aggressive/Severe: 5.5 pts)
+    corner_penalty = (
+        (corner_minor_count * 1.5) + (corner_moderate_count * 3.0) + (corner_severe_count * 5.5)
+    ) / dist_factor
 
     # Tiered Speeding Penalty (Minor: 0.5 pts/min, Moderate: 1.5 pts/min, Severe: 3.5 pts/min)
     speeding_penalty = min(
@@ -441,8 +499,17 @@ def calculate_trip_eco_score(
         "eco_score": final_score,
         "grade": get_eco_grade(final_score),
         "harsh_accel_count": harsh_accels,
+        "accel_minor_count": accel_minor_count,
+        "accel_moderate_count": accel_moderate_count,
+        "accel_severe_count": accel_severe_count,
         "harsh_brake_count": harsh_brakes,
+        "brake_minor_count": brake_minor_count,
+        "brake_moderate_count": brake_moderate_count,
+        "brake_severe_count": brake_severe_count,
         "harsh_corner_count": harsh_corners,
+        "corner_minor_count": corner_minor_count,
+        "corner_moderate_count": corner_moderate_count,
+        "corner_severe_count": corner_severe_count,
         "speeding_duration_minutes": speeding_minutes,
         "speeding_minor_minutes": speeding_minor_mins,
         "speeding_moderate_minutes": speeding_moderate_mins,

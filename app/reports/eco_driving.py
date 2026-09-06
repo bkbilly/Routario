@@ -200,6 +200,7 @@ class EcoDrivingReport(Report):
                 "harsh_accel_count": accel_cnt,
                 "harsh_brake_count": brake_cnt,
                 "harsh_corner_count": corner_cnt,
+                "speeding_duration_minutes": round(speeding_mins, 1),
                 "speeding_minor_minutes": round(speeding_minor, 1),
                 "speeding_moderate_minutes": round(speeding_moderate, 1),
                 "speeding_severe_minutes": round(speeding_severe, 1),
