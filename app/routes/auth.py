@@ -16,6 +16,7 @@ from core.database import get_db
 from core.config import get_settings
 from core.email import send_email_async
 from core.mfa import hash_recovery_code, verify_totp
+from core.rate_limiter import get_client_ip, require_rate_limit, reset_rate_limit
 from models import User
 from models.schemas import UserLogin, Token, MagicLinkRequest, MagicLinkVerify
 
@@ -79,6 +80,14 @@ async def get_auth_methods():
 @router.post("/auth/magic-link/request")
 async def request_magic_link(form_data: MagicLinkRequest, request: Request):
     """Sends a one-time passwordless sign-in link via SMTP email if enabled."""
+    client_ip = get_client_ip(request)
+    await require_rate_limit(
+        f"auth:magic_req:ip:{client_ip}",
+        max_requests=5,
+        window_seconds=300,
+        detail="Too many sign-in requests from this IP. Please wait 5 minutes.",
+    )
+
     settings = get_settings()
     smtp_enabled = bool(getattr(settings, "smtp_enabled", False))
     if not smtp_enabled:
@@ -90,6 +99,13 @@ async def request_magic_link(form_data: MagicLinkRequest, request: Request):
     email_clean = (form_data.email or "").strip().lower()
     if not email_clean or "@" not in email_clean:
         raise HTTPException(status_code=400, detail="Please enter a valid email address.")
+
+    await require_rate_limit(
+        f"auth:magic_req:email:{email_clean}",
+        max_requests=3,
+        window_seconds=300,
+        detail="Too many sign-in requests for this email. Please check your inbox or wait 5 minutes.",
+    )
 
     db = get_db()
     user = await db.get_user_by_email(email_clean)
@@ -144,6 +160,14 @@ async def request_magic_link(form_data: MagicLinkRequest, request: Request):
 @router.post("/auth/magic-link/verify", response_model=Token)
 async def verify_magic_link(form_data: MagicLinkVerify, request: Request):
     """Verifies a magic link token and authenticates the user."""
+    client_ip = get_client_ip(request)
+    await require_rate_limit(
+        f"auth:magic_verify:ip:{client_ip}",
+        max_requests=10,
+        window_seconds=60,
+        detail="Too many verification attempts. Please wait 1 minute.",
+    )
+
     settings = get_settings()
     try:
         payload = jwt.decode(form_data.token, settings.secret_key, algorithms=[settings.algorithm])
@@ -181,6 +205,23 @@ async def verify_magic_link(form_data: MagicLinkVerify, request: Request):
 
 @router.post("/login", response_model=Token)
 async def login(form_data: UserLogin, request: Request):
+    client_ip = get_client_ip(request)
+    uname = (form_data.username or "").strip().lower()
+
+    await require_rate_limit(
+        f"auth:login:ip:{client_ip}",
+        max_requests=20,
+        window_seconds=60,
+        detail="Too many login attempts from this IP. Please wait 1 minute.",
+    )
+    if uname:
+        await require_rate_limit(
+            f"auth:login:user:{uname}",
+            max_requests=10,
+            window_seconds=60,
+            detail="Too many login attempts for this account. Please wait 1 minute.",
+        )
+
     db = get_db()
     user = await db.authenticate_user(form_data.username, form_data.password)
     if not user:
@@ -208,6 +249,9 @@ async def login(form_data: UserLogin, request: Request):
         if not valid_mfa:
             await write_audit_log("auth.mfa_failed", actor=user, request=request)
             raise HTTPException(status_code=400, detail="Invalid MFA code")
+
+    if uname:
+        await reset_rate_limit(f"auth:login:user:{uname}")
 
     settings = get_settings()
     token_data = {

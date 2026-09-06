@@ -27,10 +27,12 @@ class Settings(BaseSettings):
     api_port: int = 8000
     api_workers: int = 4
     
-    # Security
+    # Security & CORS
     secret_key: str = "your-secret-key-change-in-production"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
+    cors_origins: str = "*"
+    require_ws_auth: bool = True
     passkey_rp_id: Optional[str] = None
     passkey_rp_name: str = "Routario"
     passkey_origin: Optional[str] = None
@@ -130,6 +132,9 @@ class Settings(BaseSettings):
     history_max_api_limit: int = 10000
     history_retention_enabled: bool = False
     history_retention_days: int = 90
+    history_downsample_enabled: bool = False
+    history_downsample_days: int = 30
+    history_downsample_interval_seconds: int = 60
 
     # Fleet & Trip Rules
     trip_min_distance_km: float = 0.1
@@ -416,6 +421,9 @@ SYSTEM_SETTINGS_METADATA = {
     "history_max_api_limit": {"type": "int", "category": "History Data & Retention", "label": "History Max API Limit", "description": "Maximum GPS history points allowed in a single API query", "secret": False},
     "history_retention_enabled": {"type": "bool", "category": "History Data & Retention", "label": "Auto Truncation Enabled", "description": "Automatically purge old historical position data past retention period", "secret": False},
     "history_retention_days": {"type": "int", "category": "History Data & Retention", "label": "History Retention (Days)", "description": "Number of days to keep historical position records before truncation", "secret": False},
+    "history_downsample_enabled": {"type": "bool", "category": "History Data & Retention", "label": "Time-Series Downsampling Enabled", "description": "Automatically downsample older historical position data to save storage while preserving trip continuity and state changes", "secret": False},
+    "history_downsample_days": {"type": "int", "category": "History Data & Retention", "label": "Downsample After (Days)", "description": "Number of days after which high-frequency GPS records are downsampled", "secret": False},
+    "history_downsample_interval_seconds": {"type": "int", "category": "History Data & Retention", "label": "Downsample Resolution (Seconds)", "description": "Target minimum interval between preserved GPS points during downsampling (e.g. 60s)", "secret": False},
 
     # Security & Token Policies
     "secret_key": {"type": "str", "category": "Security & Token Policies", "label": "JWT Secret Key", "description": "Secret key used for signing JWT authentication tokens", "secret": True},

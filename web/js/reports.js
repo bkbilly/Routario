@@ -2532,7 +2532,7 @@ async function showTripMap(idx) {
     if (!_tripMapInst) {
         const tileKey   = localStorage.getItem('mapTileLayer') || 'openstreetmap_dark';
         const tile      = _TRIP_TILES[tileKey] || _TRIP_TILES['openstreetmap_dark'];
-        _tripMapInst    = L.map('tripMapContainer', { zoomControl: true, wheelPxPerZoomLevel: 120 });
+        _tripMapInst    = L.map('tripMapContainer', { zoomControl: true, wheelPxPerZoomLevel: 120, preferCanvas: true });
         const tileLayer = L.tileLayer(tile.url, { maxZoom: tile.maxZoom, attribution: '© OpenStreetMap contributors' });
         tileLayer.addTo(_tripMapInst);
         if (tile.filter) {

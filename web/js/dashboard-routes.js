@@ -870,7 +870,8 @@ function initDashboardRouteEditorMap() {
         zoomControl: true,
         attributionControl: true,
         wheelPxPerZoomLevel: 120,
-        worldCopyJump: true
+        worldCopyJump: true,
+        preferCanvas: true,
     }).setView([39.0742, 21.8243], 6);
     const tileKey = localStorage.getItem('mapTileLayer') || 'openstreetmap_dark';
     const tile = (typeof MAP_TILES !== 'undefined' && MAP_TILES[tileKey]) ? MAP_TILES[tileKey] : {

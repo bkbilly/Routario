@@ -4,11 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Live Location Share</title>
+    <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
     <!-- Material Design Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/js/vehicle-icons.js"></script>
     <script>
         (function() {
             const theme = localStorage.getItem('theme') || 'dark';
@@ -170,9 +172,10 @@
     const API_URL = `/api/share/${token}/position`;
 
     let map, marker, currentPosition = null;
+    let shareTrail = [], breadcrumbLayer = null;
 
     function initMap() {
-        map = L.map('map', { zoomControl: true, attributionControl: false, wheelPxPerZoomLevel: 120 });
+        map = L.map('map', { zoomControl: true, attributionControl: false, wheelPxPerZoomLevel: 120, preferCanvas: true });
         L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
             maxZoom: 19
         }).addTo(map);
@@ -212,9 +215,10 @@
 
     function updateUI(data) {
         // Header — use vehicle-icons.js for the correct emoji
-        const cfg = VEHICLE_ICONS[data.vehicle_type] || VEHICLE_ICONS['other'];
+        const iconsMap = typeof VEHICLE_ICONS !== 'undefined' ? VEHICLE_ICONS : {};
+        const cfg = iconsMap[data.vehicle_type] || iconsMap['other'] || { emoji: '🚗' };
         document.getElementById('vehicleIcon').textContent = cfg.emoji;
-        document.getElementById('nameText').textContent = data.device_name;
+        document.getElementById('nameText').textContent = data.device_name || 'Vehicle';
 
         const badge = document.getElementById('statusBadge');
         if (data.is_moving) {
@@ -237,10 +241,42 @@
         // Map marker — use getMarkerHtml() from vehicle-icons.js
         if (data.latitude && data.longitude) {
             const latlng = [data.latitude, data.longitude];
-            const iconHtml = getMarkerHtml(data.vehicle_type, data.ignition_on, data.course || 0);
+            const iconHtml = typeof getMarkerHtml === 'function'
+                ? getMarkerHtml(data.vehicle_type, data.ignition_on, data.course || 0)
+                : `<div style="font-size:28px;">🚗</div>`;
             const icon = L.divIcon({ html: iconHtml, className: '', iconSize: [32,32], iconAnchor: [16,16] });
 
             currentPosition = { lat: data.latitude, lng: data.longitude };
+
+            // Live Breadcrumb Trail
+            const lastPt = shareTrail.length ? shareTrail[shareTrail.length - 1] : null;
+            if (!lastPt || Math.abs(lastPt[0] - data.latitude) > 0.00003 || Math.abs(lastPt[1] - data.longitude) > 0.00003) {
+                if (lastPt && (Math.abs(lastPt[0] - data.latitude) > 0.5 || Math.abs(lastPt[1] - data.longitude) > 0.5)) {
+                    shareTrail.length = 0;
+                }
+                shareTrail.push(latlng);
+                if (shareTrail.length > 10) shareTrail.splice(0, shareTrail.length - 10);
+            }
+
+            if (shareTrail.length >= 2) {
+                const trailColor = data.is_moving ? '#38bdf8' : '#94a3b8';
+                if (!breadcrumbLayer) {
+                    breadcrumbLayer = L.polyline(shareTrail, {
+                        color: trailColor,
+                        weight: 3.5,
+                        opacity: 0.75,
+                        dashArray: '4, 6',
+                        lineCap: 'round',
+                        lineJoin: 'round',
+                        interactive: false
+                    }).addTo(map);
+                    if (breadcrumbLayer.bringToBack) breadcrumbLayer.bringToBack();
+                } else {
+                    breadcrumbLayer.setLatLngs(shareTrail);
+                    breadcrumbLayer.setStyle({ color: trailColor });
+                }
+            }
+
             if (!marker) {
                 marker = L.marker(latlng, { icon }).addTo(map);
                 map.setView(latlng, 15);

@@ -437,16 +437,21 @@ function filterDevices() {
         // ── Sidebar card ──
         card.style.display = visible ? '' : 'none';
 
-        // ── Map marker ──
+        // ── Map marker & layers ──
         if (device && markers[device.id]) {
             const marker = markers[device.id];
             const circle = accuracyCircles[device.id];
+            const trail = typeof liveBreadcrumbLayers !== 'undefined' ? liveBreadcrumbLayers[device.id] : null;
             if (visible) {
                 if (!clusterGroup.hasLayer(marker)) clusterGroup.addLayer(marker);
-                if (circle && !map.hasLayer(circle)) circle.addTo(map);
+                if (circle && map && !map.hasLayer(circle)) circle.addTo(map);
+                if (trail && map && !map.hasLayer(trail) && !(typeof historyDeviceId !== 'undefined' && historyDeviceId) && (typeof _isDeviceClustered === 'function' ? !_isDeviceClustered(device.id) : true)) {
+                    trail.addTo(map);
+                }
             } else {
                 if (clusterGroup.hasLayer(marker)) clusterGroup.removeLayer(marker);
-                if (circle && map.hasLayer(circle)) map.removeLayer(circle);
+                if (circle && map && map.hasLayer(circle)) map.removeLayer(circle);
+                if (trail && map && map.hasLayer(trail)) map.removeLayer(trail);
             }
         }
     });

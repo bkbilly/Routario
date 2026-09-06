@@ -383,6 +383,13 @@ class DatabaseService:
             )""",
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_sim_cards_phone_number ON sim_cards (phone_number)",
             "ALTER TABLE sim_cards ADD COLUMN remaining_data_mb FLOAT",
+            "CREATE INDEX IF NOT EXISTS ix_position_records_device_id_device_time ON position_records (device_id, device_time)",
+            "CREATE INDEX IF NOT EXISTS ix_trips_device_id_start_time ON trips (device_id, start_time)",
+            "CREATE INDEX IF NOT EXISTS ix_alert_history_device_id_created_at ON alert_history (device_id, created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_alert_history_user_id_created_at ON alert_history (user_id, created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_audit_logs_actor_created ON audit_logs (actor_user_id, created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_audit_logs_company_created ON audit_logs (company_id, created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_usage_events_company_metric_created ON usage_events (company_id, metric, created_at)",
         ]
         if self._is_postgres:
             migrations.extend([
@@ -1123,13 +1130,25 @@ class DatabaseService:
             state = await self._get_or_create_state(session, device.id)
 
             distance_km = 0.0
-            if state.last_latitude is not None:
-                distance_km = calculate_distance_km(
+            if state.last_latitude is not None and state.last_longitude is not None:
+                raw_dist = calculate_distance_km(
                     state.last_latitude, state.last_longitude,
                     position.latitude, position.longitude,
                 )
-                if distance_km > 50.0:
+                # Stationary GPS jitter filter:
+                # If speed is near zero (< 1.0 km/h) or ignition is off, and displacement is < 15 meters (0.015 km),
+                # ignore the displacement to prevent odometer drift while parked.
+                is_stationary = (
+                    (position.speed is not None and position.speed < 1.0)
+                    or (position.ignition is False)
+                    or (state.ignition_on is False)
+                )
+                if is_stationary and raw_dist < 0.015:
                     distance_km = 0.0
+                elif raw_dist > 50.0:
+                    distance_km = 0.0
+                else:
+                    distance_km = raw_dist
 
             await self._handle_trip_logic(session, device, state, position, device_time)
 
@@ -1722,3 +1741,8 @@ def get_db() -> DatabaseService:
     if db_service is None:
         raise RuntimeError("Database not initialised — call init_database() first.")
     return db_service
+
+
+def set_db(svc: Optional[DatabaseService]):
+    global db_service
+    db_service = svc

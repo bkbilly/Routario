@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, List
 
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, Float,
-    ForeignKey, Table, Text, BigInteger,
+    ForeignKey, Table, Text, BigInteger, Index,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -232,6 +232,9 @@ class DeviceState(Base):
 
 class PositionRecord(Base):
     __tablename__ = 'position_records'
+    __table_args__ = (
+        Index('ix_position_records_device_id_device_time', 'device_id', 'device_time'),
+    )
 
     id:          Mapped[int]            = mapped_column(Integer, primary_key=True, autoincrement=True)
     device_id:   Mapped[int]            = mapped_column(Integer, ForeignKey('devices.id', ondelete='CASCADE'), index=True)
@@ -252,6 +255,9 @@ class PositionRecord(Base):
 
 class Trip(Base):
     __tablename__ = 'trips'
+    __table_args__ = (
+        Index('ix_trips_device_id_start_time', 'device_id', 'start_time'),
+    )
 
     id:               Mapped[int]            = mapped_column(Integer, primary_key=True)
     device_id:        Mapped[int]            = mapped_column(Integer, ForeignKey('devices.id', ondelete='CASCADE'), index=True)
@@ -309,6 +315,10 @@ class Geofence(Base):
 
 class AlertHistory(Base):
     __tablename__ = 'alert_history'
+    __table_args__ = (
+        Index('ix_alert_history_device_id_created_at', 'device_id', 'created_at'),
+        Index('ix_alert_history_user_id_created_at', 'user_id', 'created_at'),
+    )
 
     id:               Mapped[int]           = mapped_column(Integer, primary_key=True)
     user_id:          Mapped[int]           = mapped_column(Integer, ForeignKey('users.id',   ondelete='CASCADE'), index=True)
@@ -473,6 +483,10 @@ class VideoClip(Base):
 
 class AuditLog(Base):
     __tablename__ = 'audit_logs'
+    __table_args__ = (
+        Index('ix_audit_logs_actor_created', 'actor_user_id', 'created_at'),
+        Index('ix_audit_logs_company_created', 'company_id', 'created_at'),
+    )
 
     id:          Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
     actor_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
@@ -529,6 +543,9 @@ class BillingPlan(Base):
 
 class UsageEvent(Base):
     __tablename__ = 'usage_events'
+    __table_args__ = (
+        Index('ix_usage_events_company_metric_created', 'company_id', 'metric', 'created_at'),
+    )
 
     id:          Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
     company_id:  Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), nullable=True, index=True)

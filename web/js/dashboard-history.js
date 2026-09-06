@@ -422,6 +422,9 @@ function _restoreLiveTracking() {
                 if (accuracyCircles[d.id] && map && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
             });
         }
+        if (typeof updateAllBreadcrumbsVisibility === 'function') {
+            updateAllBreadcrumbsVisibility();
+        }
         const sidebar = document.querySelector('.sidebar');
         if (sidebar) sidebar.classList.remove('history-active');
         const devList = document.getElementById('sidebarDeviceList');
@@ -538,13 +541,18 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { pres
         });
     }
 
-    // Hide ALL live markers and accuracy circles when entering history mode
+    // Hide ALL live markers, accuracy circles, and live breadcrumb trails when entering history mode
     if (typeof clusterGroup !== 'undefined' && clusterGroup && map && map.hasLayer(clusterGroup)) {
         map.removeLayer(clusterGroup);
     }
     devices.forEach(d => {
         if (accuracyCircles[d.id] && map && map.hasLayer(accuracyCircles[d.id])) map.removeLayer(accuracyCircles[d.id]);
     });
+    if (typeof liveBreadcrumbLayers !== 'undefined') {
+        Object.values(liveBreadcrumbLayers).forEach(layer => {
+            if (layer && map && map.hasLayer(layer)) map.removeLayer(layer);
+        });
+    }
 
     try {
         await syncPublicSystemSettings(signal);
@@ -577,6 +585,9 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { pres
             devices.forEach(d => {
                 if (accuracyCircles[d.id] && map && !map.hasLayer(accuracyCircles[d.id])) accuracyCircles[d.id].addTo(map);
             });
+            if (typeof updateAllBreadcrumbsVisibility === 'function') {
+                updateAllBreadcrumbsVisibility();
+            }
             return false;
         }
         historyDeviceId = deviceId;
@@ -862,6 +873,13 @@ function exitHistoryMode(fromPopState = false) {
                 restoreDashboardRouteLayerAfterHistory();
             } catch (e) {
                 console.warn('Error restoring route layer:', e);
+            }
+        }
+        if (typeof updateAllBreadcrumbsVisibility === 'function') {
+            try {
+                updateAllBreadcrumbsVisibility();
+            } catch (e) {
+                console.warn('Error updating breadcrumbs on history exit:', e);
             }
         }
     } catch (err) {

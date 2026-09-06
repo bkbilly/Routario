@@ -192,8 +192,8 @@ class WebSocketManager:
 
     async def _broadcast_direct(self, device_id: int, message: Dict[str, Any]):
         """
-        Fallback path: look up which users own this device and push
-        directly without going through Redis.
+        Fallback path: look up which users own this device (assigned users, admins,
+        and company admins) and push directly without going through Redis.
         """
         raw = json.dumps(message)
         try:
@@ -201,8 +201,21 @@ class WebSocketManager:
             device = await db.get_device_by_id(device_id)
             if not device:
                 return
-            for user in device.users:
-                await self._send_to_user(user.id, raw)
+
+            target_user_ids = {u.id for u in (device.users or [])}
+
+            # Also check currently connected WebSocket user IDs
+            active_uids = [uid for uid in self.active_connections.keys() if uid not in target_user_ids]
+            if active_uids:
+                active_users = await db.get_users_by_ids(active_uids)
+                for u in active_users:
+                    if u.is_admin:
+                        target_user_ids.add(u.id)
+                    elif device.company_id is not None and u.company_id == device.company_id and u.is_company_admin:
+                        target_user_ids.add(u.id)
+
+            for user_id in target_user_ids:
+                await self._send_to_user(user_id, raw)
         except Exception as exc:
             logger.debug("Direct broadcast error: %s", exc)
 
@@ -536,10 +549,13 @@ app = FastAPI(
     redoc_url=None,
 )
 
+cors_raw = get_settings().cors_origins or "*"
+cors_list = [o.strip() for o in cors_raw.split(",") if o.strip()] if cors_raw != "*" else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_list,
+    allow_credentials=True if cors_list != ["*"] else False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -592,6 +608,14 @@ async def get_protocols():
         "running_servers": protocol_server_manager.running_protocols(),
         "protocol_info":   protocols_info,
     }
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon_route():
+    icon_path = Path("web/icons/favicon.ico")
+    if icon_path.is_file():
+        return FileResponse(str(icon_path))
+    return Response(status_code=204)
 
 
 @app.get("/")
@@ -1050,7 +1074,42 @@ async def web_manifest(company_id: Optional[int] = Query(None), company_slug: Op
 
 
 @app.websocket("/ws/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, user_id: int):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    user_id: int,
+    token: Optional[str] = Query(None),
+):
+    settings = get_settings()
+    auth_user = None
+
+    if token:
+        try:
+            payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+            token_user_id = int(payload.get("sub", 0))
+            db = get_db()
+            token_user = await db.get_user(token_user_id)
+            if token_user:
+                if token_user.is_admin or token_user.id == user_id or (token_user.is_company_admin and token_user.company_id is not None):
+                    auth_user = token_user
+        except Exception:
+            pass
+
+        if not auth_user:
+            from core.api_keys import authenticate_api_key
+            client_ip = websocket.client.host if websocket.client else "127.0.0.1"
+            api_user, api_key = await authenticate_api_key(token, client_ip)
+            if api_user and (api_user.is_admin or api_user.id == user_id or (api_user.is_company_admin and api_user.company_id is not None)):
+                auth_user = api_user
+
+    if not auth_user and getattr(settings, "require_ws_auth", True):
+        logger.warning(
+            "Rejecting unauthenticated WebSocket connection for user_id=%s from %s",
+            user_id,
+            getattr(websocket.client, "host", "unknown"),
+        )
+        await websocket.close(code=4001, reason="Unauthorized: Valid authentication token required")
+        return
+
     await ws_manager.connect(user_id, websocket)
     try:
         if redis_pubsub.available:

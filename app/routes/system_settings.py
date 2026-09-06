@@ -214,6 +214,29 @@ async def trigger_history_purge(
     }
 
 
+@router.post("/downsample-history", response_model=Dict[str, Any])
+async def trigger_history_downsample(
+    days: Optional[int] = None,
+    interval_seconds: Optional[int] = None,
+    current_user: User = Depends(require_admin),
+) -> Dict[str, Any]:
+    """Manually trigger time-series downsampling of historical position data older than specified days."""
+    from core.retention import downsample_old_positions
+    settings_obj = get_settings()
+    target_days = days if days is not None else getattr(settings_obj, "history_downsample_days", 30)
+    target_interval = interval_seconds if interval_seconds is not None else getattr(settings_obj, "history_downsample_interval_seconds", 60)
+
+    if target_days <= 0 or target_interval <= 0:
+        raise HTTPException(status_code=400, detail="Days and interval seconds must be greater than 0")
+
+    count = await downsample_old_positions(target_days, target_interval)
+    return {
+        "success": True,
+        "pruned_records": count,
+        "message": f"Successfully downsampled historical positions: pruned {count} redundant points older than {target_days} days.",
+    }
+
+
 class SmtpTestRequest(BaseModel):
     recipient_email: Optional[str] = None
     config_override: Optional[Dict[str, Any]] = None

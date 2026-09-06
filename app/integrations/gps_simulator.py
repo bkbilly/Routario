@@ -301,7 +301,7 @@ class GPSSimulatorIntegration(BaseIntegration):
         seg_frac:   float = float(state.get("seg_frac", 0.0))
         cur_ign:    bool  = bool(state.get("cur_ignition", True))
         last_time         = _parse_dt(state.get("last_time")) or now
-        elapsed_s         = max((now - last_time).total_seconds(), 0.001)
+        elapsed_s         = min(max((now - last_time).total_seconds(), 0.001), 30.0)
 
         # ── Honour a wait pause ───────────────────────────────────────────────
         wu = state.get("waiting_until")

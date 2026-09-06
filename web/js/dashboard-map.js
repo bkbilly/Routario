@@ -9,6 +9,12 @@ const markerState = {};
 // accuracyCircles[deviceId] = L.circle instance (or undefined)
 const accuracyCircles = {};
 
+// Live breadcrumb trails and polylines for live vehicles
+// liveBreadcrumbTrails[deviceId] = [ [lat, lng], ... ] (FIFO buffer of recent coordinates)
+const liveBreadcrumbTrails = {};
+// liveBreadcrumbLayers[deviceId] = L.polyline instance (or undefined)
+const liveBreadcrumbLayers = {};
+
 const MAP_TILES = {
     openstreetmap_dark: {
         label: '🌙 OpenStreetMap Dark',
@@ -110,6 +116,7 @@ function initMap() {
         zoomControl: false,
         wheelPxPerZoomLevel: 120,
         worldCopyJump: true,
+        preferCanvas: true,
     });
 
     // Seamlessly normalize map longitude across world copies so markers/overlays are always visible
@@ -168,6 +175,12 @@ function initMap() {
     clusterGroup.on('clusterclick', (e) => {
         zoomToClusterWithSidebarOffset(e.layer);
     });
+
+    clusterGroup.on('animationend', updateAllBreadcrumbsVisibility);
+    clusterGroup.on('spiderfied', updateAllBreadcrumbsVisibility);
+    clusterGroup.on('unspiderfied', updateAllBreadcrumbsVisibility);
+    map.on('zoomend', updateAllBreadcrumbsVisibility);
+    map.on('moveend', updateAllBreadcrumbsVisibility);
 
     initGeofences(map);
     if (typeof initHistoryZoomLineModeSwitch === 'function') {
@@ -419,6 +432,10 @@ function updateDeviceMarker(deviceId, state) {
             markers[deviceId].setPopupContent(popupContent);
         }
 
+        if (device && device.ignition_on !== state.ignition_on) {
+            markers[deviceId].setIcon(_makeMarkerIcon(device?.vehicle_type, state.ignition_on, toHead));
+        }
+
         const prev = markerState[deviceId] || { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
 
         if (prev.animFrame) {
@@ -502,6 +519,9 @@ function updateDeviceMarker(deviceId, state) {
         delete accuracyCircles[deviceId];
     }
 
+    // ── Live Breadcrumb / Directional Trail ────────────────────────────────────
+    _updateLiveBreadcrumbTrail(deviceId, toLat, toLng, state);
+
     const deviceIndex = devices.findIndex(d => d.id === deviceId);
     if (deviceIndex !== -1) {
         if (!state.hasOwnProperty('is_online') && state.last_latitude) state.is_online = true;
@@ -509,6 +529,176 @@ function updateDeviceMarker(deviceId, state) {
     }
     refreshClusterIcons();
 }
+
+/**
+ * Reads user preference for live breadcrumb trail length.
+ * Returns 0 if disabled, otherwise max number of points (default 10).
+ */
+function getBreadcrumbMaxPoints() {
+    const pref = localStorage.getItem('map_breadcrumb_points');
+    if (pref === 'disabled' || pref === '0') return 0;
+    const n = parseInt(pref, 10);
+    return Number.isFinite(n) && n > 0 ? n : 10;
+}
+
+/**
+ * Checks whether a marker is currently grouped with other markers inside a cluster.
+ */
+function _isDeviceClustered(deviceId) {
+    const marker = markers[deviceId];
+    if (!marker || !clusterGroup) return false;
+    try {
+        if (!clusterGroup.hasLayer(marker)) return true;
+        const parent = clusterGroup.getVisibleParent(marker);
+        // If parent is truthy and not the marker itself, it is grouped in an L.MarkerCluster
+        return Boolean(parent && parent !== marker);
+    } catch (_) {
+        return false;
+    }
+}
+
+/**
+ * Syncs visibility for all live breadcrumb layers depending on clustering and filter status.
+ */
+function updateAllBreadcrumbsVisibility() {
+    if (!map) return;
+    const maxPoints = getBreadcrumbMaxPoints();
+    if (maxPoints <= 0 || (typeof historyDeviceId !== 'undefined' && historyDeviceId)) {
+        for (const layer of Object.values(liveBreadcrumbLayers)) {
+            if (layer && map.hasLayer(layer)) map.removeLayer(layer);
+        }
+        return;
+    }
+
+    for (const [deviceIdStr, layer] of Object.entries(liveBreadcrumbLayers)) {
+        if (!layer) continue;
+        const devId = Number(deviceIdStr) || deviceIdStr;
+        const marker = markers[devId];
+        const trail = liveBreadcrumbTrails[devId];
+
+        if (!marker || !trail || trail.length < 2) {
+            if (map.hasLayer(layer)) map.removeLayer(layer);
+            continue;
+        }
+
+        const isClustered = _isDeviceClustered(devId);
+        const shouldBeVisible = !isClustered && clusterGroup && clusterGroup.hasLayer(marker);
+
+        if (shouldBeVisible) {
+            if (!map.hasLayer(layer)) {
+                layer.addTo(map);
+                if (layer.bringToBack) layer.bringToBack();
+            }
+        } else {
+            if (map.hasLayer(layer)) {
+                map.removeLayer(layer);
+            }
+        }
+    }
+}
+
+/**
+ * Updates the live breadcrumb polyline behind moving vehicles.
+ */
+function _updateLiveBreadcrumbTrail(deviceId, lat, lng, state) {
+    if (!map || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    if (typeof historyDeviceId !== 'undefined' && historyDeviceId) return;
+
+    const maxPoints = getBreadcrumbMaxPoints();
+    if (maxPoints <= 0) {
+        removeLiveBreadcrumb(deviceId);
+        return;
+    }
+
+    if (!liveBreadcrumbTrails[deviceId]) {
+        liveBreadcrumbTrails[deviceId] = [];
+    }
+
+    const trail = liveBreadcrumbTrails[deviceId];
+    const lastPoint = trail.length ? trail[trail.length - 1] : null;
+
+    if (lastPoint) {
+        const dLat = Math.abs(lastPoint[0] - lat);
+        const dLng = Math.abs(lastPoint[1] - lng);
+
+        // Ignore stationary GPS jitter (< 0.00003 deg ≈ ~3m)
+        if (dLat < 0.00003 && dLng < 0.00003) {
+            return;
+        }
+
+        // Reset trail on extreme telemetry jumps (> 0.5 deg ≈ ~55km) to avoid crossing maps
+        if (dLat > 0.5 || dLng > 0.5) {
+            trail.length = 0;
+        }
+    }
+
+    trail.push([lat, lng]);
+
+    // Keep the configured number of recent points
+    if (trail.length > maxPoints) {
+        trail.splice(0, trail.length - maxPoints);
+    }
+
+    if (trail.length >= 2) {
+        const isMoving = (state.last_speed || state.speed || 0) > 2 || state.ignition_on;
+        const trailColor = isMoving ? '#38bdf8' : '#94a3b8';
+        const isClustered = _isDeviceClustered(deviceId);
+
+        if (!liveBreadcrumbLayers[deviceId]) {
+            liveBreadcrumbLayers[deviceId] = L.polyline(trail, {
+                color: trailColor,
+                weight: 3.5,
+                opacity: 0.75,
+                dashArray: '4, 6',
+                lineCap: 'round',
+                lineJoin: 'round',
+                interactive: false,
+            });
+        } else {
+            const layer = liveBreadcrumbLayers[deviceId];
+            layer.setLatLngs(trail);
+            layer.setStyle({ color: trailColor });
+        }
+
+        const layer = liveBreadcrumbLayers[deviceId];
+        const isHistoryActive = Boolean(typeof historyDeviceId !== 'undefined' && historyDeviceId);
+        if (!isHistoryActive && !isClustered && clusterGroup && clusterGroup.hasLayer(markers[deviceId])) {
+            if (!map.hasLayer(layer)) {
+                layer.addTo(map);
+                if (layer.bringToBack) layer.bringToBack();
+            }
+        } else {
+            if (map.hasLayer(layer)) {
+                map.removeLayer(layer);
+            }
+        }
+    }
+}
+
+/**
+ * Clean up breadcrumbs when a device is hidden, deleted, or reset.
+ */
+function removeLiveBreadcrumb(deviceId) {
+    if (liveBreadcrumbLayers[deviceId]) {
+        if (map && map.hasLayer(liveBreadcrumbLayers[deviceId])) {
+            map.removeLayer(liveBreadcrumbLayers[deviceId]);
+        }
+        delete liveBreadcrumbLayers[deviceId];
+    }
+    if (liveBreadcrumbTrails[deviceId]) {
+        delete liveBreadcrumbTrails[deviceId];
+    }
+}
+
+// React to user breadcrumb preference changes in real-time
+window.addEventListener('storage', (e) => {
+    if (e.key === 'map_breadcrumb_points') {
+        updateAllBreadcrumbsVisibility();
+    }
+});
+window.addEventListener('routario:breadcrumbchange', () => {
+    updateAllBreadcrumbsVisibility();
+});
 
 /**
  * Called in dashboard-devices.js immediately after marker.addTo(map) when a
@@ -725,6 +915,7 @@ function refreshClusterIcons() {
         _refreshClusterTimer = null;
         try {
             clusterGroup.refreshClusters();
+            updateAllBreadcrumbsVisibility();
         } catch (_) {}
     }, 150);
 }
@@ -800,7 +991,9 @@ function connectWebSocket() {
     }
 
     wsConnectedUserId = userId;
-    const wsUrl = `${WS_BASE_URL}${userId}`;
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
+    if (!token) return;
+    const wsUrl = `${WS_BASE_URL}${userId}?token=${encodeURIComponent(token)}`;
     console.log('Connecting to WebSocket:', wsUrl);
     ws = new WebSocket(wsUrl);
 
@@ -852,6 +1045,10 @@ function handleWebSocketMessage(message) {
                 if (selectedDevice === message.device_id && typeof refreshSelectedDashboardRoute === 'function') {
                     refreshSelectedDashboardRoute({ force: true });
                 }
+            }
+        } else {
+            if (typeof loadDeviceState === 'function') {
+                loadDeviceState(message.device_id);
             }
         }
         updateStats();

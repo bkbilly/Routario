@@ -256,6 +256,10 @@ function renderProfile() {
     if (dateFmtEl) {
         dateFmtEl.value = profileUser.date_format || localStorage.getItem('date_format') || 'auto';
     }
+    const breadcrumbEl = document.getElementById('profileBreadcrumbs');
+    if (breadcrumbEl) {
+        breadcrumbEl.value = localStorage.getItem('map_breadcrumb_points') || '10';
+    }
     renderProfileCurrencyOptions(profileUser.currency || 'EUR');
     const supported = Boolean(window.PublicKeyCredential);
     const note = document.getElementById('passkeySupportNote');
@@ -337,6 +341,9 @@ async function saveProfile() {
         localStorage.setItem('sidebar_compact', saved.sidebar_compact != null ? (saved.sidebar_compact ? 'true' : 'false') : (isCompact ? 'true' : 'false'));
         localStorage.setItem('time_format', saved.time_format || timeFormat);
         localStorage.setItem('date_format', saved.date_format || dateFormat);
+        const breadcrumbEl = document.getElementById('profileBreadcrumbs');
+        const breadcrumbPoints = breadcrumbEl ? breadcrumbEl.value : '10';
+        localStorage.setItem('map_breadcrumb_points', breadcrumbPoints);
         if (typeof applyTheme === 'function') {
             applyTheme(saved.theme || payload.theme);
         }
@@ -345,6 +352,7 @@ async function saveProfile() {
         }
         window.dispatchEvent(new Event('routario:currencychange'));
         window.dispatchEvent(new Event('routario:datetimeformatchange'));
+        window.dispatchEvent(new CustomEvent('routario:breadcrumbchange', { detail: { points: breadcrumbPoints } }));
         renderProfile();
         showAlert('Profile saved', 'success');
     } catch (e) {
