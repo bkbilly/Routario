@@ -84,13 +84,18 @@
 }
 .devices-table tbody tr:last-child td { border-bottom: none; }
 .devices-table tbody tr.device-row,
+.devices-table tbody tr.table-row,
+.devices-table tbody tr {
+    transition: background var(--transition-base, 0.15s ease);
+}
+.devices-table tbody tr.device-row,
 .devices-table tbody tr.table-row {
-    transition: background var(--transition-base);
     cursor: pointer;
 }
 .devices-table tbody tr.device-row:hover td,
-.devices-table tbody tr.table-row:hover td {
-    background: var(--bg-hover);
+.devices-table tbody tr.table-row:hover td,
+.devices-table tbody tr:hover td {
+    background: var(--bg-hover, rgba(255, 255, 255, 0.05));
 }
 
 .devices-table th[data-sort],

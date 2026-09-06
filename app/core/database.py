@@ -204,6 +204,12 @@ class DatabaseService:
             "ALTER TABLE drivers ADD COLUMN assignment_grace_period INTEGER",
             "ALTER TABLE drivers ADD COLUMN assignment_clear VARCHAR(20)",
             "ALTER TABLE position_records ADD COLUMN driver_id INTEGER REFERENCES drivers(id) ON DELETE SET NULL",
+            "ALTER TABLE trips ADD COLUMN eco_score FLOAT",
+            "ALTER TABLE trips ADD COLUMN harsh_accel_count INTEGER DEFAULT 0",
+            "ALTER TABLE trips ADD COLUMN harsh_brake_count INTEGER DEFAULT 0",
+            "ALTER TABLE trips ADD COLUMN harsh_corner_count INTEGER DEFAULT 0",
+            "ALTER TABLE trips ADD COLUMN speeding_duration_minutes FLOAT DEFAULT 0.0",
+            "ALTER TABLE trips ADD COLUMN idling_duration_minutes FLOAT DEFAULT 0.0",
             """CREATE TABLE IF NOT EXISTS voice_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 sender_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -1308,6 +1314,32 @@ class DatabaseService:
                 trip.duration_minutes = mins
                 if mins > 0:
                     trip.avg_speed = (trip.distance_km / mins) * 60
+
+                # Calculate Eco-Driving score and harsh telemetry events
+                try:
+                    from core.eco_driving import calculate_trip_eco_score
+                    pos_q = select(PositionRecord).where(
+                        PositionRecord.device_id == trip.device_id,
+                        PositionRecord.device_time >= trip.start_time,
+                        PositionRecord.device_time <= device_time,
+                    ).order_by(PositionRecord.device_time.asc())
+                    pos_res = await session.execute(pos_q)
+                    trip_positions = pos_res.scalars().all()
+                    speed_limit = float(device.config.get("speed_limit") or 120.0)
+                    eco_res = calculate_trip_eco_score(
+                        trip_positions,
+                        distance_km=trip.distance_km,
+                        duration_minutes=trip.duration_minutes,
+                        speed_limit_kmh=speed_limit,
+                    )
+                    trip.eco_score = eco_res["eco_score"]
+                    trip.harsh_accel_count = eco_res["harsh_accel_count"]
+                    trip.harsh_brake_count = eco_res["harsh_brake_count"]
+                    trip.harsh_corner_count = eco_res["harsh_corner_count"]
+                    trip.speeding_duration_minutes = eco_res["speeding_duration_minutes"]
+                    trip.idling_duration_minutes = eco_res["idling_duration_minutes"]
+                except Exception as _eco_err:
+                    logger.warning("Trip eco score calculation error: %s", _eco_err)
 
                 from core.config import get_settings
                 st = get_settings()

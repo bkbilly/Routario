@@ -149,6 +149,10 @@ async def trip_rows(
             "max_speed": round(trip.max_speed, 1),
             "start_address": trip.start_address or (f"{trip.start_latitude:.4f}, {trip.start_longitude:.4f}" if trip.start_latitude is not None and trip.start_longitude is not None else None),
             "end_address": trip.end_address or (f"{trip.end_latitude:.4f}, {trip.end_longitude:.4f}" if trip.end_latitude is not None and trip.end_longitude is not None else None),
+            "eco_score": round(trip.eco_score, 0) if trip.eco_score is not None else None,
+            "harsh_accel_count": trip.harsh_accel_count or 0,
+            "harsh_brake_count": trip.harsh_brake_count or 0,
+            "harsh_corner_count": trip.harsh_corner_count or 0,
         })
     return rows
 

@@ -616,10 +616,192 @@
         .billing-detail-table th,
         .billing-detail-table td { padding: 0.55rem 0.7rem; font-size: 0.82rem; }
         .billing-detail-muted { color: var(--text-muted); }
-        .report-table tr.table-row { cursor: pointer; }
+
+        /* ── Eco driving detail modal ────────────────────────────── */
+        #ecoDetailModal { z-index: 1050; }
+        #tripMapModal { z-index: 1060; }
+        #ecoDetailModal .modal-content {
+            max-width: 980px;
+            width: 95vw;
+            max-height: 92vh;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem 1.25rem;
+        }
+        #ecoDetailBody { display: grid; gap: 0.65rem; }
+        .eco-detail-grid {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 0.45rem;
+        }
+        @media (max-width: 1024px) {
+            .eco-detail-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 0.35rem;
+            }
+        }
+        @media (max-width: 640px) {
+            .eco-detail-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 0.3rem;
+            }
+        }
+        .eco-detail-card {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-secondary);
+            padding: 0.5rem 0.65rem;
+            min-width: 0;
+            overflow: hidden;
+        }
+        .eco-detail-card .k {
+            color: var(--text-muted);
+            font-size: 0.67rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            line-height: 1.2;
+        }
+        .eco-detail-card .v {
+            margin-top: 0.2rem;
+            font-family: var(--font-mono);
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .eco-coach-box {
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(59, 130, 246, 0.24);
+            border-radius: 8px;
+            padding: 0.55rem 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            font-size: 0.8rem;
+            color: var(--text-primary);
+            line-height: 1.35;
+        }
+        .eco-sub-tabs {
+            display: flex;
+            gap: 0.35rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.4rem;
+            margin-top: 0.15rem;
+        }
+        .eco-sub-tab {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 0.35rem 0.65rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            text-align: left;
+            line-height: 1.15;
+        }
+        .eco-sub-tab:hover {
+            color: var(--text-primary);
+            background: var(--bg-hover, rgba(255,255,255,0.06));
+        }
+        .eco-sub-tab.active {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: var(--accent-primary);
+            color: var(--text-primary);
+        }
+        .eco-sub-tab .tab-icon {
+            font-size: 1.15rem;
+            flex-shrink: 0;
+        }
+        .eco-sub-tab .tab-text {
+            display: flex;
+            flex-direction: column;
+        }
+        .eco-sub-tab .tab-text strong {
+            font-size: 0.76rem;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+        .eco-sub-tab .tab-text small {
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            font-weight: normal;
+        }
+        .eco-sub-tab.active .tab-text strong {
+            color: var(--accent-primary);
+        }
+        .eco-filter-chip {
+            padding: 0.2rem 0.55rem;
+            border-radius: 14px;
+            font-size: 0.72rem;
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            line-height: 1.2;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        .eco-filter-chip:hover, .eco-filter-chip.active {
+            color: var(--text-primary);
+            border-color: var(--accent-primary);
+            background: rgba(59,130,246,0.15);
+            font-weight: 600;
+        }
+
+        /* ── Eco Scorecard Table styling with crisp dividing lines ── */
+        .eco-scorecard-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+            margin: 0;
+        }
+        .eco-scorecard-table th {
+            background: var(--bg-tertiary, #1e293b);
+            color: var(--text-secondary);
+            font-weight: 700;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 0.65rem 0.85rem;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            white-space: nowrap;
+        }
+        .eco-scorecard-table td {
+            padding: 0.65rem 0.85rem;
+            border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+            vertical-align: middle;
+        }
+        .eco-scorecard-table tbody tr:hover td {
+            background: var(--bg-hover, rgba(255, 255, 255, 0.04));
+        }
+        .eco-scorecard-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .report-table tbody tr.table-row,
+        .report-table tr.table-row {
+            cursor: pointer !important;
+            transition: background var(--transition-base, 0.15s ease);
+        }
+        .report-table tbody tr.table-row:hover td {
+            background: var(--bg-hover, #2a3447) !important;
+        }
+        .report-table tbody tr.table-row:active td {
+            background: var(--bg-tertiary, #1e293b) !important;
+        }
         .report-table th[data-sort] { cursor: pointer; user-select: none; }
         .report-table th[data-sort]:hover { color: var(--accent-primary); }
-        .report-table tr.selected td { background: var(--bg-secondary); }
+        .report-table tr.selected td { background: var(--bg-secondary) !important; }
 
         /* ── Run viewer banner ───────────────────────────────────── */
         #runViewBanner {
@@ -1347,10 +1529,23 @@
     </div>
 </div>
 
+<!-- ── Eco Detail Modal ─────────────────────────────────────────────── -->
+<div class="modal" id="ecoDetailModal">
+    <div class="modal-backdrop" onclick="closeEcoDetail()"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title" id="ecoDetailTitle">Driver Safety Scorecard</h3>
+            <button class="modal-close" onclick="closeEcoDetail()">&times;</button>
+        </div>
+        <div class="modal-scrollable">
+            <div id="ecoDetailBody"></div>
+        </div>
+    </div>
+</div>
 <!-- ── Trip Map Modal ────────────────────────────────────────────────────── -->
 <div class="modal" id="tripMapModal">
     <div class="modal-backdrop" onclick="closeTripMap()"></div>
-    <div class="modal-content">
+    <div class="modal-content" style="max-width: 1020px; width: 95vw; max-height: 92vh; display: flex; flex-direction: column;">
         <div class="modal-header">
             <h3 class="modal-title" id="tripMapTitle">Trip</h3>
             <button class="modal-close" onclick="closeTripMap()">&times;</button>
@@ -1360,6 +1555,7 @@
             <div id="tripMapContainer"></div>
             <div id="tripMapSpinner"><i class="mdi mdi-loading mdi-spin"></i> Loading positions…</div>
         </div>
+        <div id="tripMapEventsBar" style="display:none;padding:0.6rem 1rem;background:var(--bg-secondary);border-top:1px solid var(--border-color);overflow-x:auto;"></div>
     </div>
 </div>
 

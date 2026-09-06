@@ -44,6 +44,7 @@ class TripListReport(Report):
                     {"key": "duration_minutes", "label": "Duration", "type": "duration_minutes"},
                     {"key": "avg_speed", "label": "Avg Speed", "type": "number", "decimals": 1, "suffix": " km/h"},
                     {"key": "max_speed", "label": "Top Speed", "type": "number", "decimals": 1, "suffix": " km/h"},
+                    {"key": "eco_score", "label": "Eco Score", "type": "eco_score"},
                     {"key": "driver_name", "label": "Driver", "type": "text"},
                 ],
                 [

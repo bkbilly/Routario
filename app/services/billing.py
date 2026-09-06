@@ -15,31 +15,37 @@ def month_window(year: int, month: int) -> tuple[datetime, datetime]:
     return start, datetime(year, month + 1, 1)
 
 
-async def billing_usage(company_id: int, start: datetime, end: datetime) -> dict:
+async def billing_usage(company_id: int, start: datetime, end: datetime, session=None) -> dict:
+    if session is not None:
+        return await _calc_billing_usage(session, company_id, start, end)
     db = get_db()
-    async with db.get_session() as session:
-        devices = (await session.execute(
-            select(func.count(func.distinct(PositionRecord.device_id)))
-            .join(Device, PositionRecord.device_id == Device.id)
-            .where(Device.company_id == company_id, PositionRecord.device_time >= start, PositionRecord.device_time < end)
-        )).scalar_one() or 0
-        positions = (await session.execute(
-            select(func.count(PositionRecord.id))
-            .join(Device, PositionRecord.device_id == Device.id)
-            .where(Device.company_id == company_id, PositionRecord.device_time >= start, PositionRecord.device_time < end)
-        )).scalar_one() or 0
-        events = (await session.execute(
-            select(UsageEvent.metric, func.coalesce(func.sum(UsageEvent.quantity), 0))
-            .where(UsageEvent.company_id == company_id, UsageEvent.created_at >= start, UsageEvent.created_at < end)
-            .group_by(UsageEvent.metric)
-        )).all()
-        event_totals = {metric: int(total or 0) for metric, total in events}
-        return {
-            "active_devices": int(devices),
-            "positions": int(positions),
-            "api_calls": int(event_totals.get("api_call", 0)),
-            "events": event_totals,
-        }
+    async with db.get_session() as s:
+        return await _calc_billing_usage(s, company_id, start, end)
+
+
+async def _calc_billing_usage(session, company_id: int, start: datetime, end: datetime) -> dict:
+    devices = (await session.execute(
+        select(func.count(func.distinct(PositionRecord.device_id)))
+        .join(Device, PositionRecord.device_id == Device.id)
+        .where(Device.company_id == company_id, PositionRecord.device_time >= start, PositionRecord.device_time < end)
+    )).scalar_one() or 0
+    positions = (await session.execute(
+        select(func.count(PositionRecord.id))
+        .join(Device, PositionRecord.device_id == Device.id)
+        .where(Device.company_id == company_id, PositionRecord.device_time >= start, PositionRecord.device_time < end)
+    )).scalar_one() or 0
+    events = (await session.execute(
+        select(UsageEvent.metric, func.coalesce(func.sum(UsageEvent.quantity), 0))
+        .where(UsageEvent.company_id == company_id, UsageEvent.created_at >= start, UsageEvent.created_at < end)
+        .group_by(UsageEvent.metric)
+    )).all()
+    event_totals = {metric: int(total or 0) for metric, total in events}
+    return {
+        "active_devices": int(devices),
+        "positions": int(positions),
+        "api_calls": int(event_totals.get("api_call", 0)),
+        "events": event_totals,
+    }
 
 
 def invoice_lines(plan: Any, usage: dict) -> tuple[int, list[dict]]:

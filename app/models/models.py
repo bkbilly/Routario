@@ -274,6 +274,12 @@ class Trip(Base):
     start_address:    Mapped[Optional[str]]  = mapped_column(String(500), nullable=True)
     end_address:      Mapped[Optional[str]]  = mapped_column(String(500), nullable=True)
     driver_id:        Mapped[Optional[int]]  = mapped_column(Integer, ForeignKey('drivers.id', ondelete='SET NULL'), nullable=True)
+    eco_score:        Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    harsh_accel_count: Mapped[int]           = mapped_column(Integer, default=0)
+    harsh_brake_count: Mapped[int]           = mapped_column(Integer, default=0)
+    harsh_corner_count: Mapped[int]          = mapped_column(Integer, default=0)
+    speeding_duration_minutes: Mapped[float] = mapped_column(Float, default=0.0)
+    idling_duration_minutes: Mapped[float]   = mapped_column(Float, default=0.0)
 
     device: Mapped["Device"]           = relationship(back_populates="trips")
     driver: Mapped[Optional["Driver"]] = relationship(back_populates="trips")

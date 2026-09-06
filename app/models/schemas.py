@@ -437,6 +437,12 @@ class TripResponse(BaseModel):
     end_address: Optional[str]
     driver_id: Optional[int] = None
     driver_name: Optional[str] = None
+    eco_score: Optional[float] = None
+    harsh_accel_count: int = 0
+    harsh_brake_count: int = 0
+    harsh_corner_count: int = 0
+    speeding_duration_minutes: float = 0.0
+    idling_duration_minutes: float = 0.0
 
 
 class TripGeoJSON(BaseModel):
@@ -751,6 +757,10 @@ class TripReportRow(BaseModel):
     max_speed: float
     start_address: Optional[str]
     end_address: Optional[str]
+    eco_score: Optional[float] = None
+    harsh_accel_count: int = 0
+    harsh_brake_count: int = 0
+    harsh_corner_count: int = 0
 
 
 # ==================== SIM Card Schemas ====================

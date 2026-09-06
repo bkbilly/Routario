@@ -1357,6 +1357,16 @@ async function loadTripsForHistory(deviceId, startTime, endTime, { preserveScrol
             const titleAttr  = hasData ? 'Click to jump to this trip' : 'No map data — outside the 2,000-point limit';
             const clickAttr  = hasData ? `onclick="seekToTrip('${trip.start_time}')"` : '';
 
+            const ecoBadge = trip.eco_score != null ? (() => {
+                const s = Number(trip.eco_score);
+                let badgeColor = '#22c55e', badgeBg = 'rgba(34, 197, 94, 0.12)';
+                if (s < 55) { badgeColor = '#ef4444'; badgeBg = 'rgba(239, 68, 68, 0.12)'; }
+                else if (s < 70) { badgeColor = '#f97316'; badgeBg = 'rgba(249, 115, 22, 0.12)'; }
+                else if (s < 80) { badgeColor = '#eab308'; badgeBg = 'rgba(234, 179, 8, 0.12)'; }
+                else if (s < 90) { badgeColor = '#0284c7'; badgeBg = 'rgba(14, 165, 233, 0.12)'; }
+                return `<span class="trip-badge" style="background:${badgeBg};color:${badgeColor};font-weight:700;"><i class="mdi mdi-leaf"></i> ${s.toFixed(0)}%</span>`;
+            })() : '';
+
             return `
             <div class="trip-card" ${clickAttr} title="${titleAttr}"
                  style="border-left: 3px solid ${color}; ${dimStyle}${hasData ? 'cursor:pointer;' : 'cursor:default;'}">
@@ -1365,6 +1375,7 @@ async function loadTripsForHistory(deviceId, startTime, endTime, { preserveScrol
                     <span class="trip-badges">
                         <span class="trip-badge"><i class="mdi mdi-map-marker"></i> ${dist}</span>
                         <span class="trip-badge">⏱ ${dur}</span>
+                        ${ecoBadge}
                     </span>
                 </div>
                 <div class="trip-card-body">

@@ -162,7 +162,7 @@ async def billing_detail_payload(session, current_user: Any, company_id: int, pe
 
     for year, month, label in months:
         month_start, month_end = month_window(year, month)
-        usage = await billing_usage(company.id, month_start, month_end)
+        usage = await billing_usage(company.id, month_start, month_end, session=session)
         lines = []
         amount_cents = 0
         if plan:
@@ -202,7 +202,7 @@ async def billing_detail_payload(session, current_user: Any, company_id: int, pe
         day_start, day_end, _label = months[0]
         period_start, period_end = month_window(day_start, day_end)
         for start_day, end_day, label in _daily_windows(period_start, period_end):
-            usage = await billing_usage(company.id, start_day, end_day)
+            usage = await billing_usage(company.id, start_day, end_day, session=session)
             breakdown.append({
                 "label": label,
                 "period_start": start_day.isoformat(),

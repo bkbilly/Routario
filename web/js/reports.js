@@ -237,6 +237,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (document.getElementById('billingDetailModal')?.classList.contains('active')) {
             closeBillingDetail();
+            return;
+        }
+        if (document.getElementById('ecoDetailModal')?.classList.contains('active')) {
+            closeEcoDetail();
+            return;
         }
     });
 });
@@ -1931,14 +1936,27 @@ function _renderSummaryCards(cards) {
 }
 
 function _renderGenericRow(row, columns, action, idx) {
-    let attrs = '';
+    let cls = '';
+    let title = '';
+    let onclick = '';
+
     if (action?.type === 'trip_map') {
-        attrs = ` class="table-row" onclick="showTripMap(${idx})"`;
+        cls = 'table-row';
+        title = action.label || 'Click to view trip route on map';
+        onclick = `showTripMap(${idx})`;
     } else if (action?.type === 'billing_detail') {
-        const key = `${row.company_id}-${row.period_key}`;
-        const cls = key === _selectedBillingKey ? 'table-row selected' : 'table-row';
-        attrs = ` class="${cls}" title="${_esc(action.label || 'View details')}" onclick='showBillingDetail(${Number(row.company_id)}, ${JSON.stringify(row.period_key || '')}, ${JSON.stringify(key)})'`;
+        cls = 'table-row';
+        const key = `${row.company_id || ''}-${row.period_key || ''}`;
+        if (key && key === _selectedBillingKey) cls += ' selected';
+        title = action.label || 'Click to view billing details';
+        onclick = `showBillingDetail(${idx})`;
+    } else if (action?.type === 'eco_detail') {
+        cls = 'table-row';
+        title = action.label || 'Click to view driver safety scorecard & driving events';
+        onclick = `showEcoDriverDetail(${idx})`;
     }
+
+    const attrs = cls ? ` class="${cls}"${title ? ` title="${_esc(title)}"` : ''}${onclick ? ` onclick="${onclick}"` : ''}` : '';
     return `<tr${attrs}>${columns.map(col => _renderCell(row, col)).join('')}</tr>`;
 }
 
@@ -2018,6 +2036,23 @@ function _formatValue(value, col = {}, row = {}) {
             const titleText = ch.error ? `${ch.name}: Failed (${ch.error})` : `${ch.name}: ${ch.status}`;
             return `<span title="${_esc(titleText)}" style="display:inline-flex;align-items:center;gap:0.25rem;font-size:0.72rem;padding:0.12rem 0.4rem;border-radius:4px;background:rgba(255,255,255,0.06);color:${color};margin:0.1rem;font-weight:600;"><i class="mdi ${icon}"></i>${_esc(ch.name)}</span>`;
         }).join(' ');
+    }
+    if (col.type === 'eco_score' || col.key === 'eco_score') {
+        if (value === null || value === undefined || value === '') return '<span style="color:var(--text-muted);">—</span>';
+        const num = Number(value);
+        if (isNaN(num)) return _esc(value);
+        let bg = 'rgba(34, 197, 94, 0.12)', color = '#16a34a', border = 'rgba(34, 197, 94, 0.28)';
+        let grade = 'A';
+        if (num < 55) {
+            bg = 'rgba(239, 68, 68, 0.12)'; color = '#dc2626'; border = 'rgba(239, 68, 68, 0.28)'; grade = 'F';
+        } else if (num < 70) {
+            bg = 'rgba(249, 115, 22, 0.12)'; color = '#ea580c'; border = 'rgba(249, 115, 22, 0.28)'; grade = 'D';
+        } else if (num < 80) {
+            bg = 'rgba(234, 179, 8, 0.12)'; color = '#ca8a04'; border = 'rgba(234, 179, 8, 0.28)'; grade = 'C';
+        } else if (num < 90) {
+            bg = 'rgba(14, 165, 233, 0.12)'; color = '#0284c7'; border = 'rgba(14, 165, 233, 0.28)'; grade = 'B';
+        }
+        return `<span class="badge" style="background:${bg};color:${color};border:1px solid ${border};font-weight:700;font-size:0.75rem;padding:0.18rem 0.55rem;border-radius:6px;display:inline-flex;align-items:center;gap:0.35rem;"><span style="font-size:0.85rem;font-weight:800;">${grade}</span> · ${num.toFixed(0)}%</span>`;
     }
     if (col.type === 'status' || col.key === 'status') {
         const s = String(value).trim().toLowerCase();
@@ -2296,23 +2331,48 @@ function _downloadBlob(blob, filename) {
 
 // ── Billing Detail Modal ─────────────────────────────────────────
 
-async function showBillingDetail(companyId, period, rowKey) {
-    if (!companyId || !period) return;
+async function showBillingDetail(arg1, arg2, arg3) {
+    let companyId, period, rowKey;
+    if (typeof arg1 === 'object' && arg1 !== null) {
+        const row = arg1;
+        companyId = row.company_id;
+        period = row.period_key || _selectedPeriod || 'this_month';
+        rowKey = `${row.company_id || ''}-${row.period_key || ''}`;
+    } else if (typeof arg1 === 'number' && (arg2 === undefined || typeof arg2 !== 'string')) {
+        const row = _reportData[arg1] || _tripRows[arg1] || _reportPayload?.rows?.[arg1];
+        if (row) {
+            companyId = row.company_id;
+            period = row.period_key || _selectedPeriod || 'this_month';
+            rowKey = `${row.company_id || ''}-${row.period_key || ''}`;
+        } else {
+            companyId = arg1;
+            period = arg2 || _selectedPeriod || 'this_month';
+            rowKey = arg3 || `${companyId}-${period}`;
+        }
+    } else {
+        companyId = arg1;
+        period = arg2 || _selectedPeriod || 'this_month';
+        rowKey = arg3 || `${companyId}-${period}`;
+    }
+
+    if (!companyId) return;
     _selectedBillingKey = rowKey;
-    _renderReport();
 
     const modal = document.getElementById('billingDetailModal');
     const title = document.getElementById('billingDetailTitle');
     const body = document.getElementById('billingDetailBody');
     const pdfBtn = document.getElementById('billingPdfBtn');
+    if (!modal || !body) return;
+
     title.textContent = 'Billing Details';
-    body.innerHTML = '<div class="billing-detail-muted" style="padding:1rem;text-align:center;">Loading billing details…</div>';
+    body.innerHTML = '<div class="billing-detail-muted" style="padding:2.5rem;text-align:center;"><i class="mdi mdi-loading mdi-spin" style="font-size:1.6rem;display:block;margin-bottom:0.5rem;color:var(--accent-primary);"></i>Loading billing details…</div>';
     _billingDetailPdfUrl = null;
     if (pdfBtn) pdfBtn.disabled = true;
     modal.classList.add('active');
 
     try {
-        const params = new URLSearchParams({ company_id: String(companyId), period });
+        const periodParam = period || 'this_month';
+        const params = new URLSearchParams({ company_id: String(companyId), period: periodParam });
         const res = await apiFetch(`${API_BASE}/reports/billing/details?${params}`);
         if (!res.ok) throw new Error(`Request failed (${res.status})`);
         _billingDetail = await res.json();
@@ -2321,9 +2381,9 @@ async function showBillingDetail(companyId, period, rowKey) {
         body.innerHTML = _billingDetailHtml(_billingDetail);
         if (pdfBtn) pdfBtn.disabled = false;
     } catch (e) {
-        console.error(e);
+        console.error('Failed to load billing detail:', e);
         _billingDetail = null;
-        body.innerHTML = '<div style="color:var(--accent-danger);padding:1rem;text-align:center;">Failed to load billing details.</div>';
+        body.innerHTML = '<div style="color:var(--accent-danger);padding:2rem;text-align:center;"><i class="mdi mdi-alert-circle" style="font-size:1.6rem;display:block;margin-bottom:0.5rem;"></i>Failed to load billing details.</div>';
     }
 }
 
@@ -2467,6 +2527,332 @@ function _fmtInt(value) {
     return new Intl.NumberFormat().format(Number(value) || 0);
 }
 
+// ── Eco Driving Detail Modal ───────────────────────────────────────
+
+let _currentEcoRow = null;
+let _currentEcoRowIdx = null;
+let _currentEcoTab = 'events';
+let _currentEcoFilter = 'all';
+
+function showEcoDriverDetail(idx) {
+    const row = (typeof idx === 'object' && idx !== null) ? idx : (_tripRows[idx] || _reportData[idx] || _reportPayload?.rows?.[idx]);
+    if (!row) return;
+
+    _currentEcoRow = row;
+    _currentEcoRowIdx = typeof idx === 'number' ? idx : null;
+    _currentEcoTab = 'events';
+    _currentEcoFilter = 'all';
+
+    const modal = document.getElementById('ecoDetailModal');
+    const title = document.getElementById('ecoDetailTitle');
+    if (!modal) return;
+
+    const driverName = row.driver_name || row.device_name || 'Driver';
+    const plate = row.license_plate ? ` (${row.license_plate})` : '';
+    title.innerHTML = `<i class="mdi mdi-shield-car"></i> Safety Scorecard — ${_esc(driverName)}${_esc(plate)}`;
+
+    _renderEcoModalContent();
+    modal.classList.add('active');
+}
+
+function closeEcoDetail() {
+    document.getElementById('ecoDetailModal')?.classList.remove('active');
+}
+
+function _switchEcoTab(tab) {
+    _currentEcoTab = tab;
+    _renderEcoModalContent();
+}
+
+function _setEcoEventFilter(filter) {
+    _currentEcoFilter = filter;
+    _renderEcoModalContent();
+}
+
+function _renderEcoModalContent() {
+    const body = document.getElementById('ecoDetailBody');
+    if (!body || !_currentEcoRow) return;
+
+    const row = _currentEcoRow;
+    const dist = Number(row.distance_km || 0);
+    const score = Number(row.eco_score || 100);
+    const grade = row.grade || (score >= 90 ? 'A' : (score >= 80 ? 'B' : (score >= 70 ? 'C' : (score >= 60 ? 'D' : 'E'))));
+    const accels = Number(row.harsh_accel_count || 0);
+    const brakes = Number(row.harsh_brake_count || 0);
+    const corners = Number(row.harsh_corner_count || 0);
+    const speeding = Number(row.speeding_duration_minutes || 0);
+    const idling = Number(row.idling_duration_minutes || 0);
+    const trips = row.trips || [];
+
+    const accelPer100 = dist > 0 ? ((accels / dist) * 100).toFixed(1) : '0.0';
+    const brakePer100 = dist > 0 ? ((brakes / dist) * 100).toFixed(1) : '0.0';
+    const cornerPer100 = dist > 0 ? ((corners / dist) * 100).toFixed(1) : '0.0';
+
+    // Collect all events
+    const allEvents = (row.events && row.events.length) ? row.events : trips.flatMap(t => t.events || []);
+
+    const accelEvents = allEvents.filter(e => e.type === 'harsh_accel');
+    const brakeEvents = allEvents.filter(e => e.type === 'harsh_brake');
+    const cornerEvents = allEvents.filter(e => e.type === 'harsh_corner');
+    const speedingEvents = allEvents.filter(e => e.type === 'speeding');
+
+    let filteredEvents = allEvents;
+    if (_currentEcoFilter === 'accel') filteredEvents = accelEvents;
+    else if (_currentEcoFilter === 'brake') filteredEvents = brakeEvents;
+    else if (_currentEcoFilter === 'corner') filteredEvents = cornerEvents;
+    else if (_currentEcoFilter === 'speeding') filteredEvents = speedingEvents;
+
+    // Coaching advice
+    let coachingAdvice = 'Driver demonstrates balanced, safe driving habits across all monitored criteria.';
+    let coachIcon = 'mdi-check-decagram';
+    let coachColor = '#22c55e';
+    if (score < 85) {
+        coachColor = '#f97316';
+        coachIcon = 'mdi-lightbulb-on';
+        if (brakes >= accels && brakes >= corners && brakes > 0) {
+            coachingAdvice = '<b>High Harsh Braking Rate:</b> Advise the driver to increase following distance and anticipate upcoming traffic stops earlier.';
+        } else if (accels >= brakes && accels >= corners && accels > 0) {
+            coachingAdvice = '<b>Frequent Rapid Acceleration:</b> Encourage smoother throttle application when starting from stops to reduce fuel consumption and wear.';
+        } else if (corners > 0 && corners >= accels) {
+            coachingAdvice = '<b>Sharp Cornering Detected:</b> Recommend reducing speed prior to turns and roundabouts to minimize rollover risk and tire strain.';
+        } else if (speeding > 10) {
+            coachingAdvice = '<b>Sustained Speeding:</b> Ensure the driver observes posted road speed limits to prevent safety violations and citations.';
+        } else if (idling > 15) {
+            coachingAdvice = '<b>Excessive Idling:</b> Remind driver to shut off engine during stationary waits exceeding 2-3 minutes to conserve fuel.';
+        }
+    }
+
+    // Events Tab Content
+    const eventsTabHtml = `
+        <div style="margin-top:0.5rem;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">
+                <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
+                    <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'all' ? 'active' : ''}" onclick="_setEcoEventFilter('all')">
+                        All (${allEvents.length})
+                    </button>
+                    <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'accel' ? 'active' : ''}" onclick="_setEcoEventFilter('accel')">
+                        ⚡ Acceleration (${accelEvents.length})
+                    </button>
+                    <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'brake' ? 'active' : ''}" onclick="_setEcoEventFilter('brake')">
+                        🛑 Braking (${brakeEvents.length})
+                    </button>
+                    <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'corner' ? 'active' : ''}" onclick="_setEcoEventFilter('corner')">
+                        ↩ Cornering (${cornerEvents.length})
+                    </button>
+                    <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'speeding' ? 'active' : ''}" onclick="_setEcoEventFilter('speeding')">
+                        ⚠️ Speeding (${speedingEvents.length})
+                    </button>
+                </div>
+                <span style="font-size:0.72rem;color:var(--text-muted);">Click "Map" on any event to inspect its GPS location</span>
+            </div>
+
+            ${filteredEvents.length ? `
+                <div class="table-container" style="max-height:360px;overflow-y:auto;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-secondary);">
+                    <table class="devices-table eco-scorecard-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Event Type</th>
+                                <th>Speed</th>
+                                <th>Intensity / Metric</th>
+                                <th>Vehicle</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${filteredEvents.map((ev) => {
+                                const globalIdx = allEvents.indexOf(ev);
+                                let badgeHtml = '';
+                                let metricHtml = '—';
+                                if (ev.type === 'harsh_accel') {
+                                    badgeHtml = '<span style="display:inline-flex;align-items:center;gap:0.25rem;color:#f97316;font-weight:600;"><i class="mdi mdi-lightning-bolt"></i> Harsh Accel</span>';
+                                    metricHtml = ev.acceleration_ms2 != null ? `<span style="font-family:var(--font-mono);font-weight:600;color:#f97316;">+${Number(ev.acceleration_ms2).toFixed(2)} m/s²</span>` : '—';
+                                } else if (ev.type === 'harsh_brake') {
+                                    badgeHtml = '<span style="display:inline-flex;align-items:center;gap:0.25rem;color:#ef4444;font-weight:600;"><i class="mdi mdi-alert-octagon"></i> Harsh Brake</span>';
+                                    metricHtml = ev.acceleration_ms2 != null ? `<span style="font-family:var(--font-mono);font-weight:600;color:#ef4444;">${Number(ev.acceleration_ms2).toFixed(2)} m/s²</span>` : '—';
+                                } else if (ev.type === 'harsh_corner') {
+                                    badgeHtml = '<span style="display:inline-flex;align-items:center;gap:0.25rem;color:#eab308;font-weight:600;"><i class="mdi mdi-arrow-u-down-right"></i> Sharp Corner</span>';
+                                    metricHtml = ev.turn_rate_deg_s != null ? `<span style="font-family:var(--font-mono);font-weight:600;color:#eab308;">${Number(ev.turn_rate_deg_s).toFixed(1)} °/s</span>` : '—';
+                                } else if (ev.type === 'speeding') {
+                                    badgeHtml = '<span style="display:inline-flex;align-items:center;gap:0.25rem;color:#ef4444;font-weight:600;"><i class="mdi mdi-speedometer"></i> Speeding</span>';
+                                    metricHtml = `<span style="font-family:var(--font-mono);color:#ef4444;">${ev.speed ? Math.round(ev.speed) : '—'} km/h</span>`;
+                                } else {
+                                    badgeHtml = `<span style="color:var(--text-muted);">${_esc(ev.label || ev.type || 'Event')}</span>`;
+                                }
+
+                                const spd = ev.speed != null ? `${Number(ev.speed).toFixed(0)} km/h` : '—';
+                                const veh = ev.device_name || row.device_name || '—';
+                                const plate = ev.license_plate || row.license_plate ? ` (${_esc(ev.license_plate || row.license_plate)})` : '';
+
+                                return `
+                                    <tr>
+                                        <td style="white-space:nowrap;font-family:var(--font-mono);font-size:0.75rem;line-height:1.3;">${_fmtDatetimeSplit(ev.time)}</td>
+                                        <td style="white-space:nowrap;">${badgeHtml}</td>
+                                        <td style="font-family:var(--font-mono);">${spd}</td>
+                                        <td>${metricHtml}</td>
+                                        <td style="white-space:nowrap;">${_esc(veh)}${plate}</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-secondary" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="_showEcoEventOnMap(${globalIdx})">
+                                                <i class="mdi mdi-map-marker"></i> Map
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            ` : '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:2rem;"><i class="mdi mdi-check-circle-outline" style="font-size:1.6rem;display:block;margin-bottom:0.3rem;color:#22c55e;"></i>No driving events recorded in this category.</div>'}
+        </div>
+    `;
+
+    // Trips Tab Content
+    const tripsTabHtml = `
+        <div style="margin-top:0.5rem;">
+            ${trips.length ? `
+                <div class="table-container" style="max-height:360px;overflow-y:auto;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-secondary);">
+                    <table class="devices-table eco-scorecard-table">
+                        <thead>
+                            <tr>
+                                <th>Start Date</th>
+                                <th>From / To</th>
+                                <th>Distance</th>
+                                <th>Duration</th>
+                                <th>Safety Score</th>
+                                <th>Events</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${trips.map((t, tIdx) => `
+                                <tr>
+                                    <td style="white-space:nowrap;font-family:var(--font-mono);font-size:0.75rem;line-height:1.3;">${_fmtDatetimeSplit(t.start_time)}</td>
+                                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${_esc((t.start_address || '—') + ' → ' + (t.end_address || '—'))}">
+                                        ${_esc(t.start_address || '—')} → ${_esc(t.end_address || '—')}
+                                    </td>
+                                    <td style="font-family:var(--font-mono);">${Number(t.distance_km || 0).toFixed(1)} km</td>
+                                    <td>${_fmtDuration(t.duration_minutes || 0)}</td>
+                                    <td>${_formatValue(t.eco_score, { type: 'eco_score' })}</td>
+                                    <td style="white-space:nowrap;">
+                                        ${t.harsh_accel_count ? `<span title="Harsh Accel" style="color:#f97316;font-weight:600;margin-right:0.35rem;"><i class="mdi mdi-lightning-bolt"></i>${t.harsh_accel_count}</span>` : ''}
+                                        ${t.harsh_brake_count ? `<span title="Harsh Brake" style="color:#ef4444;font-weight:600;margin-right:0.35rem;"><i class="mdi mdi-alert-octagon"></i>${t.harsh_brake_count}</span>` : ''}
+                                        ${t.harsh_corner_count ? `<span title="Sharp Turn" style="color:#eab308;font-weight:600;"><i class="mdi mdi-arrow-u-down-right"></i>${t.harsh_corner_count}</span>` : ''}
+                                        ${!t.harsh_accel_count && !t.harsh_brake_count && !t.harsh_corner_count ? '<span style="color:var(--text-muted);">Smooth</span>' : ''}
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-secondary" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="showEcoTripMap(${tIdx})">
+                                            <i class="mdi mdi-map"></i> Map
+                                        </button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            ` : '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:2rem;">No individual trips recorded in this period.</div>'}
+        </div>
+    `;
+
+    body.innerHTML = `
+        <div class="eco-detail-grid">
+            <div class="eco-detail-card" style="border-left:4px solid ${score >= 85 ? '#22c55e' : (score >= 70 ? '#eab308' : '#ef4444')};">
+                <div class="k">Safety Score</div>
+                <div class="v">${score.toFixed(0)}% <span style="font-size:0.78rem;font-weight:bold;color:var(--text-muted);">(Grade ${grade})</span></div>
+            </div>
+            <div class="eco-detail-card">
+                <div class="k">Distance</div>
+                <div class="v">${dist.toFixed(1)} km <span style="font-size:0.72rem;font-weight:normal;color:var(--text-muted);">(${row.trip_count || 0} trips)</span></div>
+            </div>
+            <div class="eco-detail-card">
+                <div class="k">Drive / Idle</div>
+                <div class="v">${_fmtDuration(row.duration_minutes || 0)} <span style="font-size:0.72rem;font-weight:normal;color:var(--text-muted);">(${idling.toFixed(0)}m idle)</span></div>
+            </div>
+            <div class="eco-detail-card">
+                <div class="k">Harsh Accel</div>
+                <div class="v" style="color:#f97316;"><i class="mdi mdi-lightning-bolt"></i> ${accels} <span style="font-size:0.72rem;font-weight:normal;color:var(--text-muted);">(${accelPer100}/100km)</span></div>
+            </div>
+            <div class="eco-detail-card">
+                <div class="k">Harsh Brake</div>
+                <div class="v" style="color:#ef4444;"><i class="mdi mdi-alert-octagon"></i> ${brakes} <span style="font-size:0.72rem;font-weight:normal;color:var(--text-muted);">(${brakePer100}/100km)</span></div>
+            </div>
+            <div class="eco-detail-card">
+                <div class="k">Sharp Turn</div>
+                <div class="v" style="color:#eab308;"><i class="mdi mdi-arrow-u-down-right"></i> ${corners} <span style="font-size:0.72rem;font-weight:normal;color:var(--text-muted);">(${cornerPer100}/100km)</span></div>
+            </div>
+        </div>
+
+        <div class="eco-coach-box">
+            <i class="mdi ${coachIcon}" style="font-size:1.3rem;color:${coachColor};flex-shrink:0;"></i>
+            <div>${coachingAdvice}</div>
+        </div>
+
+        <div class="eco-sub-tabs">
+            <button type="button" class="eco-sub-tab ${_currentEcoTab === 'events' ? 'active' : ''}" onclick="_switchEcoTab('events')">
+                <i class="mdi mdi-lightning-bolt tab-icon" style="color:#f97316;"></i>
+                <span class="tab-text">
+                    <strong>Driving Events</strong>
+                    <small>${allEvents.length} recorded</small>
+                </span>
+            </button>
+            <button type="button" class="eco-sub-tab ${_currentEcoTab === 'trips' ? 'active' : ''}" onclick="_switchEcoTab('trips')">
+                <i class="mdi mdi-routes tab-icon" style="color:#3b82f6;"></i>
+                <span class="tab-text">
+                    <strong>Trips Breakdown</strong>
+                    <small>${trips.length} trips</small>
+                </span>
+            </button>
+        </div>
+
+        ${_currentEcoTab === 'events' ? eventsTabHtml : tripsTabHtml}
+    `;
+}
+
+function _showEcoEventOnMap(evIdx) {
+    const row = _currentEcoRow;
+    if (!row) return;
+    const allEvents = (row.events && row.events.length) ? row.events : (row.trips || []).flatMap(t => t.events || []);
+    const ev = allEvents[evIdx];
+    if (!ev) return;
+
+    let trip = null;
+    if (ev.trip_id && row.trips) {
+        trip = row.trips.find(t => t.id === ev.trip_id);
+    }
+    if (!trip && row.trips && row.trips.length) {
+        const evT = new Date(ev.time).getTime();
+        trip = row.trips.find(t => {
+            const st = new Date(t.start_time).getTime();
+            const et = t.end_time ? new Date(t.end_time).getTime() : st + (t.duration_minutes || 0) * 60000;
+            return evT >= st - 60000 && evT <= et + 60000;
+        }) || row.trips[0];
+    }
+
+    if (trip) {
+        showTripMap(trip, { targetLat: ev.latitude, targetLng: ev.longitude, eventLabel: ev.label || ev.type });
+    } else {
+        showTripMap({
+            device_id: row.device_id || ev.device_id,
+            device_name: row.device_name || ev.device_name || 'Vehicle',
+            start_time: ev.time,
+            end_time: ev.time,
+            start_address: `${ev.latitude.toFixed(5)}, ${ev.longitude.toFixed(5)}`,
+            end_address: `${ev.latitude.toFixed(5)}, ${ev.longitude.toFixed(5)}`,
+        }, { targetLat: ev.latitude, targetLng: ev.longitude, eventLabel: ev.label || ev.type });
+    }
+}
+
+function showEcoTripMap(rowIdx, tripIdx) {
+    let trip = null;
+    if (tripIdx === undefined && typeof rowIdx === 'number') {
+        trip = _currentEcoRow?.trips?.[rowIdx];
+    } else {
+        const row = (typeof rowIdx === 'object' && rowIdx !== null) ? rowIdx : (_tripRows[rowIdx] || _reportData[rowIdx] || _reportPayload?.rows?.[rowIdx]);
+        trip = row?.trips?.[tripIdx];
+    }
+    if (!trip) return;
+    showTripMap(trip);
+}
+
 // ── Trip Map Modal ────────────────────────────────────────────────
 
 const _TRIP_TILES = {
@@ -2480,30 +2866,62 @@ const _TRIP_TILES = {
 
 let _tripMapInst   = null; // Leaflet map instance
 let _tripMapLayers = [];   // layers added for the current trip
+let _currentTripEvents = [];
 
 function toggleTripAddress(type) {
     const el = document.getElementById(type === 'start' ? 'tripMetaStart' : 'tripMetaEnd');
     if (el) el.classList.toggle('expanded');
 }
 
-async function showTripMap(idx) {
-    const r = _tripRows[idx];
+function _focusTripEvent(idxOrLat, lng, label) {
+    let lat, lon, lbl;
+    if (typeof idxOrLat === 'number' && lng === undefined) {
+        const ev = _currentTripEvents[idxOrLat];
+        if (!ev) return;
+        lat = ev.lat;
+        lon = ev.lng;
+        lbl = ev.label;
+    } else {
+        lat = idxOrLat;
+        lon = lng;
+        lbl = label;
+    }
+    if (!_tripMapInst || isNaN(lat) || isNaN(lon)) return;
+    _tripMapInst.flyTo([lat, lon], 17, { animate: true, duration: 0.8 });
+    L.popup({ offset: [0, -10] })
+        .setLatLng([lat, lon])
+        .setContent(`<b>${_esc(lbl || 'Driving Event')}</b><br><span style="font-size:0.75rem;color:var(--text-muted);">${lat.toFixed(5)}, ${lon.toFixed(5)}</span>`)
+        .openOn(_tripMapInst);
+}
+
+async function showTripMap(idx, focusOptions = null) {
+    const r = (typeof idx === 'object' && idx !== null) ? idx : _tripRows[idx];
     if (!r) return;
 
     const modal   = document.getElementById('tripMapModal');
     const spinner = document.getElementById('tripMapSpinner');
     const title   = document.getElementById('tripMapTitle');
     const meta    = document.getElementById('tripMapMeta');
+    const eventsBar = document.getElementById('tripMapEventsBar');
 
     const device   = _allDevices.find(d => d.id === r.device_id);
     const emoji    = (VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other']).emoji;
     const duration = r.duration_minutes ? _fmtDuration(r.duration_minutes) : null;
-    title.textContent = `${emoji} ${r.device_name} — ${_fmtDatetime(r.start_time)}${duration ? `  ·  ${duration}` : ''}`;
+    title.textContent = `${emoji} ${r.device_name || 'Trip'} — ${_fmtDatetime(r.start_time)}${duration ? `  ·  ${duration}` : ''}`;
 
     const startAddr = r.start_address || '—';
     const endAddr = r.end_address || '—';
     const isStartCoords = /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(startAddr.trim());
     const isEndCoords = /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(endAddr.trim());
+
+    const ecoHtml = r.eco_score != null ? `
+        <div style="margin-top:0.6rem;display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;font-size:0.8rem;">
+            ${_formatValue(r.eco_score, { type: 'eco_score' })}
+            ${r.harsh_accel_count ? `<span style="color:#f97316;font-size:0.75rem;font-weight:600;"><i class="mdi mdi-lightning-bolt"></i> ${r.harsh_accel_count} Accel</span>` : ''}
+            ${r.harsh_brake_count ? `<span style="color:#ef4444;font-size:0.75rem;font-weight:600;"><i class="mdi mdi-alert-octagon"></i> ${r.harsh_brake_count} Brake</span>` : ''}
+            ${r.harsh_corner_count ? `<span style="color:#eab308;font-size:0.75rem;font-weight:600;"><i class="mdi mdi-arrow-u-down-right"></i> ${r.harsh_corner_count} Turn</span>` : ''}
+        </div>
+    ` : '';
 
     meta.innerHTML = `
         <div class="trip-meta-route">
@@ -2519,7 +2937,14 @@ async function showTripMap(idx) {
                 <span class="trip-meta-address${isEndCoords ? ' trip-meta-coords' : ''}">${_esc(endAddr)}</span>
             </div>
         </div>
+        ${ecoHtml}
     `;
+
+    _currentTripEvents = [];
+    if (eventsBar) {
+        eventsBar.style.display = 'none';
+        eventsBar.innerHTML = '';
+    }
 
     // Show modal with spinner overlay; map container stays visible so Leaflet can measure it
     spinner.style.display = 'flex';
@@ -2582,6 +3007,122 @@ async function showTripMap(idx) {
         line.addTo(_tripMapInst);
         _tripMapLayers.push(line);
 
+        // Plot harsh driving events along the route
+        const detectedEvents = [];
+        let lastEventEpoch = 0;
+        for (let i = 1; i < features.length; i++) {
+            const curr = features[i];
+            const prev = features[i - 1];
+            const pCoord = [curr.geometry.coordinates[1], curr.geometry.coordinates[0]];
+            const tCurr = new Date(curr.properties?.device_time || curr.properties?.timestamp || 0).getTime();
+            const tPrev = new Date(prev.properties?.device_time || prev.properties?.timestamp || 0).getTime();
+            const dt = (tCurr - tPrev) / 1000.0;
+            const spd1 = Number(prev.properties?.speed || 0);
+            const spd2 = Number(curr.properties?.speed || 0);
+            const sensors = curr.properties?.sensors || {};
+
+            const gdType = sensors.green_driving_type || sensors.green_driving || sensors.io253;
+            let isAccel = gdType === 1 || gdType === '1' || Boolean(sensors.harsh_accel || sensors.harsh_acceleration || sensors.rapid_accel);
+            let isBrake = gdType === 2 || gdType === '2' || Boolean(sensors.harsh_brake || sensors.harsh_braking || sensors.sudden_brake);
+            let isTurn = gdType === 3 || gdType === '3' || Boolean(sensors.harsh_corner || sensors.harsh_cornering || sensors.sharp_turn);
+
+            if (dt >= 0.5 && dt <= 15.0) {
+                const a = ((spd2 - spd1) / 3.6) / dt;
+                if (!isAccel && a >= 2.8) isAccel = true;
+                if (!isBrake && a <= -3.2) isBrake = true;
+            }
+
+            if (tCurr - lastEventEpoch > 4000) {
+                if (isBrake) {
+                    lastEventEpoch = tCurr;
+                    const evObj = {
+                        lat: pCoord[0],
+                        lng: pCoord[1],
+                        speed: spd2.toFixed(0),
+                        time: curr.properties?.device_time || curr.properties?.timestamp,
+                        type: 'brake',
+                        label: `🛑 Harsh Brake (${spd2.toFixed(0)} km/h)`,
+                        color: '#ef4444',
+                        icon: '🛑',
+                    };
+                    detectedEvents.push(evObj);
+                    const dot = L.circleMarker(pCoord, {
+                        radius: 6,
+                        color: '#ef4444',
+                        fillColor: '#ef4444',
+                        fillOpacity: 0.95,
+                        weight: 2
+                    }).bindTooltip(evObj.label, { direction: 'top' });
+                    dot.addTo(_tripMapInst);
+                    _tripMapLayers.push(dot);
+                } else if (isAccel) {
+                    lastEventEpoch = tCurr;
+                    const evObj = {
+                        lat: pCoord[0],
+                        lng: pCoord[1],
+                        speed: spd2.toFixed(0),
+                        time: curr.properties?.device_time || curr.properties?.timestamp,
+                        type: 'accel',
+                        label: `⚡ Harsh Accel (${spd2.toFixed(0)} km/h)`,
+                        color: '#f97316',
+                        icon: '⚡',
+                    };
+                    detectedEvents.push(evObj);
+                    const dot = L.circleMarker(pCoord, {
+                        radius: 6,
+                        color: '#f97316',
+                        fillColor: '#f97316',
+                        fillOpacity: 0.95,
+                        weight: 2
+                    }).bindTooltip(evObj.label, { direction: 'top' });
+                    dot.addTo(_tripMapInst);
+                    _tripMapLayers.push(dot);
+                } else if (isTurn) {
+                    lastEventEpoch = tCurr;
+                    const evObj = {
+                        lat: pCoord[0],
+                        lng: pCoord[1],
+                        speed: spd2.toFixed(0),
+                        time: curr.properties?.device_time || curr.properties?.timestamp,
+                        type: 'turn',
+                        label: `↩ Sharp Turn (${spd2.toFixed(0)} km/h)`,
+                        color: '#eab308',
+                        icon: '↩',
+                    };
+                    detectedEvents.push(evObj);
+                    const dot = L.circleMarker(pCoord, {
+                        radius: 6,
+                        color: '#eab308',
+                        fillColor: '#eab308',
+                        fillOpacity: 0.95,
+                        weight: 2
+                    }).bindTooltip(evObj.label, { direction: 'top' });
+                    dot.addTo(_tripMapInst);
+                    _tripMapLayers.push(dot);
+                }
+            }
+        }
+
+        _currentTripEvents = detectedEvents;
+
+        // Render detected harsh events bar if any
+        if (eventsBar && detectedEvents.length > 0) {
+            eventsBar.style.display = 'flex';
+            eventsBar.style.alignItems = 'center';
+            eventsBar.style.gap = '0.5rem';
+            eventsBar.innerHTML = `
+                <div style="font-size:0.75rem;font-weight:600;color:var(--text-muted);display:flex;align-items:center;gap:0.35rem;white-space:nowrap;margin-right:0.25rem;">
+                    <i class="mdi mdi-alert-circle-outline"></i> Events (${detectedEvents.length}):
+                </div>
+                ${detectedEvents.map((ev, i) => `
+                    <button type="button" class="eco-filter-chip" style="display:inline-flex;align-items:center;gap:0.35rem;white-space:nowrap;" onclick="_focusTripEvent(${i})">
+                        <span>${ev.icon}</span>
+                        <span>${_esc(ev.label)}</span>
+                    </button>
+                `).join('')}
+            `;
+        }
+
         const startDot = L.circleMarker(coords[0], { radius: 7, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1, weight: 2 })
             .bindTooltip('Start', { permanent: false });
         startDot.addTo(_tripMapInst);
@@ -2592,7 +3133,15 @@ async function showTripMap(idx) {
         endDot.addTo(_tripMapInst);
         _tripMapLayers.push(endDot);
 
-        _tripMapInst.fitBounds(L.featureGroup(_tripMapLayers).getBounds(), { padding: [24, 24] });
+        if (focusOptions?.targetLat && focusOptions?.targetLng && !isNaN(focusOptions.targetLat) && !isNaN(focusOptions.targetLng)) {
+            _tripMapInst.setView([focusOptions.targetLat, focusOptions.targetLng], 17);
+            L.popup({ offset: [0, -10] })
+                .setLatLng([focusOptions.targetLat, focusOptions.targetLng])
+                .setContent(`<b>${_esc(focusOptions.eventLabel || 'Driving Event')}</b><br><span style="font-size:0.75rem;color:var(--text-muted);">${focusOptions.targetLat.toFixed(5)}, ${focusOptions.targetLng.toFixed(5)}</span>`)
+                .openOn(_tripMapInst);
+        } else {
+            _tripMapInst.fitBounds(L.featureGroup(_tripMapLayers).getBounds(), { padding: [24, 24] });
+        }
     } catch (e) {
         spinner.innerHTML = '<span style="color:var(--text-muted);">Failed to load trip data.</span>';
         spinner.style.display = 'flex';
