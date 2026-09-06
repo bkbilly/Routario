@@ -2595,18 +2595,31 @@ function _renderEcoModalContent() {
     const brakeEvents = allEvents.filter(e => e.type === 'harsh_brake');
     const cornerEvents = allEvents.filter(e => e.type === 'harsh_corner');
     const speedingEvents = allEvents.filter(e => e.type === 'speeding');
+    const fatigueEvents = allEvents.filter(e => e.type === 'fatigue');
 
     let filteredEvents = allEvents;
     if (_currentEcoFilter === 'accel') filteredEvents = accelEvents;
     else if (_currentEcoFilter === 'brake') filteredEvents = brakeEvents;
     else if (_currentEcoFilter === 'corner') filteredEvents = cornerEvents;
     else if (_currentEcoFilter === 'speeding') filteredEvents = speedingEvents;
+    else if (_currentEcoFilter === 'fatigue') filteredEvents = fatigueEvents;
 
     // Coaching advice
     let coachingAdvice = 'Driver demonstrates balanced, safe driving habits across all monitored criteria.';
     let coachIcon = 'mdi-check-decagram';
     let coachColor = '#22c55e';
-    if (score < 85) {
+    const severeSpeedingMins = Number(row.speeding_severe_minutes || 0);
+    const hasFatigue = row.fatigue_risk === 'high' || fatigueEvents.length > 0;
+
+    if (hasFatigue) {
+        coachColor = '#ef4444';
+        coachIcon = 'mdi-sleep';
+        coachingAdvice = '<b>Fatigue Risk Alert:</b> Driver exceeded 4.5 hours of continuous driving without required rest pauses. Enforce mandatory 45-minute breaks to maintain safety and compliance.';
+    } else if (severeSpeedingMins > 2) {
+        coachColor = '#ef4444';
+        coachIcon = 'mdi-speedometer-slow';
+        coachingAdvice = `<b>Severe Speeding Detected:</b> Driver accumulated ${severeSpeedingMins.toFixed(0)} min of severe speeding (>20 km/h over limit). Immediate speed awareness coaching advised.`;
+    } else if (score < 85) {
         coachColor = '#f97316';
         coachIcon = 'mdi-lightbulb-on';
         if (brakes >= accels && brakes >= corners && brakes > 0) {
@@ -2642,6 +2655,11 @@ function _renderEcoModalContent() {
                     <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'speeding' ? 'active' : ''}" onclick="_setEcoEventFilter('speeding')">
                         ⚠️ Speeding (${speedingEvents.length})
                     </button>
+                    ${fatigueEvents.length ? `
+                        <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'fatigue' ? 'active' : ''}" onclick="_setEcoEventFilter('fatigue')">
+                            😴 Fatigue (${fatigueEvents.length})
+                        </button>
+                    ` : ''}
                 </div>
                 <span style="font-size:0.72rem;color:var(--text-muted);">Click "Map" on any event to inspect its GPS location</span>
             </div>
@@ -2674,9 +2692,19 @@ function _renderEcoModalContent() {
                                     badgeHtml = '<span style="display:inline-flex;align-items:center;gap:0.25rem;color:#eab308;font-weight:600;"><i class="mdi mdi-arrow-u-down-right"></i> Sharp Corner</span>';
                                     metricHtml = ev.turn_rate_deg_s != null ? `<span style="font-family:var(--font-mono);font-weight:600;color:#eab308;">${Number(ev.turn_rate_deg_s).toFixed(1)} °/s</span>` : '—';
                                 } else if (ev.type === 'speeding') {
-                                    badgeHtml = '<span style="display:inline-flex;align-items:center;gap:0.25rem;color:#ef4444;font-weight:600;"><i class="mdi mdi-speedometer"></i> Speeding</span>';
+                                    const isSevere = ev.severity === 'severe';
+                                    const isMod = ev.severity === 'moderate';
+                                    const sevColor = isSevere ? '#ef4444' : (isMod ? '#f97316' : '#eab308');
+                                    const sevTitle = isSevere ? 'Severe Speeding' : (isMod ? 'Speeding' : 'Minor Speeding');
+                                    badgeHtml = `<span style="display:inline-flex;align-items:center;gap:0.25rem;color:${sevColor};font-weight:600;"><i class="mdi mdi-speedometer"></i> ${sevTitle}</span>`;
                                     const limitTxt = ev.speed_limit ? ` <span style="font-size:0.75rem;color:var(--text-muted);font-weight:normal;">(limit ${Math.round(ev.speed_limit)})</span>` : '';
-                                    metricHtml = `<span style="font-family:var(--font-mono);color:#ef4444;font-weight:600;">${ev.speed ? Math.round(ev.speed) : '—'} km/h</span>${limitTxt}`;
+                                    const diffTxt = (ev.overspeed_kmh != null && ev.overspeed_kmh > 0) ? `+${Math.round(ev.overspeed_kmh)} km/h` : `${ev.speed ? Math.round(ev.speed) : '—'} km/h`;
+                                    metricHtml = `<span style="font-family:var(--font-mono);color:${sevColor};font-weight:600;">${diffTxt}</span>${limitTxt}`;
+                                } else if (ev.type === 'fatigue') {
+                                    const isSevere = ev.severity === 'severe';
+                                    const fatColor = isSevere ? '#ef4444' : '#a855f7';
+                                    badgeHtml = `<span style="display:inline-flex;align-items:center;gap:0.25rem;color:${fatColor};font-weight:600;"><i class="mdi mdi-sleep"></i> ${isSevere ? 'Fatigue Risk' : 'Fatigue Warning'}</span>`;
+                                    metricHtml = `<span style="font-family:var(--font-mono);color:${fatColor};font-weight:600;">${ev.duration_minutes ? _fmtDuration(ev.duration_minutes) : '>4.5h'} continuous</span>`;
                                 } else {
                                     badgeHtml = `<span style="color:var(--text-muted);">${_esc(ev.label || ev.type || 'Event')}</span>`;
                                 }
@@ -2737,8 +2765,10 @@ function _renderEcoModalContent() {
                                     <td style="white-space:nowrap;">
                                         ${t.harsh_accel_count ? `<span title="Harsh Accel" style="color:#f97316;font-weight:600;margin-right:0.35rem;"><i class="mdi mdi-lightning-bolt"></i>${t.harsh_accel_count}</span>` : ''}
                                         ${t.harsh_brake_count ? `<span title="Harsh Brake" style="color:#ef4444;font-weight:600;margin-right:0.35rem;"><i class="mdi mdi-alert-octagon"></i>${t.harsh_brake_count}</span>` : ''}
-                                        ${t.harsh_corner_count ? `<span title="Sharp Turn" style="color:#eab308;font-weight:600;"><i class="mdi mdi-arrow-u-down-right"></i>${t.harsh_corner_count}</span>` : ''}
-                                        ${!t.harsh_accel_count && !t.harsh_brake_count && !t.harsh_corner_count ? '<span style="color:var(--text-muted);">Smooth</span>' : ''}
+                                        ${t.harsh_corner_count ? `<span title="Sharp Turn" style="color:#eab308;font-weight:600;margin-right:0.35rem;"><i class="mdi mdi-arrow-u-down-right"></i>${t.harsh_corner_count}</span>` : ''}
+                                        ${t.speeding_severe_minutes ? `<span title="Severe Speeding: ${t.speeding_severe_minutes}m" style="color:#ef4444;font-weight:600;margin-right:0.35rem;"><i class="mdi mdi-speedometer"></i>${t.speeding_severe_minutes}m</span>` : ''}
+                                        ${t.fatigue_risk === 'high' ? `<span title="Fatigue Alert: >4.5h Drive" style="color:#a855f7;font-weight:600;margin-right:0.35rem;"><i class="mdi mdi-sleep"></i></span>` : ''}
+                                        ${!t.harsh_accel_count && !t.harsh_brake_count && !t.harsh_corner_count && !t.speeding_severe_minutes && t.fatigue_risk !== 'high' ? '<span style="color:var(--text-muted);">Smooth</span>' : ''}
                                     </td>
                                     <td>
                                         <button class="btn btn-sm btn-secondary" style="padding:0.2rem 0.5rem;font-size:0.75rem;" onclick="showEcoTripMap(${tIdx})">

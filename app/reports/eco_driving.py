@@ -75,6 +75,7 @@ class EcoDrivingReport(Report):
         total_harsh_accels = 0
         total_harsh_brakes = 0
         total_harsh_corners = 0
+        total_fatigue_events = 0
         total_dist_fleet = 0.0
 
         for t in trips:
@@ -97,7 +98,12 @@ class EcoDrivingReport(Report):
                     "harsh_brake_count": 0,
                     "harsh_corner_count": 0,
                     "speeding_duration_minutes": 0.0,
+                    "speeding_minor_minutes": 0.0,
+                    "speeding_moderate_minutes": 0.0,
+                    "speeding_severe_minutes": 0.0,
                     "idling_duration_minutes": 0.0,
+                    "fatigue_events_count": 0,
+                    "fatigue_risk": "none",
                     "weighted_eco_sum": 0.0,
                     "weighted_dist_sum": 0.0,
                     "trips": [],
@@ -115,6 +121,12 @@ class EcoDrivingReport(Report):
             corner_cnt = t.harsh_corner_count or 0
             speeding_mins = t.speeding_duration_minutes or 0.0
             idling_mins = t.idling_duration_minutes or 0.0
+            speeding_minor = 0.0
+            speeding_moderate = 0.0
+            speeding_severe = 0.0
+            fatigue_risk = "none"
+            fatigue_cnt = 0
+            continuous_drive = t.duration_minutes or 0.0
             trip_events = []
 
             # Calculate or extract trip event positions
@@ -138,6 +150,12 @@ class EcoDrivingReport(Report):
                     corner_cnt = eco_calc["harsh_corner_count"]
                     speeding_mins = eco_calc["speeding_duration_minutes"]
                     idling_mins = eco_calc["idling_duration_minutes"]
+                speeding_minor = eco_calc.get("speeding_minor_minutes", 0.0)
+                speeding_moderate = eco_calc.get("speeding_moderate_minutes", 0.0)
+                speeding_severe = eco_calc.get("speeding_severe_minutes", 0.0)
+                fatigue_risk = eco_calc.get("fatigue_risk", "none")
+                fatigue_cnt = eco_calc.get("fatigue_events_count", 0)
+                continuous_drive = eco_calc.get("continuous_driving_minutes", t.duration_minutes or 0.0)
                 trip_events = eco_calc.get("events", [])
             except Exception:
                 if trip_score is None:
@@ -155,7 +173,15 @@ class EcoDrivingReport(Report):
             g["harsh_brake_count"] += brake_cnt
             g["harsh_corner_count"] += corner_cnt
             g["speeding_duration_minutes"] += speeding_mins
+            g["speeding_minor_minutes"] += speeding_minor
+            g["speeding_moderate_minutes"] += speeding_moderate
+            g["speeding_severe_minutes"] += speeding_severe
             g["idling_duration_minutes"] += idling_mins
+            g["fatigue_events_count"] += fatigue_cnt
+            if fatigue_risk == "high" or g["fatigue_risk"] == "high":
+                g["fatigue_risk"] = "high"
+            elif fatigue_risk == "warning" and g["fatigue_risk"] != "high":
+                g["fatigue_risk"] = "warning"
 
             g["trips"].append({
                 "id": t.id,
@@ -174,6 +200,11 @@ class EcoDrivingReport(Report):
                 "harsh_accel_count": accel_cnt,
                 "harsh_brake_count": brake_cnt,
                 "harsh_corner_count": corner_cnt,
+                "speeding_minor_minutes": round(speeding_minor, 1),
+                "speeding_moderate_minutes": round(speeding_moderate, 1),
+                "speeding_severe_minutes": round(speeding_severe, 1),
+                "continuous_driving_minutes": round(continuous_drive, 1),
+                "fatigue_risk": fatigue_risk,
                 "events": trip_events,
             })
 
@@ -184,6 +215,7 @@ class EcoDrivingReport(Report):
             total_harsh_accels += accel_cnt
             total_harsh_brakes += brake_cnt
             total_harsh_corners += corner_cnt
+            total_fatigue_events += fatigue_cnt
             total_dist_fleet += (t.distance_km or 0.0)
 
         rows = []
@@ -200,6 +232,9 @@ class EcoDrivingReport(Report):
             g["distance_km"] = round(g["distance_km"], 1)
             g["duration_minutes"] = round(g["duration_minutes"], 1)
             g["speeding_duration_minutes"] = round(g["speeding_duration_minutes"], 1)
+            g["speeding_minor_minutes"] = round(g["speeding_minor_minutes"], 1)
+            g["speeding_moderate_minutes"] = round(g["speeding_moderate_minutes"], 1)
+            g["speeding_severe_minutes"] = round(g["speeding_severe_minutes"], 1)
             g["idling_duration_minutes"] = round(g["idling_duration_minutes"], 1)
 
             total_fleet_weighted_score += g["weighted_eco_sum"]
@@ -223,7 +258,7 @@ class EcoDrivingReport(Report):
             {"label": "Harsh Accelerations", "value": str(total_harsh_accels)},
             {"label": "Harsh Braking Events", "value": str(total_harsh_brakes)},
             {"label": "Sharp Turns", "value": str(total_harsh_corners)},
-            {"label": "Safest Driver", "value": best_driver or "—", "tone": "success"},
+            {"label": "Fatigue Alerts" if total_fatigue_events > 0 else "Safest Driver", "value": str(total_fatigue_events) if total_fatigue_events > 0 else (best_driver or "—"), "tone": "danger" if total_fatigue_events > 0 else "success"},
         ]
 
         columns = [

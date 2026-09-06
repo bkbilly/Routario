@@ -25,6 +25,15 @@ DEFAULT_HARSH_ACCEL_THRESHOLD_MS2 = 2.8   # m/s² (~10.0 km/h/s)
 DEFAULT_HARSH_BRAKE_THRESHOLD_MS2 = -3.2  # m/s² (~-11.5 km/h/s)
 DEFAULT_HARSH_CORNER_DEG_PER_S = 32.0     # °/s at speed >= 35 km/h
 
+# Speeding severity thresholds (km/h over posted limit)
+SPEEDING_MINOR_KMH = 0.0      # > 0 and <= 10 km/h over
+SPEEDING_MODERATE_KMH = 10.0  # > 10 and <= 20 km/h over
+SPEEDING_SEVERE_KMH = 20.0    # > 20 km/h over (or > 15 km/h over on <= 60 km/h roads)
+
+# Fatigue monitoring thresholds (minutes)
+FATIGUE_WARNING_MINUTES = 240.0         # 4.0 hours continuous driving caution
+FATIGUE_MAX_CONTINUOUS_MINUTES = 270.0  # 4.5 hours continuous driving limit (EU/DOT tachograph standard)
+
 
 def normalize_datetime(dt: Any) -> Optional[datetime]:
     if not dt:
@@ -102,13 +111,15 @@ def evaluate_consecutive_positions(
 ) -> Dict[str, Any]:
     """
     Compares two consecutive positions and determines acceleration, cornering,
-    speeding, and idling flags.
+    speeding (with severity classification), and idling flags.
     """
     result = {
         "harsh_accel": False,
         "harsh_brake": False,
         "harsh_corner": False,
         "is_speeding": False,
+        "speeding_severity": None,
+        "overspeed_kmh": 0.0,
         "is_idling": False,
         "dt_seconds": 0.0,
         "acceleration_ms2": 0.0,
@@ -120,9 +131,17 @@ def evaluate_consecutive_positions(
     sensors2 = getattr(curr_pos, "sensors", None) or {}
     t2 = normalize_datetime(getattr(curr_pos, "device_time", None) or getattr(curr_pos, "timestamp", None))
 
-    # Check speeding
+    # Check speeding and classify severity
     if speed2 > speed_limit_kmh:
         result["is_speeding"] = True
+        overspeed = speed2 - speed_limit_kmh
+        result["overspeed_kmh"] = round(overspeed, 1)
+        if overspeed > SPEEDING_SEVERE_KMH or (speed_limit_kmh <= 60.0 and overspeed > 15.0):
+            result["speeding_severity"] = "severe"
+        elif overspeed > SPEEDING_MODERATE_KMH:
+            result["speeding_severity"] = "moderate"
+        else:
+            result["speeding_severity"] = "minor"
 
     # Check idling
     if (ign2 is True or ign2 == 1) and speed2 < 2.0:
@@ -193,29 +212,54 @@ def calculate_trip_eco_score(
 ) -> Dict[str, Any]:
     """
     Processes a list of chronologically ordered positions for a trip and computes
-    overall eco safety score, event counts, and coordinates of harsh events.
+    overall eco safety score, event counts, coordinates of harsh events,
+    tiered speeding breakdown, and continuous driving fatigue risk.
 
     Optionally accepts `speed_limits_list` (a list of road speed limits corresponding
     to each position in `positions` from Valhalla map-matching).
     """
+    continuous_mins_fallback = round(duration_minutes or 0.0, 1)
     if not positions:
+        fatigue_risk = "high" if continuous_mins_fallback >= FATIGUE_MAX_CONTINUOUS_MINUTES else (
+            "warning" if continuous_mins_fallback >= FATIGUE_WARNING_MINUTES else "none"
+        )
+        fatigue_penalty = (
+            min(20.0, 6.0 + ((continuous_mins_fallback - FATIGUE_MAX_CONTINUOUS_MINUTES) / 15.0) * 2.0)
+            if continuous_mins_fallback >= FATIGUE_MAX_CONTINUOUS_MINUTES
+            else (2.0 if continuous_mins_fallback >= FATIGUE_WARNING_MINUTES else 0.0)
+        )
+        final_score = max(0.0, min(100.0, round(100.0 - fatigue_penalty, 1)))
         return {
-            "eco_score": 100.0,
-            "grade": "A",
+            "eco_score": final_score,
+            "grade": get_eco_grade(final_score),
             "harsh_accel_count": 0,
             "harsh_brake_count": 0,
             "harsh_corner_count": 0,
             "speeding_duration_minutes": 0.0,
+            "speeding_minor_minutes": 0.0,
+            "speeding_moderate_minutes": 0.0,
+            "speeding_severe_minutes": 0.0,
             "idling_duration_minutes": 0.0,
+            "continuous_driving_minutes": continuous_mins_fallback,
+            "fatigue_risk": fatigue_risk,
+            "fatigue_events_count": 1 if fatigue_risk == "high" else 0,
             "events": [],
         }
 
     harsh_accels = 0
     harsh_brakes = 0
     harsh_corners = 0
+    speeding_minor_seconds = 0.0
+    speeding_moderate_seconds = 0.0
+    speeding_severe_seconds = 0.0
     speeding_seconds = 0.0
     idling_seconds = 0.0
     events = []
+
+    # Continuous driving tracking
+    continuous_driving_seconds = 0.0
+    warned_fatigue = False
+    violated_fatigue = False
 
     last_event_time = {"accel": 0.0, "brake": 0.0, "corner": 0.0, "speeding": 0.0}
 
@@ -235,6 +279,40 @@ def calculate_trip_eco_score(
         lat = getattr(curr, "latitude", None)
         lng = getattr(curr, "longitude", None)
         speed = eval_res["speed_kmh"]
+
+        # Track continuous driving time (resets if vehicle stopped for > 15 mins)
+        if prev and dt > 900.0:
+            continuous_driving_seconds = 0.0
+        else:
+            continuous_driving_seconds += dt
+
+        # Continuous driving fatigue checks
+        if continuous_driving_seconds >= FATIGUE_MAX_CONTINUOUS_MINUTES * 60.0 and not violated_fatigue:
+            violated_fatigue = True
+            if lat is not None and lng is not None:
+                events.append({
+                    "type": "fatigue",
+                    "severity": "severe",
+                    "label": "Fatigue Risk (>4.5h Continuous Driving)",
+                    "latitude": float(lat),
+                    "longitude": float(lng),
+                    "speed": round(speed, 1),
+                    "time": t_curr.isoformat().replace("T", " ") if t_curr else None,
+                    "duration_minutes": round(continuous_driving_seconds / 60.0, 1),
+                })
+        elif continuous_driving_seconds >= FATIGUE_WARNING_MINUTES * 60.0 and not warned_fatigue and not violated_fatigue:
+            warned_fatigue = True
+            if lat is not None and lng is not None:
+                events.append({
+                    "type": "fatigue",
+                    "severity": "warning",
+                    "label": "Fatigue Warning (4.0h Continuous Driving)",
+                    "latitude": float(lat),
+                    "longitude": float(lng),
+                    "speed": round(speed, 1),
+                    "time": t_curr.isoformat().replace("T", " ") if t_curr else None,
+                    "duration_minutes": round(continuous_driving_seconds / 60.0, 1),
+                })
 
         # Debounce repeated event triggers within 5 seconds
         if eval_res["harsh_accel"]:
@@ -282,14 +360,27 @@ def calculate_trip_eco_score(
                         "turn_rate_deg_s": eval_res.get("turn_rate_deg_s", 0.0),
                     })
 
+        # Tiered Speeding Accumulation & Event Tagging
         if eval_res["is_speeding"]:
             speeding_seconds += dt
+            sev = eval_res.get("speeding_severity") or "minor"
+            overspeed = eval_res.get("overspeed_kmh") or (speed - active_limit)
+            if sev == "severe":
+                speeding_severe_seconds += dt
+            elif sev == "moderate":
+                speeding_moderate_seconds += dt
+            else:
+                speeding_minor_seconds += dt
+
             if epoch - last_event_time["speeding"] > 20.0:
                 last_event_time["speeding"] = epoch
                 if lat is not None and lng is not None:
+                    sev_title = sev.capitalize()
                     events.append({
                         "type": "speeding",
-                        "label": f"Speeding ({speed:.0f} km/h on {active_limit:.0f} km/h limit)",
+                        "severity": sev,
+                        "overspeed_kmh": round(overspeed, 1),
+                        "label": f"{sev_title} Speeding ({speed:.0f} km/h on {active_limit:.0f} km/h limit, +{overspeed:.0f} km/h)",
                         "latitude": float(lat),
                         "longitude": float(lng),
                         "speed": round(speed, 1),
@@ -301,7 +392,19 @@ def calculate_trip_eco_score(
             idling_seconds += dt
 
     speeding_minutes = round(speeding_seconds / 60.0, 1)
+    speeding_minor_mins = round(speeding_minor_seconds / 60.0, 1)
+    speeding_moderate_mins = round(speeding_moderate_seconds / 60.0, 1)
+    speeding_severe_mins = round(speeding_severe_seconds / 60.0, 1)
     idling_minutes = round(idling_seconds / 60.0, 1)
+    continuous_driving_mins = max(round(continuous_driving_seconds / 60.0, 1), round(duration_minutes or 0.0, 1))
+
+    # Determine overall fatigue risk state
+    if violated_fatigue or continuous_driving_mins >= FATIGUE_MAX_CONTINUOUS_MINUTES:
+        fatigue_risk = "high"
+    elif warned_fatigue or continuous_driving_mins >= FATIGUE_WARNING_MINUTES:
+        fatigue_risk = "warning"
+    else:
+        fatigue_risk = "none"
 
     # ── Score calculation (100-point scale) ──
     # Penalties are weighted and normalized to prevent short trips from unfairly tanking:
@@ -312,12 +415,26 @@ def calculate_trip_eco_score(
     accel_penalty = (harsh_accels * 4.0) / dist_factor
     brake_penalty = (harsh_brakes * 5.0) / dist_factor
     corner_penalty = (harsh_corners * 3.5) / dist_factor
-    speeding_penalty = min(25.0, speeding_minutes * 1.5)
+
+    # Tiered Speeding Penalty (Minor: 0.5 pts/min, Moderate: 1.5 pts/min, Severe: 3.5 pts/min)
+    speeding_penalty = min(
+        30.0,
+        (speeding_minor_mins * 0.5) + (speeding_moderate_mins * 1.5) + (speeding_severe_mins * 3.5),
+    )
+
     # Idling over 3 minutes incurs a small penalty
     excess_idle = max(0.0, idling_minutes - 3.0)
     idle_penalty = min(15.0, excess_idle * 0.5)
 
-    total_penalty = accel_penalty + brake_penalty + corner_penalty + speeding_penalty + idle_penalty
+    # Fatigue penalty for excessive continuous driving (>4.5h)
+    fatigue_penalty = 0.0
+    if continuous_driving_mins >= FATIGUE_MAX_CONTINUOUS_MINUTES:
+        excess_drive = continuous_driving_mins - FATIGUE_MAX_CONTINUOUS_MINUTES
+        fatigue_penalty = min(20.0, 6.0 + (excess_drive / 15.0) * 2.0)
+    elif continuous_driving_mins >= FATIGUE_WARNING_MINUTES:
+        fatigue_penalty = 2.0
+
+    total_penalty = accel_penalty + brake_penalty + corner_penalty + speeding_penalty + idle_penalty + fatigue_penalty
     final_score = max(0.0, min(100.0, round(100.0 - total_penalty, 1)))
 
     return {
@@ -327,7 +444,13 @@ def calculate_trip_eco_score(
         "harsh_brake_count": harsh_brakes,
         "harsh_corner_count": harsh_corners,
         "speeding_duration_minutes": speeding_minutes,
+        "speeding_minor_minutes": speeding_minor_mins,
+        "speeding_moderate_minutes": speeding_moderate_mins,
+        "speeding_severe_minutes": speeding_severe_mins,
         "idling_duration_minutes": idling_minutes,
+        "continuous_driving_minutes": continuous_driving_mins,
+        "fatigue_risk": fatigue_risk,
+        "fatigue_events_count": len([e for e in events if e.get("type") == "fatigue"]),
         "events": events,
     }
 
