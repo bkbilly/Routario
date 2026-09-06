@@ -1317,7 +1317,7 @@ class DatabaseService:
 
                 # Calculate Eco-Driving score and harsh telemetry events
                 try:
-                    from core.eco_driving import calculate_trip_eco_score
+                    from core.eco_driving import calculate_trip_eco_score_async
                     pos_q = select(PositionRecord).where(
                         PositionRecord.device_id == trip.device_id,
                         PositionRecord.device_time >= trip.start_time,
@@ -1326,7 +1326,7 @@ class DatabaseService:
                     pos_res = await session.execute(pos_q)
                     trip_positions = pos_res.scalars().all()
                     speed_limit = float(device.config.get("speed_limit") or 120.0)
-                    eco_res = calculate_trip_eco_score(
+                    eco_res = await calculate_trip_eco_score_async(
                         trip_positions,
                         distance_km=trip.distance_km,
                         duration_minutes=trip.duration_minutes,

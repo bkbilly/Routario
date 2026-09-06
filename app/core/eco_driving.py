@@ -12,8 +12,11 @@ Computes normalized 0-100% safety scores and letter grades (A/B/C/D/F).
 """
 
 from datetime import datetime, timezone
+import logging
 import math
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 # Default thresholds
@@ -186,10 +189,14 @@ def calculate_trip_eco_score(
     distance_km: float = 0.0,
     duration_minutes: float = 0.0,
     speed_limit_kmh: float = DEFAULT_MAX_SPEED_LIMIT_KMH,
+    speed_limits_list: Optional[List[Optional[float]]] = None,
 ) -> Dict[str, Any]:
     """
     Processes a list of chronologically ordered positions for a trip and computes
     overall eco safety score, event counts, and coordinates of harsh events.
+
+    Optionally accepts `speed_limits_list` (a list of road speed limits corresponding
+    to each position in `positions` from Valhalla map-matching).
     """
     if not positions:
         return {
@@ -216,7 +223,11 @@ def calculate_trip_eco_score(
         curr = positions[i]
         prev = positions[i - 1] if i > 0 else None
 
-        eval_res = evaluate_consecutive_positions(prev, curr, speed_limit_kmh=speed_limit_kmh)
+        active_limit = speed_limit_kmh
+        if speed_limits_list and i < len(speed_limits_list) and speed_limits_list[i] is not None:
+            active_limit = float(speed_limits_list[i])
+
+        eval_res = evaluate_consecutive_positions(prev, curr, speed_limit_kmh=active_limit)
         dt = eval_res["dt_seconds"] or 3.0  # default delta fallback
         t_curr = normalize_datetime(getattr(curr, "device_time", None) or getattr(curr, "timestamp", None))
         epoch = t_curr.timestamp() if t_curr else float(i * 3)
@@ -278,10 +289,11 @@ def calculate_trip_eco_score(
                 if lat is not None and lng is not None:
                     events.append({
                         "type": "speeding",
-                        "label": f"Speeding ({speed:.0f} km/h)",
+                        "label": f"Speeding ({speed:.0f} km/h on {active_limit:.0f} km/h limit)",
                         "latitude": float(lat),
                         "longitude": float(lng),
                         "speed": round(speed, 1),
+                        "speed_limit": round(active_limit, 1),
                         "time": t_curr.isoformat().replace("T", " ") if t_curr else None,
                     })
 
@@ -318,3 +330,39 @@ def calculate_trip_eco_score(
         "idling_duration_minutes": idling_minutes,
         "events": events,
     }
+
+
+async def calculate_trip_eco_score_async(
+    positions: List[Any],
+    distance_km: float = 0.0,
+    duration_minutes: float = 0.0,
+    speed_limit_kmh: float = DEFAULT_MAX_SPEED_LIMIT_KMH,
+    use_valhalla: bool = True,
+) -> Dict[str, Any]:
+    """
+    Asynchronously evaluates trip telematics and queries Valhalla /trace_attributes
+    for exact road speed limits along the route polyline when available.
+    """
+    speed_limits_list: Optional[List[Optional[float]]] = None
+    if use_valhalla and len(positions) >= 2:
+        try:
+            from core.valhalla import get_trace_speed_limits, is_valhalla_available
+            if is_valhalla_available():
+                pts = [
+                    (float(getattr(p, "latitude", None) or 0.0), float(getattr(p, "longitude", None) or 0.0))
+                    for p in positions
+                    if getattr(p, "latitude", None) is not None and getattr(p, "longitude", None) is not None
+                ]
+                if len(pts) == len(positions) and len(pts) >= 2:
+                    speed_limits_list = await get_trace_speed_limits(pts)
+        except Exception as exc:
+            logger.debug("Valhalla speed limit trace query failed: %s", exc)
+
+    return calculate_trip_eco_score(
+        positions=positions,
+        distance_km=distance_km,
+        duration_minutes=duration_minutes,
+        speed_limit_kmh=speed_limit_kmh,
+        speed_limits_list=speed_limits_list,
+    )
+

@@ -15,7 +15,7 @@ from reports.common import (
     round_value,
     table_payload,
 )
-from core.eco_driving import calculate_trip_eco_score, get_eco_grade
+from core.eco_driving import calculate_trip_eco_score_async, get_eco_grade
 
 
 class EcoDrivingReport(Report):
@@ -126,7 +126,7 @@ class EcoDrivingReport(Report):
                 ).order_by(PositionRecord.device_time.asc())
                 pos_res = await session.execute(pos_q)
                 pos_list = pos_res.scalars().all()
-                eco_calc = calculate_trip_eco_score(
+                eco_calc = await calculate_trip_eco_score_async(
                     pos_list,
                     distance_km=t.distance_km,
                     duration_minutes=t.duration_minutes,

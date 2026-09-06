@@ -2675,7 +2675,8 @@ function _renderEcoModalContent() {
                                     metricHtml = ev.turn_rate_deg_s != null ? `<span style="font-family:var(--font-mono);font-weight:600;color:#eab308;">${Number(ev.turn_rate_deg_s).toFixed(1)} °/s</span>` : '—';
                                 } else if (ev.type === 'speeding') {
                                     badgeHtml = '<span style="display:inline-flex;align-items:center;gap:0.25rem;color:#ef4444;font-weight:600;"><i class="mdi mdi-speedometer"></i> Speeding</span>';
-                                    metricHtml = `<span style="font-family:var(--font-mono);color:#ef4444;">${ev.speed ? Math.round(ev.speed) : '—'} km/h</span>`;
+                                    const limitTxt = ev.speed_limit ? ` <span style="font-size:0.75rem;color:var(--text-muted);font-weight:normal;">(limit ${Math.round(ev.speed_limit)})</span>` : '';
+                                    metricHtml = `<span style="font-family:var(--font-mono);color:#ef4444;font-weight:600;">${ev.speed ? Math.round(ev.speed) : '—'} km/h</span>${limitTxt}`;
                                 } else {
                                     badgeHtml = `<span style="color:var(--text-muted);">${_esc(ev.label || ev.type || 'Event')}</span>`;
                                 }

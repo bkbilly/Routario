@@ -127,3 +127,94 @@ async def get_speed_limit(
     except Exception as exc:
         logger.debug(f"Valhalla speed limit lookup failed: {exc}")
         return None
+
+
+async def get_trace_speed_limits(
+    points: List[Tuple[float, float]],
+    chunk_size: int = 1000,
+) -> List[Optional[float]]:
+    """
+    Query Valhalla /trace_attributes for an entire polyline and return the
+    road speed limit (km/h) corresponding to each input point in `points`.
+
+    Returns a list of floats (or None where unknown / unmatched) matching
+    the exact length of `points`.
+    """
+    if not _valhalla_available or not _valhalla_url or len(points) < 2:
+        return [None] * len(points)
+
+    if len(points) <= chunk_size:
+        return await _fetch_trace_speed_limits(points)
+
+    results: List[Optional[float]] = []
+    idx = 0
+    while idx < len(points):
+        chunk = points[idx : idx + chunk_size]
+        if len(chunk) < 2:
+            results.extend([None] * len(chunk))
+            break
+        chunk_limits = await _fetch_trace_speed_limits(chunk)
+        results.extend(chunk_limits)
+        idx += chunk_size
+
+    if len(results) < len(points):
+        results.extend([None] * (len(points) - len(results)))
+    return results[: len(points)]
+
+
+async def _fetch_trace_speed_limits(
+    points: List[Tuple[float, float]],
+) -> List[Optional[float]]:
+    if len(points) < 2:
+        return [None] * len(points)
+
+    shape = [{"lat": lat, "lon": lon} for lat, lon in points]
+    payload = {
+        "shape": shape,
+        "costing": "auto",
+        "shape_match": "map_snap",
+        "filters": {
+            "attributes": [
+                "edge.speed_limit",
+                "matched.edge_index",
+                "matched.type",
+            ],
+            "action": "include",
+        },
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{_valhalla_url}/trace_attributes",
+                json=payload,
+            )
+
+        if resp.status_code != 200:
+            logger.debug(f"Valhalla trace_attributes returned HTTP {resp.status_code}")
+            return [None] * len(points)
+
+        data = resp.json()
+        edges = data.get("edges") or []
+        matched_points = data.get("matched_points") or []
+
+        limits: List[Optional[float]] = []
+        for mp in matched_points:
+            edge_idx = mp.get("edge_index")
+            if edge_idx is not None and 0 <= edge_idx < len(edges):
+                lim = edges[edge_idx].get("speed_limit")
+                if isinstance(lim, (int, float)) and lim > 0:
+                    limits.append(float(lim))
+                else:
+                    limits.append(None)
+            else:
+                limits.append(None)
+
+        if len(limits) < len(points):
+            limits.extend([None] * (len(points) - len(limits)))
+        return limits[: len(points)]
+
+    except Exception as exc:
+        logger.debug(f"Valhalla batch trace speed limit lookup failed: {exc}")
+        return [None] * len(points)
+
