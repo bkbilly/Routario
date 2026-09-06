@@ -2533,6 +2533,8 @@ let _currentEcoRow = null;
 let _currentEcoRowIdx = null;
 let _currentEcoTab = 'events';
 let _currentEcoFilter = 'all';
+let _currentEcoAllEvents = [];
+let _currentEcoTrips = [];
 
 function showEcoDriverDetail(idx) {
     const row = (typeof idx === 'object' && idx !== null) ? idx : (_tripRows[idx] || _reportData[idx] || _reportPayload?.rows?.[idx]);
@@ -2582,14 +2584,28 @@ function _renderEcoModalContent() {
     const corners = Number(row.harsh_corner_count || 0);
     const speeding = Number(row.speeding_duration_minutes || 0);
     const idling = Number(row.idling_duration_minutes || 0);
-    const trips = row.trips || [];
+
+    // Sort trips latest-first (descending)
+    const rawTrips = row.trips || [];
+    const trips = [...rawTrips].sort((a, b) => {
+        const tA = a.start_time ? new Date(a.start_time).getTime() : 0;
+        const tB = b.start_time ? new Date(b.start_time).getTime() : 0;
+        return tB - tA;
+    });
+    _currentEcoTrips = trips;
 
     const accelPer100 = dist > 0 ? ((accels / dist) * 100).toFixed(1) : '0.0';
     const brakePer100 = dist > 0 ? ((brakes / dist) * 100).toFixed(1) : '0.0';
     const cornerPer100 = dist > 0 ? ((corners / dist) * 100).toFixed(1) : '0.0';
 
-    // Collect all events
-    const allEvents = (row.events && row.events.length) ? row.events : trips.flatMap(t => t.events || []);
+    // Collect all events and sort latest-first (descending)
+    const rawEvents = (row.events && row.events.length) ? row.events : trips.flatMap(t => t.events || []);
+    const allEvents = [...rawEvents].sort((a, b) => {
+        const tA = a.time ? new Date(a.time).getTime() : 0;
+        const tB = b.time ? new Date(b.time).getTime() : 0;
+        return tB - tA;
+    });
+    _currentEcoAllEvents = allEvents;
 
     const accelEvents = allEvents.filter(e => e.type === 'harsh_accel');
     const brakeEvents = allEvents.filter(e => e.type === 'harsh_brake');
@@ -2637,35 +2653,32 @@ function _renderEcoModalContent() {
 
     // Events Tab Content
     const eventsTabHtml = `
-        <div style="margin-top:0.5rem;">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">
-                <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
-                    <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'all' ? 'active' : ''}" onclick="_setEcoEventFilter('all')">
-                        All (${allEvents.length})
+        <div class="eco-tab-pane" style="margin-top:0.5rem;width:100%;max-width:100%;min-width:0;box-sizing:border-box;">
+            <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;margin-bottom:0.5rem;width:100%;max-width:100%;min-width:0;box-sizing:border-box;">
+                <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'all' ? 'active' : ''}" onclick="_setEcoEventFilter('all')">
+                    <i class="mdi mdi-format-list-bulleted"></i> All (${allEvents.length})
+                </button>
+                <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'accel' ? 'active' : ''}" onclick="_setEcoEventFilter('accel')">
+                    <i class="mdi mdi-lightning-bolt" style="color:#f97316;"></i> Acceleration (${accelEvents.length})
+                </button>
+                <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'brake' ? 'active' : ''}" onclick="_setEcoEventFilter('brake')">
+                    <i class="mdi mdi-alert-octagon" style="color:#ef4444;"></i> Braking (${brakeEvents.length})
+                </button>
+                <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'corner' ? 'active' : ''}" onclick="_setEcoEventFilter('corner')">
+                    <i class="mdi mdi-arrow-u-down-right" style="color:#eab308;"></i> Cornering (${cornerEvents.length})
+                </button>
+                <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'speeding' ? 'active' : ''}" onclick="_setEcoEventFilter('speeding')">
+                    <i class="mdi mdi-speedometer"></i> Speeding (${speedingEvents.length})
+                </button>
+                ${fatigueEvents.length ? `
+                    <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'fatigue' ? 'active' : ''}" onclick="_setEcoEventFilter('fatigue')">
+                        <i class="mdi mdi-sleep" style="color:#a855f7;"></i> Fatigue (${fatigueEvents.length})
                     </button>
-                    <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'accel' ? 'active' : ''}" onclick="_setEcoEventFilter('accel')">
-                        ⚡ Acceleration (${accelEvents.length})
-                    </button>
-                    <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'brake' ? 'active' : ''}" onclick="_setEcoEventFilter('brake')">
-                        🛑 Braking (${brakeEvents.length})
-                    </button>
-                    <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'corner' ? 'active' : ''}" onclick="_setEcoEventFilter('corner')">
-                        ↩ Cornering (${cornerEvents.length})
-                    </button>
-                    <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'speeding' ? 'active' : ''}" onclick="_setEcoEventFilter('speeding')">
-                        <i class="mdi mdi-speedometer"></i> Speeding (${speedingEvents.length})
-                    </button>
-                    ${fatigueEvents.length ? `
-                        <button type="button" class="eco-filter-chip ${_currentEcoFilter === 'fatigue' ? 'active' : ''}" onclick="_setEcoEventFilter('fatigue')">
-                            😴 Fatigue (${fatigueEvents.length})
-                        </button>
-                    ` : ''}
-                </div>
-                <span style="font-size:0.72rem;color:var(--text-muted);">Click "Map" on any event to inspect its GPS location</span>
+                ` : ''}
             </div>
 
             ${filteredEvents.length ? `
-                <div class="table-container" style="max-height:360px;overflow-y:auto;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-secondary);">
+                <div class="eco-table-wrap">
                     <table class="devices-table eco-scorecard-table">
                         <thead>
                             <tr>
@@ -2760,9 +2773,9 @@ function _renderEcoModalContent() {
 
     // Trips Tab Content
     const tripsTabHtml = `
-        <div style="margin-top:0.5rem;">
+        <div class="eco-tab-pane" style="margin-top:0.5rem;width:100%;max-width:100%;min-width:0;box-sizing:border-box;">
             ${trips.length ? `
-                <div class="table-container" style="max-height:360px;overflow-y:auto;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-secondary);">
+                <div class="eco-table-wrap">
                     <table class="devices-table eco-scorecard-table">
                         <thead>
                             <tr>
@@ -2821,27 +2834,33 @@ function _renderEcoModalContent() {
         <div class="eco-detail-grid">
             <div class="eco-detail-card" style="border-left:4px solid ${score >= 85 ? '#22c55e' : (score >= 70 ? '#eab308' : '#ef4444')};">
                 <div class="k">Safety Score</div>
-                <div class="v">${score.toFixed(0)}% <span style="font-size:0.78rem;font-weight:bold;color:var(--text-muted);">(Grade ${grade})</span></div>
+                <div class="v">${score.toFixed(0)}%</div>
+                <div class="sub">Grade ${grade}</div>
             </div>
             <div class="eco-detail-card">
                 <div class="k">Distance</div>
-                <div class="v">${dist.toFixed(1)} km <span style="font-size:0.72rem;font-weight:normal;color:var(--text-muted);">(${row.trip_count || 0} trips)</span></div>
+                <div class="v">${dist.toFixed(1)} km</div>
+                <div class="sub">${row.trip_count || 0} trips</div>
             </div>
             <div class="eco-detail-card">
-                <div class="k">Drive / Idle</div>
-                <div class="v">${_fmtDuration(row.duration_minutes || 0)} <span style="font-size:0.72rem;font-weight:normal;color:var(--text-muted);">(${idling.toFixed(0)}m idle)</span></div>
+                <div class="k">Drive Time</div>
+                <div class="v">${_fmtDuration(row.duration_minutes || 0)}</div>
+                <div class="sub">${idling.toFixed(0)}m idle</div>
             </div>
             <div class="eco-detail-card">
                 <div class="k">Harsh Accel</div>
-                <div class="v" style="color:#f97316;"><i class="mdi mdi-lightning-bolt"></i> ${accels} <span style="font-size:0.72rem;font-weight:normal;color:var(--text-muted);">(${accelPer100}/100km)</span></div>
+                <div class="v" style="color:#f97316;"><i class="mdi mdi-lightning-bolt"></i> ${accels}</div>
+                <div class="sub">${accelPer100} / 100km</div>
             </div>
             <div class="eco-detail-card">
                 <div class="k">Harsh Brake</div>
-                <div class="v" style="color:#ef4444;"><i class="mdi mdi-alert-octagon"></i> ${brakes} <span style="font-size:0.72rem;font-weight:normal;color:var(--text-muted);">(${brakePer100}/100km)</span></div>
+                <div class="v" style="color:#ef4444;"><i class="mdi mdi-alert-octagon"></i> ${brakes}</div>
+                <div class="sub">${brakePer100} / 100km</div>
             </div>
             <div class="eco-detail-card">
                 <div class="k">Sharp Turn</div>
-                <div class="v" style="color:#eab308;"><i class="mdi mdi-arrow-u-down-right"></i> ${corners} <span style="font-size:0.72rem;font-weight:normal;color:var(--text-muted);">(${cornerPer100}/100km)</span></div>
+                <div class="v" style="color:#eab308;"><i class="mdi mdi-arrow-u-down-right"></i> ${corners}</div>
+                <div class="sub">${cornerPer100} / 100km</div>
             </div>
         </div>
 
@@ -2874,8 +2893,7 @@ function _renderEcoModalContent() {
 function _showEcoEventOnMap(evIdx) {
     const row = _currentEcoRow;
     if (!row) return;
-    const allEvents = (row.events && row.events.length) ? row.events : (row.trips || []).flatMap(t => t.events || []);
-    const ev = allEvents[evIdx];
+    const ev = _currentEcoAllEvents?.[evIdx] || (row.events || [])[evIdx];
     if (!ev) return;
 
     let trip = null;
@@ -2908,7 +2926,7 @@ function _showEcoEventOnMap(evIdx) {
 function showEcoTripMap(rowIdx, tripIdx) {
     let trip = null;
     if (tripIdx === undefined && typeof rowIdx === 'number') {
-        trip = _currentEcoRow?.trips?.[rowIdx];
+        trip = _currentEcoTrips?.[rowIdx] || _currentEcoRow?.trips?.[rowIdx];
     } else {
         const row = (typeof rowIdx === 'object' && rowIdx !== null) ? rowIdx : (_tripRows[rowIdx] || _reportData[rowIdx] || _reportPayload?.rows?.[rowIdx]);
         trip = row?.trips?.[tripIdx];

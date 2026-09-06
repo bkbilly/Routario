@@ -621,28 +621,88 @@
         #ecoDetailModal { z-index: 1050; }
         #tripMapModal { z-index: 1060; }
         #ecoDetailModal .modal-content {
-            max-width: 980px;
-            width: 95vw;
-            max-height: 92vh;
+            max-width: 960px;
+            width: min(960px, 94vw);
+            min-width: 0;
+            max-height: 90vh;
             display: flex;
             flex-direction: column;
             padding: 1rem 1.25rem;
+            overflow: hidden;
+            box-sizing: border-box;
         }
-        #ecoDetailBody { display: grid; gap: 0.65rem; }
+        #ecoDetailModal .modal-header {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        #ecoDetailModal .modal-title {
+            font-size: 1.15rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+            flex: 1;
+        }
+        #ecoDetailModal .modal-scrollable {
+            flex: 1 1 auto;
+            min-height: 0;
+            min-width: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 0.5rem 0.1rem;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        @media (max-width: 768px) {
+            #ecoDetailModal .modal-content {
+                width: 96vw;
+                padding: 0.75rem 0.85rem;
+                max-height: 92vh;
+            }
+        }
+        #ecoDetailBody {
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+            overflow-x: hidden;
+        }
         .eco-detail-grid {
             display: grid;
             grid-template-columns: repeat(6, minmax(0, 1fr));
             gap: 0.45rem;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
         }
-        @media (max-width: 1024px) {
+        @media (max-width: 900px) {
             .eco-detail-grid {
                 grid-template-columns: repeat(3, minmax(0, 1fr));
                 gap: 0.35rem;
             }
         }
-        @media (max-width: 640px) {
+        @media (max-width: 520px) {
             .eco-detail-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 0.3rem;
+            }
+        }
+        @media (max-width: 340px) {
+            .eco-detail-grid {
+                grid-template-columns: 1fr;
                 gap: 0.3rem;
             }
         }
@@ -650,8 +710,12 @@
             border: 1px solid var(--border-color);
             border-radius: 8px;
             background: var(--bg-secondary);
-            padding: 0.5rem 0.65rem;
+            padding: 0.45rem 0.55rem;
             min-width: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-sizing: border-box;
             overflow: hidden;
         }
         .eco-detail-card .k {
@@ -660,13 +724,26 @@
             text-transform: uppercase;
             letter-spacing: 0.03em;
             line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .eco-detail-card .v {
-            margin-top: 0.2rem;
+            margin-top: 0.15rem;
             font-family: var(--font-mono);
             font-weight: 700;
-            font-size: 0.95rem;
+            font-size: 0.98rem;
             color: var(--text-primary);
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .eco-detail-card .sub {
+            margin-top: 0.15rem;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            line-height: 1.2;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -682,6 +759,11 @@
             font-size: 0.8rem;
             color: var(--text-primary);
             line-height: 1.35;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+            word-break: break-word;
         }
         .eco-sub-tabs {
             display: flex;
@@ -689,6 +771,11 @@
             border-bottom: 1px solid var(--border-color);
             padding-bottom: 0.4rem;
             margin-top: 0.15rem;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+            flex-wrap: wrap;
         }
         .eco-sub-tab {
             background: var(--bg-secondary);
@@ -703,6 +790,7 @@
             gap: 0.45rem;
             text-align: left;
             line-height: 1.15;
+            box-sizing: border-box;
         }
         .eco-sub-tab:hover {
             color: var(--text-primary);
@@ -747,6 +835,8 @@
             display: inline-flex;
             align-items: center;
             gap: 0.25rem;
+            white-space: nowrap;
+            box-sizing: border-box;
         }
         .eco-filter-chip:hover, .eco-filter-chip.active {
             color: var(--text-primary);
@@ -755,9 +845,24 @@
             font-weight: 600;
         }
 
-        /* ── Eco Scorecard Table styling with crisp dividing lines ── */
+        /* ── Eco Table Wrap & Table ── */
+        .eco-table-wrap {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 360px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-secondary);
+            box-sizing: border-box;
+            -webkit-overflow-scrolling: touch;
+        }
         .eco-scorecard-table {
             width: 100%;
+            min-width: 580px;
             border-collapse: collapse;
             font-size: 0.82rem;
             margin: 0;
