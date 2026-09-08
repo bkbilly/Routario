@@ -1,0 +1,66 @@
+{
+  "name": "Routario Plugin Repository",
+  "description": "Example repository manifest for Routario device decoders, alert rules, reporting modules, and third-party integrations.",
+  "plugins": [
+    {
+      "id": "cold_chain_guard",
+      "name": "Cold-Chain & Temperature Guard",
+      "version": "1.0.0",
+      "description": "Real-time temperature and humidity monitoring with spoilage alerts, compliance audit reports, and BLE beacon protocol decoding.",
+      "author": "Routario Community",
+      "category": "Sensors",
+      "icon": "mdi-snowflake",
+      "dependencies": [],
+      "requires_restart": false,
+      "homepage": "https://github.com/bkbilly/Routario"
+    },
+    {
+      "id": "obd_fuel_eco_analytics",
+      "name": "OBD-II Fuel & Eco-Driving Analytics",
+      "version": "1.1.0",
+      "description": "Advanced fuel consumption telemetry analysis, harsh acceleration/braking scoring, and idle fuel waste reporting.",
+      "author": "Telematics Lab",
+      "category": "Fuel",
+      "icon": "mdi-gas-station",
+      "dependencies": [],
+      "requires_restart": false,
+      "homepage": "https://github.com/bkbilly/Routario"
+    },
+    {
+      "id": "teltonika_advanced_can",
+      "name": "Teltonika CAN Bus Telemetry Extended",
+      "version": "2.0.1",
+      "description": "Extended Teltonika FMB series decoder for LVCAN, ALL-CAN300, tachograph driver card status, and axle load sensors.",
+      "author": "IoT Protocol Group",
+      "category": "Protocols",
+      "icon": "mdi-car-connected",
+      "dependencies": [],
+      "requires_restart": false,
+      "homepage": "https://github.com/bkbilly/Routario"
+    },
+    {
+      "id": "esg_co2_emission_report",
+      "name": "Fleet Carbon & ESG Emissions Reporter",
+      "version": "1.0.0",
+      "description": "Automated GHG Protocol Scope 1 carbon calculation based on actual vehicle fuel consumption, engine idle, and mileage.",
+      "author": "EcoFleet Solutions",
+      "category": "Reports",
+      "icon": "mdi-leaf",
+      "dependencies": [],
+      "requires_restart": false,
+      "homepage": "https://github.com/bkbilly/Routario"
+    },
+    {
+      "id": "samsara_cloud_sync",
+      "name": "Samsara Cloud Platform Connector",
+      "version": "1.2.0",
+      "description": "Bi-directional sync of assets, drivers, hours-of-service (HOS), and telematics streams with Samsara Cloud API.",
+      "author": "Cloud Integrations",
+      "category": "Integrations",
+      "icon": "mdi-cloud-sync",
+      "dependencies": [],
+      "requires_restart": false,
+      "homepage": "https://github.com/bkbilly/Routario"
+    }
+  ]
+}

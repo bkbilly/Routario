@@ -1,0 +1,115 @@
+/* Plugins Management Styles */
+
+.btn-usage-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.65rem;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    border: 1px solid var(--border-color);
+    background: var(--bg-subtle, rgba(255, 255, 255, 0.04));
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-base, 0.2s);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.btn-usage-pill:hover {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+    background: rgba(60, 152, 254, 0.08);
+}
+
+.btn-usage-pill.active {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.3);
+    color: var(--accent-success, #10b981);
+}
+
+.plugin-catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.plugin-catalog-card {
+    background: var(--bg-card, #171d29);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    transition: border-color var(--transition-base, 0.2s), transform var(--transition-base, 0.2s);
+}
+
+.plugin-catalog-card:hover {
+    border-color: var(--accent-primary);
+    transform: translateY(-2px);
+}
+
+.catalog-filter-bar {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.catalog-filter-btn {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+    background: var(--bg-subtle, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all var(--transition-base, 0.2s);
+}
+
+.catalog-filter-btn:hover,
+.catalog-filter-btn.active {
+    background: var(--accent-primary);
+    color: #fff;
+    border-color: var(--accent-primary);
+}
+
+.plugin-restart-banner {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: var(--accent-warning, #f59e0b);
+    padding: 0.75rem 1.25rem;
+    border-radius: 8px;
+    margin-bottom: 1.25rem;
+    font-size: 0.875rem;
+}
+
+/* Modal Stacking & Layering */
+#pluginCatalogModal {
+    z-index: 1040;
+}
+
+#pluginRepoModal {
+    z-index: 1060;
+}
+
+#pluginUsageModal {
+    z-index: 1070;
+}
+
+/* Disabled Toggle Switch */
+.toggle-switch.disabled,
+.toggle-switch input:disabled + .toggle-slider {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: auto;
+}
+

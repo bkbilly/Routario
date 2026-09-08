@@ -59,6 +59,12 @@ class ProtocolRegistry:
         return list(cls._decoders.keys())
 
     @classmethod
+    def unregister(cls, protocol_name: str) -> None:
+        """Unregister a protocol decoder"""
+        cls._decoders.pop(protocol_name.lower(), None)
+        logger.info(f"Unregistered protocol: {protocol_name}")
+
+    @classmethod
     def get_all(cls) -> Dict[str, BaseProtocolDecoder]:
         return cls._decoders
 

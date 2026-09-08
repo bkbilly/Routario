@@ -58,6 +58,13 @@ class IntegrationRegistry:
         return cls() if cls else None
 
     @staticmethod
+    def unregister(provider_id: str) -> None:
+        """Unregister an integration provider dynamically (used by plugins)."""
+        _REGISTRY.pop(provider_id, None)
+        INTEGRATION_PROTOCOL_IDS.discard(provider_id)
+        logger.info(f"Unregistered integration provider: {provider_id}")
+
+    @staticmethod
     def all() -> list[dict]:
         """
         Return metadata for every registered provider.

@@ -480,6 +480,14 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Valhalla disabled in config.")
 
+    # Plugins system — discover & hot-load enabled plugins
+    try:
+        from core.plugins.manager import load_all_plugins
+        loaded_count = len(await load_all_plugins(app))
+        logger.info("Plugin engine initialized (%d plugins loaded)", loaded_count)
+    except Exception as exc:
+        logger.warning("Could not initialize plugin engine: %s", exc)
+
     protocol_server_manager.configure(
         tcp_host=settings.tcp_host,
         udp_host=settings.udp_host,

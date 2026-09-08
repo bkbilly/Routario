@@ -41,3 +41,23 @@ for _, module_name, _ in pkgutil.iter_modules([str(Path(__file__).parent)]):
                 logger.debug(f"Registered alert: {defn.key} ({obj.__name__})")
     except Exception as e:
         logger.error(f"Failed to load alert module '{module_name}': {e}")
+
+
+def register_alert_class(alert_cls: type[BaseAlert]) -> str:
+    """Register an alert class dynamically (used by plugins)."""
+    defn = alert_cls.definition()
+    ALERT_REGISTRY[defn.key] = alert_cls
+    ALERT_DEFINITIONS[defn.key] = defn
+    if not defn.hidden:
+        ALERT_DEFINITIONS_PUBLIC[defn.key] = defn
+    logger.info(f"Dynamically registered alert: {defn.key} ({alert_cls.__name__})")
+    return defn.key
+
+
+def unregister_alert_class(key: str) -> None:
+    """Unregister an alert class dynamically by key (used by plugins)."""
+    ALERT_REGISTRY.pop(key, None)
+    ALERT_DEFINITIONS.pop(key, None)
+    ALERT_DEFINITIONS_PUBLIC.pop(key, None)
+    logger.info(f"Unregistered alert: {key}")
+

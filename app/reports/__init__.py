@@ -41,3 +41,14 @@ def get_report_definitions(user) -> list[dict]:
 
 def valid_report_types() -> set[str]:
     return set(REPORT_REGISTRY)
+
+
+def register_report(report: Report) -> str:
+    """Register a report instance dynamically (used by plugins)."""
+    REPORT_REGISTRY[report.definition.key] = report
+    return report.definition.key
+
+
+def unregister_report(key: str) -> None:
+    """Unregister a report dynamically by key (used by plugins)."""
+    REPORT_REGISTRY.pop(key, None)
