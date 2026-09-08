@@ -38,7 +38,7 @@ from core.auth import get_current_user, require_permission
 from core.database import get_db
 from integrations.integration_model import IntegrationAccount
 from integrations.registry import IntegrationRegistry
-from integrations.engine import _get_auth, evict_auth_cache
+from integrations.engine import _get_auth, evict_auth_cache, wake_engine
 from models import User
 
 router = APIRouter(prefix="/api/integrations", tags=["integrations"])
@@ -125,6 +125,7 @@ async def create_account(
             # Evict the in-memory auth context so the engine re-authenticates
             # with the new credentials on the next poll cycle.
             evict_auth_cache(current_user.id, body.provider_id, body.account_label)
+            wake_engine()
             return existing
 
         account = IntegrationAccount(
@@ -136,6 +137,7 @@ async def create_account(
         session.add(account)
         await session.flush()
         await session.refresh(account)
+        wake_engine()
         return account
 
 
@@ -158,6 +160,7 @@ async def delete_account(
             .where(IntegrationAccount.id == account_id)
             .values(is_active=False)
         )
+    wake_engine()
 
 
 @router.post("/accounts/test")

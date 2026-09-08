@@ -24,7 +24,7 @@ from core.database import get_db
 from core.gateway import sync_active_protocol_servers
 from core.auth import get_current_user, require_admin, require_company_admin, verify_device_access, require_permission
 from core.audit import write_audit_log
-from integrations.engine import clear_device_state, evict_auth_cache
+from integrations.engine import clear_device_state, evict_auth_cache, wake_engine
 from integrations.integration_model import IntegrationAccount
 from models import User, Device, DeviceState, user_device_association, SimCard
 from models.models import Driver
@@ -105,6 +105,7 @@ async def create_device(
     target_user = assign_to if assign_to else caller.id
     await db.add_device_to_user(target_user, device.id)
     await sync_active_protocol_servers()
+    wake_engine()
     await write_audit_log("device.created", actor=caller, company_id=device.company_id, target_type="device", target_id=device.id, request=request, metadata={"imei": device.imei, "protocol": device.protocol})
     created_device = await db.get_device_by_id(device.id)
     return created_device if created_device else device
@@ -177,6 +178,7 @@ async def update_device(
                 .values(total_odometer=new_odometer)
             )
     await sync_active_protocol_servers()
+    wake_engine()
     await write_audit_log("device.updated", actor=caller, company_id=device.company_id, target_type="device", target_id=device.id, request=request)
     updated_device = await db.get_device_by_id(device_id)
     return updated_device if updated_device else device
@@ -207,6 +209,7 @@ async def delete_device(device_id: int, request: Request, caller: User = Depends
     # Clear in-memory polling state for this IMEI
     clear_device_state(imei)
     await sync_active_protocol_servers()
+    wake_engine()
 
     # If this was an integration device, clean up the IntegrationAccount when
     # no other device belonging to the same user still references it.

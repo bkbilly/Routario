@@ -160,6 +160,32 @@ async def _init_last_seen(db) -> None:
                     f"ignition={last_pos.ignition}"
                 )
 
+IDLE_SLEEP_SECONDS = 30.0
+MIN_POLL_INTERVAL_SECONDS = 3.0
+MAX_POLL_INTERVAL_SECONDS = 30.0
+
+_engine_wake_event: Optional[asyncio.Event] = None
+
+
+def get_wake_event() -> asyncio.Event:
+    global _engine_wake_event
+    if _engine_wake_event is None:
+        _engine_wake_event = asyncio.Event()
+    return _engine_wake_event
+
+
+def wake_engine() -> None:
+    """
+    Signal the integration engine loop to wake up immediately.
+    Call this when integration accounts or devices are created, updated, or deleted.
+    """
+    try:
+        evt = get_wake_event()
+        evt.set()
+    except Exception as e:
+        logger.debug(f"Integration engine wake signal failed: {e}")
+
+
 async def integration_poll_task(
     position_callback: Callable[..., Coroutine[Any, Any, None]],
 ):
@@ -173,37 +199,50 @@ async def integration_poll_task(
         mark_task_error("integration_polling", e)
         logger.error(f"Integration engine: failed to seed last-seen: {e}", exc_info=True)
 
-    TICK_SECONDS = 5
+    wake_evt = get_wake_event()
 
     while True:
+        wake_evt.clear()
         try:
-            await _run_poll_cycle(position_callback)
+            next_sleep = await _run_poll_cycle(position_callback)
             mark_task_success("integration_polling")
+        except asyncio.CancelledError:
+            break
         except Exception as e:
             mark_task_error("integration_polling", e)
             logger.error(f"Integration poll cycle error: {e}", exc_info=True)
+            next_sleep = 10.0
 
-        await asyncio.sleep(TICK_SECONDS)
+        try:
+            await asyncio.wait_for(wake_evt.wait(), timeout=next_sleep)
+        except (asyncio.TimeoutError, TimeoutError):
+            pass
+
 
 async def _run_poll_cycle(
     position_callback: Callable[..., Coroutine[Any, Any, None]],
-):
+) -> float:
     db = get_db()
 
     # ── Build groups of devices that are due for a poll ───────────────────────
     # We only query the DB once per tick; the per-device schedule check is cheap.
     groups: dict[tuple, list[dict]] = {}
+    integration_devices: list[Device] = []
 
     async with db.get_session() as session:
-        dev_result = await session.execute(
-            select(Device).where(Device.is_active == True)
-        )
-        all_devices = dev_result.scalars().all()
-
         acc_result = await session.execute(
             select(IntegrationAccount).where(IntegrationAccount.is_active == True)
         )
         active_accounts = acc_result.scalars().all()
+
+        # If there are NO active integration accounts in the system, enter deep idle
+        if not active_accounts:
+            return IDLE_SLEEP_SECONDS
+
+        dev_result = await session.execute(
+            select(Device).where(Device.is_active == True)
+        )
+        all_devices = dev_result.scalars().all()
 
         accounts_by_key: dict[tuple[str, str], list[IntegrationAccount]] = {}
         accounts_by_provider: dict[str, list[IntegrationAccount]] = {}
@@ -227,6 +266,8 @@ async def _run_poll_cycle(
                     remote_id = device.imei
                 else:
                     continue
+
+            integration_devices.append(device)
 
             # Skip devices that are not yet due for a poll
             if not _is_due(device.imei):
@@ -254,8 +295,8 @@ async def _run_poll_cycle(
                 "last_seen_floor": _last_seen_db.get(device.imei),
             })
 
-    if not groups:
-        return
+    if not integration_devices:
+        return IDLE_SLEEP_SECONDS
 
     # ── Authenticate and fetch for each group ─────────────────────────────────
     # Each DB operation uses its own short-lived session so the connection is
@@ -400,6 +441,25 @@ async def _run_poll_cycle(
                 f"Integration poll {provider_id}/{account_label}: "
                 f"{fetched} positions, {errors} errors"
             )
+
+    # ── Compute the smart delay until the next due device ─────────────────────
+    now = _now()
+    due_deltas = []
+    for dev in integration_devices:
+        due_at = _next_poll_at.get(dev.imei)
+        if due_at is None:
+            due_deltas.append(0.0)
+        else:
+            delta = (due_at - now).total_seconds()
+            due_deltas.append(delta)
+
+    if due_deltas:
+        earliest = min(due_deltas)
+        if earliest <= 0:
+            return MIN_POLL_INTERVAL_SECONDS
+        return max(MIN_POLL_INTERVAL_SECONDS, min(earliest, MAX_POLL_INTERVAL_SECONDS))
+
+    return IDLE_SLEEP_SECONDS
 
 
 def clear_device_state(imei: str) -> None:
