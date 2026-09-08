@@ -1,6 +1,6 @@
 {
-  "name": "Routario Plugin Repository",
-  "description": "Example repository manifest for Routario device decoders, alert rules, reporting modules, and third-party integrations.",
+  "name": "Routario Official Plugin Repository",
+  "description": "Official repository for Routario device decoders, alert rules, reporting modules, and third-party integrations.",
   "plugins": [
     {
       "id": "cold_chain_guard",
@@ -10,6 +10,7 @@
       "author": "Routario Community",
       "category": "Sensors",
       "icon": "mdi-snowflake",
+      "path": "examples/cold_chain_guard",
       "dependencies": [],
       "requires_restart": false,
       "homepage": "https://github.com/bkbilly/Routario"
@@ -22,6 +23,7 @@
       "author": "Telematics Lab",
       "category": "Fuel",
       "icon": "mdi-gas-station",
+      "path": "examples/obd_fuel_eco_analytics",
       "dependencies": [],
       "requires_restart": false,
       "homepage": "https://github.com/bkbilly/Routario"
@@ -34,18 +36,7 @@
       "author": "IoT Protocol Group",
       "category": "Protocols",
       "icon": "mdi-car-connected",
-      "dependencies": [],
-      "requires_restart": false,
-      "homepage": "https://github.com/bkbilly/Routario"
-    },
-    {
-      "id": "esg_co2_emission_report",
-      "name": "Fleet Carbon & ESG Emissions Reporter",
-      "version": "1.0.0",
-      "description": "Automated GHG Protocol Scope 1 carbon calculation based on actual vehicle fuel consumption, engine idle, and mileage.",
-      "author": "EcoFleet Solutions",
-      "category": "Reports",
-      "icon": "mdi-leaf",
+      "path": "examples/teltonika_advanced_can",
       "dependencies": [],
       "requires_restart": false,
       "homepage": "https://github.com/bkbilly/Routario"
@@ -58,6 +49,7 @@
       "author": "Cloud Integrations",
       "category": "Integrations",
       "icon": "mdi-cloud-sync",
+      "path": "examples/samsara_cloud_sync",
       "dependencies": [],
       "requires_restart": false,
       "homepage": "https://github.com/bkbilly/Routario"

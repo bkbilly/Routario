@@ -273,11 +273,20 @@ async def fetch_aggregated_catalog() -> List[PluginManifest]:
 
     async def _fetch_single_repo(repo: RepositoryConfig) -> List[PluginManifest]:
         try:
-            data, _, _ = await validate_and_fetch_manifest(repo.url, repo.subfolder)
+            data, normalized_manifest_url, _ = await validate_and_fetch_manifest(repo.url, repo.subfolder)
             plugins_raw = data.get("plugins", [])
             manifests = []
+            repo_base_raw = normalized_manifest_url.rsplit("/", 1)[0]
+
             for item in plugins_raw:
                 if isinstance(item, dict) and item.get("id") and item.get("name"):
+                    plugin_id = item["id"]
+                    plugin_path = (item.get("path") or item.get("download_url") or plugin_id).strip("/")
+
+                    if not item.get("download_url") or not item["download_url"].startswith(("http://", "https://")):
+                        item["download_url"] = f"{repo_base_raw}/{plugin_path}"
+
+                    item["path"] = plugin_path
                     item["repository_name"] = repo.name
                     item["repository_url"] = repo.manifest_url
                     manifests.append(PluginManifest(**item))

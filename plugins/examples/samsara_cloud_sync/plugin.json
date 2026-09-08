@@ -1,0 +1,12 @@
+{
+  "id": "samsara_cloud_sync",
+  "name": "Samsara Cloud Platform Connector",
+  "version": "1.2.0",
+  "description": "Bi-directional sync of assets, drivers, hours-of-service (HOS), and telematics streams with Samsara Cloud API.",
+  "author": "Cloud Integrations",
+  "category": "Integrations",
+  "icon": "mdi-cloud-sync",
+  "dependencies": [],
+  "requires_restart": false,
+  "homepage": "https://github.com/bkbilly/Routario"
+}

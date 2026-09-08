@@ -157,7 +157,7 @@ class PluginManager:
             return {}
 
         for entry in self.plugins_dir.iterdir():
-            if not entry.is_dir():
+            if not entry.is_dir() or entry.name.startswith((".", "_")) or entry.name in ("examples", "zips", "__pycache__", ".git"):
                 continue
 
             manifest_file = None
@@ -280,6 +280,14 @@ class PluginManager:
                             reg_entry["reports"].add(key)
                         except Exception as exc:
                             logger.warning("Could not register report %s: %s", name, exc)
+                    elif inspect.isclass(obj) and issubclass(obj, Report) and obj is not Report:
+                        try:
+                            instance = obj()
+                            key = register_report(instance)
+                            components.reports.append(key)
+                            reg_entry["reports"].add(key)
+                        except Exception as exc:
+                            logger.warning("Could not instantiate and register report class %s: %s", name, exc)
 
                     # D. Integrations
                     if inspect.isclass(obj) and issubclass(obj, BaseIntegration) and obj is not BaseIntegration:

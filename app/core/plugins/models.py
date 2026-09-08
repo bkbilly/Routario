@@ -18,7 +18,9 @@ class PluginManifest(BaseModel):
     icon: Optional[str] = "mdi-puzzle"
     icon_url: Optional[str] = None
     dependencies: List[str] = Field(default_factory=list)
+    path: Optional[str] = None
     download_url: Optional[str] = None
+    files: List[str] = Field(default_factory=list)
     changelog: Optional[str] = None
     min_routario_version: Optional[str] = None
     requires_restart: bool = False
