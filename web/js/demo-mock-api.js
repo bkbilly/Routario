@@ -40,6 +40,12 @@
         currency: 'EUR',
         theme: 'dark',
         timezone: 'Europe/Athens',
+        time_format: '24',
+        date_format: 'YYYY-MM-DD',
+        sidebar_compact: false,
+        mfa_enabled: false,
+        mfa_secret: null,
+        mfa_recovery_codes: [],
         notification_channels: [
             { id: 'nc_ops_email', name: 'Ops Email', url: 'mailto:ops@example.com' },
             { id: 'nc_dispatch_slack', name: 'Dispatch Slack', url: 'slack://demo/webhook' },
@@ -363,7 +369,7 @@
 
     const users = [
         DEMO_USER,
-        { id: 2, username: 'dispatcher', email: 'dispatch@routario.local', phone_number: '+30 692 345 6789', is_admin: false, is_company_admin: false, company_id: 1, permissions: ['view_reports', 'view_devices'], units: 'metric', currency: 'EUR', theme: 'dark' },
+        { id: 2, username: 'dispatcher', email: 'dispatch@routario.local', phone_number: '+30 692 345 6789', is_admin: false, is_company_admin: false, company_id: 1, permissions: ['view_reports', 'view_devices'], units: 'metric', currency: 'EUR', theme: 'dark', mfa_enabled: false, mfa_secret: null, mfa_recovery_codes: [] },
         {
             id: 3,
             username: 'fleetadmin',
@@ -381,8 +387,12 @@
             units: 'metric',
             currency: 'EUR',
             theme: 'dark',
+            mfa_enabled: false,
+            mfa_secret: null,
+            mfa_recovery_codes: [],
         },
     ];
+    let demoPasskeys = [];
     let demoCompanies = [
         { id: 1, name: 'Demo Fleet', app_name: 'Routario Demo', login_slug: 'demo-fleet', billing_plan_id: 1, user_count: users.length, device_count: devices.length, created_at: iso(10000), branding_version: 1, icon_url: null, badge_url: null },
     ];
@@ -1634,6 +1644,8 @@
         }
         if (apiPath === '/users/me' || apiPath === '/users/1' || apiPath.match(/^\/users\/\d+$/)) {
             const uid = apiPath === '/users/me' ? 1 : Number(apiPath.split('/').pop());
+            const targetUser = users.find(u => u.id === uid) || (uid === 1 ? DEMO_USER : null);
+            if (!targetUser) return json({ detail: 'User not found' }, 404);
             if (method === 'DELETE') {
                 const idx = users.findIndex(u => u.id === uid);
                 if (idx >= 0) users.splice(idx, 1);
@@ -1645,6 +1657,9 @@
                 if (body.units !== undefined) targetUser.units = body.units;
                 if (body.currency !== undefined) targetUser.currency = body.currency;
                 if (body.theme !== undefined) targetUser.theme = body.theme;
+                if (body.time_format !== undefined) targetUser.time_format = body.time_format;
+                if (body.date_format !== undefined) targetUser.date_format = body.date_format;
+                if (body.sidebar_compact !== undefined) targetUser.sidebar_compact = body.sidebar_compact;
                 if (body.email !== undefined) targetUser.email = body.email;
                 if (body.username !== undefined) targetUser.username = body.username;
                 if (body.phone_number !== undefined) targetUser.phone_number = body.phone_number;
@@ -2421,6 +2436,129 @@
             };
             demoInstalledPlugins.push(uploaded);
             return json(uploaded);
+        }
+
+        // ── MFA (2FA) API (Demo Mock) ────────────────────────────────────────
+        if (apiPath === '/mfa/status') {
+            return json({ enabled: Boolean(DEMO_USER.mfa_enabled) });
+        }
+        if (apiPath === '/mfa/setup') {
+            const secret = 'JBSWY3DPEHPK3PXP';
+            const recoveryCodes = [
+                '4a8f-2b1c', '9e3d-7f5a', '1c6b-8d2e', '3f4a-5b6c',
+                '7d8e-9f0a', '2b3c-4d5e', '6f7a-8b9c', '0d1e-2f3a'
+            ];
+            DEMO_USER._temp_mfa_secret = secret;
+            DEMO_USER._temp_recovery_codes = recoveryCodes;
+            return json({
+                secret,
+                provisioning_uri: `otpauth://totp/Routario:${encodeURIComponent(DEMO_USER.username)}?secret=${secret}&issuer=Routario`,
+                recovery_codes: recoveryCodes,
+            });
+        }
+        if (apiPath === '/mfa/enable') {
+            if (!body.code) return json({ detail: 'Invalid MFA code' }, 400);
+            DEMO_USER.mfa_enabled = true;
+            DEMO_USER.mfa_secret = DEMO_USER._temp_mfa_secret || 'JBSWY3DPEHPK3PXP';
+            DEMO_USER.mfa_recovery_codes = DEMO_USER._temp_recovery_codes || [];
+            return json({ status: 'enabled' });
+        }
+        if (apiPath === '/mfa/disable') {
+            DEMO_USER.mfa_enabled = false;
+            DEMO_USER.mfa_secret = null;
+            DEMO_USER.mfa_recovery_codes = [];
+            return json({ status: 'disabled' });
+        }
+        if (apiPath.match(/^\/mfa\/users\/\d+\/status$/)) {
+            const uid = Number(apiPath.split('/')[3]);
+            const target = users.find(u => u.id === uid) || (uid === 1 ? DEMO_USER : null);
+            if (!target) return json({ detail: 'User not found' }, 404);
+            return json({ user_id: target.id, enabled: Boolean(target.mfa_enabled) });
+        }
+        if (apiPath.match(/^\/mfa\/users\/\d+\/setup$/)) {
+            const uid = Number(apiPath.split('/')[3]);
+            const target = users.find(u => u.id === uid) || (uid === 1 ? DEMO_USER : null);
+            if (!target) return json({ detail: 'User not found' }, 404);
+            const secret = 'JBSWY3DPEHPK3PXP';
+            const recoveryCodes = [
+                '4a8f-2b1c', '9e3d-7f5a', '1c6b-8d2e', '3f4a-5b6c',
+                '7d8e-9f0a', '2b3c-4d5e', '6f7a-8b9c', '0d1e-2f3a'
+            ];
+            target._temp_mfa_secret = secret;
+            target._temp_recovery_codes = recoveryCodes;
+            return json({
+                secret,
+                provisioning_uri: `otpauth://totp/Routario:${encodeURIComponent(target.username)}?secret=${secret}&issuer=Routario`,
+                recovery_codes: recoveryCodes,
+            });
+        }
+        if (apiPath.match(/^\/mfa\/users\/\d+\/enable$/)) {
+            const uid = Number(apiPath.split('/')[3]);
+            const target = users.find(u => u.id === uid) || (uid === 1 ? DEMO_USER : null);
+            if (!target) return json({ detail: 'User not found' }, 404);
+            if (!body.code) return json({ detail: 'Invalid MFA code' }, 400);
+            target.mfa_enabled = true;
+            target.mfa_secret = target._temp_mfa_secret || 'JBSWY3DPEHPK3PXP';
+            target.mfa_recovery_codes = target._temp_recovery_codes || [];
+            return json({ status: 'enabled' });
+        }
+        if (apiPath.match(/^\/mfa\/users\/\d+\/disable$/)) {
+            const uid = Number(apiPath.split('/')[3]);
+            const target = users.find(u => u.id === uid) || (uid === 1 ? DEMO_USER : null);
+            if (!target) return json({ detail: 'User not found' }, 404);
+            target.mfa_enabled = false;
+            target.mfa_secret = null;
+            target.mfa_recovery_codes = [];
+            return json({ status: 'disabled' });
+        }
+
+        // ── Passkeys API (Demo Mock) ─────────────────────────────────────────
+        if (apiPath === '/passkeys') {
+            return json(demoPasskeys);
+        }
+        if (apiPath === '/passkeys/register/options') {
+            return json({
+                challenge: 'demo-passkey-challenge',
+                rp: { name: 'Routario Demo', id: location.hostname },
+                user: { id: 'demo-user-id', name: DEMO_USER.username, displayName: DEMO_USER.username },
+                pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
+            });
+        }
+        if (apiPath === '/passkeys/register/verify') {
+            const newKey = {
+                id: Math.random().toString(36).substring(2, 10),
+                name: body.name || 'Demo Passkey',
+                last_used_at: null,
+                created_at: iso(0),
+            };
+            demoPasskeys.push(newKey);
+            return json(newKey, 201);
+        }
+        if (apiPath.match(/^\/passkeys\/[^/]+$/)) {
+            const keyId = apiPath.split('/')[2];
+            const idx = demoPasskeys.findIndex(k => k.id === keyId);
+            if (method === 'DELETE') {
+                if (idx >= 0) demoPasskeys.splice(idx, 1);
+                return json({ status: 'deleted' });
+            }
+            if (method === 'PUT' && idx >= 0) {
+                if (body.name) demoPasskeys[idx].name = body.name;
+                return json(demoPasskeys[idx]);
+            }
+        }
+
+        // ── Backup API (Demo Mock) ───────────────────────────────────────────
+        if (apiPath === '/admin/backup/download') {
+            return new Response(new Blob(['Demo backup archive contents']), {
+                status: 200,
+                headers: {
+                    'Content-Type': 'application/gzip',
+                    'Content-Disposition': 'attachment; filename=routario_demo_backup.tar.gz',
+                },
+            });
+        }
+        if (apiPath === '/admin/backup/restore') {
+            return json({ status: 'ok', message: 'Backup restored successfully (demo simulation).' });
         }
 
         if (apiPath.startsWith('/dashcam/clips')) return json([]);
