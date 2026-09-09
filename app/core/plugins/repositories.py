@@ -199,12 +199,12 @@ async def save_configured_repositories(repos: List[RepositoryConfig]) -> None:
             record = result.scalar_one_or_none()
             if record:
                 record.value = payload
-                record.updated_at = datetime.now(timezone.utc)
+                record.updated_at = datetime.utcnow()
             else:
                 new_record = SystemSetting(
                     key=SETTING_KEY_REPOSITORIES,
                     value=payload,
-                    updated_at=datetime.now(timezone.utc),
+                    updated_at=datetime.utcnow(),
                 )
                 session.add(new_record)
             await session.commit()

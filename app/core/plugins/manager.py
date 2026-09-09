@@ -93,13 +93,13 @@ class PluginManager:
                 record = result.scalar_one_or_none()
                 if record:
                     record.value = payload
-                    record.updated_at = datetime.now(timezone.utc)
+                    record.updated_at = datetime.utcnow()
                 else:
                     session.add(
                         SystemSetting(
                             key=SETTING_KEY_PLUGIN_STATES,
                             value=payload,
-                            updated_at=datetime.now(timezone.utc),
+                            updated_at=datetime.utcnow(),
                         )
                     )
                 await session.commit()
