@@ -4,7 +4,11 @@
   "version": "1.1.0",
   "description": "Advanced fuel consumption telemetry analysis, harsh acceleration/braking scoring, and idle fuel waste reporting.",
   "author": "Telematics Lab",
-  "category": "Fuel",
+  "categories": [
+    "protocols",
+    "alerts",
+    "reports"
+  ],
   "icon": "mdi-gas-station",
   "dependencies": [],
   "requires_restart": false,

@@ -647,6 +647,203 @@
         },
     ];
 
+    let demoPluginRepositories = [
+        {
+            id: 'official-routario',
+            name: 'Routario Official Plugin Repository',
+            url: 'https://github.com/bkbilly/Routario/tree/main/plugins',
+            subfolder: '',
+            manifest_url: 'https://raw.githubusercontent.com/bkbilly/Routario/main/plugins/manifest.json',
+            enabled: true,
+            last_synced_at: iso(10),
+            error: null,
+            plugin_count: 4,
+        },
+    ];
+
+    let demoPluginCatalog = [
+        {
+            id: 'cold_chain_guard',
+            name: 'Cold-Chain & Temperature Guard',
+            version: '1.0.0',
+            description: 'Real-time temperature and humidity monitoring with spoilage alerts, compliance audit reports, and BLE beacon protocol decoding.',
+            author: 'Routario Community',
+            categories: ['protocols', 'alerts', 'reports', 'integrations'],
+            category: 'protocols',
+            icon: 'mdi-snowflake',
+            icon_url: null,
+            dependencies: [],
+            path: 'examples/cold_chain_guard',
+            download_url: 'https://raw.githubusercontent.com/bkbilly/Routario/main/plugins/examples/cold_chain_guard/plugin.json',
+            files: ['__init__.py', 'plugin.json', 'protocol_decoder.py', 'alerts.py', 'reports.py', 'integration.py'],
+            requires_restart: false,
+            repository_name: 'Routario Official Plugin Repository',
+            repository_url: 'https://github.com/bkbilly/Routario/tree/main/plugins',
+        },
+        {
+            id: 'obd_fuel_eco_analytics',
+            name: 'OBD-II Fuel & Eco-Driving Analytics',
+            version: '1.1.0',
+            description: 'Advanced fuel consumption telemetry analysis, harsh acceleration/braking scoring, and idle fuel waste reporting.',
+            author: 'Telematics Lab',
+            categories: ['protocols', 'alerts', 'reports'],
+            category: 'protocols',
+            icon: 'mdi-gas-station',
+            icon_url: null,
+            dependencies: [],
+            path: 'examples/obd_fuel_eco_analytics',
+            download_url: 'https://raw.githubusercontent.com/bkbilly/Routario/main/plugins/examples/obd_fuel_eco_analytics/plugin.json',
+            files: ['__init__.py', 'plugin.json', 'fuel_decoder.py', 'eco_score.py', 'alerts.py'],
+            requires_restart: false,
+            repository_name: 'Routario Official Plugin Repository',
+            repository_url: 'https://github.com/bkbilly/Routario/tree/main/plugins',
+        },
+        {
+            id: 'teltonika_advanced_can',
+            name: 'Teltonika CAN Bus Telemetry Extended',
+            version: '2.0.1',
+            description: 'Extended Teltonika FMB series decoder for LVCAN, ALL-CAN300, tachograph driver card status, and axle load sensors.',
+            author: 'IoT Protocol Group',
+            categories: ['protocols', 'alerts', 'reports'],
+            category: 'protocols',
+            icon: 'mdi-car-connected',
+            icon_url: null,
+            dependencies: [],
+            path: 'examples/teltonika_advanced_can',
+            download_url: 'https://raw.githubusercontent.com/bkbilly/Routario/main/plugins/examples/teltonika_advanced_can/plugin.json',
+            files: ['__init__.py', 'plugin.json', 'decoder.py', 'tacho.py'],
+            requires_restart: false,
+            repository_name: 'Routario Official Plugin Repository',
+            repository_url: 'https://github.com/bkbilly/Routario/tree/main/plugins',
+        },
+        {
+            id: 'samsara_cloud_sync',
+            name: 'Samsara Cloud Platform Connector',
+            version: '1.2.0',
+            description: 'Bi-directional sync of assets, drivers, hours-of-service (HOS), and telematics streams with Samsara Cloud API.',
+            author: 'Cloud Integrations',
+            categories: ['alerts', 'integrations'],
+            category: 'integrations',
+            icon: 'mdi-cloud-sync',
+            icon_url: null,
+            dependencies: [],
+            path: 'examples/samsara_cloud_sync',
+            download_url: 'https://raw.githubusercontent.com/bkbilly/Routario/main/plugins/examples/samsara_cloud_sync/plugin.json',
+            files: ['__init__.py', 'plugin.json', 'client.py', 'sync.py'],
+            requires_restart: false,
+            repository_name: 'Routario Official Plugin Repository',
+            repository_url: 'https://github.com/bkbilly/Routario/tree/main/plugins',
+        },
+    ];
+
+    let demoInstalledPlugins = [
+        {
+            id: 'cold_chain_guard',
+            manifest: {
+                id: 'cold_chain_guard',
+                name: 'Cold-Chain & Temperature Guard',
+                version: '1.0.0',
+                description: 'Real-time temperature and humidity monitoring with spoilage alerts, compliance audit reports, and BLE beacon protocol decoding.',
+                author: 'Routario Community',
+                categories: ['protocols', 'alerts', 'reports', 'integrations'],
+                category: 'protocols',
+                icon: 'mdi-snowflake',
+                icon_url: null,
+                dependencies: [],
+                path: 'examples/cold_chain_guard',
+                requires_restart: false,
+            },
+            path: '/app/plugins/installed/cold_chain_guard',
+            enabled: true,
+            is_loaded: true,
+            load_error: null,
+            requires_restart: false,
+            components: {
+                protocols: ['temp_beacon_udp'],
+                alerts: ['temperature_breach'],
+                reports: ['cold_chain_compliance'],
+                integrations: ['sensorcloud_telemetry'],
+            },
+            usage: {
+                total_devices: 1,
+                devices: [
+                    {
+                        id: 1,
+                        name: 'Athens Van 12',
+                        imei: 'demo-0001',
+                        protocol: 'temp_beacon_udp',
+                        company_id: 1,
+                        company_name: 'Demo Fleet',
+                        user_names: ['demo'],
+                    },
+                ],
+                total_alerts: 1,
+                alert_rules: [
+                    {
+                        device_id: 1,
+                        device_name: 'Athens Van 12',
+                        alert_key: 'temperature_breach',
+                        company_name: 'Demo Fleet',
+                        user_names: ['demo'],
+                        params: { max_temp_c: 4, duration_min: 15 },
+                    },
+                ],
+                total_reports: 0,
+                report_schedules: [],
+                total_integrations: 0,
+                integrations: [],
+                summary_text: '1 device, 1 alert',
+                in_use: true,
+            },
+            installed_at: iso(1440),
+            update_available: null,
+            latest_manifest: null,
+        },
+        {
+            id: 'obd_fuel_eco_analytics',
+            manifest: {
+                id: 'obd_fuel_eco_analytics',
+                name: 'OBD-II Fuel & Eco-Driving Analytics',
+                version: '1.0.0',
+                description: 'Advanced fuel consumption telemetry analysis, harsh acceleration/braking scoring, and idle fuel waste reporting.',
+                author: 'Telematics Lab',
+                categories: ['protocols', 'alerts', 'reports'],
+                category: 'protocols',
+                icon: 'mdi-gas-station',
+                icon_url: null,
+                dependencies: [],
+                path: 'examples/obd_fuel_eco_analytics',
+                requires_restart: false,
+            },
+            path: '/app/plugins/installed/obd_fuel_eco_analytics',
+            enabled: true,
+            is_loaded: true,
+            load_error: null,
+            requires_restart: false,
+            components: {
+                protocols: ['obd2_can_telemetry'],
+                alerts: ['fuel_drain_theft'],
+                reports: ['fuel_eco_scorecard'],
+                integrations: [],
+            },
+            usage: {
+                total_devices: 0,
+                devices: [],
+                total_alerts: 0,
+                alert_rules: [],
+                total_reports: 0,
+                report_schedules: [],
+                total_integrations: 0,
+                integrations: [],
+                summary_text: 'Not in use',
+                in_use: false,
+            },
+            installed_at: iso(2880),
+            update_available: '1.1.0',
+            latest_manifest: null,
+        },
+    ];
+
     const reportDefs = [
         { key: 'alerts', label: 'Alerts', description: 'Alert history for the selected period. Admins can filter by user.', renderer: 'alerts', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: true, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
         { key: 'audit', label: 'Audit', description: 'System audit log for super admins.', renderer: 'table', needs_date_range: true, supports_vehicle_filter: false, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, super_admin_required: true, schedule_supported: false, schedule_uses_device_filter: false, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
@@ -2043,6 +2240,189 @@
             return json(currencyRates);
         }
         if (apiPath === '/currency/rates/refresh') return json(currencyRates);
+
+        // ── Plugins API (Demo Mock) ──────────────────────────────────────────
+        if (apiPath === '/plugins/installed') {
+            return json(demoInstalledPlugins);
+        }
+        if (apiPath.match(/^\/plugins\/[^/]+\/usage$/)) {
+            const pluginId = decodeURIComponent(apiPath.split('/')[2]);
+            const p = demoInstalledPlugins.find(x => x.id === pluginId);
+            if (!p) return json({ detail: `Plugin '${pluginId}' not found` }, 404);
+            return json(p.usage || {
+                total_devices: 0,
+                devices: [],
+                total_alerts: 0,
+                alert_rules: [],
+                total_reports: 0,
+                report_schedules: [],
+                total_integrations: 0,
+                integrations: [],
+                summary_text: 'Not in use',
+                in_use: false,
+            });
+        }
+        if (apiPath.match(/^\/plugins\/[^/]+\/toggle$/)) {
+            const pluginId = decodeURIComponent(apiPath.split('/')[2]);
+            const p = demoInstalledPlugins.find(x => x.id === pluginId);
+            if (!p) return json({ detail: `Plugin '${pluginId}' not found` }, 404);
+            p.enabled = !!body.enabled;
+            return json(p);
+        }
+        if (apiPath === '/plugins/repositories') {
+            if (method === 'POST') {
+                const cleanUrl = String(body.url || '').trim();
+                const newRepo = {
+                    id: Math.random().toString(36).substring(2, 10),
+                    name: body.name || (cleanUrl.includes('/') ? cleanUrl.split('/').filter(Boolean).pop() : 'Custom Repo'),
+                    url: cleanUrl,
+                    subfolder: body.subfolder || '',
+                    manifest_url: cleanUrl ? (cleanUrl.replace('github.com', 'raw.githubusercontent.com').replace('/tree/', '/') + '/manifest.json') : '',
+                    enabled: true,
+                    last_synced_at: iso(0),
+                    error: null,
+                    plugin_count: 2,
+                };
+                demoPluginRepositories.push(newRepo);
+                return json(newRepo, 201);
+            }
+            return json(demoPluginRepositories);
+        }
+        if (apiPath.match(/^\/plugins\/repositories\/[^/]+$/)) {
+            const repoId = decodeURIComponent(apiPath.split('/')[3]);
+            const idx = demoPluginRepositories.findIndex(r => r.id === repoId);
+            if (idx >= 0 && method === 'DELETE') {
+                demoPluginRepositories.splice(idx, 1);
+                return json({ status: 'deleted', repo_id: repoId });
+            }
+            return json({ detail: 'Repository not found' }, 404);
+        }
+        if (apiPath === '/plugins/catalog') {
+            return json(demoPluginCatalog);
+        }
+        if (apiPath === '/plugins/install') {
+            const pid = body.plugin_id;
+            const catItem = demoPluginCatalog.find(c => c.id === pid) || {
+                id: pid || 'custom_installed_plugin',
+                name: pid || 'Custom Plugin',
+                version: '1.0.0',
+                description: 'Installed from external repository source.',
+                author: 'Community',
+                categories: ['protocols', 'integrations'],
+                category: 'protocols',
+                icon: 'mdi-puzzle',
+                icon_url: null,
+            };
+            let existing = demoInstalledPlugins.find(p => p.id === catItem.id);
+            if (!existing) {
+                existing = {
+                    id: catItem.id,
+                    manifest: {
+                        id: catItem.id,
+                        name: catItem.name,
+                        version: catItem.version || '1.0.0',
+                        description: catItem.description || '',
+                        author: catItem.author || '',
+                        categories: catItem.categories || ['protocols'],
+                        category: catItem.category || 'protocols',
+                        icon: catItem.icon || 'mdi-puzzle',
+                        icon_url: catItem.icon_url || null,
+                        dependencies: catItem.dependencies || [],
+                        path: catItem.path || `examples/${catItem.id}`,
+                        requires_restart: false,
+                    },
+                    path: `/app/plugins/installed/${catItem.id}`,
+                    enabled: true,
+                    is_loaded: true,
+                    load_error: null,
+                    requires_restart: false,
+                    components: {
+                        protocols: (catItem.categories || []).includes('protocols') ? [`${catItem.id}_protocol`] : [],
+                        alerts: (catItem.categories || []).includes('alerts') ? [`${catItem.id}_alert`] : [],
+                        reports: (catItem.categories || []).includes('reports') ? [`${catItem.id}_report`] : [],
+                        integrations: (catItem.categories || []).includes('integrations') ? [`${catItem.id}_integration`] : [],
+                    },
+                    usage: {
+                        total_devices: 0,
+                        devices: [],
+                        total_alerts: 0,
+                        alert_rules: [],
+                        total_reports: 0,
+                        report_schedules: [],
+                        total_integrations: 0,
+                        integrations: [],
+                        summary_text: 'Not in use',
+                        in_use: false,
+                    },
+                    installed_at: iso(0),
+                    update_available: null,
+                    latest_manifest: null,
+                };
+                demoInstalledPlugins.push(existing);
+            } else {
+                existing.manifest.version = catItem.version;
+                existing.update_available = null;
+            }
+            return json(existing);
+        }
+        if (apiPath.match(/^\/plugins\/[^/]+\/uninstall$/)) {
+            const pluginId = decodeURIComponent(apiPath.split('/')[2]);
+            const idx = demoInstalledPlugins.findIndex(p => p.id === pluginId);
+            if (idx >= 0) {
+                demoInstalledPlugins.splice(idx, 1);
+                return json({ status: 'uninstalled', plugin_id: pluginId });
+            }
+            return json({ detail: `Plugin '${pluginId}' not found` }, 404);
+        }
+        if (apiPath === '/plugins/upload') {
+            const customId = 'custom_telematics_pack_' + Math.floor(Math.random() * 900 + 100);
+            const uploaded = {
+                id: customId,
+                manifest: {
+                    id: customId,
+                    name: 'Custom Telematics Pack (Demo ZIP)',
+                    version: '1.0.0',
+                    description: 'Custom plugin package uploaded from ZIP archive in demo mode.',
+                    author: 'Demo Admin',
+                    categories: ['protocols', 'alerts'],
+                    category: 'protocols',
+                    icon: 'mdi-package-variant-closed',
+                    icon_url: null,
+                    dependencies: [],
+                    path: `custom/${customId}`,
+                    requires_restart: false,
+                },
+                path: `/app/plugins/installed/${customId}`,
+                enabled: true,
+                is_loaded: true,
+                load_error: null,
+                requires_restart: false,
+                components: {
+                    protocols: ['custom_avl_proto'],
+                    alerts: ['custom_harsh_event'],
+                    reports: [],
+                    integrations: [],
+                },
+                usage: {
+                    total_devices: 0,
+                    devices: [],
+                    total_alerts: 0,
+                    alert_rules: [],
+                    total_reports: 0,
+                    report_schedules: [],
+                    total_integrations: 0,
+                    integrations: [],
+                    summary_text: 'Not in use',
+                    in_use: false,
+                },
+                installed_at: iso(0),
+                update_available: null,
+                latest_manifest: null,
+            };
+            demoInstalledPlugins.push(uploaded);
+            return json(uploaded);
+        }
+
         if (apiPath.startsWith('/dashcam/clips')) return json([]);
         if (apiPath.startsWith('/share')) return json([]);
 

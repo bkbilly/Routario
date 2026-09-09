@@ -105,12 +105,13 @@ function filterInstalledPlugins() {
         if (!searchVal) return true;
         const m = plugin.manifest || {};
         const comp = plugin.components || { protocols: [], alerts: [], reports: [], integrations: [] };
+        const cats = Array.isArray(m.categories) ? m.categories : (m.category ? [m.category] : []);
         const text = [
             plugin.id,
             m.name,
             m.description,
             m.author,
-            m.category,
+            ...cats,
             ...(comp.protocols || []),
             ...(comp.alerts || []),
             ...(comp.reports || []),
@@ -185,11 +186,11 @@ function filterInstalledPlugins() {
                         <span style="font-size:0.75rem;font-family:var(--font-mono);color:var(--text-muted);">v${escapeHtml(m.version || '1.0.0')}</span>
                         ${updateHtml}
                     </div>
-                    <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.2rem;max-width:520px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                    <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.25rem;line-height:1.45;">
                         ${escapeHtml(m.description || 'No description provided')}
                     </div>
-                    <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.25rem;">
-                        Author: <strong>${escapeHtml(m.author || 'Unknown')}</strong> • Category: <span>${escapeHtml(m.category || 'General')}</span>
+                    <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.35rem;display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">
+                        <span>Author: <strong>${escapeHtml(m.author || 'Unknown')}</strong></span>
                     </div>
                 </td>
                 <td>
@@ -421,10 +422,10 @@ async function openPluginRepoModal() {
     const modal = document.getElementById('pluginRepoModal');
     if (!modal) return;
     modal.classList.add('active');
-    document.getElementById('repoErrorMsg').style.display = 'none';
-    document.getElementById('repoUrlInput').value = '';
-    document.getElementById('repoSubfolderInput').value = '';
-    document.getElementById('repoNameInput').value = '';
+    const errEl = document.getElementById('repoErrorMsg');
+    if (errEl) errEl.style.display = 'none';
+    const urlInput = document.getElementById('repoUrlInput');
+    if (urlInput) urlInput.value = '';
     await loadPluginRepositories();
 }
 
@@ -471,6 +472,7 @@ function renderPluginRepositories() {
 
     let html = '';
     for (const repo of _pluginRepositories) {
+        const displayUrl = repo.url || repo.manifest_url || '';
         html += `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:0.75rem 1rem;background:var(--bg-subtle, rgba(255,255,255,0.03));border:1px solid var(--border-color);border-radius:8px;margin-bottom:0.5rem;">
                 <div style="overflow:hidden;text-overflow:ellipsis;padding-right:0.5rem;">
@@ -478,8 +480,8 @@ function renderPluginRepositories() {
                         ${escapeHtml(repo.name)}
                         <span style="font-size:0.75rem;color:var(--text-muted);font-family:var(--font-mono);">(${repo.plugin_count || 0} plugins)</span>
                     </div>
-                    <div style="font-size:0.75rem;color:var(--text-muted);font-family:var(--font-mono);margin-top:0.2rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                        ${escapeHtml(repo.manifest_url || repo.url)}
+                    <div style="font-size:0.75rem;color:var(--text-muted);font-family:var(--font-mono);margin-top:0.2rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(displayUrl)}">
+                        ${escapeHtml(displayUrl)}
                     </div>
                     ${repo.error ? `<div style="font-size:0.75rem;color:var(--accent-danger);margin-top:0.2rem;"><i class="mdi mdi-alert-circle"></i> ${escapeHtml(repo.error)}</div>` : ''}
                 </div>
@@ -496,29 +498,29 @@ function renderPluginRepositories() {
 
 async function submitAddPluginRepo() {
     const urlInput = document.getElementById('repoUrlInput');
-    const subInput = document.getElementById('repoSubfolderInput');
-    const nameInput = document.getElementById('repoNameInput');
     const btn = document.getElementById('btnAddRepoSubmit');
     const errEl = document.getElementById('repoErrorMsg');
 
-    const url = (urlInput.value || '').trim();
-    const subfolder = (subInput.value || '').trim();
-    const name = (nameInput.value || '').trim();
+    const url = (urlInput?.value || '').trim();
 
     if (!url) {
-        errEl.textContent = 'Repository URL is required.';
-        errEl.style.display = 'block';
+        if (errEl) {
+            errEl.textContent = 'Repository URL is required.';
+            errEl.style.display = 'block';
+        }
         return;
     }
 
-    errEl.style.display = 'none';
-    btn.disabled = true;
-    btn.innerHTML = `<span class="loading" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:0.3rem;"></span> Validating…`;
+    if (errEl) errEl.style.display = 'none';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="loading" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:0.3rem;"></span> Validating…`;
+    }
 
     try {
         const res = await apiFetch('/api/plugins/repositories', {
             method: 'POST',
-            body: JSON.stringify({ url, subfolder, name: name || undefined }),
+            body: JSON.stringify({ url }),
         });
 
         const data = await res.json();
@@ -527,16 +529,18 @@ async function submitAddPluginRepo() {
         }
 
         showToast(`Repository '${data.name}' added successfully (${data.plugin_count} plugins found).`);
-        urlInput.value = '';
-        subInput.value = '';
-        nameInput.value = '';
+        if (urlInput) urlInput.value = '';
         await loadPluginRepositories();
     } catch (e) {
-        errEl.textContent = e.message;
-        errEl.style.display = 'block';
+        if (errEl) {
+            errEl.textContent = e.message;
+            errEl.style.display = 'block';
+        }
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = `<i class="mdi mdi-plus"></i> Add Repository`;
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="mdi mdi-plus"></i> Add`;
+        }
     }
 }
 
@@ -602,9 +606,9 @@ async function loadPluginCatalog() {
 }
 
 function filterPluginCatalog(category) {
-    _pluginCatalogFilter = category;
+    _pluginCatalogFilter = category || 'all';
     document.querySelectorAll('.catalog-filter-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.cat === category);
+        b.classList.toggle('active', (b.dataset.cat || '').toLowerCase() === _pluginCatalogFilter.toLowerCase());
     });
     renderPluginCatalog();
 }
@@ -618,12 +622,21 @@ function renderPluginCatalog() {
     const installedMap = new Map(_installedPlugins.map(p => [p.id, p]));
 
     let filtered = _pluginCatalog.filter(p => {
-        const catMatch = _pluginCatalogFilter === 'all' || (p.category || 'General').toLowerCase() === _pluginCatalogFilter.toLowerCase();
+        let catMatch = _pluginCatalogFilter === 'all';
+        const cats = (Array.isArray(p.categories) && p.categories.length 
+            ? p.categories 
+            : (p.category ? [p.category] : [])).map(c => String(c).toLowerCase());
+
+        if (!catMatch) {
+            const filterNorm = _pluginCatalogFilter.toLowerCase().replace(/s$/, ''); // e.g. "protocol", "alert", "report", "integration"
+            catMatch = cats.some(c => c.includes(filterNorm) || filterNorm.includes(c.replace(/s$/, '')));
+        }
         const textMatch = !searchVal 
             || (p.name || '').toLowerCase().includes(searchVal)
             || (p.description || '').toLowerCase().includes(searchVal)
             || (p.id || '').toLowerCase().includes(searchVal)
-            || (p.author || '').toLowerCase().includes(searchVal);
+            || (p.author || '').toLowerCase().includes(searchVal)
+            || cats.some(c => c.includes(searchVal));
         return catMatch && textMatch;
     });
 
@@ -666,29 +679,53 @@ function renderPluginCatalog() {
         }
 
         const iconHtml = p.icon_url 
-            ? `<img src="${escapeHtml(p.icon_url)}" style="width:34px;height:34px;border-radius:8px;object-fit:cover;" alt="icon">`
-            : `<div style="width:36px;height:36px;border-radius:8px;background:rgba(60,152,254,0.15);color:var(--accent-primary);display:flex;align-items:center;justify-content:center;font-size:20px;"><i class="mdi ${escapeHtml(p.icon || 'mdi-puzzle')}"></i></div>`;
+            ? `<div class="plugin-catalog-icon"><img src="${escapeHtml(p.icon_url)}" alt="icon"></div>`
+            : `<div class="plugin-catalog-icon"><i class="mdi ${escapeHtml(p.icon || 'mdi-puzzle')}"></i></div>`;
+
+        const cats = Array.isArray(p.categories) && p.categories.length 
+            ? p.categories 
+            : (p.category ? [p.category] : []);
+        
+        const catBadgesHtml = cats.map(c => {
+            const clower = String(c).toLowerCase();
+            let label = clower.charAt(0).toUpperCase() + clower.slice(1);
+            let catClass = 'cat-protocol';
+            let iconClass = 'mdi-antenna';
+            if (clower.includes('alert')) {
+                catClass = 'cat-alert';
+                iconClass = 'mdi-bell-alert';
+            } else if (clower.includes('report')) {
+                catClass = 'cat-report';
+                iconClass = 'mdi-file-chart';
+            } else if (clower.includes('integration')) {
+                catClass = 'cat-integration';
+                iconClass = 'mdi-cloud-sync';
+            }
+            return `<span class="plugin-cat-badge ${catClass}"><i class="mdi ${iconClass}"></i> ${escapeHtml(label)}</span>`;
+        }).join(' ');
 
         html += `
             <div class="plugin-catalog-card">
-                <div style="display:flex;align-items:flex-start;gap:0.75rem;margin-bottom:0.65rem;">
+                <div class="plugin-catalog-card-header">
                     ${iconHtml}
-                    <div style="flex:1;overflow:hidden;">
-                        <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                    <div style="flex:1;overflow:hidden;min-width:0;">
+                        <div class="plugin-catalog-card-title" title="${escapeHtml(p.name)}">
                             ${escapeHtml(p.name)}
                         </div>
-                        <div style="font-size:0.75rem;color:var(--text-muted);display:flex;align-items:center;gap:0.35rem;margin-top:0.15rem;">
+                        <div class="plugin-catalog-card-meta">
                             <span>v${escapeHtml(p.version || '1.0.0')}</span> • <span>${escapeHtml(p.author || 'Community')}</span>
                         </div>
                     </div>
                 </div>
 
-                <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.4;margin-bottom:0.75rem;min-height:38px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+                <div class="plugin-catalog-card-desc">
                     ${escapeHtml(p.description || 'No description available.')}
                 </div>
 
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:0.6rem;border-top:1px solid var(--border-color);">
-                    <span class="badge badge-subtle" style="font-size:0.7rem;">${escapeHtml(p.category || 'General')}</span>
+                <div class="plugin-catalog-card-footer">
+                    <div class="plugin-catalog-card-badges">
+                        ${catBadgesHtml || '<span class="plugin-cat-badge">General</span>'}
+                    </div>
                     ${actionBtn}
                 </div>
             </div>

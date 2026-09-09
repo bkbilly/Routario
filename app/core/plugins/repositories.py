@@ -93,6 +93,16 @@ async def validate_and_fetch_manifest(
     """
     manifest_url = normalize_manifest_url(url, subfolder)
 
+    # Check local fallback for official repository first
+    local_fallback = Path("plugins/manifest.json")
+    if (manifest_url == DEFAULT_OFFICIAL_REPO_URL or "bkbilly/Routario" in manifest_url) and local_fallback.is_file():
+        try:
+            data = json.loads(local_fallback.read_text(encoding="utf-8"))
+            repo_name = data.get("name") or DEFAULT_OFFICIAL_REPO_NAME
+            return data, manifest_url, repo_name
+        except Exception:
+            pass
+
     try:
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
             resp = await client.get(manifest_url)
@@ -216,17 +226,20 @@ async def add_repository(
     url: str, subfolder: Optional[str] = None, name: Optional[str] = None
 ) -> RepositoryConfig:
     """Validate, fetch, and register a new repository URL."""
+    clean_url = url.strip()
     manifest_data, manifest_url, detected_name = await validate_and_fetch_manifest(
-        url, subfolder
+        clean_url, subfolder
     )
 
     repos = await get_configured_repositories()
+    repo_title = name or detected_name or manifest_data.get("name") or "Plugin Repository"
 
-    # Check for existing repository with the same manifest URL
+    # Check for existing repository with the same manifest URL or typed URL
     for r in repos:
-        if r.manifest_url.lower() == manifest_url.lower():
+        if r.manifest_url.lower() == manifest_url.lower() or r.url.strip().lower() == clean_url.lower():
             r.enabled = True
-            r.name = name or detected_name or r.name
+            r.name = repo_title
+            r.url = clean_url
             r.last_synced_at = datetime.now(timezone.utc).isoformat()
             r.plugin_count = len(manifest_data.get("plugins", []))
             r.error = None
@@ -235,9 +248,8 @@ async def add_repository(
 
     new_repo = RepositoryConfig(
         id=str(uuid.uuid4())[:8],
-        name=name or detected_name or "Custom Repository",
-        url=url,
-        subfolder=subfolder,
+        name=repo_title,
+        url=clean_url,
         manifest_url=manifest_url,
         enabled=True,
         last_synced_at=datetime.now(timezone.utc).isoformat(),
@@ -288,7 +300,7 @@ async def fetch_aggregated_catalog() -> List[PluginManifest]:
 
                     item["path"] = plugin_path
                     item["repository_name"] = repo.name
-                    item["repository_url"] = repo.manifest_url
+                    item["repository_url"] = repo.url
                     manifests.append(PluginManifest(**item))
             repo.plugin_count = len(manifests)
             repo.last_synced_at = datetime.now(timezone.utc).isoformat()

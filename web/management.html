@@ -1840,7 +1840,7 @@
         </div>
         <div class="modal-scrollable" style="padding:1.25rem 1.5rem;overflow-y:auto;">
             <p class="settings-section-description" style="margin-bottom:1rem;">
-                Repositories provide catalogs of plugins. Add official or third-party Git repositories (supports subfolder paths).
+                Repositories provide catalogs of plugins. Add official or third-party Git repositories.
             </p>
             <div style="background:var(--bg-subtle, rgba(255,255,255,0.03));border:1px solid var(--border-color);border-radius:8px;padding:1rem;margin-bottom:1.25rem;">
                 <div style="font-weight:700;font-size:0.875rem;margin-bottom:0.75rem;color:var(--text-primary);">
@@ -1848,25 +1848,15 @@
                 </div>
                 <div style="display:flex;flex-direction:column;gap:0.6rem;">
                     <div>
-                        <label class="form-label" style="font-size:0.75rem;">Repository or Raw URL <span style="color:var(--accent-danger);">*</span></label>
-                        <input type="text" id="repoUrlInput" class="form-input" placeholder="e.g. https://github.com/my-org/plugins/tree/main/telematics-pack">
-                    </div>
-                    <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
-                        <div style="flex:1;min-width:140px;">
-                            <label class="form-label" style="font-size:0.75rem;">Subfolder Path (Optional)</label>
-                            <input type="text" id="repoSubfolderInput" class="form-input" placeholder="e.g. temperature-sensors">
-                        </div>
-                        <div style="flex:1;min-width:140px;">
-                            <label class="form-label" style="font-size:0.75rem;">Custom Name (Optional)</label>
-                            <input type="text" id="repoNameInput" class="form-input" placeholder="e.g. My Fleet Addons">
+                        <label class="form-label" style="font-size:0.75rem;">Repository URL <span style="color:var(--accent-danger);">*</span></label>
+                        <div style="display:flex;gap:0.5rem;align-items:center;">
+                            <input type="text" id="repoUrlInput" class="form-input" style="flex:1;" placeholder="e.g. https://github.com/bkbilly/Routario/tree/main/plugins" onkeydown="if(event.key==='Enter')submitAddPluginRepo()">
+                            <button type="button" id="btnAddRepoSubmit" class="btn btn-primary" onclick="submitAddPluginRepo()" style="white-space:nowrap;padding:0.45rem 1rem;">
+                                <i class="mdi mdi-plus"></i> Add
+                            </button>
                         </div>
                     </div>
                     <div id="repoErrorMsg" style="display:none;color:var(--accent-danger);font-size:0.8rem;background:rgba(239,68,68,0.1);padding:0.4rem 0.6rem;border-radius:4px;border:1px solid rgba(239,68,68,0.25);"></div>
-                    <div style="text-align:right;margin-top:0.25rem;">
-                        <button type="button" id="btnAddRepoSubmit" class="btn btn-primary btn-small" onclick="submitAddPluginRepo()">
-                            <i class="mdi mdi-plus"></i> Add Repository
-                        </button>
-                    </div>
                 </div>
             </div>
             <h4 style="font-size:0.875rem;font-weight:700;color:var(--text-primary);margin:0 0 0.5rem 0;">Configured Sources</h4>
@@ -1885,22 +1875,21 @@
             <h2 class="modal-title"><i class="mdi mdi-storefront-outline"></i> Plugin Store & Catalog</h2>
             <button type="button" class="modal-close" onclick="closePluginCatalogModal()"><i class="mdi mdi-close"></i></button>
         </div>
-        <div class="modal-scrollable" style="padding:1.25rem 1.5rem;display:flex;flex-direction:column;flex:1;min-height:0;">
-            <div style="display:flex;gap:0.75rem;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;">
-                <div class="search-input-wrap" style="flex:1;min-width:200px;">
+        <div class="modal-scrollable" style="padding:1.25rem 1.5rem 0.75rem;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;">
+            <div style="display:flex;gap:0.75rem;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;flex-shrink:0;">
+                <div class="search-input-wrap" style="flex:1;min-width:140px;">
                     <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
                     <input type="text" id="catalogSearchInput" class="search-input" placeholder="Search catalog by name, author, tag…" oninput="renderPluginCatalog()">
                 </div>
                 <div class="catalog-filter-bar" style="margin-bottom:0;">
                     <button type="button" class="catalog-filter-btn active" data-cat="all" onclick="filterPluginCatalog('all')">All</button>
-                    <button type="button" class="catalog-filter-btn" data-cat="Sensors" onclick="filterPluginCatalog('Sensors')">Sensors</button>
-                    <button type="button" class="catalog-filter-btn" data-cat="Protocols" onclick="filterPluginCatalog('Protocols')">Protocols</button>
-                    <button type="button" class="catalog-filter-btn" data-cat="Fuel" onclick="filterPluginCatalog('Fuel')">Fuel</button>
-                    <button type="button" class="catalog-filter-btn" data-cat="Reports" onclick="filterPluginCatalog('Reports')">Reports</button>
-                    <button type="button" class="catalog-filter-btn" data-cat="Integrations" onclick="filterPluginCatalog('Integrations')">Integrations</button>
+                    <button type="button" class="catalog-filter-btn" data-cat="protocols" onclick="filterPluginCatalog('protocols')"><i class="mdi mdi-antenna"></i> Protocols</button>
+                    <button type="button" class="catalog-filter-btn" data-cat="integrations" onclick="filterPluginCatalog('integrations')"><i class="mdi mdi-cloud-sync"></i> Integrations</button>
+                    <button type="button" class="catalog-filter-btn" data-cat="alerts" onclick="filterPluginCatalog('alerts')"><i class="mdi mdi-bell-alert"></i> Alerts</button>
+                    <button type="button" class="catalog-filter-btn" data-cat="reports" onclick="filterPluginCatalog('reports')"><i class="mdi mdi-file-chart"></i> Reports</button>
                 </div>
             </div>
-            <div id="pluginCatalogGrid" class="plugin-catalog-grid" style="overflow-y:auto;flex:1;"></div>
+            <div id="pluginCatalogGrid" class="plugin-catalog-grid" style="overflow-y:auto;flex:1;min-height:0;"></div>
         </div>
         <div class="modal-footer" style="justify-content:space-between;">
             <button type="button" class="btn btn-secondary btn-small" onclick="openPluginRepoModal()"><i class="mdi mdi-cog-outline"></i> Manage Repositories</button>
@@ -2007,7 +1996,7 @@
         } else if (name === 'billing' && localStorage.getItem('is_admin') === 'true') {
             notifyEl.innerHTML = `<button class="header-menu-item" onclick="rtpOpenExchangeRatesModal(); ${_closeMenu}"><span class="header-menu-item-icon"><i class="mdi mdi-swap-horizontal" style="font-size:15px;"></i></span><span>Exchange Rates</span></button>`;
         } else if (name === 'plugins' && localStorage.getItem('is_admin') === 'true') {
-            notifyEl.innerHTML = `<button class="header-menu-item" onclick="openPluginRepoModal(); ${_closeMenu}"><span class="header-menu-item-icon"><i class="mdi mdi-source-repository" style="font-size:15px;"></i></span><span>Repositories</span></button><button class="header-menu-item" onclick="triggerUploadPluginZip(); ${_closeMenu}"><span class="header-menu-item-icon"><i class="mdi mdi-upload" style="font-size:15px;"></i></span><span>Upload Plugin (.zip)</span></button>`;
+            notifyEl.innerHTML = `<button class="header-menu-item" onclick="triggerUploadPluginZip(); ${_closeMenu}"><span class="header-menu-item-icon"><i class="mdi mdi-upload" style="font-size:15px;"></i></span><span>Upload Plugin (.zip)</span></button>`;
         }
 
         const refreshEl = document.getElementById('snRefreshAction');
@@ -2094,9 +2083,9 @@
             return;
         }
         const closers = [
-            ['pluginCatalogModal', () => closePluginCatalogModal()],
-            ['pluginRepoModal',    () => closePluginRepoModal()],
             ['pluginUsageModal',   () => closePluginUsageModal()],
+            ['pluginRepoModal',    () => closePluginRepoModal()],
+            ['pluginCatalogModal', () => closePluginCatalogModal()],
             ['qrZoomModal', () => closeQrZoomModal()],
             ['alertRuleHistoryModal', () => (typeof closeAlertRuleHistoryModal === 'function' ? closeAlertRuleHistoryModal() : document.getElementById('alertRuleHistoryModal')?.classList.remove('active'))],
             ['alertProfileMergeModal', () => closeAlertProfileMergeChoice()],

@@ -4,7 +4,11 @@
   "version": "2.0.1",
   "description": "Extended Teltonika FMB series decoder for LVCAN, ALL-CAN300, tachograph driver card status, and axle load sensors.",
   "author": "IoT Protocol Group",
-  "category": "Protocols",
+  "categories": [
+    "protocols",
+    "alerts",
+    "reports"
+  ],
   "icon": "mdi-car-connected",
   "dependencies": [],
   "requires_restart": false,

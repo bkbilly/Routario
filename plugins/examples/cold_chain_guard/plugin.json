@@ -4,7 +4,12 @@
   "version": "1.0.0",
   "description": "Real-time temperature and humidity monitoring with spoilage alerts, compliance audit reports, and BLE beacon protocol decoding.",
   "author": "Routario Community",
-  "category": "Sensors",
+  "categories": [
+    "protocols",
+    "alerts",
+    "reports",
+    "integrations"
+  ],
   "icon": "mdi-snowflake",
   "dependencies": [],
   "requires_restart": false,

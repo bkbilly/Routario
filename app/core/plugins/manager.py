@@ -311,6 +311,20 @@ class PluginManager:
             components.reports = list(set(components.reports))
             components.integrations = list(set(components.integrations))
 
+            if not plugin_info.manifest.categories:
+                derived = []
+                if components.protocols:
+                    derived.append("protocols")
+                if components.alerts:
+                    derived.append("alerts")
+                if components.reports:
+                    derived.append("reports")
+                if components.integrations:
+                    derived.append("integrations")
+                plugin_info.manifest.categories = derived
+                if derived and not plugin_info.manifest.category:
+                    plugin_info.manifest.category = derived[0]
+
             plugin_info.components = components
             plugin_info.is_loaded = True
             plugin_info.load_error = None

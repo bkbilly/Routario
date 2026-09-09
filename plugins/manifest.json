@@ -8,7 +8,12 @@
       "version": "1.0.0",
       "description": "Real-time temperature and humidity monitoring with spoilage alerts, compliance audit reports, and BLE beacon protocol decoding.",
       "author": "Routario Community",
-      "category": "Sensors",
+      "categories": [
+        "protocols",
+        "alerts",
+        "reports",
+        "integrations"
+      ],
       "icon": "mdi-snowflake",
       "path": "examples/cold_chain_guard",
       "dependencies": [],
@@ -21,7 +26,11 @@
       "version": "1.1.0",
       "description": "Advanced fuel consumption telemetry analysis, harsh acceleration/braking scoring, and idle fuel waste reporting.",
       "author": "Telematics Lab",
-      "category": "Fuel",
+      "categories": [
+        "protocols",
+        "alerts",
+        "reports"
+      ],
       "icon": "mdi-gas-station",
       "path": "examples/obd_fuel_eco_analytics",
       "dependencies": [],
@@ -34,7 +43,11 @@
       "version": "2.0.1",
       "description": "Extended Teltonika FMB series decoder for LVCAN, ALL-CAN300, tachograph driver card status, and axle load sensors.",
       "author": "IoT Protocol Group",
-      "category": "Protocols",
+      "categories": [
+        "protocols",
+        "alerts",
+        "reports"
+      ],
       "icon": "mdi-car-connected",
       "path": "examples/teltonika_advanced_can",
       "dependencies": [],
@@ -47,7 +60,10 @@
       "version": "1.2.0",
       "description": "Bi-directional sync of assets, drivers, hours-of-service (HOS), and telematics streams with Samsara Cloud API.",
       "author": "Cloud Integrations",
-      "category": "Integrations",
+      "categories": [
+        "alerts",
+        "integrations"
+      ],
       "icon": "mdi-cloud-sync",
       "path": "examples/samsara_cloud_sync",
       "dependencies": [],

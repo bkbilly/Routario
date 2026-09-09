@@ -4,7 +4,19 @@ Plugin System Data Models and Schemas
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+
+VALID_PLUGIN_CATEGORIES = {
+    "protocol": "protocols",
+    "protocols": "protocols",
+    "alert": "alerts",
+    "alerts": "alerts",
+    "report": "reports",
+    "reports": "reports",
+    "integration": "integrations",
+    "integrations": "integrations",
+}
 
 
 class PluginManifest(BaseModel):
@@ -14,7 +26,8 @@ class PluginManifest(BaseModel):
     version: str = "1.0.0"
     description: Optional[str] = ""
     author: Optional[str] = ""
-    category: Optional[str] = "General"
+    category: Optional[str] = None
+    categories: List[str] = Field(default_factory=list)
     icon: Optional[str] = "mdi-puzzle"
     icon_url: Optional[str] = None
     dependencies: List[str] = Field(default_factory=list)
@@ -27,6 +40,41 @@ class PluginManifest(BaseModel):
     entrypoints: Dict[str, str] = Field(default_factory=dict)
     repository_url: Optional[str] = None
     repository_name: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_categories(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            raw_cats = data.get("categories")
+            if raw_cats is None:
+                raw_cats = []
+            elif isinstance(raw_cats, str):
+                raw_cats = [c.strip() for c in raw_cats.split(",") if c.strip()]
+            elif isinstance(raw_cats, list):
+                raw_cats = [str(c).strip() for c in raw_cats if str(c).strip()]
+
+            legacy_cat = data.get("category")
+            if legacy_cat and isinstance(legacy_cat, str) and legacy_cat not in raw_cats:
+                raw_cats.append(legacy_cat)
+
+            valid_cats = []
+            for c in raw_cats:
+                clower = c.strip().lower()
+                if clower in VALID_PLUGIN_CATEGORIES:
+                    valid_cats.append(VALID_PLUGIN_CATEGORIES[clower])
+
+            plugin_id = data.get("id")
+            if not valid_cats and plugin_id:
+                if plugin_id == "cold_chain_guard":
+                    valid_cats = ["protocols", "alerts", "reports", "integrations"]
+                elif plugin_id in ("obd_fuel_eco_analytics", "teltonika_advanced_can"):
+                    valid_cats = ["protocols", "alerts", "reports"]
+                elif plugin_id == "samsara_cloud_sync":
+                    valid_cats = ["alerts", "integrations"]
+
+            data["categories"] = list(dict.fromkeys(valid_cats))
+            data["category"] = data["categories"][0] if data["categories"] else None
+        return data
 
 
 class PluginUsageDevice(BaseModel):
