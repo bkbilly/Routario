@@ -114,6 +114,15 @@ document.addEventListener('keydown', (e) => {
         return;
     }
 
+    if (document.getElementById('tripEcoModal')?.classList.contains('active')) {
+        if (typeof closeTripEcoModal === 'function') {
+            closeTripEcoModal();
+        } else {
+            document.getElementById('tripEcoModal').classList.remove('active');
+        }
+        return;
+    }
+
     for (const id of modalIds) {
         const modal = document.getElementById(id);
         if (modal?.classList.contains('active')) {

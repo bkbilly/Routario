@@ -370,7 +370,10 @@
                         onmousedown="_startStepHold(1)" onmouseup="_stopStepHold()" onmouseleave="_stopStepHold()"
                         ontouchstart="event.preventDefault();_startStepHold(1)" ontouchend="_stopStepHold()"
                         title="Next Event"><i class="mdi mdi-skip-next"></i></button>
-                    <button class="btn-icon" id="historyLineModeBtn" onclick="toggleHistoryLineMode()" title="Switch to animated lines"><i class="mdi mdi-waves"></i></button>
+                    <div class="history-controls-right-btns">
+                        <button class="btn-icon" id="historyEcoEventsToggleBtn" onclick="toggleHistoryEcoEvents()" title="Show eco driving events on map"><i class="mdi mdi-leaf"></i></button>
+                        <button class="btn-icon" id="historyLineModeBtn" onclick="toggleHistoryLineMode()" title="Switch to animated lines"><i class="mdi mdi-waves"></i></button>
+                    </div>
                 </div>
                 <!-- Row 3: slider -->
                 <div class="history-slider-row">
@@ -627,6 +630,24 @@
                     </div>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- ── Trip Eco & Safety Scorecard Modal ────────────────────────────── -->
+    <div class="modal" id="tripEcoModal">
+        <div class="modal-content trip-eco-modal">
+            <div class="modal-header">
+                <div>
+                    <h2 style="font-size:1.2rem; margin:0; display:flex; align-items:center; gap:0.45rem;">
+                        <i class="mdi mdi-leaf" style="color:var(--accent-success, #22c55e);"></i> Trip Eco & Safety Scorecard
+                    </h2>
+                    <div id="tripEcoModalSubtitle" class="trip-eco-subtitle"></div>
+                </div>
+                <button type="button" class="modal-close" onclick="closeTripEcoModal()" title="Close"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div id="tripEcoModalBody" class="trip-eco-body">
+                <!-- Populated dynamically by dashboard-history.js -->
+            </div>
         </div>
     </div>
 

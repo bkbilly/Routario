@@ -26,7 +26,7 @@ from core.auth import get_current_user, require_admin, require_company_admin, ve
 from core.audit import write_audit_log
 from integrations.engine import clear_device_state, evict_auth_cache, wake_engine
 from integrations.integration_model import IntegrationAccount
-from models import User, Device, DeviceState, user_device_association, SimCard
+from models import User, Device, DeviceState, user_device_association, SimCard, PositionRecord, Trip
 from models.models import Driver
 from models.schemas import DeviceCreate, DeviceResponse, DeviceStateResponse, TripResponse, UserResponse
 
@@ -280,6 +280,134 @@ async def get_device_trips(
     if not end_date:
         end_date = datetime.utcnow()
     return await db.get_device_trips(device_id, start_date, end_date)
+
+
+@router.get("/{device_id}/trips/{trip_id}/eco")
+async def get_trip_eco_scorecard(
+    device_id: int,
+    trip_id: int,
+    caller: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("view_history")),
+):
+    """Return detailed eco scorecard and telemetry event breakdown for a trip."""
+    db = get_db()
+    async with db.get_session() as session:
+        result = await session.execute(
+            select(Trip)
+            .options(selectinload(Trip.driver), selectinload(Trip.device))
+            .where(Trip.id == trip_id, Trip.device_id == device_id)
+        )
+        trip = result.scalar_one_or_none()
+        if not trip:
+            raise HTTPException(status_code=404, detail="Trip not found")
+
+        # Load device configuration
+        device = trip.device
+        speed_limit = 120.0
+        if device and device.config and isinstance(device.config, dict):
+            try:
+                speed_limit = float(device.config.get("speed_limit") or 120.0)
+            except (ValueError, TypeError):
+                speed_limit = 120.0
+
+        # Query positions for this trip
+        pos_q = select(PositionRecord).where(
+            PositionRecord.device_id == device_id,
+            PositionRecord.device_time >= trip.start_time,
+            PositionRecord.device_time <= (trip.end_time or datetime.utcnow()),
+        ).order_by(PositionRecord.device_time.asc())
+        pos_res = await session.execute(pos_q)
+        pos_list = pos_res.scalars().all()
+
+        from core.eco_driving import calculate_trip_eco_score_async, get_eco_grade
+        eco_calc = await calculate_trip_eco_score_async(
+            pos_list,
+            distance_km=trip.distance_km or 0.0,
+            duration_minutes=trip.duration_minutes or 0.0,
+            speed_limit_kmh=speed_limit,
+        )
+
+        score = trip.eco_score if trip.eco_score is not None else eco_calc["eco_score"]
+        grade = get_eco_grade(score)
+
+        # Generate coaching advice
+        accels = eco_calc["harsh_accel_count"]
+        brakes = eco_calc["harsh_brake_count"]
+        corners = eco_calc["harsh_corner_count"]
+        speeding = eco_calc["speeding_duration_minutes"]
+        severe_speeding_mins = eco_calc.get("speeding_severe_minutes", 0.0)
+        idling = eco_calc["idling_duration_minutes"]
+        fatigue_risk = eco_calc.get("fatigue_risk", "none")
+
+        coaching_advice = "Driver demonstrates balanced, safe driving habits across all monitored criteria."
+        coach_icon = "mdi-check-decagram"
+        coach_color = "#22c55e"
+
+        if fatigue_risk == "high" or eco_calc.get("fatigue_events_count", 0) > 0:
+            coach_color = "#ef4444"
+            coach_icon = "mdi-sleep"
+            coaching_advice = "Fatigue Risk Alert: Driver exceeded 4.5 hours of continuous driving without required rest pauses. Enforce mandatory 45-minute breaks to maintain safety and compliance."
+        elif severe_speeding_mins > 2:
+            coach_color = "#ef4444"
+            coach_icon = "mdi-speedometer-slow"
+            coaching_advice = f"Severe Speeding Detected: Driver accumulated {severe_speeding_mins:.0f} min of severe speeding (>20 km/h over limit). Immediate speed awareness coaching advised."
+        elif score < 85:
+            coach_color = "#f97316"
+            coach_icon = "mdi-lightbulb-on"
+            if brakes >= accels and brakes >= corners and brakes > 0:
+                coaching_advice = "High Harsh Braking Rate: Advise the driver to increase following distance and anticipate upcoming traffic stops earlier."
+            elif accels >= brakes and accels >= corners and accels > 0:
+                coaching_advice = "Frequent Rapid Acceleration: Encourage smoother throttle application when starting from stops to reduce fuel consumption and wear."
+            elif corners > 0 and corners >= accels:
+                coaching_advice = "Sharp Cornering Detected: Recommend reducing speed prior to turns and roundabouts to minimize rollover risk and tire strain."
+            elif speeding > 5:
+                coaching_advice = "Sustained Speeding: Ensure the driver observes posted road speed limits to prevent safety violations and citations."
+            elif idling > 10:
+                coaching_advice = "Excessive Idling: Remind driver to shut off engine during stationary waits exceeding 2-3 minutes to conserve fuel."
+
+        return {
+            "trip_id": trip.id,
+            "device_id": trip.device_id,
+            "device_name": device.name if device else f"Device {device_id}",
+            "license_plate": device.license_plate if device else None,
+            "driver_name": trip.driver_name,
+            "start_time": trip.start_time.isoformat() if trip.start_time else None,
+            "end_time": trip.end_time.isoformat() if trip.end_time else None,
+            "distance_km": round(trip.distance_km or 0.0, 2),
+            "duration_minutes": round(trip.duration_minutes or 0.0, 1),
+            "avg_speed": round(trip.avg_speed or 0.0, 1),
+            "max_speed": round(trip.max_speed or 0.0, 1),
+            "start_address": trip.start_address,
+            "end_address": trip.end_address,
+            "eco_score": round(score, 1),
+            "grade": grade,
+            "harsh_accel_count": accels,
+            "accel_minor_count": eco_calc.get("accel_minor_count", 0),
+            "accel_moderate_count": eco_calc.get("accel_moderate_count", 0),
+            "accel_severe_count": eco_calc.get("accel_severe_count", 0),
+            "harsh_brake_count": brakes,
+            "brake_minor_count": eco_calc.get("brake_minor_count", 0),
+            "brake_moderate_count": eco_calc.get("brake_moderate_count", 0),
+            "brake_severe_count": eco_calc.get("brake_severe_count", 0),
+            "harsh_corner_count": corners,
+            "corner_minor_count": eco_calc.get("corner_minor_count", 0),
+            "corner_moderate_count": eco_calc.get("corner_moderate_count", 0),
+            "corner_severe_count": eco_calc.get("corner_severe_count", 0),
+            "speeding_duration_minutes": round(speeding, 1),
+            "speeding_minor_minutes": round(eco_calc.get("speeding_minor_minutes", 0.0), 1),
+            "speeding_moderate_minutes": round(eco_calc.get("speeding_moderate_minutes", 0.0), 1),
+            "speeding_severe_minutes": round(eco_calc.get("speeding_severe_minutes", 0.0), 1),
+            "idling_duration_minutes": round(idling, 1),
+            "continuous_driving_minutes": round(eco_calc.get("continuous_driving_minutes", trip.duration_minutes or 0.0), 1),
+            "fatigue_risk": fatigue_risk,
+            "fatigue_events_count": eco_calc.get("fatigue_events_count", 0),
+            "events": eco_calc.get("events", []),
+            "coaching": {
+                "advice": coaching_advice,
+                "icon": coach_icon,
+                "color": coach_color,
+            },
+        }
 
 
 @router.get("/{device_id}/users", response_model=List[UserResponse])

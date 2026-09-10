@@ -6,8 +6,30 @@
 let historyLineMode = 'static'; // 'static' | 'ant'
 let historyLineRenderMode = null; // temporary render override, e.g. static while zooming
 let historyClips = [];
+let historyEcoEvents = [];
+let historyShowEcoEvents = false;
+let _currentTripEcoData = null;
+let _currentTripEcoFilter = 'all';
+let _tripEcoAbortController = null;
 let _historyZoomLineSwitchAttached = false;
 let _historyZoomLineSwitchActive = false;
+
+function _format2LineDatetime(rawGpsTime) {
+    if (!rawGpsTime) return '—';
+    let raw = rawGpsTime;
+    if (typeof raw === 'string' && !raw.endsWith('Z') && !raw.includes('+') && !raw.includes('-0') && !raw.includes('-1')) {
+        raw = raw + 'Z';
+    }
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return String(rawGpsTime);
+    const dateStr = typeof formatDateValue === 'function'
+        ? formatDateValue(d)
+        : d.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+    const timeStr = typeof formatTimeValue === 'function'
+        ? formatTimeValue(d, { withSeconds: true })
+        : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return `<div style="text-align:right;"><div style="font-weight:600;color:var(--text-primary);">${dateStr}</div><div style="font-size:0.72rem;color:var(--text-muted);">${timeStr}</div></div>`;
+}
 
 const PLAYBACK_SPEEDS = [1, 2, 5, 10];
 let playbackSpeedIdx = 0;
@@ -58,7 +80,14 @@ window.addEventListener('popstate', (e) => {
         return;
     }
 
-    // 2. AI Copilot Modal
+    // 2. Trip Eco Scorecard Modal
+    const ecoModal = document.getElementById('tripEcoModal');
+    if (ecoModal && ecoModal.classList.contains('active')) {
+        closeTripEcoModal();
+        return;
+    }
+
+    // 3. AI Copilot Modal
     const aiModal = document.getElementById('aiCopilotModal');
     if (aiModal && aiModal.classList.contains('active')) {
         if (typeof closeAiCopilotModal === 'function') {
@@ -67,7 +96,7 @@ window.addEventListener('popstate', (e) => {
         }
     }
 
-    // 3. Any generic active modal
+    // 4. Any generic active modal
     const activeModal = document.querySelector('.modal.active');
     if (activeModal) {
         activeModal.classList.remove('active');
@@ -622,9 +651,11 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { pres
         pushModalState('history_playback');
         _updateLineModeBtn();
         _updateSpeedBtn();
+        _updateEcoEventsBtn();
         _updateSliderGradient();
         requestAnimationFrame(applyHistoryControlsPadding);
         _loadHistoryClips(deviceId, startTime, endTime, signal);
+        _renderHistoryEcoEvents();
 
         if (allLayers.length > 0) {
             requestAnimationFrame(() => {
@@ -797,6 +828,30 @@ function _updateLineModeBtn() {
     btn.title = isAnt ? 'Switch to static lines' : 'Switch to animated lines';
 }
 
+function toggleHistoryEcoEvents() {
+    historyShowEcoEvents = !historyShowEcoEvents;
+    _updateEcoEventsBtn();
+    if (markers['history_eco']) {
+        if (historyShowEcoEvents) {
+            if (map && !map.hasLayer(markers['history_eco'])) {
+                map.addLayer(markers['history_eco']);
+            }
+        } else {
+            if (map && map.hasLayer(markers['history_eco'])) {
+                map.removeLayer(markers['history_eco']);
+            }
+        }
+    }
+}
+
+function _updateEcoEventsBtn() {
+    const btn = document.getElementById('historyEcoEventsToggleBtn');
+    if (!btn) return;
+    btn.classList.toggle('active', historyShowEcoEvents);
+    btn.title = historyShowEcoEvents ? 'Hide eco driving events on map' : 'Show eco driving events on map';
+    btn.style.opacity = historyShowEcoEvents ? '1' : '0.55';
+}
+
 function exitHistoryMode(fromPopState = false) {
     try {
         if (_historyAbortController) {
@@ -832,6 +887,20 @@ function exitHistoryMode(fromPopState = false) {
             }
             delete markers['history_pos'];
         }
+
+        if (markers['history_eco']) {
+            try {
+                map.removeLayer(markers['history_eco']);
+            } catch (e) {
+                console.warn('Error removing history eco markers:', e);
+            }
+            delete markers['history_eco'];
+        }
+        closeTripEcoModal();
+        historyEcoEvents = [];
+        historyShowEcoEvents = false;
+        _updateEcoEventsBtn();
+
         currentHistoryTab = 'trips';
         switchHistoryTab('trips');
 
@@ -1059,6 +1128,9 @@ function updatePlaybackUI() {
     document.getElementById('historySliderCounter').textContent = `${historyIndex + 1} / ${historyData.length}`;
 
     if (!markers['history_pos']) createHistoryMarker();
+    if (markers['history_pos'] && typeof markers['history_pos'].setZIndexOffset === 'function') {
+        markers['history_pos'].setZIndexOffset(2000);
+    }
 
     const vehicle = VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other'];
     const ignColor = p.ignition === true ? '#10b981' : p.ignition === false ? '#ef4444' : '#6b7280';
@@ -1069,7 +1141,7 @@ function updatePlaybackUI() {
                 <span class="vp-name">${device?.name || 'History'}</span>
             </div>
             <div class="vp-grid">
-                <span class="vp-label">Time</span>      <span class="vp-value vp-mono">${time}</span>
+                <span class="vp-label">Time</span>      <span class="vp-value vp-mono" style="font-size:0.72rem;">${_format2LineDatetime(p.time)}</span>
                 <span class="vp-label">Driver</span>    <span class="vp-value">${p.driver_name ? _esc(p.driver_name) : '—'}</span>
                 <span class="vp-label">Speed</span>     <span class="vp-value">${p.speed != null ? fmtSpeed(p.speed) : '—'}</span>
                 <span class="vp-label">Heading</span>   <span class="vp-value">${p.course != null ? Number(p.course).toFixed(0) + '°' : '—'}</span>
@@ -1236,7 +1308,7 @@ function createHistoryMarker() {
         iconAnchor: [16, 16]
     });
     const startPos = historyData[historyIndex].geometry.coordinates;
-    markers['history_pos'] = L.marker([startPos[1], startPos[0]], { icon }).addTo(map);
+    markers['history_pos'] = L.marker([startPos[1], startPos[0]], { icon, zIndexOffset: 2000 }).addTo(map);
     markers['history_pos'].deviceId = 'history_pos';
 }
 
@@ -1359,12 +1431,12 @@ async function loadTripsForHistory(deviceId, startTime, endTime, { preserveScrol
 
             const ecoBadge = trip.eco_score != null ? (() => {
                 const s = Number(trip.eco_score);
-                let badgeColor = '#22c55e', badgeBg = 'rgba(34, 197, 94, 0.12)';
-                if (s < 55) { badgeColor = '#ef4444'; badgeBg = 'rgba(239, 68, 68, 0.12)'; }
-                else if (s < 70) { badgeColor = '#f97316'; badgeBg = 'rgba(249, 115, 22, 0.12)'; }
-                else if (s < 80) { badgeColor = '#eab308'; badgeBg = 'rgba(234, 179, 8, 0.12)'; }
-                else if (s < 90) { badgeColor = '#0284c7'; badgeBg = 'rgba(14, 165, 233, 0.12)'; }
-                return `<span class="trip-badge" style="background:${badgeBg};color:${badgeColor};font-weight:700;"><i class="mdi mdi-leaf"></i> ${s.toFixed(0)}%</span>`;
+                let badgeColor = '#22c55e', badgeBg = 'rgba(34, 197, 94, 0.12)', borderCol = 'rgba(34, 197, 94, 0.3)';
+                if (s < 55) { badgeColor = '#ef4444'; badgeBg = 'rgba(239, 68, 68, 0.12)'; borderCol = 'rgba(239, 68, 68, 0.3)'; }
+                else if (s < 70) { badgeColor = '#f97316'; badgeBg = 'rgba(249, 115, 22, 0.12)'; borderCol = 'rgba(249, 115, 22, 0.3)'; }
+                else if (s < 80) { badgeColor = '#eab308'; badgeBg = 'rgba(234, 179, 8, 0.12)'; borderCol = 'rgba(234, 179, 8, 0.3)'; }
+                else if (s < 90) { badgeColor = '#0284c7'; badgeBg = 'rgba(14, 165, 233, 0.12)'; borderCol = 'rgba(14, 165, 233, 0.3)'; }
+                return `<button type="button" class="trip-badge trip-eco-badge" onclick="event.stopPropagation(); openTripEcoModal(${trip.id});" title="Click to view Eco Score & driving safety scorecard" style="background:${badgeBg};color:${badgeColor};border:1px solid ${borderCol};cursor:pointer;font-weight:700;"><i class="mdi mdi-leaf"></i> ${s.toFixed(0)}%</button>`;
             })() : '';
 
             return `
@@ -1372,11 +1444,11 @@ async function loadTripsForHistory(deviceId, startTime, endTime, { preserveScrol
                  style="border-left: 3px solid ${color}; ${dimStyle}${hasData ? 'cursor:pointer;' : 'cursor:default;'}">
                 <div class="trip-card-header">
                     <span class="trip-index" style="color: ${color};">Trip ${label}</span>
-                    <span class="trip-badges">
-                        <span class="trip-badge"><i class="mdi mdi-map-marker"></i> ${dist}</span>
-                        <span class="trip-badge">⏱ ${dur}</span>
-                        ${ecoBadge}
-                    </span>
+                </div>
+                <div class="trip-card-badges">
+                    <span class="trip-badge"><i class="mdi mdi-map-marker"></i> ${dist}</span>
+                    <span class="trip-badge">⏱ ${dur}</span>
+                    ${ecoBadge}
                 </div>
                 <div class="trip-card-body">
                     ${trip.driver_name ? `<div class="trip-driver" title="${_esc(trip.driver_name)}"><i class="mdi mdi-account"></i><span>${_esc(trip.driver_name)}</span></div>` : ''}
@@ -1576,3 +1648,628 @@ function _openHistoryClipPlayer(clip) {
     modal.style.display = 'flex';
     document.getElementById('historyClipVideo').play().catch(() => {});
 }
+
+// ── Eco-Driving & Safety Scorecard Analytics ──────────────────────────────────
+
+function _extractEcoEventsFromHistory(features) {
+    if (!features || features.length < 2) return [];
+    const events = [];
+    const device = devices.find(d => d.id === historyDeviceId);
+    const speedLimit = Number(device?.config?.speed_limit) || 120.0;
+    const lastEventTime = { accel: 0, brake: 0, corner: 0, speeding: 0 };
+    let continuousSecs = 0;
+    let warnedFatigue = false;
+    let violatedFatigue = false;
+
+    for (let i = 0; i < features.length; i++) {
+        const curr = features[i];
+        const prev = i > 0 ? features[i - 1] : null;
+        const coords = curr.geometry?.coordinates || [0, 0];
+        const lng = coords[0], lat = coords[1];
+        const pCurr = curr.properties || {};
+        const pPrev = prev ? prev.properties : {};
+        const speed2 = Number(pCurr.speed || 0);
+        const tCurr = pCurr.time ? new Date(pCurr.time).getTime() : 0;
+        const epoch = tCurr ? tCurr / 1000 : (i * 3);
+
+        let dt = 3;
+        if (prev && pPrev.time && pCurr.time) {
+            const dtSec = (new Date(pCurr.time).getTime() - new Date(pPrev.time).getTime()) / 1000;
+            if (dtSec >= 0.5 && dtSec <= 20) dt = dtSec;
+        }
+
+        if (prev && dt > 900) {
+            continuousSecs = 0;
+        } else {
+            continuousSecs += dt;
+        }
+
+        const pointTripId = pCurr.trip_id ?? (typeof getCurrentTripForPoint === 'function' ? getCurrentTripForPoint(pCurr.time)?.id : null) ?? null;
+
+        // Fatigue check
+        if (continuousSecs >= 16200 && !violatedFatigue) {
+            violatedFatigue = true;
+            events.push({
+                point_index: i,
+                trip_id: pointTripId,
+                type: 'fatigue',
+                severity: 'severe',
+                label: 'Fatigue Risk (>4.5h Continuous Driving)',
+                latitude: lat,
+                longitude: lng,
+                speed: speed2,
+                time: pCurr.time,
+                duration_minutes: Math.round(continuousSecs / 60),
+            });
+        } else if (continuousSecs >= 14400 && !warnedFatigue && !violatedFatigue) {
+            warnedFatigue = true;
+            events.push({
+                point_index: i,
+                trip_id: pointTripId,
+                type: 'fatigue',
+                severity: 'warning',
+                label: 'Fatigue Warning (4.0h Continuous Driving)',
+                latitude: lat,
+                longitude: lng,
+                speed: speed2,
+                time: pCurr.time,
+                duration_minutes: Math.round(continuousSecs / 60),
+            });
+        }
+
+        // Hardware sensor check
+        const sensors = pCurr.sensors || {};
+        let hwAccel = false, hwBrake = false, hwCorner = false;
+        const gd = sensors.green_driving_type ?? sensors.green_driving ?? sensors.io253 ?? sensors.io_253;
+        if (gd != null) {
+            const gdNum = Number(gd);
+            if (gdNum === 1) hwAccel = true;
+            else if (gdNum === 2) hwBrake = true;
+            else if (gdNum === 3) hwCorner = true;
+        }
+        if (sensors.harsh_accel || sensors.harsh_acceleration) hwAccel = true;
+        if (sensors.harsh_brake || sensors.harsh_braking) hwBrake = true;
+        if (sensors.harsh_corner || sensors.harsh_cornering) hwCorner = true;
+
+        let accelMs2 = 0;
+        if (prev) {
+            const speed1 = Number(pPrev.speed || 0);
+            accelMs2 = ((speed2 / 3.6) - (speed1 / 3.6)) / dt;
+        }
+
+        // Harsh Accel
+        if (hwAccel || accelMs2 >= 2.8) {
+            if (epoch - lastEventTime.accel > 5) {
+                lastEventTime.accel = epoch;
+                const aVal = Math.round(accelMs2 * 100) / 100;
+                const sev = aVal > 4.2 ? 'severe' : (aVal > 3.4 ? 'moderate' : 'minor');
+                const sevTitle = sev === 'severe' ? 'Severe Accel' : (sev === 'moderate' ? 'Harsh Accel' : 'Moderate Accel');
+                events.push({
+                    point_index: i,
+                    trip_id: pointTripId,
+                    type: 'harsh_accel',
+                    severity: sev,
+                    label: `${sevTitle} (+${aVal > 0 ? aVal.toFixed(2) : '3.00'} m/s²)`,
+                    latitude: lat,
+                    longitude: lng,
+                    speed: speed2,
+                    acceleration_ms2: aVal > 0 ? aVal : 3.0,
+                    time: pCurr.time,
+                });
+            }
+        }
+
+        // Harsh Brake
+        if (hwBrake || accelMs2 <= -3.2) {
+            if (epoch - lastEventTime.brake > 5) {
+                lastEventTime.brake = epoch;
+                const bVal = Math.round(accelMs2 * 100) / 100;
+                const sev = bVal < -4.6 ? 'severe' : (bVal < -3.8 ? 'moderate' : 'minor');
+                const sevTitle = sev === 'severe' ? 'Severe Brake' : (sev === 'moderate' ? 'Harsh Brake' : 'Hard Brake');
+                events.push({
+                    point_index: i,
+                    trip_id: pointTripId,
+                    type: 'harsh_brake',
+                    severity: sev,
+                    label: `${sevTitle} (${bVal < 0 ? bVal.toFixed(2) : '-3.50'} m/s²)`,
+                    latitude: lat,
+                    longitude: lng,
+                    speed: speed2,
+                    acceleration_ms2: bVal < 0 ? bVal : -3.5,
+                    time: pCurr.time,
+                });
+            }
+        }
+
+        // Cornering
+        if (hwCorner || (prev && speed2 >= 35 && pCurr.course != null && pPrev.course != null)) {
+            const c1 = Number(pPrev.course || 0);
+            const c2 = Number(pCurr.course || 0);
+            const dCourse = Math.abs((c2 - c1 + 180) % 360 - 180);
+            const turnRate = Math.round((dCourse / dt) * 10) / 10;
+            if (hwCorner || (turnRate >= 32.0 && dCourse >= 30.0)) {
+                if (epoch - lastEventTime.corner > 5) {
+                    lastEventTime.corner = epoch;
+                    const sev = turnRate >= 50 ? 'severe' : (turnRate >= 40 ? 'moderate' : 'minor');
+                    const sevTitle = sev === 'severe' ? 'Aggressive Turn' : (sev === 'moderate' ? 'Sharp Turn' : 'Moderate Turn');
+                    events.push({
+                        point_index: i,
+                        trip_id: pointTripId,
+                        type: 'harsh_corner',
+                        severity: sev,
+                        label: `${sevTitle} (${turnRate > 0 ? turnRate.toFixed(1) : '35.0'} °/s)`,
+                        latitude: lat,
+                        longitude: lng,
+                        speed: speed2,
+                        turn_rate_deg_s: turnRate > 0 ? turnRate : 35.0,
+                        time: pCurr.time,
+                    });
+                }
+            }
+        }
+
+        // Speeding
+        if (speed2 > (speedLimit + 3)) {
+            const overspeed = Math.round((speed2 - speedLimit) * 10) / 10;
+            if (epoch - lastEventTime.speeding > 20) {
+                lastEventTime.speeding = epoch;
+                const sev = overspeed > 20 ? 'severe' : (overspeed > 10 ? 'moderate' : 'minor');
+                const sevTitle = sev === 'severe' ? 'Severe Speeding' : (sev === 'moderate' ? 'Speeding' : 'Minor Speeding');
+                events.push({
+                    point_index: i,
+                    trip_id: pointTripId,
+                    type: 'speeding',
+                    severity: sev,
+                    label: `${sevTitle} (${Math.round(speed2)} km/h on ${Math.round(speedLimit)} km/h limit, +${Math.round(overspeed)} km/h)`,
+                    latitude: lat,
+                    longitude: lng,
+                    speed: speed2,
+                    speed_limit: speedLimit,
+                    overspeed_kmh: overspeed,
+                    time: pCurr.time,
+                });
+            }
+        }
+    }
+    return events;
+}
+
+function _renderHistoryEcoEvents(filterTripId = null) {
+    if (markers['history_eco']) {
+        try { map.removeLayer(markers['history_eco']); } catch (e) {}
+        delete markers['history_eco'];
+    }
+
+    if (!historyData || historyData.length < 2) return;
+    historyEcoEvents = _extractEcoEventsFromHistory(historyData);
+
+    const ecoLayers = [];
+
+    historyEcoEvents.forEach((ev) => {
+        if (filterTripId != null && ev.trip_id != null && ev.trip_id !== filterTripId) {
+            return;
+        }
+        let pinClass = 'pin-accel';
+        let iconClass = 'mdi-lightning-bolt';
+        let pinToneColor = '#f97316';
+        let titleText = 'Harsh Acceleration';
+
+        if (ev.type === 'harsh_brake') {
+            pinClass = 'pin-brake';
+            iconClass = 'mdi-alert-octagon';
+            pinToneColor = '#ef4444';
+            titleText = 'Harsh Braking';
+        } else if (ev.type === 'harsh_corner') {
+            pinClass = 'pin-corner';
+            iconClass = 'mdi-arrow-u-down-right';
+            pinToneColor = '#eab308';
+            titleText = 'Harsh Cornering';
+        } else if (ev.type === 'speeding') {
+            pinClass = 'pin-speeding';
+            iconClass = 'mdi-speedometer';
+            pinToneColor = '#a855f7';
+            titleText = 'Speeding Event';
+        } else if (ev.type === 'fatigue') {
+            pinClass = 'pin-fatigue';
+            iconClass = 'mdi-sleep';
+            pinToneColor = '#dc2626';
+            titleText = 'Driver Fatigue';
+        }
+
+        if (ev.latitude != null && ev.longitude != null) {
+            const icon = L.divIcon({
+                html: `<div class="history-eco-pin ${pinClass}" title="${_esc(ev.label)}"><i class="mdi ${iconClass}"></i></div>`,
+                className: 'history-eco-marker',
+                iconSize: [28, 28],
+                iconAnchor: [14, 14],
+                popupAnchor: [0, -14],
+            });
+
+            const m = L.marker([ev.latitude, ev.longitude], { icon, zIndexOffset: 100 });
+            const time2Line = _format2LineDatetime(ev.time);
+            const spdStr = ev.speed != null ? `${Math.round(ev.speed)} km/h` : '—';
+
+            let metricDisplay = '—';
+            if (ev.type === 'harsh_accel') {
+                metricDisplay = `+${Number(ev.acceleration_ms2 || 3.0).toFixed(2)} m/s²`;
+            } else if (ev.type === 'harsh_brake') {
+                metricDisplay = `${Number(ev.acceleration_ms2 || -3.5).toFixed(2)} m/s²`;
+            } else if (ev.type === 'harsh_corner') {
+                metricDisplay = `${Number(ev.turn_rate_deg_s || 35.0).toFixed(1)} °/s`;
+            } else if (ev.type === 'speeding') {
+                metricDisplay = `+${Math.round(ev.overspeed_kmh || 0)} km/h over`;
+            } else if (ev.type === 'fatigue') {
+                metricDisplay = `${ev.duration_minutes ? Math.round(ev.duration_minutes / 60 * 10) / 10 + 'h' : '>4.5h'} continuous`;
+            }
+
+            const sevText = (ev.severity || 'Moderate').charAt(0).toUpperCase() + (ev.severity || 'Moderate').slice(1);
+            let sevColor = '#f59e0b';
+            if (ev.severity === 'severe') sevColor = '#ef4444';
+            else if (ev.severity === 'minor') sevColor = '#3b82f6';
+
+            m.bindPopup(`
+                <div class="vp-popup" style="min-width:200px;">
+                    <div class="vp-header" style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--border-color);display:flex;align-items:center;gap:0.4rem;">
+                        <span class="vp-icon" style="color:${pinToneColor};font-size:1rem;display:flex;align-items:center;"><i class="mdi ${iconClass}"></i></span>
+                        <span class="vp-name" style="font-weight:600;font-size:0.82rem;line-height:1.2;">${_esc(titleText)}</span>
+                    </div>
+                    <div class="vp-grid" style="display:grid;grid-template-columns:auto 1fr;gap:0.3rem 0.75rem;padding:0.5rem 0.75rem;font-size:0.76rem;align-items:center;">
+                        <span class="vp-label" style="color:var(--text-muted);">Severity</span>
+                        <span class="vp-value" style="font-weight:700;color:${sevColor};text-align:right;">${sevText}</span>
+                        <span class="vp-label" style="color:var(--text-muted);">Metric</span>
+                        <span class="vp-value vp-mono" style="color:${pinToneColor};font-weight:700;text-align:right;">${metricDisplay}</span>
+                        <span class="vp-label" style="color:var(--text-muted);">Time</span>
+                        <span class="vp-value vp-mono" style="font-size:0.72rem;">${time2Line}</span>
+                        <span class="vp-label" style="color:var(--text-muted);">Speed</span>
+                        <span class="vp-value vp-mono" style="text-align:right;">${spdStr}</span>
+                    </div>
+                    <div style="padding:0 0.75rem 0.5rem;">
+                        <button type="button" class="btn btn-sm btn-primary" style="width:100%;padding:0.25rem 0.5rem;font-size:0.74rem;display:flex;align-items:center;justify-content:center;gap:0.3rem;" onclick="seekHistory(${ev.point_index})">
+                            <i class="mdi mdi-play"></i> Jump Playback Here
+                        </button>
+                    </div>
+                </div>
+            `);
+            ecoLayers.push(m);
+        }
+    });
+
+    if (ecoLayers.length > 0 && map) {
+        markers['history_eco'] = L.featureGroup(ecoLayers);
+        if (historyShowEcoEvents) {
+            markers['history_eco'].addTo(map);
+        }
+    }
+}
+
+async function openTripEcoModal(tripId) {
+    if (!historyDeviceId) return;
+    const modal = document.getElementById('tripEcoModal');
+    if (!modal) return;
+
+    const device = devices.find(d => d.id === historyDeviceId);
+    const trip = (historyTrips || []).find(t => t.id === tripId);
+    const devName = device ? device.name : `Device ${historyDeviceId}`;
+    const startTxt = trip?.start_time ? formatDateToLocal(trip.start_time) : '';
+    const endTxt = trip?.end_time ? formatDateToLocal(trip.end_time) : 'Ongoing';
+
+    const subEl = document.getElementById('tripEcoModalSubtitle');
+    if (subEl) {
+        subEl.innerHTML = `<span><i class="mdi mdi-car"></i> ${_esc(devName)}</span> · <span><i class="mdi mdi-clock-outline"></i> ${startTxt} → ${endTxt}</span>`;
+    }
+
+    const body = document.getElementById('tripEcoModalBody');
+    if (body) {
+        body.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:center;padding:4rem 1rem;color:var(--text-muted);gap:0.75rem;">
+                <i class="mdi mdi-loading mdi-spin" style="font-size:1.8rem;color:var(--accent-primary);"></i>
+                <span style="font-size:0.95rem;">Analyzing telematics & computing eco scorecard…</span>
+            </div>
+        `;
+    }
+
+    modal.classList.add('active');
+    pushModalState('trip_eco_modal');
+    _currentTripEcoFilter = 'all';
+    _renderHistoryEcoEvents(tripId);
+
+    if (_tripEcoAbortController) {
+        _tripEcoAbortController.abort();
+    }
+    _tripEcoAbortController = new AbortController();
+
+    try {
+        const res = await apiFetch(`${API_BASE}/devices/${historyDeviceId}/trips/${tripId}/eco`, {
+            signal: _tripEcoAbortController.signal,
+        });
+        if (!res.ok) throw new Error('API error');
+        const data = await res.json();
+        _currentTripEcoData = data;
+        _renderTripEcoModalContent();
+    } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.warn('Backend eco endpoint fallback:', err);
+        _currentTripEcoData = _buildTripEcoFallback(trip);
+        _renderTripEcoModalContent();
+    }
+}
+
+function closeTripEcoModal() {
+    if (_tripEcoAbortController) {
+        _tripEcoAbortController.abort();
+        _tripEcoAbortController = null;
+    }
+    const modal = document.getElementById('tripEcoModal');
+    if (modal) modal.classList.remove('active');
+    _renderHistoryEcoEvents();
+}
+
+function _setTripEcoFilter(filter) {
+    _currentTripEcoFilter = filter;
+    _renderTripEcoModalContent();
+}
+
+function _buildTripEcoFallback(trip) {
+    const s = Number(trip?.eco_score ?? 100);
+    let grade = 'A';
+    if (s < 55) grade = 'F';
+    else if (s < 70) grade = 'D';
+    else if (s < 80) grade = 'C';
+    else if (s < 90) grade = 'B';
+
+    // Filter loaded history points for this trip
+    const st = trip?.start_time ? new Date(trip.start_time).getTime() : 0;
+    const et = trip?.end_time ? new Date(trip.end_time).getTime() : Infinity;
+    const tripPoints = (historyData || []).filter(f => {
+        const t = f.properties?.time ? new Date(f.properties.time).getTime() : 0;
+        return t >= st && t <= et;
+    });
+    const events = _extractEcoEventsFromHistory(tripPoints);
+
+    return {
+        trip_id: trip?.id,
+        eco_score: s,
+        grade: grade,
+        distance_km: trip?.distance_km || 0,
+        duration_minutes: trip?.duration_minutes || 0,
+        harsh_accel_count: trip?.harsh_accel_count || events.filter(e => e.type === 'harsh_accel').length,
+        harsh_brake_count: trip?.harsh_brake_count || events.filter(e => e.type === 'harsh_brake').length,
+        harsh_corner_count: trip?.harsh_corner_count || events.filter(e => e.type === 'harsh_corner').length,
+        speeding_duration_minutes: trip?.speeding_duration_minutes || 0,
+        idling_duration_minutes: trip?.idling_duration_minutes || 0,
+        continuous_driving_minutes: trip?.duration_minutes || 0,
+        fatigue_risk: 'none',
+        events: events,
+        coaching: {
+            advice: 'Driving telematics computed from loaded trip telemetry.',
+            icon: 'mdi-check-decagram',
+            color: '#22c55e',
+        },
+    };
+}
+
+function _renderTripEcoModalContent() {
+    const body = document.getElementById('tripEcoModalBody');
+    if (!body || !_currentTripEcoData) return;
+
+    const data = _currentTripEcoData;
+    const score = Number(data.eco_score || 100);
+    const grade = data.grade || 'A';
+    const dist = Number(data.distance_km || 0);
+    const durMins = Number(data.duration_minutes || 0);
+    const accels = Number(data.harsh_accel_count || 0);
+    const brakes = Number(data.harsh_brake_count || 0);
+    const corners = Number(data.harsh_corner_count || 0);
+    const speeding = Number(data.speeding_duration_minutes || 0);
+    const idling = Number(data.idling_duration_minutes || 0);
+
+    const accelPer100 = dist > 0 ? ((accels / dist) * 100).toFixed(1) : '0.0';
+    const brakePer100 = dist > 0 ? ((brakes / dist) * 100).toFixed(1) : '0.0';
+    const cornerPer100 = dist > 0 ? ((corners / dist) * 100).toFixed(1) : '0.0';
+
+    const allEvents = data.events || [];
+    const accelEvents = allEvents.filter(e => e.type === 'harsh_accel');
+    const brakeEvents = allEvents.filter(e => e.type === 'harsh_brake');
+    const cornerEvents = allEvents.filter(e => e.type === 'harsh_corner');
+    const speedingEvents = allEvents.filter(e => e.type === 'speeding');
+    const fatigueEvents = allEvents.filter(e => e.type === 'fatigue');
+
+    let filteredEvents = allEvents;
+    if (_currentTripEcoFilter === 'accel') filteredEvents = accelEvents;
+    else if (_currentTripEcoFilter === 'brake') filteredEvents = brakeEvents;
+    else if (_currentTripEcoFilter === 'corner') filteredEvents = cornerEvents;
+    else if (_currentTripEcoFilter === 'speeding') filteredEvents = speedingEvents;
+    else if (_currentTripEcoFilter === 'fatigue') filteredEvents = fatigueEvents;
+
+    const coaching = data.coaching || {
+        advice: 'Driver demonstrates balanced, safe driving habits across all monitored criteria.',
+        icon: 'mdi-check-decagram',
+        color: '#22c55e',
+    };
+
+    let scoreColor = '#22c55e';
+    if (score < 55) scoreColor = '#ef4444';
+    else if (score < 70) scoreColor = '#f97316';
+    else if (score < 80) scoreColor = '#eab308';
+    else if (score < 90) scoreColor = '#0284c7';
+
+    body.innerHTML = `
+        <div class="eco-detail-grid">
+            <div class="eco-detail-card" style="border-left:4px solid ${scoreColor};">
+                <div class="k">Safety Score</div>
+                <div class="v" style="color:${scoreColor};">${score.toFixed(0)}%</div>
+                <div class="sub" style="font-weight:700;">Grade ${grade}</div>
+            </div>
+            <div class="eco-detail-card">
+                <div class="k">Distance</div>
+                <div class="v">${dist.toFixed(1)} km</div>
+                <div class="sub">${durMins.toFixed(0)} min drive</div>
+            </div>
+            <div class="eco-detail-card">
+                <div class="k">Harsh Accel</div>
+                <div class="v" style="color:#f97316;"><i class="mdi mdi-lightning-bolt"></i> ${accels}</div>
+                <div class="sub">${accelPer100} / 100km</div>
+            </div>
+            <div class="eco-detail-card">
+                <div class="k">Harsh Brake</div>
+                <div class="v" style="color:#ef4444;"><i class="mdi mdi-alert-octagon"></i> ${brakes}</div>
+                <div class="sub">${brakePer100} / 100km</div>
+            </div>
+            <div class="eco-detail-card">
+                <div class="k">Sharp Turn</div>
+                <div class="v" style="color:#eab308;"><i class="mdi mdi-arrow-u-down-right"></i> ${corners}</div>
+                <div class="sub">${cornerPer100} / 100km</div>
+            </div>
+            <div class="eco-detail-card">
+                <div class="k">Speeding / Idle</div>
+                <div class="v" style="color:${speeding > 0 ? '#f97316' : 'var(--text-primary)'};">${speeding.toFixed(1)}m</div>
+                <div class="sub">${idling.toFixed(0)}m idle</div>
+            </div>
+        </div>
+
+        <div class="eco-coach-box" style="border-left:4px solid ${coaching.color};">
+            <i class="mdi ${coaching.icon}" style="font-size:1.35rem;color:${coaching.color};flex-shrink:0;"></i>
+            <div>${_esc(coaching.advice)}</div>
+        </div>
+
+        <div class="eco-filter-bar">
+            <button type="button" class="eco-filter-chip ${_currentTripEcoFilter === 'all' ? 'active' : ''}" onclick="_setTripEcoFilter('all')">
+                <i class="mdi mdi-format-list-bulleted"></i> All (${allEvents.length})
+            </button>
+            <button type="button" class="eco-filter-chip ${_currentTripEcoFilter === 'accel' ? 'active' : ''}" onclick="_setTripEcoFilter('accel')">
+                <i class="mdi mdi-lightning-bolt" style="color:#f97316;"></i> Accel (${accelEvents.length})
+            </button>
+            <button type="button" class="eco-filter-chip ${_currentTripEcoFilter === 'brake' ? 'active' : ''}" onclick="_setTripEcoFilter('brake')">
+                <i class="mdi mdi-alert-octagon" style="color:#ef4444;"></i> Brake (${brakeEvents.length})
+            </button>
+            <button type="button" class="eco-filter-chip ${_currentTripEcoFilter === 'corner' ? 'active' : ''}" onclick="_setTripEcoFilter('corner')">
+                <i class="mdi mdi-arrow-u-down-right" style="color:#eab308;"></i> Corner (${cornerEvents.length})
+            </button>
+            <button type="button" class="eco-filter-chip ${_currentTripEcoFilter === 'speeding' ? 'active' : ''}" onclick="_setTripEcoFilter('speeding')">
+                <i class="mdi mdi-speedometer" style="color:#a855f7;"></i> Speeding (${speedingEvents.length})
+            </button>
+            ${fatigueEvents.length ? `
+                <button type="button" class="eco-filter-chip ${_currentTripEcoFilter === 'fatigue' ? 'active' : ''}" onclick="_setTripEcoFilter('fatigue')">
+                    <i class="mdi mdi-sleep" style="color:#dc2626;"></i> Fatigue (${fatigueEvents.length})
+                </button>
+            ` : ''}
+        </div>
+
+        <div class="eco-table-wrap">
+            <table class="eco-scorecard-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Event</th>
+                        <th>Speed</th>
+                        <th>Intensity / Metric</th>
+                        <th style="text-align:right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${filteredEvents.length ? filteredEvents.map((ev) => {
+                        const globalIdx = allEvents.indexOf(ev);
+                        let badgeHtml = '';
+                        let metricHtml = '—';
+                        if (ev.type === 'harsh_accel') {
+                            const aVal = Number(ev.acceleration_ms2 || 0);
+                            const sev = ev.severity || 'minor';
+                            const sevColor = sev === 'severe' ? '#ef4444' : (sev === 'moderate' ? '#f97316' : '#eab308');
+                            const sevTitle = sev === 'severe' ? 'Severe Accel' : (sev === 'moderate' ? 'Harsh Accel' : 'Moderate Accel');
+                            badgeHtml = `<span style="display:inline-flex;align-items:center;gap:0.25rem;color:${sevColor};font-weight:600;"><i class="mdi mdi-lightning-bolt"></i> ${sevTitle}</span>`;
+                            metricHtml = aVal ? `<span style="font-family:var(--font-mono);font-weight:600;color:${sevColor};">+${aVal.toFixed(2)} m/s²</span>` : '—';
+                        } else if (ev.type === 'harsh_brake') {
+                            const bVal = Number(ev.acceleration_ms2 || 0);
+                            const sev = ev.severity || 'minor';
+                            const sevColor = sev === 'severe' ? '#ef4444' : (sev === 'moderate' ? '#f97316' : '#eab308');
+                            const sevTitle = sev === 'severe' ? 'Severe Brake' : (sev === 'moderate' ? 'Harsh Brake' : 'Hard Brake');
+                            badgeHtml = `<span style="display:inline-flex;align-items:center;gap:0.25rem;color:${sevColor};font-weight:600;"><i class="mdi mdi-alert-octagon"></i> ${sevTitle}</span>`;
+                            metricHtml = bVal ? `<span style="font-family:var(--font-mono);font-weight:600;color:${sevColor};">${bVal.toFixed(2)} m/s²</span>` : '—';
+                        } else if (ev.type === 'harsh_corner') {
+                            const cVal = Number(ev.turn_rate_deg_s || 0);
+                            const sev = ev.severity || 'minor';
+                            const sevColor = sev === 'severe' ? '#ef4444' : (sev === 'moderate' ? '#f97316' : '#eab308');
+                            const sevTitle = sev === 'severe' ? 'Aggressive Turn' : (sev === 'moderate' ? 'Sharp Turn' : 'Moderate Turn');
+                            badgeHtml = `<span style="display:inline-flex;align-items:center;gap:0.25rem;color:${sevColor};font-weight:600;"><i class="mdi mdi-arrow-u-down-right"></i> ${sevTitle}</span>`;
+                            metricHtml = cVal ? `<span style="font-family:var(--font-mono);font-weight:600;color:${sevColor};">${cVal.toFixed(1)} °/s</span>` : '—';
+                        } else if (ev.type === 'speeding') {
+                            const overspeed = (ev.overspeed_kmh != null) ? Number(ev.overspeed_kmh) : ((ev.speed != null && ev.speed_limit != null) ? (Number(ev.speed) - Number(ev.speed_limit)) : 0);
+                            const sev = ev.severity || (overspeed > 20 ? 'severe' : (overspeed > 10 ? 'moderate' : 'minor'));
+                            const sevColor = sev === 'severe' ? '#ef4444' : (sev === 'moderate' ? '#f97316' : '#a855f7');
+                            const sevTitle = sev === 'severe' ? 'Severe Speeding' : (sev === 'moderate' ? 'Speeding' : 'Minor Speeding');
+                            badgeHtml = `<span style="display:inline-flex;align-items:center;gap:0.25rem;color:${sevColor};font-weight:600;"><i class="mdi mdi-speedometer"></i> ${sevTitle}</span>`;
+                            const limitTxt = ev.speed_limit ? ` <span style="font-size:0.75rem;color:var(--text-muted);">(limit ${Math.round(ev.speed_limit)})</span>` : '';
+                            const diffTxt = (overspeed > 0) ? `+${Math.round(overspeed)} km/h` : `${ev.speed ? Math.round(ev.speed) : '—'} km/h`;
+                            metricHtml = `<span style="font-family:var(--font-mono);color:${sevColor};font-weight:600;">${diffTxt}</span>${limitTxt}`;
+                        } else if (ev.type === 'fatigue') {
+                            const isSevere = ev.severity === 'severe';
+                            const fatColor = isSevere ? '#ef4444' : '#a855f7';
+                            badgeHtml = `<span style="display:inline-flex;align-items:center;gap:0.25rem;color:${fatColor};font-weight:600;"><i class="mdi mdi-sleep"></i> ${isSevere ? 'Fatigue Risk' : 'Fatigue Warning'}</span>`;
+                            metricHtml = `<span style="font-family:var(--font-mono);color:${fatColor};font-weight:600;">${ev.duration_minutes ? _fmtDuration(ev.duration_minutes) : '>4.5h'} continuous</span>`;
+                        } else {
+                            badgeHtml = `<span style="color:var(--text-muted);">${_esc(ev.label || ev.type || 'Event')}</span>`;
+                        }
+
+                        const spd = ev.speed != null ? `${Math.round(ev.speed)} km/h` : '—';
+                        const timeStr = ev.time ? formatDateToLocal(ev.time) : '—';
+
+                        return `
+                            <tr>
+                                <td style="white-space:nowrap;font-family:var(--font-mono);font-size:0.75rem;">${timeStr}</td>
+                                <td style="white-space:nowrap;">${badgeHtml}</td>
+                                <td style="font-family:var(--font-mono);">${spd}</td>
+                                <td>${metricHtml}</td>
+                                <td style="text-align:right;white-space:nowrap;">
+                                    <button type="button" class="btn btn-sm btn-secondary" style="padding:0.25rem 0.65rem;font-size:0.75rem;" onclick="jumpToTripEcoEvent(${globalIdx})">
+                                        <i class="mdi mdi-map-marker"></i> Jump
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('') : `
+                        <tr>
+                            <td colspan="5" style="text-align:center;padding:2.5rem 1rem;color:var(--text-muted);">
+                                <i class="mdi mdi-check-circle-outline" style="font-size:1.8rem;display:block;margin-bottom:0.4rem;color:#22c55e;"></i>
+                                No driving events recorded in this category.
+                            </td>
+                        </tr>
+                    `}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function jumpToTripEcoEvent(evIdx) {
+    if (!_currentTripEcoData) return;
+    const ev = (_currentTripEcoData.events || [])[evIdx];
+    if (!ev) return;
+
+    closeTripEcoModal();
+
+    let targetIdx = ev.point_index;
+    if (targetIdx == null && ev.time && historyData.length) {
+        const evT = new Date(ev.time).getTime();
+        let closestDiff = Infinity;
+        historyData.forEach((f, idx) => {
+            const diff = Math.abs(new Date(f.properties.time).getTime() - evT);
+            if (diff < closestDiff) { closestDiff = diff; targetIdx = idx; }
+        });
+    }
+
+    if (targetIdx != null && targetIdx >= 0 && targetIdx < historyData.length) {
+        seekHistory(targetIdx);
+        const pos = [historyData[targetIdx].geometry.coordinates[1], historyData[targetIdx].geometry.coordinates[0]];
+        if (map) map.panTo(pos);
+    } else if (ev.latitude != null && ev.longitude != null && map) {
+        map.panTo([ev.latitude, ev.longitude]);
+    }
+}
+
+window.openTripEcoModal = openTripEcoModal;
+window.closeTripEcoModal = closeTripEcoModal;
+window._setTripEcoFilter = _setTripEcoFilter;
+window.jumpToTripEcoEvent = jumpToTripEcoEvent;
+window.toggleHistoryEcoEvents = toggleHistoryEcoEvents;
+
+
