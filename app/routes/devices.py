@@ -282,6 +282,14 @@ async def get_device_trips(
     return await db.get_device_trips(device_id, start_date, end_date)
 
 
+def _to_naive_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 @router.get("/{device_id}/eco-events")
 async def get_device_history_eco_events(
     device_id: int,
@@ -297,10 +305,8 @@ async def get_device_history_eco_events(
     if not end_date:
         end_date = datetime.utcnow()
 
-    if start_date.tzinfo:
-        start_date = start_date.astimezone(timezone.utc).replace(tzinfo=None)
-    if end_date.tzinfo:
-        end_date = end_date.astimezone(timezone.utc).replace(tzinfo=None)
+    start_date_naive = _to_naive_utc(start_date)
+    end_date_naive = _to_naive_utc(end_date)
 
     async with db.get_session() as session:
         dev_res = await session.execute(select(Device).where(Device.id == device_id))
@@ -320,8 +326,8 @@ async def get_device_history_eco_events(
             select(Trip)
             .where(
                 Trip.device_id == device_id,
-                Trip.start_time <= end_date,
-                or_(Trip.end_time.is_(None), Trip.end_time >= start_date),
+                Trip.start_time <= end_date_naive,
+                or_(Trip.end_time.is_(None), Trip.end_time >= start_date_naive),
             )
             .order_by(Trip.start_time.asc())
         )
@@ -334,10 +340,12 @@ async def get_device_history_eco_events(
 
         if trips:
             for trip in trips:
+                t_start = _to_naive_utc(trip.start_time)
+                t_end = _to_naive_utc(trip.end_time) or datetime.utcnow()
                 pos_q = select(PositionRecord).where(
                     PositionRecord.device_id == device_id,
-                    PositionRecord.device_time >= trip.start_time,
-                    PositionRecord.device_time <= (trip.end_time or datetime.utcnow()),
+                    PositionRecord.device_time >= t_start,
+                    PositionRecord.device_time <= t_end,
                 ).order_by(PositionRecord.device_time.asc())
                 pos_res = await session.execute(pos_q)
                 pos_list = pos_res.scalars().all()
@@ -362,8 +370,8 @@ async def get_device_history_eco_events(
         else:
             pos_q = select(PositionRecord).where(
                 PositionRecord.device_id == device_id,
-                PositionRecord.device_time >= start_date,
-                PositionRecord.device_time <= end_date,
+                PositionRecord.device_time >= start_date_naive,
+                PositionRecord.device_time <= end_date_naive,
             ).order_by(PositionRecord.device_time.asc())
             pos_res = await session.execute(pos_q)
             pos_list = pos_res.scalars().all()
@@ -414,10 +422,12 @@ async def get_trip_eco_scorecard(
                 speed_limit = 120.0
 
         # Query positions for this trip
+        t_start = _to_naive_utc(trip.start_time)
+        t_end = _to_naive_utc(trip.end_time) or datetime.utcnow()
         pos_q = select(PositionRecord).where(
             PositionRecord.device_id == device_id,
-            PositionRecord.device_time >= trip.start_time,
-            PositionRecord.device_time <= (trip.end_time or datetime.utcnow()),
+            PositionRecord.device_time >= t_start,
+            PositionRecord.device_time <= t_end,
         ).order_by(PositionRecord.device_time.asc())
         pos_res = await session.execute(pos_q)
         pos_list = pos_res.scalars().all()
