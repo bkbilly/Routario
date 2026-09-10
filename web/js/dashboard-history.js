@@ -83,7 +83,7 @@ window.addEventListener('popstate', (e) => {
     // 2. Trip Eco Scorecard Modal
     const ecoModal = document.getElementById('tripEcoModal');
     if (ecoModal && ecoModal.classList.contains('active')) {
-        closeTripEcoModal();
+        closeTripEcoModal(true);
         return;
     }
 
@@ -1854,23 +1854,36 @@ async function _loadHistoryEcoEvents(deviceId, startTime, endTime, signal = null
     _renderHistoryEcoEvents();
 }
 
+let _lastRenderedEcoFilterTripId = undefined;
+
 function _renderHistoryEcoEvents(filterTripId = null) {
+    if (_lastRenderedEcoFilterTripId === filterTripId && markers['history_eco']) {
+        return;
+    }
+    _lastRenderedEcoFilterTripId = filterTripId;
+
     if (markers['history_eco']) {
         try { map.removeLayer(markers['history_eco']); } catch (e) {}
         delete markers['history_eco'];
     }
 
-    if (!historyEcoEvents || historyEcoEvents.length === 0) {
+    let sourceEvents = historyEcoEvents;
+    if (filterTripId != null && _currentTripEcoData && Number(_currentTripEcoData.trip_id) === Number(filterTripId) && Array.isArray(_currentTripEcoData.events) && _currentTripEcoData.events.length > 0) {
+        sourceEvents = _currentTripEcoData.events.map(e => ({ ...e, trip_id: filterTripId }));
+    }
+
+    if (!sourceEvents || sourceEvents.length === 0) {
         if (historyData && historyData.length >= 2) {
             historyEcoEvents = _extractEcoEventsFromHistory(historyData);
+            sourceEvents = historyEcoEvents;
         }
     }
 
-    if (!historyEcoEvents || historyEcoEvents.length === 0) return;
+    if (!sourceEvents || sourceEvents.length === 0) return;
 
     const ecoLayers = [];
 
-    historyEcoEvents.forEach((ev) => {
+    sourceEvents.forEach((ev) => {
         if (filterTripId != null && ev.trip_id != null && Number(ev.trip_id) !== Number(filterTripId)) {
             return;
         }
@@ -1911,6 +1924,7 @@ function _renderHistoryEcoEvents(filterTripId = null) {
             });
 
             const m = L.marker([ev.latitude, ev.longitude], { icon, zIndexOffset: 100 });
+            m._ecoEvent = ev;
             const time2Line = _format2LineDatetime(ev.time);
             const spdStr = ev.speed != null ? `${Math.round(ev.speed)} km/h` : '—';
 
@@ -1934,13 +1948,24 @@ function _renderHistoryEcoEvents(filterTripId = null) {
             else if (ev.severity === 'minor') sevColor = '#3b82f6';
 
             let seekIdx = ev.point_index;
-            if ((seekIdx == null || seekIdx < 0) && ev.time && historyData.length) {
-                const evT = new Date(ev.time).getTime();
-                let minD = Infinity;
-                historyData.forEach((f, idx) => {
-                    const d = Math.abs(new Date(f.properties.time).getTime() - evT);
-                    if (d < minD) { minD = d; seekIdx = idx; }
-                });
+            if ((seekIdx == null || seekIdx < 0) && ev.time && historyData && historyData.length) {
+                const evT = typeof ev._ts === 'number' ? ev._ts : (ev._ts = new Date(ev.time).getTime());
+                let low = 0, high = historyData.length - 1;
+                while (low <= high) {
+                    const mid = (low + high) >> 1;
+                    const midT = historyData[mid]._ts || (historyData[mid]._ts = new Date(historyData[mid].properties?.time).getTime());
+                    if (midT < evT) low = mid + 1;
+                    else high = mid - 1;
+                }
+                let bestIdx = Math.max(0, Math.min(historyData.length - 1, low));
+                let minDiff = Infinity;
+                for (let k = Math.max(0, bestIdx - 1); k <= Math.min(historyData.length - 1, bestIdx + 1); k++) {
+                    const kT = historyData[k]._ts || (historyData[k]._ts = new Date(historyData[k].properties?.time).getTime());
+                    const diff = Math.abs(kT - evT);
+                    if (diff < minDiff) { minDiff = diff; bestIdx = k; }
+                }
+                seekIdx = bestIdx;
+                ev.point_index = seekIdx;
             }
             const jumpAction = seekIdx != null && seekIdx >= 0 ? `seekHistory(${seekIdx})` : `map.panTo([${ev.latitude}, ${ev.longitude}])`;
 
@@ -2006,7 +2031,6 @@ async function openTripEcoModal(tripId) {
     }
 
     modal.classList.add('active');
-    pushModalState('trip_eco_modal');
     _currentTripEcoFilter = 'all';
     _renderHistoryEcoEvents(tripId);
 
@@ -2022,12 +2046,22 @@ async function openTripEcoModal(tripId) {
         if (!res.ok) throw new Error('API error');
         const data = await res.json();
         _currentTripEcoData = data;
+
+        // Synchronize loaded trip events into historyEcoEvents
+        if (data.events && data.events.length > 0) {
+            const tripEvents = data.events.map(ev => ({ ...ev, trip_id: tripId }));
+            historyEcoEvents = (historyEcoEvents || []).filter(e => e.trip_id == null || Number(e.trip_id) !== Number(tripId));
+            historyEcoEvents.push(...tripEvents);
+        }
+
         _renderTripEcoModalContent();
+        _renderHistoryEcoEvents(tripId);
     } catch (err) {
         if (err.name === 'AbortError') return;
         console.warn('Backend eco endpoint fallback:', err);
         _currentTripEcoData = _buildTripEcoFallback(trip);
         _renderTripEcoModalContent();
+        _renderHistoryEcoEvents(tripId);
     }
 }
 
@@ -2038,7 +2072,9 @@ function closeTripEcoModal() {
     }
     const modal = document.getElementById('tripEcoModal');
     if (modal) modal.classList.remove('active');
-    _renderHistoryEcoEvents();
+    requestAnimationFrame(() => {
+        _renderHistoryEcoEvents();
+    });
 }
 
 function _setTripEcoFilter(filter) {
@@ -2288,24 +2324,81 @@ function jumpToTripEcoEvent(evIdx) {
     const ev = (_currentTripEcoData.events || [])[evIdx];
     if (!ev) return;
 
-    closeTripEcoModal();
+    // 1. Immediately dismiss modal with no lag
+    const modal = document.getElementById('tripEcoModal');
+    if (modal) modal.classList.remove('active');
+    if (_tripEcoAbortController) {
+        _tripEcoAbortController.abort();
+        _tripEcoAbortController = null;
+    }
 
+    // 2. Ensure eco layer is enabled and on the map
+    if (!historyShowEcoEvents) {
+        historyShowEcoEvents = true;
+        _updateEcoEventsBtn();
+    }
+    if (markers['history_eco'] && map && !map.hasLayer(markers['history_eco'])) {
+        map.addLayer(markers['history_eco']);
+    }
+
+    // 3. Instant binary search for closest position index
     let targetIdx = ev.point_index;
-    if (targetIdx == null && ev.time && historyData.length) {
+    if ((targetIdx == null || targetIdx < 0) && ev.time && historyData && historyData.length) {
         const evT = new Date(ev.time).getTime();
-        let closestDiff = Infinity;
-        historyData.forEach((f, idx) => {
-            const diff = Math.abs(new Date(f.properties.time).getTime() - evT);
-            if (diff < closestDiff) { closestDiff = diff; targetIdx = idx; }
+        let low = 0, high = historyData.length - 1;
+        while (low <= high) {
+            const mid = (low + high) >> 1;
+            const midT = new Date(historyData[mid].properties?.time).getTime();
+            if (midT < evT) low = mid + 1;
+            else high = mid - 1;
+        }
+        let bestIdx = Math.max(0, Math.min(historyData.length - 1, low));
+        let minDiff = Infinity;
+        for (let k = Math.max(0, bestIdx - 2); k <= Math.min(historyData.length - 1, bestIdx + 2); k++) {
+            const diff = Math.abs(new Date(historyData[k].properties?.time).getTime() - evT);
+            if (diff < minDiff) { minDiff = diff; bestIdx = k; }
+        }
+        targetIdx = bestIdx;
+    }
+
+    // 4. Seek playback timeline immediately
+    if (targetIdx != null && targetIdx >= 0 && targetIdx < historyData.length) {
+        seekHistory(targetIdx);
+    }
+
+    // 5. Center map directly on the eco event coordinates
+    const eventLat = ev.latitude != null ? Number(ev.latitude) : (targetIdx != null && targetIdx >= 0 ? historyData[targetIdx].geometry.coordinates[1] : null);
+    const eventLng = ev.longitude != null ? Number(ev.longitude) : (targetIdx != null && targetIdx >= 0 ? historyData[targetIdx].geometry.coordinates[0] : null);
+
+    if (eventLat != null && eventLng != null && map) {
+        const targetLatLng = L.latLng(eventLat, eventLng);
+        const centerPos = typeof applyLatLngOffset === 'function' ? applyLatLngOffset(targetLatLng, map.getZoom()) : targetLatLng;
+        map.setView(centerPos, Math.max(map.getZoom(), 15), { animate: false });
+    }
+
+    // 6. Instantly locate marker and open popup
+    let foundMarker = null;
+    if (markers['history_eco']) {
+        markers['history_eco'].eachLayer((layer) => {
+            if (foundMarker) return;
+            const mEv = layer._ecoEvent;
+            if (!mEv) return;
+            if (mEv === ev || (mEv.time && ev.time && mEv.time === ev.time && mEv.type === ev.type)) {
+                foundMarker = layer;
+            } else if (
+                layer.getLatLng &&
+                eventLat != null &&
+                eventLng != null &&
+                Math.abs(layer.getLatLng().lat - eventLat) < 0.0001 &&
+                Math.abs(layer.getLatLng().lng - eventLng) < 0.0001
+            ) {
+                foundMarker = layer;
+            }
         });
     }
 
-    if (targetIdx != null && targetIdx >= 0 && targetIdx < historyData.length) {
-        seekHistory(targetIdx);
-        const pos = [historyData[targetIdx].geometry.coordinates[1], historyData[targetIdx].geometry.coordinates[0]];
-        if (map) map.panTo(pos);
-    } else if (ev.latitude != null && ev.longitude != null && map) {
-        map.panTo([ev.latitude, ev.longitude]);
+    if (foundMarker) {
+        foundMarker.openPopup();
     }
 }
 
@@ -2314,5 +2407,16 @@ window.closeTripEcoModal = closeTripEcoModal;
 window._setTripEcoFilter = _setTripEcoFilter;
 window.jumpToTripEcoEvent = jumpToTripEcoEvent;
 window.toggleHistoryEcoEvents = toggleHistoryEcoEvents;
+
+document.addEventListener('DOMContentLoaded', () => {
+    const ecoModalEl = document.getElementById('tripEcoModal');
+    if (ecoModalEl) {
+        ecoModalEl.addEventListener('click', (e) => {
+            if (e.target === ecoModalEl) {
+                closeTripEcoModal();
+            }
+        });
+    }
+});
 
 

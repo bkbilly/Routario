@@ -13,7 +13,7 @@ Access rules:
   GET  /api/devices/{id}/statistics → must have device access
   GET  /api/devices/{id}/trips      → must have device access
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends, Request
@@ -297,6 +297,11 @@ async def get_device_history_eco_events(
     if not end_date:
         end_date = datetime.utcnow()
 
+    if start_date.tzinfo:
+        start_date = start_date.astimezone(timezone.utc).replace(tzinfo=None)
+    if end_date.tzinfo:
+        end_date = end_date.astimezone(timezone.utc).replace(tzinfo=None)
+
     async with db.get_session() as session:
         dev_res = await session.execute(select(Device).where(Device.id == device_id))
         device = dev_res.scalar_one_or_none()
@@ -310,12 +315,13 @@ async def get_device_history_eco_events(
             except (ValueError, TypeError):
                 speed_limit = 120.0
 
+        from sqlalchemy import or_
         trips_res = await session.execute(
             select(Trip)
             .where(
                 Trip.device_id == device_id,
-                Trip.start_time >= start_date,
                 Trip.start_time <= end_date,
+                or_(Trip.end_time.is_(None), Trip.end_time >= start_date),
             )
             .order_by(Trip.start_time.asc())
         )
