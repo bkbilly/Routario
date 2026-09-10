@@ -282,6 +282,103 @@ async def get_device_trips(
     return await db.get_device_trips(device_id, start_date, end_date)
 
 
+@router.get("/{device_id}/eco-events")
+async def get_device_history_eco_events(
+    device_id: int,
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    caller: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("view_history")),
+):
+    """Return all eco-driving telematics events for all trips of a device in a time range."""
+    db = get_db()
+    if not start_date:
+        start_date = datetime.utcnow() - timedelta(days=7)
+    if not end_date:
+        end_date = datetime.utcnow()
+
+    async with db.get_session() as session:
+        dev_res = await session.execute(select(Device).where(Device.id == device_id))
+        device = dev_res.scalar_one_or_none()
+        if not device:
+            raise HTTPException(status_code=404, detail="Device not found")
+
+        speed_limit = 120.0
+        if device.config and isinstance(device.config, dict):
+            try:
+                speed_limit = float(device.config.get("speed_limit") or 120.0)
+            except (ValueError, TypeError):
+                speed_limit = 120.0
+
+        trips_res = await session.execute(
+            select(Trip)
+            .where(
+                Trip.device_id == device_id,
+                Trip.start_time >= start_date,
+                Trip.start_time <= end_date,
+            )
+            .order_by(Trip.start_time.asc())
+        )
+        trips = trips_res.scalars().all()
+
+        from core.eco_driving import calculate_trip_eco_score_async
+
+        all_events = []
+        trip_scorecards = {}
+
+        if trips:
+            for trip in trips:
+                pos_q = select(PositionRecord).where(
+                    PositionRecord.device_id == device_id,
+                    PositionRecord.device_time >= trip.start_time,
+                    PositionRecord.device_time <= (trip.end_time or datetime.utcnow()),
+                ).order_by(PositionRecord.device_time.asc())
+                pos_res = await session.execute(pos_q)
+                pos_list = pos_res.scalars().all()
+
+                eco_calc = await calculate_trip_eco_score_async(
+                    pos_list,
+                    distance_km=trip.distance_km or 0.0,
+                    duration_minutes=trip.duration_minutes or 0.0,
+                    speed_limit_kmh=speed_limit,
+                )
+
+                trip_events = eco_calc.get("events", [])
+                for ev in trip_events:
+                    ev["trip_id"] = trip.id
+                    all_events.append(ev)
+
+                trip_scorecards[str(trip.id)] = {
+                    "trip_id": trip.id,
+                    "eco_score": round(trip.eco_score if trip.eco_score is not None else eco_calc["eco_score"], 1),
+                    "events": trip_events,
+                }
+        else:
+            pos_q = select(PositionRecord).where(
+                PositionRecord.device_id == device_id,
+                PositionRecord.device_time >= start_date,
+                PositionRecord.device_time <= end_date,
+            ).order_by(PositionRecord.device_time.asc())
+            pos_res = await session.execute(pos_q)
+            pos_list = pos_res.scalars().all()
+            if pos_list:
+                eco_calc = await calculate_trip_eco_score_async(
+                    pos_list,
+                    distance_km=0.0,
+                    duration_minutes=0.0,
+                    speed_limit_kmh=speed_limit,
+                )
+                all_events = eco_calc.get("events", [])
+
+        return {
+            "device_id": device_id,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "events": all_events,
+            "trips": trip_scorecards,
+        }
+
+
 @router.get("/{device_id}/trips/{trip_id}/eco")
 async def get_trip_eco_scorecard(
     device_id: int,

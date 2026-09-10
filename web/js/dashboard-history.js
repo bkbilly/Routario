@@ -655,7 +655,7 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { pres
         _updateSliderGradient();
         requestAnimationFrame(applyHistoryControlsPadding);
         _loadHistoryClips(deviceId, startTime, endTime, signal);
-        _renderHistoryEcoEvents();
+        _loadHistoryEcoEvents(deviceId, startTime, endTime, signal);
 
         if (allLayers.length > 0) {
             requestAnimationFrame(() => {
@@ -1834,19 +1834,44 @@ function _extractEcoEventsFromHistory(features) {
     return events;
 }
 
+async function _loadHistoryEcoEvents(deviceId, startTime, endTime, signal = null) {
+    try {
+        const res = await apiFetch(
+            `${API_BASE}/devices/${deviceId}/eco-events?start_date=${startTime.toISOString()}&end_date=${endTime.toISOString()}`,
+            signal ? { signal } : {}
+        );
+        if (res.ok) {
+            const data = await res.json();
+            historyEcoEvents = data.events || [];
+            _renderHistoryEcoEvents();
+            return;
+        }
+    } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.warn('Could not load backend eco events, falling back to local extractor:', err);
+    }
+    historyEcoEvents = _extractEcoEventsFromHistory(historyData);
+    _renderHistoryEcoEvents();
+}
+
 function _renderHistoryEcoEvents(filterTripId = null) {
     if (markers['history_eco']) {
         try { map.removeLayer(markers['history_eco']); } catch (e) {}
         delete markers['history_eco'];
     }
 
-    if (!historyData || historyData.length < 2) return;
-    historyEcoEvents = _extractEcoEventsFromHistory(historyData);
+    if (!historyEcoEvents || historyEcoEvents.length === 0) {
+        if (historyData && historyData.length >= 2) {
+            historyEcoEvents = _extractEcoEventsFromHistory(historyData);
+        }
+    }
+
+    if (!historyEcoEvents || historyEcoEvents.length === 0) return;
 
     const ecoLayers = [];
 
     historyEcoEvents.forEach((ev) => {
-        if (filterTripId != null && ev.trip_id != null && ev.trip_id !== filterTripId) {
+        if (filterTripId != null && ev.trip_id != null && Number(ev.trip_id) !== Number(filterTripId)) {
             return;
         }
         let pinClass = 'pin-accel';
@@ -1897,7 +1922,8 @@ function _renderHistoryEcoEvents(filterTripId = null) {
             } else if (ev.type === 'harsh_corner') {
                 metricDisplay = `${Number(ev.turn_rate_deg_s || 35.0).toFixed(1)} °/s`;
             } else if (ev.type === 'speeding') {
-                metricDisplay = `+${Math.round(ev.overspeed_kmh || 0)} km/h over`;
+                const overspd = (ev.overspeed_kmh != null) ? Number(ev.overspeed_kmh) : ((ev.speed != null && ev.speed_limit != null) ? (Number(ev.speed) - Number(ev.speed_limit)) : 0);
+                metricDisplay = `+${Math.round(overspd)} km/h over`;
             } else if (ev.type === 'fatigue') {
                 metricDisplay = `${ev.duration_minutes ? Math.round(ev.duration_minutes / 60 * 10) / 10 + 'h' : '>4.5h'} continuous`;
             }
@@ -1906,6 +1932,17 @@ function _renderHistoryEcoEvents(filterTripId = null) {
             let sevColor = '#f59e0b';
             if (ev.severity === 'severe') sevColor = '#ef4444';
             else if (ev.severity === 'minor') sevColor = '#3b82f6';
+
+            let seekIdx = ev.point_index;
+            if ((seekIdx == null || seekIdx < 0) && ev.time && historyData.length) {
+                const evT = new Date(ev.time).getTime();
+                let minD = Infinity;
+                historyData.forEach((f, idx) => {
+                    const d = Math.abs(new Date(f.properties.time).getTime() - evT);
+                    if (d < minD) { minD = d; seekIdx = idx; }
+                });
+            }
+            const jumpAction = seekIdx != null && seekIdx >= 0 ? `seekHistory(${seekIdx})` : `map.panTo([${ev.latitude}, ${ev.longitude}])`;
 
             m.bindPopup(`
                 <div class="vp-popup" style="min-width:200px;">
@@ -1924,7 +1961,7 @@ function _renderHistoryEcoEvents(filterTripId = null) {
                         <span class="vp-value vp-mono" style="text-align:right;">${spdStr}</span>
                     </div>
                     <div style="padding:0 0.75rem 0.5rem;">
-                        <button type="button" class="btn btn-sm btn-primary" style="width:100%;padding:0.25rem 0.5rem;font-size:0.74rem;display:flex;align-items:center;justify-content:center;gap:0.3rem;" onclick="seekHistory(${ev.point_index})">
+                        <button type="button" class="btn btn-sm btn-primary" style="width:100%;padding:0.25rem 0.5rem;font-size:0.74rem;display:flex;align-items:center;justify-content:center;gap:0.3rem;" onclick="${jumpAction}">
                             <i class="mdi mdi-play"></i> Jump Playback Here
                         </button>
                     </div>
@@ -2017,14 +2054,20 @@ function _buildTripEcoFallback(trip) {
     else if (s < 80) grade = 'C';
     else if (s < 90) grade = 'B';
 
-    // Filter loaded history points for this trip
-    const st = trip?.start_time ? new Date(trip.start_time).getTime() : 0;
-    const et = trip?.end_time ? new Date(trip.end_time).getTime() : Infinity;
-    const tripPoints = (historyData || []).filter(f => {
-        const t = f.properties?.time ? new Date(f.properties.time).getTime() : 0;
-        return t >= st && t <= et;
-    });
-    const events = _extractEcoEventsFromHistory(tripPoints);
+    let events = [];
+    if (historyEcoEvents && historyEcoEvents.length > 0 && trip?.id != null) {
+        events = historyEcoEvents.filter(e => Number(e.trip_id) === Number(trip.id));
+    }
+    if (!events.length) {
+        // Filter loaded history points for this trip
+        const st = trip?.start_time ? new Date(trip.start_time).getTime() : 0;
+        const et = trip?.end_time ? new Date(trip.end_time).getTime() : Infinity;
+        const tripPoints = (historyData || []).filter(f => {
+            const t = f.properties?.time ? new Date(f.properties.time).getTime() : 0;
+            return t >= st && t <= et;
+        });
+        events = _extractEcoEventsFromHistory(tripPoints);
+    }
 
     return {
         trip_id: trip?.id,
