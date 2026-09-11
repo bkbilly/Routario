@@ -167,6 +167,7 @@ class DeviceResponse(BaseModel):
     created_at: datetime
     config: Optional[Dict[str, Any]] = None
     company_id: Optional[int] = None
+    company_name: Optional[str] = None
     sim_card_id: Optional[int] = None
     state: Optional["DeviceStateResponse"] = None
 

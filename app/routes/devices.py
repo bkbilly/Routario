@@ -41,6 +41,7 @@ async def get_all_devices(caller: User = Depends(require_company_admin), _: User
         q = select(Device).options(
             selectinload(Device.state).selectinload(DeviceState.current_driver),
             selectinload(Device.sim_card),
+            selectinload(Device.company),
         )
         if not caller.is_admin:
             q = q.where(Device.company_id == caller.company_id)
@@ -58,6 +59,7 @@ async def get_devices(current_user: User = Depends(get_current_user)):
                 select(Device).options(
                     selectinload(Device.state).selectinload(DeviceState.current_driver),
                     selectinload(Device.sim_card),
+                    selectinload(Device.company),
                 )
             )
             return result.scalars().all()
@@ -69,6 +71,7 @@ async def get_devices(current_user: User = Depends(get_current_user)):
                 .options(
                     selectinload(Device.state).selectinload(DeviceState.current_driver),
                     selectinload(Device.sim_card),
+                    selectinload(Device.company),
                 )
             )
             return result.scalars().all()

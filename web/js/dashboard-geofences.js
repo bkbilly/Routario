@@ -63,6 +63,7 @@ function _polylineBufferPolygon(latlngs, bufferMeters) {
 const _isAdmin        = () => localStorage.getItem('is_admin') === 'true';
 const _isCompanyAdmin = () => localStorage.getItem('is_company_admin') === 'true';
 const _canAssignOwner = () => _isAdmin() || _isCompanyAdmin();
+const _isHistoryActive = () => (typeof isHistoryMode === 'function' ? isHistoryMode() : (typeof historyDeviceId !== 'undefined' && historyDeviceId != null));
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let _map = null;
@@ -239,7 +240,7 @@ function _addLayerToMap(gf) {
             corridorLayer.on('click', (e) => {
                 const el = corridorLayer.getElement ? corridorLayer.getElement() : corridorLayer._path;
                 if (el) el.blur();
-                if (_drawControl || _mapDraggedRecently || !hasPermission('manage_geofences')) return;
+                if (_isHistoryActive() || _drawControl || _mapDraggedRecently || !hasPermission('manage_geofences')) return;
                 L.DomEvent.stopPropagation(e);
                 _enterEditMode(layer, gf.id);
             });
@@ -270,7 +271,7 @@ function _addLayerToMap(gf) {
     layer.on('click', (e) => {
         const el = layer.getElement ? layer.getElement() : layer._path;
         if (el) el.blur();
-        if (_drawControl || _mapDraggedRecently || !hasPermission('manage_geofences')) return;
+        if (_isHistoryActive() || _drawControl || _mapDraggedRecently || !hasPermission('manage_geofences')) return;
         L.DomEvent.stopPropagation(e);
         _enterEditMode(layer, gf.id);
     });
@@ -282,6 +283,7 @@ function _addLayerToMap(gf) {
 
 // ── Draw Mode (create new) ────────────────────────────────────────────────────
 function startDrawGeofence(type = 'polygon') {
+    if (_isHistoryActive()) return;
     if (type === 'navigation-polyline' && !_valhallaNavigationAvailable) {
         showAlert('Navigation geofences require Valhalla to be available.', 'warning');
         return;
@@ -387,6 +389,7 @@ function _cancelDraw() {
 
 // ── Edit Mode (existing geofence) ─────────────────────────────────────────────
 function _enterEditMode(layer, geofenceId) {
+    if (_isHistoryActive()) return;
     if (_editingLayer) _cancelEdit();
 
     _editingLayer = layer;
@@ -503,6 +506,7 @@ function cancelGeofenceEdit() {
 
 // ── Save / Name Modal ─────────────────────────────────────────────────────────
 async function _openGeofenceModal(id, gf, type) {
+    if (_isHistoryActive()) return;
     document.getElementById('geofenceModalId').value = id || '';
     document.getElementById('geofenceModalType').value = type || 'polygon';
     document.getElementById('geofenceModalName').value = gf?.name || '';

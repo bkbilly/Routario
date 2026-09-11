@@ -4676,13 +4676,29 @@ body.light-theme .cluster-pie-inner {
     font-size: 15px;
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(255, 255, 255, 0.9);
     cursor: pointer;
-    transition: transform 0.15s ease;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .history-eco-pin:hover {
     transform: scale(1.22);
+}
+.history-eco-pin.pin-sev-severe,
+.history-eco-pin.pin-severe {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    box-shadow: 0 3px 8px rgba(239, 68, 68, 0.5), 0 0 0 2px rgba(255, 255, 255, 0.95);
+}
+.history-eco-pin.pin-sev-moderate,
+.history-eco-pin.pin-moderate {
+    background: linear-gradient(135deg, #f97316, #ea580c);
+    box-shadow: 0 3px 8px rgba(249, 115, 22, 0.5), 0 0 0 2px rgba(255, 255, 255, 0.95);
+}
+.history-eco-pin.pin-sev-minor,
+.history-eco-pin.pin-minor {
+    background: linear-gradient(135deg, #0ea5e9, #0284c7);
+    box-shadow: 0 3px 8px rgba(2, 132, 199, 0.5), 0 0 0 2px rgba(255, 255, 255, 0.95);
 }
 .history-eco-pin.pin-accel { background: linear-gradient(135deg, #f97316, #ea580c); }
 .history-eco-pin.pin-brake { background: linear-gradient(135deg, #ef4444, #b91c1c); }
 .history-eco-pin.pin-corner { background: linear-gradient(135deg, #eab308, #ca8a04); }
 .history-eco-pin.pin-speeding { background: linear-gradient(135deg, #a855f7, #7e22ce); }
 .history-eco-pin.pin-fatigue { background: linear-gradient(135deg, #dc2626, #7f1d1d); }
+

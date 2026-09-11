@@ -196,6 +196,8 @@ function getDeviceCardContent(device, icon) {
     const vs = getVehicleStatus(device);
     const lastSeen = timeAgo(device.last_update);
     const maintenanceHtml = _sidebarMaintenanceHtml(device);
+    const isSuperAdmin = localStorage.getItem('is_admin') === 'true';
+    const companyName = device.company_name || device.company?.name || (device.company_id ? `Company #${device.company_id}` : null);
 
     // Full datetime string for tooltip on Last Seen
     const lastSeenFull = device.last_update ? formatDateToLocal(device.last_update) : 'Never';
@@ -242,6 +244,11 @@ function getDeviceCardContent(device, icon) {
             <div class="device-info-row">
                 <span class="info-label">Driver</span>
                 <span class="info-value"><i class="mdi mdi-account" style="font-size:0.8rem;"></i> ${device.current_driver_name}</span>
+            </div>` : ''}
+            ${(isSuperAdmin && companyName) ? `
+            <div class="device-info-row">
+                <span class="info-label">Company</span>
+                <span class="info-value" title="${_esc(companyName)}">${_esc(companyName)}</span>
             </div>` : ''}
             <div class="device-info-row">
                 <span class="info-label">IMEI</span>
@@ -429,7 +436,8 @@ function filterDevices() {
         const searchableText = [
             deviceName,
             device?.imei || '',
-            device?.license_plate || ''
+            device?.license_plate || '',
+            device?.company_name || ''
         ].join(' ').toLowerCase();
 
         const visible = !searchTerm || searchableText.includes(searchTerm);

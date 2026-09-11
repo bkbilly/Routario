@@ -189,7 +189,7 @@
     const devices = [
         {
             id: 1, name: 'Athens Van 12', imei: 'demo-0001', protocol: 'teltonika',
-            vehicle_type: 'van', license_plate: 'ATH-1201', company_id: 1,
+            vehicle_type: 'van', license_plate: 'ATH-1201', company_id: 1, company_name: 'Demo Fleet',
             supports_commands: true, is_active: true,
             custom_attributes: { department: 'Operations' },
             config: {
@@ -212,7 +212,7 @@
         },
         {
             id: 2, name: 'Piraeus Truck 4', imei: 'demo-0002', protocol: 'gt06',
-            vehicle_type: 'truck', license_plate: 'PIR-4040', company_id: 1,
+            vehicle_type: 'truck', license_plate: 'PIR-4040', company_id: 1, company_name: 'Demo Fleet',
             supports_commands: false, is_active: true,
             custom_attributes: { department: 'Logistics' },
             config: {
@@ -234,7 +234,7 @@
         },
         {
             id: 3, name: 'Thessaloniki Car 7', imei: 'demo-0003', protocol: 'osmand',
-            vehicle_type: 'car', license_plate: 'SKG-7007', company_id: 1,
+            vehicle_type: 'car', license_plate: 'SKG-7007', company_id: 1, company_name: 'Demo Fleet',
             supports_commands: false, is_active: true,
             custom_attributes: { department: 'Sales' },
             config: { offline_timeout_hours: 12, trip_merge_gap_minutes: 0, alert_rows: [], alert_channels: {} },
@@ -868,6 +868,7 @@
         ], schedule_controls: [{ key: 'billing_period', label: 'Billing Period', type: 'select', default: 'this_month', options: [{ value: 'this_year', label: 'This year' }, { value: 'last_year', label: 'Last year' }, { value: 'this_month', label: 'This month' }, { value: 'last_month', label: 'Last month' }] }] },
         { key: 'daily', label: 'Daily Activity', description: 'Trip activity aggregated by day for the whole fleet, each vehicle, or each driver.', renderer: 'daily', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: true, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [{ key: 'group_by', label: 'Daily Breakdown', type: 'select', default: 'fleet', options: [{ value: 'fleet', label: 'Fleet total' }, { value: 'vehicles', label: 'Vehicles' }, { value: 'drivers', label: 'Drivers' }] }], schedule_controls: [] },
         { key: 'drivers', label: 'Driver Activity', description: 'Activity per driver for the selected period - trips, distance, driving time, and top speed.', renderer: 'drivers', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
+        { key: 'eco_driving', label: 'Eco-Driving', description: 'Driver safety performance, eco scores (0-100), harsh accelerations, harsh braking, sharp cornering, and speeding metrics.', renderer: 'table', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: true, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
         { key: 'geofences', label: 'Geofence Activity', description: 'Geofence enter and exit activity by vehicle, geofence, event, and recipient.', renderer: 'geofences', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
         { key: 'logbook', label: 'Logbook', description: 'Fuel or maintenance logbook reports for the selected vehicles and period.', renderer: 'logbook', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [{ key: 'logbook_type', label: 'Logbook Type', type: 'select', default: 'maintenance', options: [{ value: 'maintenance', label: 'Maintenance' }, { value: 'fuel', label: 'Fuel' }] }], schedule_controls: [] },
         { key: 'sensor_graphs', label: 'Sensor Graphs', description: 'Interactive sensor graphs and data tables for up to 5 vehicles across a date range.', renderer: 'sensor_graphs', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
@@ -1772,6 +1773,8 @@
                 const d = devices.find(x => x.id === devId);
                 if (d) {
                     d.company_id = action === 'add' ? id : null;
+                    const cmp = demoCompanies.find(c => c.id === id);
+                    d.company_name = (action === 'add' && cmp) ? cmp.name : null;
                 }
                 return json({ status: 'success' });
             }

@@ -311,6 +311,7 @@ async def get_company_devices(company_id: int, admin: User = Depends(require_adm
             .options(
                 selectinload(Device.state).selectinload(DeviceState.current_driver),
                 selectinload(Device.sim_card),
+                selectinload(Device.company),
             )
         )
         return result.scalars().all()

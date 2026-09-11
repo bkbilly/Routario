@@ -1006,6 +1006,7 @@ class DatabaseService:
                     selectinload(Device.state).selectinload(DeviceState.current_driver),
                     selectinload(Device.users),
                     selectinload(Device.sim_card),
+                    selectinload(Device.company),
                 )
             )
             return result.scalar_one()
@@ -1019,6 +1020,7 @@ class DatabaseService:
                     selectinload(Device.state).selectinload(DeviceState.current_driver),
                     selectinload(Device.users),
                     selectinload(Device.sim_card),
+                    selectinload(Device.company),
                 )
             )
             return result.scalar_one_or_none()
@@ -1032,6 +1034,7 @@ class DatabaseService:
                     selectinload(Device.state).selectinload(DeviceState.current_driver),
                     selectinload(Device.users),
                     selectinload(Device.sim_card),
+                    selectinload(Device.company),
                 )
             )
             return result.scalar_one_or_none()
@@ -1045,6 +1048,7 @@ class DatabaseService:
                 .options(
                     selectinload(Device.state).selectinload(DeviceState.current_driver),
                     selectinload(Device.sim_card),
+                    selectinload(Device.company),
                 )
             )
             return result.scalars().all()
@@ -1057,6 +1061,7 @@ class DatabaseService:
             q = select(Device).options(
                 selectinload(Device.state).selectinload(DeviceState.current_driver),
                 selectinload(Device.sim_card),
+                selectinload(Device.company),
             )
             if user.is_admin:
                 result = await session.execute(q)
@@ -1080,6 +1085,7 @@ class DatabaseService:
                     selectinload(Device.state).selectinload(DeviceState.current_driver),
                     selectinload(Device.users),
                     selectinload(Device.sim_card),
+                    selectinload(Device.company),
                 )
             )
             device = result.scalar_one_or_none()

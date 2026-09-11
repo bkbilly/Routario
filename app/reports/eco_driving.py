@@ -21,7 +21,7 @@ from core.eco_driving import calculate_trip_eco_score_async, get_eco_grade
 class EcoDrivingReport(Report):
     definition = ReportDefinition(
         key="eco_driving",
-        label="Eco-Driving & Driver Safety",
+        label="Eco-Driving",
         description="Driver safety performance, eco scores (0-100), harsh accelerations, harsh braking, sharp cornering, and speeding metrics.",
         renderer="table",
         supports_vehicle_filter=True,

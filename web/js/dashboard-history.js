@@ -115,6 +115,9 @@ window.addEventListener('popstate', (e) => {
 
 // --- HISTORY MODAL ---
 function openHistoryModal(deviceId) {
+    if (typeof cancelGeofenceEdit === 'function') {
+        cancelGeofenceEdit();
+    }
     syncPublicSystemSettings();
     document.getElementById('historyModal').dataset.deviceId = String(deviceId);
     setHistoryModalLoading(false);
@@ -559,6 +562,9 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { pres
         delete markers['history_pos'];
     }
     stopPlayback();
+    if (typeof cancelGeofenceEdit === 'function') {
+        cancelGeofenceEdit();
+    }
 
     // Cancel pending live marker animations
     if (typeof markerState !== 'undefined') {
@@ -847,6 +853,8 @@ function toggleHistoryEcoEvents() {
 function _updateEcoEventsBtn() {
     const btn = document.getElementById('historyEcoEventsToggleBtn');
     if (!btn) return;
+    const hasEvents = Array.isArray(historyEcoEvents) && historyEcoEvents.length > 0;
+    btn.style.display = hasEvents ? 'inline-flex' : 'none';
     btn.classList.toggle('active', historyShowEcoEvents);
     btn.title = historyShowEcoEvents ? 'Hide eco driving events on map' : 'Show eco driving events on map';
     btn.style.opacity = historyShowEcoEvents ? '1' : '0.55';
@@ -1651,6 +1659,25 @@ function _openHistoryClipPlayer(clip) {
 
 // ── Eco-Driving & Safety Scorecard Analytics ──────────────────────────────────
 
+function _normalizeEcoSeverity(sev) {
+    const s = String(sev || '').toLowerCase().trim();
+    if (s === 'severe' || s === 'critical' || s === 'high' || s === 'danger') return 'severe';
+    if (s === 'moderate' || s === 'warning' || s === 'medium') return 'moderate';
+    return 'minor';
+}
+
+function _getEcoSeverityColor(sev) {
+    const norm = _normalizeEcoSeverity(sev);
+    if (norm === 'severe') return '#ef4444';
+    if (norm === 'moderate') return '#f97316';
+    return '#0284c7';
+}
+
+function _getEcoSeverityClass(sev) {
+    const norm = _normalizeEcoSeverity(sev);
+    return `pin-sev-${norm}`;
+}
+
 function _extractEcoEventsFromHistory(features) {
     if (!features || features.length < 2) return [];
     const events = [];
@@ -1843,6 +1870,7 @@ async function _loadHistoryEcoEvents(deviceId, startTime, endTime, signal = null
         if (res.ok) {
             const data = await res.json();
             historyEcoEvents = data.events || [];
+            _updateEcoEventsBtn();
             _renderHistoryEcoEvents();
             return;
         }
@@ -1851,6 +1879,7 @@ async function _loadHistoryEcoEvents(deviceId, startTime, endTime, signal = null
         console.warn('Could not load backend eco events, falling back to local extractor:', err);
     }
     historyEcoEvents = _extractEcoEventsFromHistory(historyData);
+    _updateEcoEventsBtn();
     _renderHistoryEcoEvents();
 }
 
@@ -1876,6 +1905,7 @@ function _renderHistoryEcoEvents(filterTripId = null) {
         if (historyData && historyData.length >= 2) {
             historyEcoEvents = _extractEcoEventsFromHistory(historyData);
             sourceEvents = historyEcoEvents;
+            _updateEcoEventsBtn();
         }
     }
 
@@ -1887,36 +1917,30 @@ function _renderHistoryEcoEvents(filterTripId = null) {
         if (filterTripId != null && ev.trip_id != null && Number(ev.trip_id) !== Number(filterTripId)) {
             return;
         }
-        let pinClass = 'pin-accel';
+        const normSev = _normalizeEcoSeverity(ev.severity);
+        const pinClass = _getEcoSeverityClass(normSev);
+        const sevColor = _getEcoSeverityColor(normSev);
+
         let iconClass = 'mdi-lightning-bolt';
-        let pinToneColor = '#f97316';
         let titleText = 'Harsh Acceleration';
 
         if (ev.type === 'harsh_brake') {
-            pinClass = 'pin-brake';
             iconClass = 'mdi-alert-octagon';
-            pinToneColor = '#ef4444';
             titleText = 'Harsh Braking';
         } else if (ev.type === 'harsh_corner') {
-            pinClass = 'pin-corner';
             iconClass = 'mdi-arrow-u-down-right';
-            pinToneColor = '#eab308';
             titleText = 'Harsh Cornering';
         } else if (ev.type === 'speeding') {
-            pinClass = 'pin-speeding';
             iconClass = 'mdi-speedometer';
-            pinToneColor = '#a855f7';
             titleText = 'Speeding Event';
         } else if (ev.type === 'fatigue') {
-            pinClass = 'pin-fatigue';
             iconClass = 'mdi-sleep';
-            pinToneColor = '#dc2626';
             titleText = 'Driver Fatigue';
         }
 
         if (ev.latitude != null && ev.longitude != null) {
             const icon = L.divIcon({
-                html: `<div class="history-eco-pin ${pinClass}" title="${_esc(ev.label)}"><i class="mdi ${iconClass}"></i></div>`,
+                html: `<div class="history-eco-pin ${pinClass}" title="${_esc(ev.label || titleText)}"><i class="mdi ${iconClass}"></i></div>`,
                 className: 'history-eco-marker',
                 iconSize: [28, 28],
                 iconAnchor: [14, 14],
@@ -1942,10 +1966,7 @@ function _renderHistoryEcoEvents(filterTripId = null) {
                 metricDisplay = `${ev.duration_minutes ? Math.round(ev.duration_minutes / 60 * 10) / 10 + 'h' : '>4.5h'} continuous`;
             }
 
-            const sevText = (ev.severity || 'Moderate').charAt(0).toUpperCase() + (ev.severity || 'Moderate').slice(1);
-            let sevColor = '#f59e0b';
-            if (ev.severity === 'severe') sevColor = '#ef4444';
-            else if (ev.severity === 'minor') sevColor = '#3b82f6';
+            const sevText = normSev.charAt(0).toUpperCase() + normSev.slice(1);
 
             let seekIdx = ev.point_index;
             if ((seekIdx == null || seekIdx < 0) && ev.time && historyData && historyData.length) {
@@ -1972,14 +1993,14 @@ function _renderHistoryEcoEvents(filterTripId = null) {
             m.bindPopup(`
                 <div class="vp-popup" style="min-width:200px;">
                     <div class="vp-header" style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--border-color);display:flex;align-items:center;gap:0.4rem;">
-                        <span class="vp-icon" style="color:${pinToneColor};font-size:1rem;display:flex;align-items:center;"><i class="mdi ${iconClass}"></i></span>
+                        <span class="vp-icon" style="color:${sevColor};font-size:1rem;display:flex;align-items:center;"><i class="mdi ${iconClass}"></i></span>
                         <span class="vp-name" style="font-weight:600;font-size:0.82rem;line-height:1.2;">${_esc(titleText)}</span>
                     </div>
                     <div class="vp-grid" style="display:grid;grid-template-columns:auto 1fr;gap:0.3rem 0.75rem;padding:0.5rem 0.75rem;font-size:0.76rem;align-items:center;">
                         <span class="vp-label" style="color:var(--text-muted);">Severity</span>
                         <span class="vp-value" style="font-weight:700;color:${sevColor};text-align:right;">${sevText}</span>
                         <span class="vp-label" style="color:var(--text-muted);">Metric</span>
-                        <span class="vp-value vp-mono" style="color:${pinToneColor};font-weight:700;text-align:right;">${metricDisplay}</span>
+                        <span class="vp-value vp-mono" style="color:${sevColor};font-weight:700;text-align:right;">${metricDisplay}</span>
                         <span class="vp-label" style="color:var(--text-muted);">Time</span>
                         <span class="vp-value vp-mono" style="font-size:0.72rem;">${time2Line}</span>
                         <span class="vp-label" style="color:var(--text-muted);">Speed</span>
@@ -2052,6 +2073,7 @@ async function openTripEcoModal(tripId) {
             const tripEvents = data.events.map(ev => ({ ...ev, trip_id: tripId }));
             historyEcoEvents = (historyEcoEvents || []).filter(e => e.trip_id == null || Number(e.trip_id) !== Number(tripId));
             historyEcoEvents.push(...tripEvents);
+            _updateEcoEventsBtn();
         }
 
         _renderTripEcoModalContent();
@@ -2248,45 +2270,39 @@ function _renderTripEcoModalContent() {
                 <tbody>
                     ${filteredEvents.length ? filteredEvents.map((ev) => {
                         const globalIdx = allEvents.indexOf(ev);
+                        const normSev = _normalizeEcoSeverity(ev.severity);
+                        const sevColor = _getEcoSeverityColor(normSev);
                         let badgeHtml = '';
                         let metricHtml = '—';
                         if (ev.type === 'harsh_accel') {
                             const aVal = Number(ev.acceleration_ms2 || 0);
-                            const sev = ev.severity || 'minor';
-                            const sevColor = sev === 'severe' ? '#ef4444' : (sev === 'moderate' ? '#f97316' : '#eab308');
-                            const sevTitle = sev === 'severe' ? 'Severe Accel' : (sev === 'moderate' ? 'Harsh Accel' : 'Moderate Accel');
+                            const sevTitle = normSev === 'severe' ? 'Severe Accel' : (normSev === 'moderate' ? 'Harsh Accel' : 'Moderate Accel');
                             badgeHtml = `<span style="display:inline-flex;align-items:center;gap:0.25rem;color:${sevColor};font-weight:600;"><i class="mdi mdi-lightning-bolt"></i> ${sevTitle}</span>`;
                             metricHtml = aVal ? `<span style="font-family:var(--font-mono);font-weight:600;color:${sevColor};">+${aVal.toFixed(2)} m/s²</span>` : '—';
                         } else if (ev.type === 'harsh_brake') {
                             const bVal = Number(ev.acceleration_ms2 || 0);
-                            const sev = ev.severity || 'minor';
-                            const sevColor = sev === 'severe' ? '#ef4444' : (sev === 'moderate' ? '#f97316' : '#eab308');
-                            const sevTitle = sev === 'severe' ? 'Severe Brake' : (sev === 'moderate' ? 'Harsh Brake' : 'Hard Brake');
+                            const sevTitle = normSev === 'severe' ? 'Severe Brake' : (normSev === 'moderate' ? 'Harsh Brake' : 'Hard Brake');
                             badgeHtml = `<span style="display:inline-flex;align-items:center;gap:0.25rem;color:${sevColor};font-weight:600;"><i class="mdi mdi-alert-octagon"></i> ${sevTitle}</span>`;
                             metricHtml = bVal ? `<span style="font-family:var(--font-mono);font-weight:600;color:${sevColor};">${bVal.toFixed(2)} m/s²</span>` : '—';
                         } else if (ev.type === 'harsh_corner') {
                             const cVal = Number(ev.turn_rate_deg_s || 0);
-                            const sev = ev.severity || 'minor';
-                            const sevColor = sev === 'severe' ? '#ef4444' : (sev === 'moderate' ? '#f97316' : '#eab308');
-                            const sevTitle = sev === 'severe' ? 'Aggressive Turn' : (sev === 'moderate' ? 'Sharp Turn' : 'Moderate Turn');
+                            const sevTitle = normSev === 'severe' ? 'Aggressive Turn' : (normSev === 'moderate' ? 'Sharp Turn' : 'Moderate Turn');
                             badgeHtml = `<span style="display:inline-flex;align-items:center;gap:0.25rem;color:${sevColor};font-weight:600;"><i class="mdi mdi-arrow-u-down-right"></i> ${sevTitle}</span>`;
                             metricHtml = cVal ? `<span style="font-family:var(--font-mono);font-weight:600;color:${sevColor};">${cVal.toFixed(1)} °/s</span>` : '—';
                         } else if (ev.type === 'speeding') {
                             const overspeed = (ev.overspeed_kmh != null) ? Number(ev.overspeed_kmh) : ((ev.speed != null && ev.speed_limit != null) ? (Number(ev.speed) - Number(ev.speed_limit)) : 0);
-                            const sev = ev.severity || (overspeed > 20 ? 'severe' : (overspeed > 10 ? 'moderate' : 'minor'));
-                            const sevColor = sev === 'severe' ? '#ef4444' : (sev === 'moderate' ? '#f97316' : '#a855f7');
-                            const sevTitle = sev === 'severe' ? 'Severe Speeding' : (sev === 'moderate' ? 'Speeding' : 'Minor Speeding');
+                            const sevTitle = normSev === 'severe' ? 'Severe Speeding' : (normSev === 'moderate' ? 'Speeding' : 'Minor Speeding');
                             badgeHtml = `<span style="display:inline-flex;align-items:center;gap:0.25rem;color:${sevColor};font-weight:600;"><i class="mdi mdi-speedometer"></i> ${sevTitle}</span>`;
                             const limitTxt = ev.speed_limit ? ` <span style="font-size:0.75rem;color:var(--text-muted);">(limit ${Math.round(ev.speed_limit)})</span>` : '';
                             const diffTxt = (overspeed > 0) ? `+${Math.round(overspeed)} km/h` : `${ev.speed ? Math.round(ev.speed) : '—'} km/h`;
                             metricHtml = `<span style="font-family:var(--font-mono);color:${sevColor};font-weight:600;">${diffTxt}</span>${limitTxt}`;
                         } else if (ev.type === 'fatigue') {
-                            const isSevere = ev.severity === 'severe';
-                            const fatColor = isSevere ? '#ef4444' : '#a855f7';
-                            badgeHtml = `<span style="display:inline-flex;align-items:center;gap:0.25rem;color:${fatColor};font-weight:600;"><i class="mdi mdi-sleep"></i> ${isSevere ? 'Fatigue Risk' : 'Fatigue Warning'}</span>`;
-                            metricHtml = `<span style="font-family:var(--font-mono);color:${fatColor};font-weight:600;">${ev.duration_minutes ? _fmtDuration(ev.duration_minutes) : '>4.5h'} continuous</span>`;
+                            const isSevere = normSev === 'severe';
+                            badgeHtml = `<span style="display:inline-flex;align-items:center;gap:0.25rem;color:${sevColor};font-weight:600;"><i class="mdi mdi-sleep"></i> ${isSevere ? 'Fatigue Risk' : 'Fatigue Warning'}</span>`;
+                            metricHtml = `<span style="font-family:var(--font-mono);color:${sevColor};font-weight:600;">${ev.duration_minutes ? _fmtDuration(ev.duration_minutes) : '>4.5h'} continuous</span>`;
                         } else {
-                            badgeHtml = `<span style="color:var(--text-muted);">${_esc(ev.label || ev.type || 'Event')}</span>`;
+                            badgeHtml = `<span style="display:inline-flex;align-items:center;gap:0.25rem;color:${sevColor};font-weight:600;">${_esc(ev.label || ev.type || 'Event')}</span>`;
+                            metricHtml = `<span style="font-family:var(--font-mono);color:${sevColor};font-weight:600;">—</span>`;
                         }
 
                         const spd = ev.speed != null ? `${Math.round(ev.speed)} km/h` : '—';
@@ -2402,6 +2418,11 @@ function jumpToTripEcoEvent(evIdx) {
     }
 }
 
+function isHistoryMode() {
+    return historyDeviceId != null;
+}
+
+window.isHistoryMode = isHistoryMode;
 window.openTripEcoModal = openTripEcoModal;
 window.closeTripEcoModal = closeTripEcoModal;
 window._setTripEcoFilter = _setTripEcoFilter;

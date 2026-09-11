@@ -166,6 +166,13 @@ class Device(Base):
     sim_card:      Mapped[Optional["SimCard"]]     = relationship("SimCard", back_populates="device", uselist=False)
 
     @property
+    def company_name(self) -> Optional[str]:
+        try:
+            return self.company.name if self.company else None
+        except Exception:
+            return None
+
+    @property
     def sim_card_id(self) -> Optional[int]:
         try:
             return self.sim_card.id if self.sim_card else None

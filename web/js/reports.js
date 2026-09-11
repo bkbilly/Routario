@@ -380,7 +380,7 @@ function _populateReportSelect(id, defs) {
     }
 
     const categoryMap = {
-        'Fleet & Vehicles': ['summary', 'sensors', 'sensor_graphs', 'trips', 'daily', 'drivers', 'sim_cards', 'logbook', 'geofences'],
+        'Fleet & Vehicles': ['summary', 'sensors', 'sensor_graphs', 'trips', 'daily', 'drivers', 'eco_driving', 'sim_cards', 'logbook', 'geofences'],
         'System & Management': ['alerts', 'users', 'billing', 'audit'],
         'AI & Analytics': ['ai_custom'],
     };
