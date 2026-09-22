@@ -1,0 +1,312 @@
+/* Plugins Management Styles */
+
+.btn-usage-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.65rem;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    border: 1px solid var(--border-color);
+    background: var(--bg-subtle, rgba(255, 255, 255, 0.04));
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-base, 0.2s);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.btn-usage-pill:hover {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+    background: rgba(60, 152, 254, 0.08);
+}
+
+.btn-usage-pill.active {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.3);
+    color: var(--accent-success, #10b981);
+}
+
+.plugin-catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+    gap: 0.85rem;
+    padding: 6px 4px;
+    margin-top: 0.5rem;
+}
+
+.plugin-catalog-card {
+    background: var(--bg-card, #171d29);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    transition: border-color var(--transition-base, 0.2s), box-shadow var(--transition-base, 0.2s), transform var(--transition-base, 0.2s);
+}
+
+.plugin-catalog-card:hover {
+    border-color: var(--accent-primary);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+    transform: translateY(-2px);
+}
+
+.plugin-catalog-card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.plugin-catalog-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    background: rgba(60, 152, 254, 0.15);
+    color: var(--accent-primary);
+}
+
+.plugin-catalog-icon img {
+    width: 100%;
+    height: 100%;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.plugin-catalog-card-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.plugin-catalog-card-meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.15rem;
+    flex-wrap: wrap;
+}
+
+.plugin-catalog-card-desc {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.45;
+    margin-bottom: 0.85rem;
+    flex: 1;
+    word-break: break-word;
+}
+
+.plugin-catalog-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: auto;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+    flex-wrap: wrap;
+}
+
+.plugin-catalog-card-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    align-items: center;
+}
+
+.catalog-filter-bar {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.catalog-filter-btn {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+    background: var(--bg-subtle, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    transition: all var(--transition-base, 0.2s);
+}
+
+.catalog-filter-btn:hover,
+.catalog-filter-btn.active {
+    background: var(--accent-primary);
+    color: #fff;
+    border-color: var(--accent-primary);
+}
+
+/* Category Badges */
+.plugin-cat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: capitalize;
+    border: 1px solid var(--border-color);
+    background: var(--bg-subtle, rgba(255, 255, 255, 0.04));
+    color: var(--text-secondary);
+}
+
+.plugin-cat-badge.cat-protocol {
+    background: rgba(60, 152, 254, 0.12);
+    border-color: rgba(60, 152, 254, 0.3);
+    color: #60a5fa;
+}
+
+.plugin-cat-badge.cat-alert {
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.3);
+    color: #fbbf24;
+}
+
+.plugin-cat-badge.cat-report {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.3);
+    color: #34d399;
+}
+
+.plugin-cat-badge.cat-integration {
+    background: rgba(168, 85, 247, 0.12);
+    border-color: rgba(168, 85, 247, 0.3);
+    color: #c084fc;
+}
+
+.plugin-restart-banner {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: var(--accent-warning, #f59e0b);
+    padding: 0.75rem 1.25rem;
+    border-radius: 8px;
+    margin-bottom: 1.25rem;
+    font-size: 0.875rem;
+}
+
+/* Modal Stacking & Layering */
+#pluginCatalogModal {
+    z-index: 1040;
+}
+
+#pluginRepoModal {
+    z-index: 1060;
+}
+
+#pluginUsageModal {
+    z-index: 1070;
+}
+
+/* Disabled Toggle Switch */
+.toggle-switch.disabled,
+.toggle-switch input:disabled + .toggle-slider {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: auto;
+}
+
+/* Responsive adjustments for catalog grid and cards on small screens */
+@media (max-width: 768px) {
+    .plugin-catalog-grid {
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
+        gap: 0.75rem;
+    }
+    .plugin-catalog-card {
+        padding: 0.85rem;
+    }
+    .plugin-catalog-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 18px;
+    }
+    .plugin-catalog-card-title {
+        font-size: 0.9rem;
+    }
+    .plugin-catalog-card-desc {
+        font-size: 0.78rem;
+        line-height: 1.4;
+        margin-bottom: 0.65rem;
+    }
+    #pluginCatalogModal .modal-scrollable {
+        padding: 1rem 1rem 0.5rem !important;
+    }
+}
+
+@media (max-width: 520px) {
+    .plugin-catalog-grid {
+        grid-template-columns: 1fr;
+        gap: 0.6rem;
+        padding: 4px 2px;
+    }
+    .plugin-catalog-card {
+        padding: 0.75rem;
+        border-radius: 8px;
+    }
+    .plugin-catalog-card-header {
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .plugin-catalog-icon {
+        width: 30px;
+        height: 30px;
+        font-size: 16px;
+        border-radius: 6px;
+    }
+    .plugin-catalog-card-title {
+        font-size: 0.86rem;
+    }
+    .plugin-catalog-card-meta {
+        font-size: 0.7rem;
+    }
+    .plugin-catalog-card-desc {
+        font-size: 0.75rem;
+        line-height: 1.35;
+        margin-bottom: 0.5rem;
+    }
+    .plugin-catalog-card-footer {
+        padding-top: 0.5rem;
+        gap: 0.4rem;
+    }
+    .plugin-cat-badge {
+        font-size: 0.65rem;
+        padding: 0.1rem 0.4rem;
+    }
+    .catalog-filter-bar {
+        gap: 0.25rem;
+    }
+    .catalog-filter-btn {
+        padding: 0.25rem 0.55rem;
+        font-size: 0.72rem;
+    }
+    #pluginCatalogModal .modal-scrollable {
+        padding: 0.75rem 0.65rem 0.4rem !important;
+    }
+}
+
+
