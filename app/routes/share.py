@@ -76,6 +76,8 @@ async def create_share(
         device = device_result.scalar_one_or_none()
         if not device:
             raise HTTPException(status_code=404, detail="Device not found")
+        if not device.is_active:
+            raise HTTPException(status_code=400, detail="Cannot share a disabled device")
 
         # Generate a secure random token
         token = secrets.token_urlsafe(32)
@@ -215,7 +217,7 @@ async def get_shared_position(token: str):
         )
         state = state_result.scalar_one_or_none()
 
-        if not device or not state:
+        if not device or not state or not device.is_active:
             raise HTTPException(status_code=404, detail="Device data unavailable")
 
         return {

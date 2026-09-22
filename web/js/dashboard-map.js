@@ -269,12 +269,24 @@ function togglePopupSensors(btn, deviceId) {
 window.togglePopupSensors = togglePopupSensors;
 
 function updateDeviceMarker(deviceId, state) {
-    if (!state.last_latitude || !state.last_longitude) return;
+    const device = devices.find(d => d.id === deviceId);
+    if ((device && device.is_active === false) || (state && state.is_active === false)) {
+        if (markers[deviceId]) {
+            if (typeof clusterGroup !== 'undefined' && clusterGroup && clusterGroup.hasLayer(markers[deviceId])) {
+                clusterGroup.removeLayer(markers[deviceId]);
+            }
+            if (typeof map !== 'undefined' && map && map.hasLayer(markers[deviceId])) {
+                map.removeLayer(markers[deviceId]);
+            }
+            delete markers[deviceId];
+        }
+        return;
+    }
+    if (!state || !state.last_latitude || !state.last_longitude) return;
 
     const toLat  = state.last_latitude;
     const toLng  = state.last_longitude;
     const toHead = state.last_course ?? null;
-    const device = devices.find(d => d.id === deviceId);
     const deviceName = device ? device.name : 'Unknown Device';
 
     const ignitionColor = state.ignition_on === true  ? '#10b981'

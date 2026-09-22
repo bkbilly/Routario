@@ -533,7 +533,8 @@ h1 {
 
 /* ── Forms ─────────────────────────────────────────────────────── */
 
-.form-group  { margin-bottom: 1.75rem; }
+.form-group,
+#integrationFieldsPanel { margin-bottom: 1.75rem; }
 
 .form-label {
     display: block;

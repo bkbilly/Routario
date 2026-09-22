@@ -403,7 +403,21 @@ async def sync_active_protocol_servers() -> None:
     await protocol_server_manager.sync(await get_active_device_protocols())
 
 
+def disconnect_device(imei: str) -> None:
+    writer = connection_manager.get_connection(imei)
+    if writer:
+        try:
+            writer.close()
+        except Exception:
+            pass
+        connection_manager.unregister_connection(imei)
+
+
 async def send_command_to_device(imei: str, command_data: bytes) -> bool:
+    db = get_db()
+    device = await db.get_device_by_imei(imei)
+    if not device or not device.is_active:
+        return False
     writer = connection_manager.get_connection(imei)
     if not writer:
         return False

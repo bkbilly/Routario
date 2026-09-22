@@ -433,6 +433,11 @@ async function sendCommand() {
         commandLabel = select?.options[select.selectedIndex]?.textContent || commandType;
     }
 
+    if (currentCommandDevice && currentCommandDevice.is_active === false) {
+        showAlert({ title: 'Device Disabled', message: 'Commands cannot be sent to a disabled device.', type: 'warning' });
+        return;
+    }
+
     const deviceName = currentCommandDevice?.name || 'device';
     if (!confirm(`Send "${commandLabel}" command to ${deviceName}?`)) {
         return;

@@ -449,15 +449,16 @@ function renderDeviceTable(list) {
         const lastSeen    = d.state?.last_update ? formatDateToLocalSplit(d.state.last_update) : '—';
         const odometer    = d.state?.total_odometer != null ? fmtOdometer(d.state.total_odometer) : '—';
         const plate       = d.license_plate || '—';
-        const cmds        = d.supports_commands !== false && hasPermission('send_commands');
+        const isDisabled  = d.is_active === false;
+        const cmds        = !isDisabled && d.supports_commands !== false && hasPermission('send_commands');
         const companyName = allCompanies.find(c => _sameId(c.id, d.company_id))?.name || '—';
         const canEdit     = hasPermission('edit_devices');
 
         return `
-        <tr class="device-row" ondblclick="openDeviceModal(${d.id},'general')">
+        <tr class="device-row ${isDisabled ? 'device-row-disabled' : ''}" ondblclick="openDeviceModal(${d.id},'general')">
             <td style="text-align:center;font-size:1.25rem;">${icon}</td>
             <td>
-                <span class="device-row-name">${_esc(d.name)}</span>
+                <span class="device-row-name">${_esc(d.name)}${isDisabled ? ' <span class="device-disabled-badge">Disabled</span>' : ''}</span>
                 <div class="device-row-imei">${_esc(d.imei)}</div>
             </td>
             <td>${protoBadgeHtml(d.protocol)}</td>
@@ -552,9 +553,12 @@ function openAddDeviceModal() {
     document.getElementById('currentOdometer').value         = '0.0';
     document.getElementById('offlineTimeoutHours').value     = '24';
 
-    ['deviceName', 'licensePlate', 'vehicleType', 'currentOdometer', 'offlineTimeoutHours', 'tripMergeGapMinutes', 'deviceHasCamera'].forEach(id => {
+    ['deviceName', 'licensePlate', 'vehicleType', 'currentOdometer', 'offlineTimeoutHours', 'tripMergeGapMinutes', 'deviceHasCamera', 'deviceDisabled'].forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.disabled = false;
+        if (el) {
+            el.disabled = false;
+            if (el.type === 'checkbox') el.checked = false;
+        }
     });
 
     populateVehicleTypeSelect(document.getElementById('vehicleType'), DEFAULT_TYPE);
@@ -609,8 +613,9 @@ function openDeviceModal(deviceId, startTab = 'general') {
     document.getElementById('submitBtn').style.display       = canEditDevice ? '' : 'none';
     const exportBtnEdit = document.getElementById('exportDeviceProfileBtn');
     if (exportBtnEdit) exportBtnEdit.style.display = 'inline-flex';
+    const isDevDisabled = d.is_active === false;
     const commandsTabBtnEdit = document.getElementById('commandsTabBtn');
-    if (commandsTabBtnEdit) commandsTabBtnEdit.style.display = (d.supports_commands && hasPermission('send_commands')) ? '' : 'none';
+    if (commandsTabBtnEdit) commandsTabBtnEdit.style.display = (!isDevDisabled && d.supports_commands && hasPermission('send_commands')) ? '' : 'none';
     const rawDataTabBtnEdit = document.querySelector('.modal-tab[data-tab="rawdata"]');
     if (rawDataTabBtnEdit) rawDataTabBtnEdit.style.display = hasPermission('view_history') ? '' : 'none';
     const alertsTabBtnEdit = document.querySelector('.modal-tab[data-tab="alerts"]');
@@ -637,6 +642,10 @@ function openDeviceModal(deviceId, startTab = 'general') {
         d.config?.trip_merge_gap_minutes ?? 0;
     document.getElementById('deviceHasCamera').checked =
         d.config?.has_camera ?? false;
+    const disabledEl = document.getElementById('deviceDisabled');
+    if (disabledEl) {
+        disabledEl.checked = isDevDisabled;
+    }
 
     const imeiEl     = document.getElementById('deviceImei');
     const protocolEl = document.getElementById('deviceProtocol');
@@ -647,7 +656,7 @@ function openDeviceModal(deviceId, startTab = 'general') {
         protocolEl.disabled = true;
     }
 
-    ['deviceName', 'licensePlate', 'vehicleType', 'currentOdometer', 'offlineTimeoutHours', 'tripMergeGapMinutes', 'deviceHasCamera'].forEach(id => {
+    ['deviceName', 'licensePlate', 'vehicleType', 'currentOdometer', 'offlineTimeoutHours', 'tripMergeGapMinutes', 'deviceHasCamera', 'deviceDisabled'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.disabled = !canEditDevice;
     });
@@ -688,6 +697,7 @@ function _snapshotDeviceModal() {
         assignedUsers: Array.from(deviceAssignedUserIds).sort(),
         customAttrs:   readCustomAttributes(),
         alertRows:     alertRows,
+        disabled:      document.getElementById('deviceDisabled')?.checked,
     });
 }
 
@@ -707,6 +717,11 @@ function openRawDataModal(id) { openDeviceModal(id, 'rawdata'); }
 
 // ── Commands Tab ──────────────────────────────────────────────────
 function openCommandModal(deviceId) {
+    const d = devices.find(x => x.id == deviceId);
+    if (d && d.is_active === false) {
+        showAlert({ title: 'Device Disabled', message: 'Commands cannot be sent to a disabled device.', type: 'warning' });
+        return;
+    }
     openDeviceModal(deviceId, 'commands');
 }
 
@@ -862,6 +877,7 @@ async function handleSubmit(event) {
             license_plate:     document.getElementById('licensePlate').value || null,
             custom_attributes: readCustomAttributes(),
             config:        newConfig,
+            is_active:     !document.getElementById('deviceDisabled')?.checked,
             sim_card_id:   parseInt(document.getElementById('deviceSimCard')?.value) || null,
         };
         if (isAdmin) {

@@ -992,6 +992,7 @@ class DatabaseService:
                 custom_attributes=device_data.custom_attributes or {},
                 config=device_data.config.model_dump(),
                 company_id=device_data.company_id,
+                is_active=device_data.is_active,
             )
             session.add(device)
             await session.flush()
@@ -1039,9 +1040,11 @@ class DatabaseService:
             )
             return result.scalar_one_or_none()
 
-    async def get_user_devices(self, user_id: int) -> List[Device]:
+    async def get_user_devices(
+        self, user_id: int, is_active: Optional[bool] = None
+    ) -> List[Device]:
         async with self.get_session() as session:
-            result = await session.execute(
+            q = (
                 select(Device)
                 .join(Device.users)
                 .where(User.id == user_id)
@@ -1051,6 +1054,9 @@ class DatabaseService:
                     selectinload(Device.company),
                 )
             )
+            if is_active is not None:
+                q = q.where(Device.is_active == is_active)
+            result = await session.execute(q)
             return result.scalars().all()
 
     async def get_websocket_devices_for_user(self, user_id: int) -> List[Device]:
@@ -1099,6 +1105,7 @@ class DatabaseService:
             device.custom_attributes = device_data.custom_attributes or {}
             device.config            = device_data.config.model_dump()
             device.company_id        = device_data.company_id
+            device.is_active         = device_data.is_active
             await session.flush()
             return device
 
@@ -1137,6 +1144,9 @@ class DatabaseService:
             device = await self._get_device_by_imei_internal(session, position.imei)
             if not device:
                 logger.warning("Unknown device: %s", position.imei)
+                return False
+            if not device.is_active:
+                logger.debug("Device %s is disabled, ignoring position update", position.imei)
                 return False
 
             state = await self._get_or_create_state(session, device.id)

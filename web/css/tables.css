@@ -97,6 +97,25 @@
 .devices-table tbody tr:hover td {
     background: var(--bg-hover, rgba(255, 255, 255, 0.05));
 }
+.devices-table tbody tr.device-row-disabled {
+    opacity: 0.55;
+    filter: grayscale(85%);
+}
+.devices-table tbody tr.device-row-disabled:hover td {
+    background: var(--bg-hover, rgba(255, 255, 255, 0.03));
+}
+.device-disabled-badge {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+}
 
 .devices-table th[data-sort],
 .devices-table th[onclick] {

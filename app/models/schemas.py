@@ -137,6 +137,7 @@ class DeviceCreate(BaseModel):
     custom_attributes: Optional[Dict[str, str]] = Field(default_factory=dict)
     company_id: Optional[int] = None
     sim_card_id: Optional[int] = None
+    is_active: bool = True
     config: DeviceConfig = Field(
         default_factory=lambda: DeviceConfig(
             offline_timeout_hours=None,

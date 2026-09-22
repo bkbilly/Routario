@@ -1700,7 +1700,18 @@
             const limit = parseInt(url.searchParams.get('limit') || '1000', 10);
             return json(runtimeLogPayload(limit));
         }
-        if (apiPath === '/devices' || apiPath === '/devices/all') return json(devices);
+        if (apiPath === '/devices' || apiPath === '/devices/all') {
+            const activeOnly = url.searchParams.get('is_active') === 'true';
+            return json(activeOnly ? devices.filter(d => d.is_active !== false) : devices);
+        }
+        if (apiPath.match(/^\/devices\/\d+\/command$/)) {
+            const id = Number(apiPath.split('/')[2]);
+            const d = devices.find(item => item.id === id);
+            if (d && d.is_active === false) {
+                return json({ detail: 'Cannot send command to a disabled device' }, 400);
+            }
+            return json({ status: 'queued', id: Date.now() });
+        }
         if (apiPath.match(/^\/devices\/\d+$/)) {
             const id = Number(apiPath.split('/')[2]);
             const d = devices.find(item => item.id === id);

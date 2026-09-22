@@ -7,7 +7,7 @@
 async function loadDevices() {
     try {
         const userId = localStorage.getItem('user_id');
-        const response = await apiFetch(`${API_BASE}/devices?_t=${Date.now()}`);
+        const response = await apiFetch(`${API_BASE}/devices?is_active=true&_t=${Date.now()}`);
         if (!response.ok) {
             if (response.status === 401) {
                 handleLogout(); // Token invalid
@@ -17,10 +17,30 @@ async function loadDevices() {
         }
         // Flatten device.state into the device object so sort fields
         // (last_update, speed, ignition) are available on the first render.
-        devices = (await response.json()).map(d => {
-            const { state, ...rest } = d;
-            return { ...rest, ...(state || {}) };
-        });
+        // Filter out disabled devices so they do not show on the map or dashboard.
+        devices = (await response.json())
+            .filter(d => d.is_active !== false)
+            .map(d => {
+                const { state, ...rest } = d;
+                return { ...rest, ...(state || {}) };
+            });
+
+        // Clean up any existing markers that are no longer active
+        const activeIds = new Set(devices.map(d => d.id));
+        if (typeof markers !== 'undefined') {
+            Object.keys(markers).forEach(id => {
+                const numId = Number(id);
+                if (numId && !activeIds.has(numId)) {
+                    if (typeof clusterGroup !== 'undefined' && clusterGroup && clusterGroup.hasLayer(markers[id])) {
+                        clusterGroup.removeLayer(markers[id]);
+                    }
+                    if (typeof map !== 'undefined' && map && map.hasLayer(markers[id])) {
+                        map.removeLayer(markers[id]);
+                    }
+                    delete markers[id];
+                }
+            });
+        }
 
         // Single render after all states are present — sort is now correct
         renderDeviceList();

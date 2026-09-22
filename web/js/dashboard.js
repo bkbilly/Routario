@@ -135,3 +135,7 @@ document.addEventListener('keydown', (e) => {
         }
     }
 });
+
+window.addEventListener('routario:devices-updated', () => {
+    if (typeof loadDevices === 'function') loadDevices();
+});

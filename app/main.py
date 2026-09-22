@@ -359,7 +359,7 @@ async def command_callback(imei: str, writer) -> None:
     try:
         db = get_db()
         device = await db.get_device_by_imei(imei)
-        if not device:
+        if not device or not device.is_active:
             return
         commands = await db.get_pending_commands(device.id)
         if not commands:

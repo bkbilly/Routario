@@ -97,7 +97,7 @@ function _renderIntegrationFields(provider, existingIntg = null) {
         const label = existingIntg?.account_label || provider.display_name;
         return `
             <div style="background:var(--bg-tertiary); border:1px solid var(--accent-primary);
-                        border-radius:10px; padding:1rem 1.25rem; margin-top:0.5rem;
+                        border-radius:10px; padding:1rem 1.25rem; margin-top:0.5rem; margin-bottom:1.75rem;
                         display:flex; align-items:center; gap:0.75rem;">
                 <span style="font-size:1.25rem;"><i class="mdi mdi-connection"></i></span>
                 <div>
@@ -124,7 +124,7 @@ function _renderIntegrationFields(provider, existingIntg = null) {
 
     return `
         <div style="background:var(--bg-tertiary); border:1px solid var(--accent-primary);
-                    border-radius:10px; padding:1.25rem; margin-top:0.5rem;">
+                    border-radius:10px; padding:1.25rem; margin-top:0.5rem; margin-bottom:1.75rem;">
 
             <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em;
                         color:var(--accent-primary); margin-bottom:1rem; font-weight:600;">

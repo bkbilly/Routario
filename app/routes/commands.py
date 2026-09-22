@@ -35,6 +35,10 @@ async def send_command(
     """Queue or send a command for a GPS device."""
     db = get_db()
     device = await db.get_device_by_id(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    if not device.is_active:
+        raise HTTPException(status_code=400, detail="Cannot send command to a disabled device")
     if command.command_type.startswith("user_cmd:"):
         cmd_id = command.command_type.split(":", 1)[1]
         user_cmds = (device.config or {}).get("user_commands", [])
@@ -154,6 +158,8 @@ async def preview_command(
     device = await db.get_device_by_id(device_id)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
+    if not device.is_active:
+        raise HTTPException(status_code=400, detail="Cannot send command to a disabled device")
 
     command_type = command_data.get("command_type", "")
     payload = command_data.get("payload", "")

@@ -34,7 +34,11 @@ router = APIRouter(prefix="/api/devices", tags=["devices"])
 
 
 @router.get("/all", response_model=List[DeviceResponse])
-async def get_all_devices(caller: User = Depends(require_company_admin), _: User = Depends(require_permission("view_devices"))):
+async def get_all_devices(
+    is_active: Optional[bool] = Query(None),
+    caller: User = Depends(require_company_admin),
+    _: User = Depends(require_permission("view_devices")),
+):
     """Return devices. Super admin sees all; company admin sees their company's."""
     db = get_db()
     async with db.get_session() as session:
@@ -45,37 +49,42 @@ async def get_all_devices(caller: User = Depends(require_company_admin), _: User
         )
         if not caller.is_admin:
             q = q.where(Device.company_id == caller.company_id)
+        if is_active is not None:
+            q = q.where(Device.is_active == is_active)
         result = await session.execute(q)
         return result.scalars().all()
 
 
 @router.get("", response_model=List[DeviceResponse])
-async def get_devices(current_user: User = Depends(get_current_user)):
+async def get_devices(
+    is_active: Optional[bool] = Query(None),
+    current_user: User = Depends(get_current_user),
+):
     """Return devices for the caller. Company admins see all company devices."""
     db = get_db()
     if current_user.is_admin:
         async with db.get_session() as session:
-            result = await session.execute(
-                select(Device).options(
-                    selectinload(Device.state).selectinload(DeviceState.current_driver),
-                    selectinload(Device.sim_card),
-                    selectinload(Device.company),
-                )
+            q = select(Device).options(
+                selectinload(Device.state).selectinload(DeviceState.current_driver),
+                selectinload(Device.sim_card),
+                selectinload(Device.company),
             )
+            if is_active is not None:
+                q = q.where(Device.is_active == is_active)
+            result = await session.execute(q)
             return result.scalars().all()
     if current_user.is_company_admin and current_user.company_id is not None:
         async with db.get_session() as session:
-            result = await session.execute(
-                select(Device)
-                .where(Device.company_id == current_user.company_id)
-                .options(
-                    selectinload(Device.state).selectinload(DeviceState.current_driver),
-                    selectinload(Device.sim_card),
-                    selectinload(Device.company),
-                )
+            q = select(Device).where(Device.company_id == current_user.company_id).options(
+                selectinload(Device.state).selectinload(DeviceState.current_driver),
+                selectinload(Device.sim_card),
+                selectinload(Device.company),
             )
+            if is_active is not None:
+                q = q.where(Device.is_active == is_active)
+            result = await session.execute(q)
             return result.scalars().all()
-    return await db.get_user_devices(current_user.id)
+    return await db.get_user_devices(current_user.id, is_active=is_active)
 
 
 @router.post("", response_model=DeviceResponse)
@@ -172,6 +181,17 @@ async def update_device(
 
     if old_device and old_device.imei:
         clear_device_state(old_device.imei)
+
+    if not device_data.is_active:
+        from core.gateway import disconnect_device
+        if old_device and old_device.imei:
+            disconnect_device(old_device.imei)
+        async with db.get_session() as session:
+            await session.execute(
+                update(DeviceState)
+                .where(DeviceState.device_id == device_id)
+                .values(is_online=False)
+            )
 
     if new_odometer is not None:
         async with db.get_session() as session:
