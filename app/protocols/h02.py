@@ -319,6 +319,7 @@ class H02Decoder(BaseProtocolDecoder):
 
         return NormalizedPosition(
             imei=imei,
+            protocol="h02",
             device_time=device_time,
             server_time=datetime.now(timezone.utc),
             latitude=latitude,

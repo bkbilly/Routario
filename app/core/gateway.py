@@ -137,6 +137,8 @@ class TCPDeviceHandler:
                             if "position" in result:
                                 pos = result["position"]
                                 if isinstance(pos, NormalizedPosition):
+                                    if not pos.protocol:
+                                        pos.protocol = self.protocol
                                     if not self.imei and pos.imei:
                                         self.imei = pos.imei
                                         connection_manager.register_connection(
@@ -147,10 +149,14 @@ class TCPDeviceHandler:
                             # Extra positions (multi-record batch)
                             for extra_pos in result.get("extra_positions", []):
                                 if isinstance(extra_pos, NormalizedPosition):
+                                    if not extra_pos.protocol:
+                                        extra_pos.protocol = self.protocol
                                     await self.position_callback(extra_pos)
 
                         # ── Plain NormalizedPosition ───────────────────────
                         elif isinstance(result, NormalizedPosition):
+                            if not result.protocol:
+                                result.protocol = self.protocol
                             if not self.imei and result.imei:
                                 self.imei = result.imei
                                 connection_manager.register_connection(
@@ -252,7 +258,20 @@ class UDPProtocol(asyncio.DatagramProtocol):
                 data, {"ip": addr[0], "port": addr[1]}, None
             )
             if isinstance(res, NormalizedPosition):
+                if not res.protocol:
+                    res.protocol = self.protocol
                 await self.position_callback(res)
+            elif isinstance(res, dict):
+                if "position" in res and isinstance(res["position"], NormalizedPosition):
+                    pos = res["position"]
+                    if not pos.protocol:
+                        pos.protocol = self.protocol
+                    await self.position_callback(pos)
+                for extra_pos in res.get("extra_positions", []):
+                    if isinstance(extra_pos, NormalizedPosition):
+                        if not extra_pos.protocol:
+                            extra_pos.protocol = self.protocol
+                        await self.position_callback(extra_pos)
         except Exception:
             pass
 

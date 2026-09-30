@@ -636,6 +636,7 @@ class TeltonikaDecoder(BaseProtocolDecoder):
 
         position = NormalizedPosition(
             imei=known_imei,
+            protocol="teltonika",
             device_time=device_time,
             server_time=datetime.now(timezone.utc),
             latitude=lat,

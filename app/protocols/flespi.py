@@ -27,15 +27,55 @@ Flespi standard field names used here:
 Outbound command format (server → device):
   {"command": "<type>", ...params...}\n
 """
+import gzip
 import json
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple, Union
 import logging
+import zlib
+from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler
+from io import BytesIO
+from typing import Any, Dict, List, Optional, Tuple, Union
+from urllib.parse import parse_qs
 
 from models.schemas import NormalizedPosition
 from . import BaseProtocolDecoder, ProtocolRegistry
 
 logger = logging.getLogger(__name__)
+
+HTTP_200_KEEP_ALIVE = (
+    b'HTTP/1.1 200 OK\r\n'
+    b'Content-Length: 2\r\n'
+    b'Content-Type: application/json\r\n'
+    b'Connection: keep-alive\r\n'
+    b'\r\n'
+    b'ok'
+)
+
+HTTP_200_CLOSE = (
+    b'HTTP/1.1 200 OK\r\n'
+    b'Content-Length: 2\r\n'
+    b'Content-Type: application/json\r\n'
+    b'Connection: close\r\n'
+    b'\r\n'
+    b'ok'
+)
+
+_HTTP_METHODS = (b'POST ', b'GET ', b'PUT ', b'HEAD ', b'OPTIONS ', b'PATCH ')
+
+
+class _HTTPRequest(BaseHTTPRequestHandler):
+    def __init__(self, raw: bytes):
+        self.rfile = BytesIO(raw)
+        self.raw_requestline = self.rfile.readline()
+        self.error_code = None
+        self.parse_request()
+
+    def send_error(self, code, message=None, explain=None):
+        self.error_code = code
+
+    def log_message(self, *args):
+        pass
+
 
 # Fields that are consumed into top-level NormalizedPosition attributes and
 # should not be duplicated in sensors{}.
@@ -50,6 +90,9 @@ _POSITION_KEYS = frozenset({
     'position.satellites', 'sat', 'satellites',
     'position.valid', 'valid',
     'engine.ignition.status', 'ignition',
+    # Internal flespi metadata
+    'device.id', 'device.name', 'device.type.id',
+    'channel.id', 'protocol.id', 'peer',
 })
 
 
@@ -129,51 +172,171 @@ class FlespiDecoder(BaseProtocolDecoder):
             if not data:
                 return None, 0
 
-            try:
-                text = data.decode('utf-8')
-            except UnicodeDecodeError:
-                logger.error("Flespi: Failed to decode UTF-8, skipping byte")
-                return None, 1
+            data_stripped = data.lstrip()
+            strip_offset = len(data) - len(data_stripped)
 
-            newline_idx = text.find('\n')
+            # ── Check if incoming data is an HTTP request ──────────────
+            is_http = any(data_stripped.startswith(m) for m in _HTTP_METHODS)
+            if not is_http and len(data_stripped) < 7:
+                # Buffer might be a partial HTTP method (e.g. b"POS" or b"POST")
+                if any(m.startswith(data_stripped) for m in _HTTP_METHODS):
+                    return None, 0
+
+            if is_http:
+                header_end = data_stripped.find(b'\r\n\r\n')
+                sep_len = 4
+                if header_end == -1:
+                    header_end = data_stripped.find(b'\n\n')
+                    sep_len = 2
+
+                if header_end == -1:
+                    if len(data) > 65536:
+                        logger.warning("Flespi: HTTP header too large, resetting")
+                        return None, len(data)
+                    return None, 0  # Incomplete HTTP headers, wait for more data
+
+                header_bytes = data_stripped[:header_end + sep_len]
+                try:
+                    req = _HTTPRequest(header_bytes)
+                except Exception as exc:
+                    logger.warning("Flespi: HTTP parse exception: %s", exc)
+                    return None, strip_offset + header_end + sep_len
+
+                if req.error_code:
+                    logger.warning("Flespi: HTTP parse error %s", req.error_code)
+                    return None, strip_offset + header_end + sep_len
+
+                is_close = (req.headers.get('Connection') or '').lower() == 'close'
+                resp_200 = HTTP_200_CLOSE if is_close else HTTP_200_KEEP_ALIVE
+
+                content_length_str = req.headers.get('Content-Length')
+                try:
+                    content_length = int(content_length_str) if content_length_str else 0
+                except (ValueError, TypeError):
+                    content_length = 0
+
+                total_length = strip_offset + header_end + sep_len + content_length
+                if len(data) < total_length:
+                    return None, 0  # Incomplete HTTP body, wait for remaining chunks
+
+                consumed = total_length
+                body_bytes = data_stripped[header_end + sep_len : header_end + sep_len + content_length]
+
+                # HTTP GET / HEAD handler
+                if req.command in ('GET', 'HEAD'):
+                    if req.command == 'GET' and '?' in req.path:
+                        query_str = req.path.split('?', 1)[1]
+                        params = {k: v[0] for k, v in parse_qs(query_str, keep_blank_values=False).items() if v}
+                        if params:
+                            pos = self._parse_message(params, known_imei)
+                            if pos:
+                                return {'response': resp_200, 'position': pos}, consumed
+                    return {'response': resp_200}, consumed
+
+                # Decompress if Content-Encoding is present
+                content_encoding = (req.headers.get('Content-Encoding') or '').lower().strip()
+                if 'gzip' in content_encoding:
+                    try:
+                        body_bytes = gzip.decompress(body_bytes)
+                    except Exception as exc:
+                        logger.error("Flespi: Gzip decompression error: %s", exc)
+                        return {'response': resp_200}, consumed
+                elif 'deflate' in content_encoding:
+                    try:
+                        body_bytes = zlib.decompress(body_bytes)
+                    except zlib.error:
+                        try:
+                            body_bytes = zlib.decompress(body_bytes, -zlib.MAX_WBITS)
+                        except Exception as exc:
+                            logger.error("Flespi: Deflate decompression error: %s", exc)
+                            return {'response': resp_200}, consumed
+
+                body_text = body_bytes.decode('utf-8', errors='replace').strip()
+                if not body_text:
+                    return {'response': resp_200}, consumed
+
+                try:
+                    message = json.loads(body_text)
+                except json.JSONDecodeError:
+                    # Fallback: support newline-delimited JSON inside the HTTP body
+                    lines = [l.strip() for l in body_text.splitlines() if l.strip()]
+                    message = []
+                    for line in lines:
+                        try:
+                            message.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            pass
+                    if not message:
+                        logger.error("Flespi: JSON decode error in HTTP body — raw: %s", body_text[:120])
+                        return {'response': resp_200}, consumed
+
+                positions: List[NormalizedPosition] = []
+                if isinstance(message, dict):
+                    pos = self._parse_message(message, known_imei)
+                    if pos:
+                        positions.append(pos)
+                elif isinstance(message, list):
+                    for msg in message:
+                        if isinstance(msg, dict):
+                            pos = self._parse_message(msg, known_imei)
+                            if pos:
+                                positions.append(pos)
+
+                if positions:
+                    return {
+                        'response': resp_200,
+                        'position': positions[0],
+                        'extra_positions': positions[1:],
+                    }, consumed
+
+                return {'response': resp_200}, consumed
+
+            # ── Newline-delimited JSON (NDJSON) over TCP ─────────────
+            newline_idx = data.find(b'\n')
             if newline_idx == -1:
-                if len(data) > 8192:
+                if len(data) > 65536:
                     logger.warning("Flespi: Buffer too large without newline, resetting")
                     return None, len(data)
                 return None, 0
 
-            json_str = text[:newline_idx].strip()
-            consumed = len(json_str.encode('utf-8')) + 1  # +1 for the newline
+            line_bytes = data[:newline_idx].strip()
+            consumed = newline_idx + 1  # Exactly consumed through '\n'
 
-            if not json_str:
+            if not line_bytes:
                 return None, consumed
 
             try:
+                json_str = line_bytes.decode('utf-8')
                 message = json.loads(json_str)
+            except UnicodeDecodeError:
+                logger.error("Flespi: Failed to decode UTF-8")
+                return None, consumed
             except json.JSONDecodeError as e:
-                logger.error(f"Flespi: JSON decode error: {e} — raw: {json_str[:120]}")
+                logger.error(f"Flespi: JSON decode error: {e} — raw: {line_bytes[:120].decode('utf-8', errors='replace')}")
                 return None, consumed
 
             # ── Single message ─────────────────────────────────────
             if isinstance(message, dict):
-                # Login / auth message — device identifies itself
                 ident = message.get('ident') or message.get('device.ident')
+                pos = self._parse_message(message, known_imei)
                 if ident and not known_imei:
                     logger.info(f"Flespi login: {ident}")
-                    return {
+                    res: Dict[str, Any] = {
                         'event': 'login',
                         'imei': str(ident),
                         'response': b'{"status":"ok"}\n',
-                    }, consumed
+                    }
+                    if pos:
+                        res['position'] = pos
+                    return res, consumed
 
-                pos = self._parse_message(message, known_imei)
                 if pos:
                     return pos, consumed
                 return None, consumed
 
             # ── Batch of messages ──────────────────────────────────
             if isinstance(message, list):
-                positions: List[NormalizedPosition] = []
+                positions = []
                 for msg in message:
                     if isinstance(msg, dict):
                         pos = self._parse_message(msg, known_imei)
@@ -183,8 +346,6 @@ class FlespiDecoder(BaseProtocolDecoder):
                 if not positions:
                     return None, consumed
 
-                # Return first position; extras passed through extra_positions
-                # so the server can persist all of them (same pattern as Teltonika).
                 return {
                     'position': positions[0],
                     'extra_positions': positions[1:],
@@ -236,7 +397,17 @@ class FlespiDecoder(BaseProtocolDecoder):
             longitude = self._get(message, ['position.longitude', 'lon',  'longitude'])
 
             if latitude is None or longitude is None:
-                logger.warning(f"Flespi: Missing GPS coordinates for {imei}")
+                logger.debug(f"Flespi: Missing GPS coordinates for {imei}")
+                return None
+
+            try:
+                lat_f = float(latitude)
+                lon_f = float(longitude)
+            except (ValueError, TypeError):
+                return None
+
+            if lat_f == 0.0 and lon_f == 0.0:
+                logger.debug(f"Flespi: Zero GPS coordinates for {imei}")
                 return None
 
             # ── Position fields ───────────────────────────────────
@@ -257,6 +428,7 @@ class FlespiDecoder(BaseProtocolDecoder):
 
             _sensor_map = [
                 (['battery.voltage',              'battery_voltage'],   'battery_voltage',   float),
+                (['battery.level',                'battery_percent'],   'battery_percent',   float),
                 (['external.powersource.voltage', 'external_voltage'],  'external_voltage',  float),
                 (['gnss.hdop',                    'hdop'],              'hdop',              float),
                 (['gsm.signal.level',             'rssi',    'signal'], 'gsm_signal',        int),
@@ -284,6 +456,7 @@ class FlespiDecoder(BaseProtocolDecoder):
 
             return NormalizedPosition(
                 imei=imei,
+                protocol="flespi",
                 device_time=device_time,
                 server_time=datetime.now(timezone.utc),
                 latitude=float(latitude),

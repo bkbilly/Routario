@@ -332,6 +332,7 @@ class QueclinkDecoder(BaseProtocolDecoder):
 
             return NormalizedPosition(
                 imei=imei,
+                protocol="queclink",
                 device_time=device_time,
                 server_time=datetime.now(timezone.utc),
                 latitude=latitude,

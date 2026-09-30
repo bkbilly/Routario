@@ -369,6 +369,8 @@ async def _run_poll_cycle(
             # Network I/O — no DB connection held during the fetch
             async for position in provider.fetch_positions(auth_ctx, devices):
                 try:
+                    if not position.protocol:
+                        position.protocol = provider_id
                     await position_callback(position)  # opens its own short session
                     fetched += 1
 

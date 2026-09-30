@@ -268,6 +268,7 @@ class TraccarIntegration(BaseIntegration):
 
             return NormalizedPosition(
                 imei=imei,
+                protocol="traccar",
                 device_time=device_time,
                 server_time=server_time,
                 latitude=lat,

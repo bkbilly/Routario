@@ -387,6 +387,7 @@ class FlespiIntegration(BaseIntegration):
 
             return NormalizedPosition(
                 imei=imei,
+                protocol="flespi_cloud",
                 device_time=device_time,
                 server_time=server_time,
                 latitude=lat,

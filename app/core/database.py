@@ -8,6 +8,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
+import time
 from typing import Any, Dict, List, Optional
 
 import bcrypt
@@ -139,6 +140,7 @@ class DatabaseService:
             class_=AsyncSession,
             expire_on_commit=False,
         )
+        self._proto_mismatch_warn_times: Dict[tuple, float] = {}
 
     async def init_db(self):
         """Create all tables. PostgreSQL also enables the uuid extension."""
@@ -1149,6 +1151,11 @@ class DatabaseService:
                 logger.debug("Device %s is disabled, ignoring position update", position.imei)
                 return False
 
+            if position.protocol and device.protocol:
+                if not self._is_protocol_compatible(device.protocol, position.protocol):
+                    self._log_protocol_mismatch_warning(device, position)
+                    return False
+
             state = await self._get_or_create_state(session, device.id)
 
             distance_km = 0.0
@@ -1226,6 +1233,29 @@ class DatabaseService:
             session.add(rec)
             await session.flush()
             return True
+
+    @staticmethod
+    def _is_protocol_compatible(configured: str, incoming: str) -> bool:
+        cfg = (configured or "").strip().lower()
+        inc = (incoming or "").strip().lower()
+        if cfg == inc:
+            return True
+        flespi_aliases = {"flespi", "flespi_cloud"}
+        if cfg in flespi_aliases and inc in flespi_aliases:
+            return True
+        return False
+
+    def _log_protocol_mismatch_warning(self, device: Device, position: NormalizedPosition) -> None:
+        now = time.monotonic()
+        key = (device.id, (position.protocol or "").lower())
+        last_warn = self._proto_mismatch_warn_times.get(key, 0.0)
+        if now - last_warn >= 30.0:
+            self._proto_mismatch_warn_times[key] = now
+            logger.warning(
+                "Ignored position for device '%s' (IMEI: %s): incoming protocol '%s' "
+                "does not match configured protocol '%s'",
+                device.name, position.imei, position.protocol, device.protocol,
+            )
 
     async def _get_device_by_imei_internal(
         self, session: AsyncSession, imei: str

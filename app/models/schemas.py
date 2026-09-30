@@ -51,6 +51,7 @@ class NormalizedPosition(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
     imei: str
+    protocol: Optional[str] = None
     device_time: datetime
     server_time: Optional[datetime] = None
     

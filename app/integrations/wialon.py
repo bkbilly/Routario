@@ -340,6 +340,7 @@ class WialonIntegration(BaseIntegration):
 
             return NormalizedPosition(
                 imei=imei,
+                protocol="wialon",
                 device_time=device_time,
                 server_time=server_time,
                 latitude=lat,

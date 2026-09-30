@@ -323,6 +323,7 @@ class OsmAndDecoder(BaseProtocolDecoder):
 
             return NormalizedPosition(
                 imei=device_id,
+                protocol="osmand",
                 device_time=device_time,
                 server_time=datetime.now(timezone.utc),
                 latitude=latitude,

@@ -332,6 +332,7 @@ class GPSServerIntegration(BaseIntegration):
 
             return NormalizedPosition(
                 imei=imei,
+                protocol="gpsserver",
                 device_time=device_time,
                 server_time=server_time,
                 latitude=lat,

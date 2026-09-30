@@ -398,6 +398,7 @@ class GoogleFindHubIntegration(BaseIntegration):
 
             yield NormalizedPosition(
                 imei=imei,
+                protocol="google_find_hub",
                 device_time=ts,
                 server_time=datetime.now(timezone.utc),
                 latitude=location["latitude"],

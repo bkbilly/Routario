@@ -372,6 +372,7 @@ class ThreeDTrackingIntegration(BaseIntegration):
 
             return NormalizedPosition(
                 imei=imei,
+                protocol="3dtracking",
                 device_time=device_time,
                 server_time=server_time,
                 latitude=lat,

@@ -239,6 +239,7 @@ class GT06Decoder(BaseProtocolDecoder):
 
             return NormalizedPosition(
                 imei=known_imei,
+                protocol="gt06",
                 device_time=device_time,
                 server_time=datetime.now(timezone.utc),
                 latitude=latitude,

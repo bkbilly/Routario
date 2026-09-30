@@ -273,6 +273,7 @@ class TK103Decoder(BaseProtocolDecoder):
 
             return NormalizedPosition(
                 imei=imei,
+                protocol="tk103",
                 device_time=device_time,
                 server_time=datetime.now(timezone.utc),
                 latitude=latitude,

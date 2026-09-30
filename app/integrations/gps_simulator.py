@@ -455,6 +455,7 @@ def _make_pos(
     sensors = {**extra, "simulated": True}
     return NormalizedPosition(
         imei=imei,
+        protocol="gps_simulator",
         device_time=ts,
         server_time=ts,
         latitude=lat,
