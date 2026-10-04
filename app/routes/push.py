@@ -38,6 +38,13 @@ class AdminNotifyPayload(BaseModel):
 
 # ── Routes ────────────────────────────────────────────────────────
 
+@router.get("/vapid-public-key")
+async def get_vapid_public_key():
+    """Return the active VAPID public key for browser push subscription."""
+    push = get_push_service()
+    return {"public_key": push._public_key}
+
+
 @router.post("/{user_id}/push-subscription")
 async def save_push_subscription(
     user_id: int,

@@ -32,15 +32,35 @@ class PushSubscription(Base):
     )
 
 
+DEFAULT_VAPID_PUBLIC_KEY = "BGQ3prURPQf1PZSGKySh1Mnr1QQW5pVBGZujTApG_zhqKxGnCz30umqOg5Mh_Q6U-5nNbAtO7XVmz0G-3RR_84g"
+DEFAULT_VAPID_PRIVATE_KEY = "Qk1wdfPJGQ4nLYN2SKLNGR5Z3FrD-e_LfByMTUyJ3Hc"
+
+
 class PushNotificationService:
 
     def __init__(self):
-        settings = get_settings()
-        self._private_key = getattr(settings, "vapid_private_key", "")
-        self._public_key  = getattr(settings, "vapid_public_key",  "")
-        self._mailto      = getattr(settings, "vapid_mailto", "mailto:admin@example.com")
-        if not self._private_key:
-            logger.warning("[Push] VAPID keys not configured — push notifications disabled")
+        pass
+
+    @property
+    def _private_key(self) -> str:
+        key = getattr(get_settings(), "vapid_private_key", "")
+        if key and key.strip():
+            return key.strip()
+        return DEFAULT_VAPID_PRIVATE_KEY
+
+    @property
+    def _public_key(self) -> str:
+        key = getattr(get_settings(), "vapid_public_key", "")
+        if key and key.strip():
+            return key.strip()
+        return DEFAULT_VAPID_PUBLIC_KEY
+
+    @property
+    def _mailto(self) -> str:
+        mailto = getattr(get_settings(), "vapid_mailto", "")
+        if mailto and mailto.strip():
+            return mailto.strip()
+        return "mailto:admin@example.com"
 
     @property
     def _enabled(self) -> bool:
@@ -59,7 +79,7 @@ class PushNotificationService:
         if not subscription:
             return False
         icon, badge = await self._get_branding_urls(db_service, user_id)
-        return await self._send(
+        ok, _ = await self._send(
             subscription=subscription,
             alert_type="notification",
             message=message,
@@ -72,6 +92,7 @@ class PushNotificationService:
             db_service=db_service,
             title_override=title,
         )
+        return ok
 
     async def notify_user(
         self,
@@ -82,12 +103,12 @@ class PushNotificationService:
         severity: str = "info",
         device_name: Optional[str] = None,
         alert_id: Optional[int] = None,
-    ) -> bool:
+    ) -> tuple[bool, Optional[str]]:
         if not self._enabled:
-            return False
+            return False, "Push notifications disabled: VAPID keys not configured on server"
         subscription = await self._get_subscription(db_service, user_id)
         if not subscription:
-            return False
+            return False, f"No active browser subscription found for user {user_id}"
         icon, badge = await self._get_branding_urls(db_service, user_id)
         return await self._send(
             subscription=subscription,
@@ -189,12 +210,12 @@ class PushNotificationService:
         user_id: Optional[int] = None,
         db_service: Any = None,
         title_override: Optional[str] = None,
-    ) -> bool:
+    ) -> tuple[bool, Optional[str]]:
         try:
             from pywebpush import webpush, WebPushException
         except ImportError:
             logger.error("[Push] pywebpush not installed")
-            return False
+            return False, "pywebpush library not installed on server"
 
         if title_override:
             title = title_override
@@ -220,7 +241,7 @@ class PushNotificationService:
                 vapid_private_key=self._private_key,
                 vapid_claims={"sub": self._mailto},
             )
-            return True
+            return True, None
         except Exception as ex:
             resp = getattr(ex, "response", None)
             status_code = getattr(resp, "status_code", None)
@@ -237,9 +258,16 @@ class PushNotificationService:
                         await self.remove_subscription(db_service, user_id)
                     except Exception as clean_ex:
                         logger.warning("[Push] Failed to auto-remove expired subscription for %s: %s", user_str, clean_ex)
+                return False, "Browser subscription expired or unsubscribed"
             else:
                 logger.error("[Push] Send failed for %s: %s", user_str, ex)
-            return False
+                err_text = str(ex)
+                if resp is not None and hasattr(resp, "text"):
+                    try:
+                        err_text = f"{resp.status_code}: {resp.text}"
+                    except Exception:
+                        pass
+                return False, f"Push delivery failed: {err_text}"
 
 
 _push_service: Optional[PushNotificationService] = None

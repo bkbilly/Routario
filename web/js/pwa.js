@@ -122,9 +122,20 @@ async function _subscribeToPush() {
       await existing.unsubscribe();
     }
 
+    let activePublicKey = VAPID_PUBLIC_KEY;
+    try {
+      const keyRes = await apiFetch(`${API_BASE}/users/vapid-public-key`);
+      if (keyRes.ok) {
+        const keyData = await keyRes.json();
+        if (keyData?.public_key) {
+          activePublicKey = keyData.public_key;
+        }
+      }
+    } catch (_) {}
+
     const subscription = await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      applicationServerKey: urlBase64ToUint8Array(activePublicKey),
     });
 
     const res = await apiFetch(`${API_BASE}/users/${userId}/push-subscription`, {

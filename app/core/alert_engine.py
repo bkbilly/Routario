@@ -531,7 +531,7 @@ class AlertEngine:
                 try:
                     push = get_push_service()
                     type_str = alert_data['type'].value if hasattr(alert_data['type'], 'value') else str(alert_data['type'])
-                    ok = await push.notify_user(
+                    ok, push_err = await push.notify_user(
                         db_service=get_db(),
                         user_id=user.id,
                         alert_type=type_str,
@@ -542,7 +542,7 @@ class AlertEngine:
                     if ok:
                         channel_status.append({"name": "Web Push", "status": "sent"})
                     else:
-                        channel_status.append({"name": "Web Push", "status": "failed", "error": "No active browser subscription or push disabled"})
+                        channel_status.append({"name": "Web Push", "status": "failed", "error": push_err or "Push delivery failed"})
                 except Exception as e:
                     channel_status.append({"name": "Web Push", "status": "failed", "error": str(e)})
 
