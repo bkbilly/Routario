@@ -203,7 +203,12 @@ async def trigger_test_alert(
     # 2. Determine target users
     notify_users = []
     if req.notify_user_ids:
-        notify_users = await db.get_users_by_ids(req.notify_user_ids)
+        try:
+            target_uids = [int(uid) for uid in req.notify_user_ids if str(uid).isdigit()]
+            if target_uids:
+                notify_users = await db.get_users_by_ids(target_uids)
+        except Exception:
+            pass
     if not notify_users and getattr(device, 'users', None):
         notify_users = list(device.users)
     if not notify_users:
@@ -261,8 +266,10 @@ async def trigger_test_alert(
             ev_verb = "Entered" if ev_type in ("enter", "both") else "Exited"
             msg = f"Geofence {ev_verb}: {gf_name}"
         elif k == "device_event":
-            label = p.get("event_label") or p.get("sensor_key") or "Panic Button"
-            msg = f"Device Event: {label}"
+            raw_label = p.get("event_label") or p.get("sensor_key") or "Device Event"
+            label = raw_label.replace("_", " ").title()
+            alert_label = label
+            msg = f"{label}: reported by device."
         elif k in ("no_driver", "driver"):
             msg = "Unauthorized movement without driver identified (speed 45 km/h)."
         elif k.startswith("maint"):
@@ -305,8 +312,15 @@ async def trigger_test_alert(
     except Exception:
         sev_enum = Severity.WARNING
 
+    effective_rule_name = req.rule_name
+    if not effective_rule_name or effective_rule_name.strip().lower() in ("device_event", "device event"):
+        effective_rule_name = alert_label
+
     alert_meta = {
-        "rule_name": req.rule_name or alert_label,
+        "rule_name": effective_rule_name,
+        "event_label": (req.params or {}).get("event_label") or alert_label,
+        "sensor_key": (req.params or {}).get("sensor_key", ""),
+        "config_key": "device_event" if k == "device_event" else req.alert_type,
         "is_test": True,
         "triggered_by": current_user.username,
         "selected_channels": channels,
@@ -366,14 +380,16 @@ async def trigger_test_alert(
         except Exception as e:
             logger.error("Test alert notification dispatch failed for user %s: %s", getattr(target_user, 'id', None), e, exc_info=True)
 
-    # 6. Broadcast via WebSocket ONLY to notify_users
+    # 6. Broadcast via WebSocket to notify_users and current_user
     try:
         from main import handle_new_alert
         if created_alerts:
-            target_ids = [u.id for u in notify_users]
+            target_ids = [int(u.id) for u in notify_users if getattr(u, 'id', None) is not None]
+            if current_user and current_user.id not in target_ids:
+                target_ids.append(int(current_user.id))
             await handle_new_alert(created_alerts[0], notify_user_ids=target_ids)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.error("Failed to broadcast alert via WebSocket: %s", exc, exc_info=True)
 
     # 7. Fetch updated alert with channel_status
     primary_alert = created_alerts[0] if created_alerts else None

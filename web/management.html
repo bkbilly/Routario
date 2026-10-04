@@ -1010,7 +1010,7 @@
                             </div>
                         </div>
                         <div id="customRuleFields" style="display:none;flex-direction:column;gap:0.6rem;margin-top:0.85rem;">
-                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
                                 <input type="text" id="newRuleName" class="form-input"
                                     placeholder="Rule name, e.g. High speed alert"
                                     style="flex:1;min-width:140px;"
@@ -1019,6 +1019,11 @@
                                     placeholder="speed &gt; 80 and ignition"
                                     style="flex:2;min-width:140px;"
                                     onkeydown="if(event.key==='Enter'){event.preventDefault();addSelectedAlert();}">
+                                <select id="newRuleSeverity" class="form-input" style="flex:0 0 130px;font-weight:600;" title="Notification Severity Level">
+                                    <option value="warning" selected>⚠️ Warning</option>
+                                    <option value="info">ℹ️ Info</option>
+                                    <option value="critical">🚨 Critical</option>
+                                </select>
                             </div>
                             <details>
                                 <summary style="cursor:pointer;color:var(--text-muted);font-size:0.78rem;"><i class="mdi mdi-information-outline"></i> Syntax reference</summary>
@@ -1034,17 +1039,18 @@
                             <thead>
                                 <tr>
                                     <th style="width:34px;">#</th>
-                                    <th style="width:190px;">Alert Type</th>
+                                    <th style="width:185px;">Alert Type</th>
                                     <th>Threshold</th>
                                     <th>Notify Via</th>
                                     <th id="alertsNotifyUsersHeader" style="display:none;">Notify Users</th>
-                                    <th style="width:160px;">Schedule</th>
+                                    <th style="width:150px;">Schedule</th>
+                                    <th style="width:100px;text-align:center;">Severity</th>
                                     <th style="width:115px;text-align:center;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="alertsTableBody">
                                 <tr id="alertsEmptyRow">
-                                    <td colspan="6" class="alerts-empty">No alerts configured. Use the dropdown above to add one.</td>
+                                    <td colspan="7" class="alerts-empty">No alerts configured. Use the dropdown above to add one.</td>
                                 </tr>
                             </tbody>
                         </table>

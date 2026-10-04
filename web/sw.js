@@ -4,7 +4,7 @@
  * Place this file at: /web/sw.js  (root of your web directory)
  */
 
-const CACHE_NAME = 'gps-dashboard-v127';
+const CACHE_NAME = 'gps-dashboard-v131';
 const STATIC_ASSETS = [
   '/login.html',
   '/gps-dashboard.html',
@@ -126,14 +126,24 @@ self.addEventListener('push', (event) => {
     }
   }
 
+  const isCritical = data.severity === 'critical' || data.severity === 'high';
+  const isWarning  = data.severity === 'warning';
+
+  // For critical emergency alerts, use an intense, escalating siren vibration pattern:
+  // 500ms on, 150ms off, 500ms on, 150ms off, 500ms on, 200ms off, 800ms on, 200ms off, 1200ms on (~4.2s total)
+  const vibratePattern = isCritical
+    ? [500, 150, 500, 150, 500, 200, 800, 200, 1200]
+    : (isWarning ? [250, 100, 250] : [150, 100, 150]);
+
   const options = {
     body: data.body,
     icon: data.icon || '/icons/icon-192.png',
     badge: data.badge || '/icons/badge-96.png',
-    tag: data.tag || 'gps-alert',
+    tag: isCritical ? `gps-critical-${data.data?.alert_id || Date.now()}` : (data.tag || 'gps-alert'),
     data: data.data || {},
-    requireInteraction: data.severity === 'critical' || data.severity === 'high',
-    vibrate: data.severity === 'critical' ? [200, 100, 200, 100, 200] : [200, 100, 200],
+    requireInteraction: isCritical,
+    renotify: true,
+    vibrate: vibratePattern,
     actions: [
       { action: 'open', title: 'Open Map' },
       { action: 'dismiss', title: 'Dismiss' }

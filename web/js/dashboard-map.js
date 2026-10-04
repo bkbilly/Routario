@@ -989,6 +989,11 @@ let wsReconnectTimer = null;
 let wsConnectedUserId = null;
 
 function connectWebSocket() {
+    if (typeof initGlobalAlertWebSocket === 'function') {
+        initGlobalAlertWebSocket();
+        return;
+    }
+
     const userId = localStorage.getItem('user_id');
     if (!userId) return;
 
@@ -1066,19 +1071,24 @@ function handleWebSocketMessage(message) {
         updateStats();
         refreshClusterIcons();
     } else if (message.type === 'alert') {
-        const nids = message.notify_user_ids;
-        const myId = parseInt(localStorage.getItem('user_id'), 10);
-        if (nids && !nids.includes(myId)) return;
-        loadAlerts();
-        let title, toastMessage;
-        if (message.data.type === 'custom' && message.data.alert_metadata?.rule_name) {
-            title        = message.data.alert_metadata.rule_name;
-            toastMessage = message.data.alert_metadata.rule_condition || message.data.message;
-        } else {
-            title        = message.data.type.replace(/_/g, ' ').toUpperCase();
-            toastMessage = message.data.message;
+        console.log('[WebSocket] Alert message received:', message);
+        const isCritical = message.data?.severity === 'critical' || message.data?.severity === 'high';
+        if (typeof updateAlertsButtonState === 'function') {
+            const currentCount = Array.isArray(window.loadedAlerts) ? window.loadedAlerts.length : (typeof loadedAlerts !== 'undefined' && Array.isArray(loadedAlerts) ? loadedAlerts.length : 0);
+            updateAlertsButtonState(currentCount + 1, isCritical);
         }
-        showAlert({ title, message: toastMessage, type: message.data.severity || 'info' });
+
+        if (typeof loadAlerts === 'function') {
+            loadAlerts();
+        }
+
+        const alertData = message.data || {};
+        const title = typeof getAlertDisplayTitle === 'function'
+            ? getAlertDisplayTitle(alertData)
+            : (alertData.alert_metadata?.rule_name || alertData.alert_metadata?.event_label || (alertData.alert_type ? alertData.alert_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Alert'));
+        const toastMessage = alertData.alert_metadata?.rule_condition || alertData.message || 'New alert triggered';
+
+        showAlert({ title, message: toastMessage, type: alertData.severity || 'info' });
     } else if (message.type === 'route_update') {
         if (typeof applyDashboardRouteUpdate === 'function') {
             applyDashboardRouteUpdate(message.data);

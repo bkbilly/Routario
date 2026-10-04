@@ -45,12 +45,165 @@ async function apiFetch(url, options = {}) {
     return response;
 }
 
+function _playCriticalAlertTone() {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.setValueAtTime(660, now + 0.15);
+        osc.frequency.setValueAtTime(880, now + 0.30);
+        osc.frequency.setValueAtTime(660, now + 0.45);
+        osc.frequency.setValueAtTime(880, now + 0.60);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.85);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.85);
+        setTimeout(() => ctx.close().catch(() => {}), 1000);
+    } catch (_) {}
+}
+
+function _ensureToastStyles() {
+    if (document.getElementById('routarioToastStyles')) return;
+    const style = document.createElement('style');
+    style.id = 'routarioToastStyles';
+    style.textContent = `
+.toast-container {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    max-width: 440px;
+    width: calc(100vw - 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    z-index: 99999;
+    pointer-events: none;
+}
+.toast {
+    position: relative;
+    background: #181e2e;
+    color: #f1f5f9;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 0.95rem 1.15rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75), 0 4px 12px rgba(0, 0, 0, 0.5);
+    animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: auto;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}
+body.light-theme .toast {
+    background: #ffffff;
+    color: #0f172a;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.toast-icon {
+    font-size: 1.5rem;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+}
+.toast-content {
+    flex: 1;
+    min-width: 0;
+}
+.toast-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+    line-height: 1.3;
+    margin-bottom: 0.25rem;
+    color: #f8fafc;
+}
+body.light-theme .toast-title {
+    color: #0f172a;
+}
+.toast-message {
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: #e2e8f0;
+    word-break: break-word;
+    font-weight: 500;
+}
+body.light-theme .toast-message {
+    color: #334155;
+}
+.toast-close {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 0.2rem;
+    font-size: 1.1rem;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-left: 0.25rem;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+}
+.toast-close:hover {
+    color: #f8fafc;
+    background: rgba(255, 255, 255, 0.1);
+}
+body.light-theme .toast-close:hover {
+    color: #0f172a;
+    background: rgba(0, 0, 0, 0.06);
+}
+.toast-success  { border-left: 5px solid #10b981; }
+.toast-success .toast-icon { color: #10b981; }
+.toast-error    { border-left: 5px solid #ef4444; }
+.toast-error .toast-icon { color: #ef4444; }
+.toast-warning  { border-left: 5px solid #f59e0b; }
+.toast-warning .toast-icon { color: #f59e0b; }
+.toast-info     { border-left: 5px solid #3b82f6; }
+.toast-info .toast-icon { color: #3b82f6; }
+
+.toast-critical {
+    background: #1c1520;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    border-left: 6px solid #ef4444;
+    box-shadow: 0 0 24px rgba(239, 68, 68, 0.3), 0 16px 40px rgba(0, 0, 0, 0.8);
+}
+body.light-theme .toast-critical {
+    background: #fff5f5;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-left: 6px solid #ef4444;
+}
+.toast-critical .toast-icon {
+    color: #ef4444;
+    font-size: 1.6rem;
+    animation: toast-crit-pulse 1s infinite alternate ease-in-out;
+}
+@keyframes toast-crit-pulse {
+    0% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(239, 68, 68, 0.4)); }
+    100% { transform: scale(1.18); filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.8)); }
+}
+@keyframes toastSlideIn {
+    from { transform: translateX(110%); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+}
+`;
+    document.head.appendChild(style);
+}
+
 /**
  * Show a toast notification.
  * Accepts either showAlert(message, type, duration)
  * or showAlert({ title, message, type, duration }).
  */
 function showAlert(messageOrData, type = 'info', duration = 3000) {
+    _ensureToastStyles();
+
     let title = null, message, resolvedType = type, resolvedDuration = duration;
 
     if (messageOrData && typeof messageOrData === 'object') {
@@ -66,12 +219,26 @@ function showAlert(messageOrData, type = 'info', duration = 3000) {
 
     // Auto-scale display duration for long or multi-line messages so users have time to read
     let finalDuration = resolvedDuration;
-    if (message.includes('\n') || message.length > 80) {
+    if (resolvedType === 'critical') {
+        finalDuration = resolvedDuration === 3000 ? 10000 : Math.max(resolvedDuration, 10000);
+        if ('vibrate' in navigator) {
+            try {
+                navigator.vibrate([500, 150, 500, 150, 500, 200, 800, 200, 1200]);
+            } catch (_) {}
+        }
+        _playCriticalAlertTone();
+    } else if (message.includes('\n') || message.length > 80) {
         const calculated = Math.max(8000, Math.min(25000, message.length * 50));
         finalDuration = resolvedDuration === 3000 ? calculated : Math.max(resolvedDuration, calculated);
     }
 
-    const icons = { success: 'mdi-check-circle', error: 'mdi-close-circle', warning: 'mdi-alert', info: 'mdi-information' };
+    const icons = {
+        success: 'mdi-check-circle',
+        error: 'mdi-close-circle',
+        warning: 'mdi-alert',
+        info: 'mdi-information',
+        critical: 'mdi-alert-octagon',
+    };
     const icon  = icons[resolvedType] || 'mdi-information';
 
     let container = document.getElementById('toastContainer');
@@ -92,9 +259,235 @@ function showAlert(messageOrData, type = 'info', duration = 3000) {
 
     setTimeout(() => {
         if (!toast.isConnected) return;
-        toast.style.animation = 'slideInRight 0.3s reverse forwards';
+        toast.style.animation = 'toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) reverse forwards';
         setTimeout(() => toast.remove(), 300);
     }, finalDuration);
+}
+
+// ── Universal Alert Title and Icon Resolvers ──────────────────────────────────
+function getAlertDisplayTitle(alert) {
+    if (!alert) return 'Alert';
+    const meta = alert.alert_metadata || {};
+    const params = meta.params || {};
+
+    const typeStr = (alert.alert_type || alert.type || '').toString().toLowerCase();
+    const configKey = (meta.config_key || '').toString().toLowerCase();
+    const isDeviceEvent = typeStr === 'device_event' || configKey === 'device_event';
+
+    // 1. Check event_label in meta or params (ignore generic placeholders like "device event")
+    const eventLabel = meta.event_label || params.event_label;
+    if (eventLabel && typeof eventLabel === 'string' && eventLabel.trim().toLowerCase() !== 'device event') {
+        return eventLabel.trim();
+    }
+
+    // 2. Check rule_name in meta (ignore generic placeholders like "device event" or "device_event")
+    const ruleName = meta.rule_name;
+    if (ruleName && typeof ruleName === 'string' && ruleName.trim().toLowerCase() !== 'device event' && ruleName.trim().toLowerCase() !== 'device_event') {
+        return ruleName.trim();
+    }
+
+    // 3. For device events, check sensor_key (e.g., 'towing' -> 'Towing', 'power_cut' -> 'Power Cut')
+    const sensorKey = meta.sensor_key || params.sensor_key;
+    if (sensorKey && typeof sensorKey === 'string') {
+        return sensorKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+    }
+
+    // 4. Notification title
+    if ((typeStr === 'notification' || configKey === 'notification') && meta.title) {
+        return meta.title.trim();
+    }
+
+    // 5. Check if message has a specific prefix (e.g., "Device Event: Towing" or "Towing: reported by device")
+    if (alert.message && typeof alert.message === 'string') {
+        const colonIdx = alert.message.indexOf(':');
+        if (colonIdx > 0 && colonIdx < 35) {
+            const prefix = alert.message.substring(0, colonIdx).trim();
+            if (prefix.toLowerCase() === 'device event') {
+                const rest = alert.message.substring(colonIdx + 1).split(/[\(\.,]/)[0].trim();
+                if (rest && rest.toLowerCase() !== 'device event') return rest;
+            } else if (prefix.toLowerCase() !== 'alert' && !prefix.includes('{')) {
+                return prefix;
+            }
+        }
+    }
+
+    // 6. Look up in ALERT_TYPES if registered
+    if (typeof ALERT_TYPES !== 'undefined' && ALERT_TYPES[typeStr]?.label) {
+        return ALERT_TYPES[typeStr].label;
+    }
+
+    // 7. General alert type fallback formatted nicely (e.g. "geofence_enter" -> "Geofence Enter")
+    if (typeStr && typeStr !== 'custom' && typeStr !== 'device_event') {
+        return typeStr.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    return isDeviceEvent ? 'Device Alert' : (meta.rule_name || 'Alert');
+}
+
+function getAlertIconClass(alert) {
+    if (!alert) return 'mdi-bell';
+    const meta = alert.alert_metadata || {};
+    const params = meta.params || {};
+
+    const ICON_MAP = {
+        speeding:               'mdi-speedometer',
+        speed:                  'mdi-speedometer',
+        geofence_enter:         'mdi-map-marker-check',
+        geofence_exit:          'mdi-map-marker-minus',
+        geofence:               'mdi-map-marker-radius',
+        geofencing:             'mdi-map-marker-radius',
+        offline:                'mdi-wifi-off',
+        towing:                 'mdi-tow-truck',
+        low_battery:            'mdi-battery-low',
+        battery:                'mdi-battery-low',
+        power_cut:              'mdi-power-plug-off',
+        power:                  'mdi-power-plug-off',
+        sos:                    'mdi-alarm-light',
+        panic:                  'mdi-alarm-light',
+        alarm:                  'mdi-alarm-light',
+        tampering:              'mdi-alert',
+        tamper:                 'mdi-alert',
+        door:                   'mdi-door-open',
+        door_open:              'mdi-door-open',
+        crash:                  'mdi-car-crash',
+        accident:               'mdi-car-crash',
+        vibration:              'mdi-vibrate',
+        shock:                  'mdi-vibrate',
+        movement:               'mdi-motion-sensor',
+        motion:                 'mdi-motion-sensor',
+        idling:                 'mdi-engine-off',
+        idle:                   'mdi-engine-off',
+        ignition_on:            'mdi-key-variant',
+        ignition_off:           'mdi-key-variant',
+        fuel:                   'mdi-gas-station',
+        fuel_drop:              'mdi-gas-station',
+        temperature:            'mdi-thermometer-alert',
+        maintenance:            'mdi-wrench',
+        driver:                 'mdi-account-alert',
+        no_driver:              'mdi-account-alert',
+        notification:           'mdi-message-badge',
+        route_waypoint_skipped: 'mdi-map-marker-off',
+        route_off_route:        'mdi-map-marker-path',
+        route_completed:        'mdi-flag-checkered',
+    };
+
+    const sensorKey = (meta.sensor_key || params.sensor_key || '').toString().toLowerCase();
+    if (sensorKey && ICON_MAP[sensorKey]) return ICON_MAP[sensorKey];
+
+    const eventLabel = (meta.event_label || params.event_label || meta.rule_name || '').toString().toLowerCase();
+    for (const [key, icon] of Object.entries(ICON_MAP)) {
+        if (eventLabel.includes(key)) return icon;
+    }
+
+    const alertType = (alert.alert_type || alert.type || '').toString().toLowerCase();
+    if (ICON_MAP[alertType]) return ICON_MAP[alertType];
+
+    return 'mdi-bell';
+}
+
+function getAlertIconHtml(alert) {
+    return `<i class="mdi ${getAlertIconClass(alert)}"></i>`;
+}
+
+window.getAlertDisplayTitle = getAlertDisplayTitle;
+window.getAlertIconClass    = getAlertIconClass;
+window.getAlertIconHtml     = getAlertIconHtml;
+
+// ── Global Real-Time Alert WebSocket (active on all authenticated pages) ───────
+let _globalWs = null;
+let _globalWsReconnectTimer = null;
+let _globalWsConnectedUserId = null;
+
+function initGlobalAlertWebSocket() {
+    const userId = localStorage.getItem('user_id');
+    const token  = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
+    if (!userId || !token) return;
+
+    if (window.location.pathname.endsWith('login.html') || window.location.pathname.endsWith('/login')) return;
+
+    if (_globalWs && (_globalWs.readyState === WebSocket.OPEN || _globalWs.readyState === WebSocket.CONNECTING)) {
+        if (_globalWsConnectedUserId === userId) return;
+        try { _globalWs.close(1000, 'user changed'); } catch (_) {}
+    }
+    _globalWsConnectedUserId = userId;
+
+    if (_globalWsReconnectTimer) {
+        clearTimeout(_globalWsReconnectTimer);
+        _globalWsReconnectTimer = null;
+    }
+
+    const wsUrl = `${WS_BASE_URL}${userId}?token=${encodeURIComponent(token)}`;
+    try {
+        _globalWs = new WebSocket(wsUrl);
+        window.ws = _globalWs;
+
+        _globalWs.onopen = () => {
+            console.log('[WebSocket] Global socket connected for user', userId, 'on', window.location.pathname);
+        };
+
+        _globalWs.onmessage = (event) => {
+            try {
+                const message = JSON.parse(event.data);
+                _dispatchGlobalWebSocketMessage(message);
+            } catch (err) {
+                console.error('[WebSocket] Message parsing error:', err);
+            }
+        };
+
+        _globalWs.onerror = (e) => {
+            console.debug('[WebSocket] Socket error on', window.location.pathname, e);
+        };
+
+        _globalWs.onclose = () => {
+            if (!localStorage.getItem('auth_token')) return;
+            _globalWsReconnectTimer = setTimeout(initGlobalAlertWebSocket, 5000);
+        };
+    } catch (e) {
+        console.warn('[WebSocket] Global init failed:', e);
+    }
+}
+
+function _dispatchGlobalWebSocketMessage(message) {
+    if (!message) return;
+
+    // If on dashboard, delegate full handling to dashboard-map.js
+    if (typeof handleWebSocketMessage === 'function') {
+        handleWebSocketMessage(message);
+        return;
+    }
+
+    // On all other pages (device-management, reports, management, company, etc.):
+    if (message.type === 'alert') {
+        console.log('[WebSocket] Real-time alert on page:', window.location.pathname, message);
+        const alertData = message.data || {};
+        const title = typeof getAlertDisplayTitle === 'function'
+            ? getAlertDisplayTitle(alertData)
+            : (alertData.alert_metadata?.rule_name || alertData.alert_metadata?.event_label || (alertData.alert_type ? alertData.alert_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Alert'));
+        const toastMessage = alertData.alert_metadata?.rule_condition || alertData.message || 'New alert triggered';
+
+        showAlert({
+            title,
+            message: toastMessage,
+            type: alertData.severity || 'info',
+        });
+
+        if (typeof loadAlertRuleHistoryData === 'function') {
+            loadAlertRuleHistoryData();
+        }
+        if (typeof loadAlerts === 'function') {
+            loadAlerts();
+        }
+    }
+}
+
+window.initGlobalAlertWebSocket = initGlobalAlertWebSocket;
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        initGlobalAlertWebSocket();
+    });
+} else {
+    initGlobalAlertWebSocket();
 }
 
 function hasPermission(perm) {

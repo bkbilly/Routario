@@ -1559,7 +1559,12 @@ class DatabaseService:
             if end_date:
                 query = query.where(AlertHistory.created_at <= end_date)
             if alert_type:
-                query = query.where(AlertHistory.alert_type == alert_type)
+                if "," in alert_type:
+                    types = [t.strip() for t in alert_type.split(",") if t.strip()]
+                    if types:
+                        query = query.where(AlertHistory.alert_type.in_(types))
+                else:
+                    query = query.where(AlertHistory.alert_type == alert_type)
             query = query.order_by(AlertHistory.created_at.desc()).limit(limit).offset(offset)
             result = await session.execute(query)
             return [

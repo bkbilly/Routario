@@ -1088,11 +1088,26 @@ function loadAlertsFromConfig(config) {
         const ch = config.alert_channels || {};
         for (const [key] of Object.entries(ALERT_TYPES)) {
             if (config[key] != null)
-                alertRows.push({ uid: nextUid(), alertKey: key, value: config[key], channels: ch[key] || [], schedule: null });
+                alertRows.push({
+                    uid: nextUid(),
+                    alertKey: key,
+                    severity: ALERT_TYPES[key]?.severity || 'warning',
+                    value: config[key],
+                    channels: ch[key] || [],
+                    schedule: null
+                });
         }
         (config.custom_rules || []).forEach(r => {
-            const obj = typeof r === 'string' ? { name: 'Custom Alert', rule: r, channels: [] } : r;
-            alertRows.push({ uid: nextUid(), alertKey: '__custom__', name: obj.name, rule: obj.rule, channels: obj.channels || [], schedule: null });
+            const obj = typeof r === 'string' ? { name: 'Custom Alert', rule: r, channels: [], severity: 'warning' } : r;
+            alertRows.push({
+                uid: nextUid(),
+                alertKey: '__custom__',
+                name: obj.name,
+                rule: obj.rule,
+                severity: obj.severity || 'warning',
+                channels: obj.channels || [],
+                schedule: null
+            });
         });
     }
     renderAlertsTable();
@@ -1106,6 +1121,9 @@ function _cloneAlertRow(row) {
 function _alertRowWithFreshUid(row) {
     const clone = _cloneAlertRow(row);
     clone.uid = nextUid();
+    if (!clone.severity) {
+        clone.severity = ALERT_TYPES[clone.alertKey]?.severity || clone.params?.severity || 'warning';
+    }
     return clone;
 }
 
@@ -1779,16 +1797,18 @@ function addSelectedAlert() {
     if (val.startsWith('__native__:')) {
         try {
             const eventDef = JSON.parse(val.slice('__native__:'.length));
+            const evSev = eventDef.severity || 'warning';
             alertRows.push({
                 uid:      nextUid(),
                 alertKey: 'device_event',
+                severity: evSev,
                 params: {
                     sensor_key:     eventDef.key,
                     trigger_value:  eventDef.trigger_value  ?? '',
                     trigger_values: eventDef.trigger_values ?? [],
                     event_label:    eventDef.label.replace(/^[\p{Emoji}\s]+/u, '').trim(),
                     event_icon:     (eventDef.label.match(/^\p{Emoji}/u) || ['📡'])[0],
-                    severity:       eventDef.severity,
+                    severity:       evSev,
                 },
                 channels: [],
                 schedule: null,
@@ -1810,7 +1830,18 @@ function addSelectedAlert() {
     if (!def) return;
     const params = {};
     (def.fields || []).forEach(f => { params[f.key] = f.default; });
-    alertRows.push({ uid: nextUid(), alertKey: val, params, channels: [], schedule: null, notify_user_ids: _curUid ? [_curUid] : null, send_push: true, send_email: false, send_voip: false });
+    alertRows.push({
+        uid: nextUid(),
+        alertKey: val,
+        severity: def.severity || 'warning',
+        params,
+        channels: [],
+        schedule: null,
+        notify_user_ids: _curUid ? [_curUid] : null,
+        send_push: true,
+        send_email: false,
+        send_voip: false
+    });
     renderAlertsTable();
     sel.value = '';
 }
@@ -1831,7 +1862,22 @@ function addCustomRule() {
         return;
     }
     const _curUid = parseInt(localStorage.getItem('user_id'), 10) || null;
-    alertRows.push({ uid: nextUid(), alertKey: '__custom__', name, rule, channels: [], schedule: null, duration: null, notify_user_ids: _curUid ? [_curUid] : null, send_push: true, send_email: false, send_voip: false });
+    const sevEl = document.getElementById('newRuleSeverity');
+    const customSev = sevEl?.value || 'warning';
+    alertRows.push({
+        uid: nextUid(),
+        alertKey: '__custom__',
+        name,
+        rule,
+        severity: customSev,
+        channels: [],
+        schedule: null,
+        duration: null,
+        notify_user_ids: _curUid ? [_curUid] : null,
+        send_push: true,
+        send_email: false,
+        send_voip: false
+    });
     nameEl.value = '';
     ruleEl.value = '';
     // Reset dropdown and hide custom fields
@@ -1883,7 +1929,7 @@ function renderAlertsTable() {
     const notifyHdr = document.getElementById('alertsNotifyUsersHeader');
     if (notifyHdr) notifyHdr.style.display = hasAdminAccess ? '' : 'none';
     const emptyCell = emptyRow?.querySelector('td');
-    if (emptyCell) emptyCell.colSpan = hasAdminAccess ? 7 : 6;
+    if (emptyCell) emptyCell.colSpan = hasAdminAccess ? 8 : 7;
     tbody.querySelectorAll('tr.alert-data-row').forEach(r => r.remove());
     if (!alertRows.length) { if (emptyRow) emptyRow.style.display = ''; return; }
 
@@ -1911,6 +1957,13 @@ function renderAlertsTable() {
             : isDeviceEvent
             ? `<span class="alert-type-label system">${_esc(row.params?.event_icon || '📡')} ${_esc(row.params?.event_label || row.params?.sensor_key || 'Device Event')}</span>`
             : (def?.icon ? `${def.icon} ` : '') + _esc(def?.label || row.alertKey);
+
+        const rowSev = (row.severity || def?.severity || (isDeviceEvent ? row.params?.severity : null) || 'warning').toLowerCase();
+        const sevClass = (rowSev === 'critical' || rowSev === 'high') ? 'sev-critical' : (rowSev === 'warning' ? 'sev-warning' : 'sev-info');
+        let sevIcon = 'mdi-alert-outline';
+        if (sevClass === 'sev-critical') sevIcon = 'mdi-alert-octagon-outline';
+        else if (sevClass === 'sev-info') sevIcon = 'mdi-information-outline';
+        const sevBadge = `<span class="severity-badge ${sevClass}"><i class="mdi ${sevIcon}"></i> ${_esc(rowSev)}</span>`;
 
         let thresh;
         if (isCustom) {
@@ -2051,6 +2104,7 @@ function renderAlertsTable() {
             <td><div style="display:flex;flex-wrap:wrap;gap:0.3rem;">${chHtml}</div></td>
             ${notifyUsersCell}
             <td>${schedHtml}</td>
+            <td style="text-align:center;">${sevBadge}</td>
             <td style="text-align:center;white-space:nowrap;">
                 <button type="button" class="btn btn-secondary tbl-btn" title="View Alert History & Test Trigger" onclick="openAlertHistoryForAlert(${row.uid})"><i class="mdi mdi-history"></i></button>
                 <button type="button" class="btn btn-secondary tbl-btn" title="Edit Alert" onclick="openAlertEditor(${row.uid})"><i class="mdi mdi-pencil"></i></button>
@@ -2172,6 +2226,140 @@ function closeAlertRuleHistoryModal() {
 }
 window.closeAlertRuleHistoryModal = closeAlertRuleHistoryModal;
 
+function _matchesAlertRuleRow(item, row) {
+    if (!item || !row) return false;
+    const meta = item.alert_metadata || {};
+    const itemType = String(item.alert_type || '').toLowerCase();
+    const itemMsg = String(item.message || '').toLowerCase();
+    const alertKey = row.alertKey;
+
+    if (alertKey === 'device_event') {
+        const sensorKey = String(row.params?.sensor_key || '').trim().toLowerCase();
+        const eventLabel = String(row.params?.event_label || '').trim().toLowerCase();
+
+        const metaSensor = String(meta.sensor_key || meta.params?.sensor_key || '').trim().toLowerCase();
+        const metaLabel = String(meta.event_label || meta.rule_name || meta.params?.event_label || '').trim().toLowerCase();
+
+        // 1. Direct sensor key match
+        if (sensorKey && metaSensor && sensorKey === metaSensor) return true;
+
+        // 2. Direct event label match
+        if (eventLabel && metaLabel && eventLabel === metaLabel) return true;
+
+        // 3. Message prefix / match (e.g. "Alarm: reported by device.")
+        if (eventLabel && itemMsg.startsWith(eventLabel)) return true;
+        if (sensorKey && itemMsg.startsWith(sensorKey)) return true;
+        if (eventLabel && itemMsg.includes(eventLabel)) return true;
+
+        // 4. If sensor_key or label is present in metadata
+        if (sensorKey && (metaSensor === sensorKey || itemMsg.includes(sensorKey))) return true;
+        if (eventLabel && (metaLabel === eventLabel || itemMsg.includes(eventLabel))) return true;
+
+        return false;
+    }
+
+    if (alertKey === '__custom__') {
+        // Exclude native hardware device events
+        if (meta.config_key === 'device_event' || meta.sensor_key) return false;
+        if (itemType !== 'custom' && itemType !== '__custom__') return false;
+
+        const ruleName = String(row.name || '').trim().toLowerCase();
+        const ruleCond = String(row.rule || '').trim();
+
+        const metaRuleName = String(meta.rule_name || '').trim().toLowerCase();
+        const metaCond = String(meta.rule_condition || '').trim();
+
+        if (ruleName && metaRuleName && ruleName === metaRuleName) return true;
+        if (ruleCond && metaCond && ruleCond === metaCond) return true;
+        if (ruleName && itemMsg.includes(ruleName)) return true;
+
+        if (!ruleName && !ruleCond) return true;
+        return false;
+    }
+
+    if (alertKey === 'geofence_alert') {
+        const isGfType = ['geofence_alert', 'geofence_enter', 'geofence_exit', 'geofence'].includes(itemType) || meta.config_key === 'geofence_alert';
+        if (!isGfType) return false;
+
+        const rowGfId = row.params?.geofence_id != null ? String(row.params.geofence_id) : '';
+        const rowGfName = String(row.params?.geofence_name || '').trim().toLowerCase();
+
+        const metaGfId = meta.geofence_id != null ? String(meta.geofence_id) : (meta.params?.geofence_id != null ? String(meta.params.geofence_id) : '');
+        const metaGfName = String(meta.geofence_name || meta.params?.geofence_name || '').trim().toLowerCase();
+
+        if (rowGfId && metaGfId) {
+            return rowGfId === metaGfId;
+        }
+        if (rowGfName && metaGfName) {
+            return rowGfName === metaGfName;
+        }
+        if (rowGfName && itemMsg.includes(rowGfName)) {
+            return true;
+        }
+        if (!rowGfId && !rowGfName) return true;
+        return false;
+    }
+
+    if (alertKey === 'maintenance_alert') {
+        const isMaint = ['maintenance_alert', 'maintenance'].includes(itemType) || meta.config_key === 'maintenance_alert';
+        if (!isMaint) return false;
+
+        const rowType = String(row.params?.maintenance_type || '').toLowerCase();
+        const rowLabel = String(row.params?.custom_label || '').trim().toLowerCase();
+
+        const metaType = String(meta.params?.maintenance_type || meta.maintenance_type || '').toLowerCase();
+        const metaLabel = String(meta.params?.custom_label || meta.custom_label || '').trim().toLowerCase();
+
+        if (rowType === 'custom' && rowLabel) {
+            if (metaLabel && metaLabel === rowLabel) return true;
+            if (itemMsg.includes(rowLabel)) return true;
+            return false;
+        }
+        if (rowType && metaType) {
+            return rowType === metaType;
+        }
+        if (rowType && itemMsg.includes(rowType.replace(/_/g, ' '))) {
+            return true;
+        }
+        if (!rowType && !rowLabel) return true;
+        return false;
+    }
+
+    if (alertKey === 'speed_tolerance') {
+        return ['speed_tolerance', 'speeding', 'speed'].includes(itemType) || meta.config_key === 'speed_tolerance' || itemMsg.includes('speed');
+    }
+
+    if (alertKey === 'idle_timeout_minutes') {
+        return ['idle_timeout_minutes', 'idling', 'idle'].includes(itemType) || meta.config_key === 'idle_timeout_minutes' || itemMsg.includes('idle');
+    }
+
+    if (alertKey === 'towing_threshold_meters') {
+        return ['towing_threshold_meters', 'towing'].includes(itemType) || meta.config_key === 'towing_threshold_meters' || itemMsg.includes('towing');
+    }
+
+    if (alertKey === 'low_battery') {
+        return ['low_battery', 'battery'].includes(itemType) || meta.config_key === 'low_battery' || itemMsg.includes('battery');
+    }
+
+    if (alertKey === 'offline_detection') {
+        return ['offline_detection', 'offline'].includes(itemType) || meta.config_key === 'offline_detection' || itemMsg.includes('offline');
+    }
+
+    if (alertKey === 'no_driver' || alertKey === 'beacon_driver_id') {
+        return ['no_driver', 'beacon_driver_id', 'unauthorized_driver'].includes(itemType) || meta.config_key === alertKey || itemMsg.includes('driver');
+    }
+
+    if (alertKey === 'route_waypoint_skipped') {
+        return ['route_waypoint_skipped', 'route_completed'].includes(itemType) || meta.config_key === alertKey;
+    }
+
+    if (alertKey === 'route_off_route') {
+        return itemType === 'route_off_route' || meta.config_key === alertKey;
+    }
+
+    return itemType === alertKey || meta.config_key === alertKey;
+}
+
 async function loadAlertRuleHistoryData() {
     const row = alertRows.find(r => r.uid === currentHistoryAlertUid);
     if (!row) return;
@@ -2188,24 +2376,35 @@ async function loadAlertRuleHistoryData() {
     if (tableEl) tableEl.style.display = 'none';
 
     try {
-        const isCustom = row.alertKey === '__custom__';
-        const alertType = isCustom ? 'custom' : row.alertKey;
         const deviceId = editingDeviceId;
+        const typeAliases = {
+            'device_event': 'device_event,custom',
+            '__custom__': 'custom',
+            'speed_tolerance': 'speed_tolerance,speeding',
+            'idle_timeout_minutes': 'idle_timeout_minutes,idling',
+            'towing_threshold_meters': 'towing_threshold_meters,towing',
+            'geofence_alert': 'geofence_alert,geofence_enter,geofence_exit',
+            'maintenance_alert': 'maintenance_alert,maintenance',
+            'low_battery': 'low_battery',
+            'offline_detection': 'offline_detection,offline',
+            'no_driver': 'no_driver,unauthorized_driver',
+            'beacon_driver_id': 'beacon_driver_id,unauthorized_driver',
+            'route_waypoint_skipped': 'route_waypoint_skipped,route_completed',
+            'route_off_route': 'route_off_route',
+        };
+        const queryType = typeAliases[row.alertKey] || (row.alertKey === '__custom__' ? 'custom' : row.alertKey);
 
-        let url = `${API_BASE}/alerts/report?limit=100`;
+        let url = `${API_BASE}/alerts/report?limit=300`;
         if (deviceId) url += `&device_ids=${deviceId}`;
-        if (alertType) url += `&alert_type=${encodeURIComponent(alertType)}`;
+        if (queryType) url += `&alert_type=${encodeURIComponent(queryType)}`;
 
         const res = await apiFetch(url);
         if (!res.ok) throw new Error('Failed to load alert history');
         let data = await res.json();
 
-        // If custom alert, filter by rule_name if set
-        if (isCustom && row.name && Array.isArray(data)) {
-            data = data.filter(a => {
-                const meta = a.alert_metadata || {};
-                return meta.rule_name === row.name || a.message?.includes(row.name);
-            });
+        // Strictly filter to only alerts that match the specific clicked rule / category
+        if (Array.isArray(data)) {
+            data = data.filter(item => _matchesAlertRuleRow(item, row));
         }
 
         if (loadingEl) loadingEl.style.display = 'none';
@@ -2521,6 +2720,23 @@ function renderAlertEditorCommandOptions(cmdKey, supportData, currentPayload = '
     }
 }
 
+function getSeverityDescription(sev) {
+    switch ((sev || '').toLowerCase()) {
+        case 'info':
+            return '<span style="color:#3b82f6;font-weight:600;">Routine / Informational:</span> Standard in-app notification for general operational awareness.';
+        case 'critical':
+            return '<span style="color:#ef4444;font-weight:600;">Urgent / High Priority:</span> Screen-pinned mobile push notification requiring interaction, urgent repeating vibration.';
+        case 'warning':
+        default:
+            return '<span style="color:#f59e0b;font-weight:600;">Attention Required:</span> Important threshold violation or warning requiring operator review.';
+    }
+}
+function updateAlertEditorSeverityDesc(sev) {
+    const el = document.getElementById('editor-severity-desc');
+    if (el) el.innerHTML = getSeverityDescription(sev);
+}
+window.updateAlertEditorSeverityDesc = updateAlertEditorSeverityDesc;
+
 // ── Alert Editor ──────────────────────────────────────────────────
 async function openAlertEditor(uid) {
     if (typeof syncPublicSystemSettings === 'function') {
@@ -2812,11 +3028,33 @@ async function openAlertEditor(uid) {
         } catch (e) { console.error('Failed to load device users:', e); }
     }
 
+    const curSeverity = (row.severity || def?.severity || (isDeviceEvent ? row.params?.severity : null) || 'warning').toLowerCase();
+
+    const severitySelectorHtml = `
+        <div class="form-group" style="margin-bottom:1.15rem;background:var(--bg-tertiary);padding:0.85rem 1rem;border-radius:10px;border:1px solid var(--border-color);">
+            <label class="form-label" style="display:flex;align-items:center;gap:0.4rem;font-weight:600;margin-bottom:0.45rem;">
+                <i class="mdi mdi-shield-alert-outline" style="color:var(--accent-primary);font-size:1.1rem;"></i>
+                <span>Notification Severity Level</span>
+            </label>
+            <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                <select class="form-input" id="editor-alert-severity" onchange="updateAlertEditorSeverityDesc(this.value)" style="max-width:170px;font-weight:600;">
+                    <option value="info"${curSeverity === 'info' ? ' selected' : ''}>ℹ️ Info</option>
+                    <option value="warning"${curSeverity === 'warning' ? ' selected' : ''}>⚠️ Warning</option>
+                    <option value="critical"${curSeverity === 'critical' ? ' selected' : ''}>🚨 Critical</option>
+                </select>
+                <div id="editor-severity-desc" style="font-size:0.78rem;color:var(--text-muted);line-height:1.35;flex:1;min-width:180px;">
+                    ${getSeverityDescription(curSeverity)}
+                </div>
+            </div>
+        </div>
+    `;
+
     document.getElementById('alertEditorBody').innerHTML = `
         <div class="alert-editor-grid">
             <div class="alert-editor-left">
                 <div style="display:flex;flex-direction:column;gap:0.25rem;">
                     ${def?.description ? `<p style="color:var(--text-muted);font-size:0.85rem;margin:0 0 1rem;">${_esc(def.description)}</p>` : ''}
+                    ${severitySelectorHtml}
                     ${fieldsHtml}
                 </div>
             </div>
@@ -2991,6 +3229,15 @@ function saveAlertFromEditor() {
     const isCustom = row.alertKey === '__custom__';
     const isDeviceEvent = row.alertKey === 'device_event';
 
+    const sevSel = document.getElementById('editor-alert-severity');
+    if (sevSel) {
+        row.severity = sevSel.value;
+        if (isDeviceEvent) {
+            if (!row.params) row.params = {};
+            row.params.severity = sevSel.value;
+        }
+    }
+
     if (isCustom) {
         const n   = document.getElementById('editor-custom-name')?.value.trim();
         const r   = document.getElementById('editor-custom-rule')?.value.trim();
@@ -3102,6 +3349,7 @@ function buildConfigFromAlertRows(existing = {}) {
     const isVoipAvailable = isVoipNotificationAvailable();
     alertRows.forEach(row => {
         const rowCopy = { ...row };
+        rowCopy.severity = row.severity || ALERT_TYPES[row.alertKey]?.severity || 'warning';
         if (!isEmailAvailable) {
             rowCopy.send_email = false;
         }
@@ -3110,7 +3358,7 @@ function buildConfigFromAlertRows(existing = {}) {
         }
         config.alert_rows.push(rowCopy);
         if (row.alertKey === '__custom__')
-            config.custom_rules.push({ name: row.name, rule: row.rule, channels: row.channels || [] });
+            config.custom_rules.push({ name: row.name, rule: row.rule, severity: rowCopy.severity, channels: row.channels || [] });
         else
             config.alert_channels[row.alertKey] = row.channels || [];
     });

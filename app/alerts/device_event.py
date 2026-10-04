@@ -146,5 +146,6 @@ class DeviceEventAlert(BaseAlert):
                 "sensor_key":   sensor_key,
                 "sensor_value": raw_value,
                 "event_label":  event_label,
+                "rule_name":    event_label,
             },
         }

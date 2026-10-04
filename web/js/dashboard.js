@@ -55,25 +55,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadAlerts(); // Load alerts immediately on startup
     startPeriodicUpdate();
 
-    // Mutation Observer for Alert Button
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            const count = parseInt(mutation.target.textContent) | 0;
-            const btn = document.getElementById('alertsBtn');
-            if (btn) {
-                if (count > 0) {
-                    btn.classList.add('has-alerts');
-                } else {
-                    btn.classList.remove('has-alerts');
-                }
-            }
-        });
-    });
-
-    const alertCountSpan = document.getElementById('alertCount');
-    if (alertCountSpan) {
-        observer.observe(alertCountSpan, { childList: true, characterData: true, subtree: true });
-    }
 
     // Start local time update interval (every 60s) for "time ago"
     setInterval(updateSidebarTimes, 60000);

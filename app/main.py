@@ -8,10 +8,14 @@ import logging
 import mimetypes
 import os
 import signal
+import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
+
+# Ensure that 'main' in sys.modules resolves to this module if executed as __main__
+sys.modules.setdefault("main", sys.modules[__name__])
 
 import httpx
 import jwt
@@ -258,6 +262,12 @@ class WebSocketManager:
             await self._broadcast_direct(device.id, message)
 
     async def broadcast_alert(self, alert: AlertHistory, notify_user_ids=None):
+        if notify_user_ids is not None:
+            try:
+                notify_user_ids = [int(u) for u in notify_user_ids if str(u).isdigit()]
+            except Exception:
+                pass
+
         message = {
             "type":           WSMessageType.ALERT.value,
             "device_id":      alert.device_id,
@@ -266,25 +276,57 @@ class WebSocketManager:
             "data": {
                 "id":             alert.id,
                 "type":           alert.alert_type,
+                "alert_type":     alert.alert_type,
                 "severity":       alert.severity,
                 "message":        alert.message,
                 "alert_metadata": alert.alert_metadata,
                 "created_at":     alert.created_at.isoformat(),
             },
         }
-        if alert.device_id is None:
-            await self._send_to_user(alert.user_id, json.dumps(message))
-            return
-        if notify_user_ids is not None:
-            # Send only to the specified users (direct, no broadcast)
-            raw = json.dumps(message)
-            for uid in notify_user_ids:
-                await self._send_to_user(uid, raw)
-            return
-        if redis_pubsub.available:
+
+        # Resolve target recipients
+        recipients = set(notify_user_ids) if notify_user_ids is not None else set()
+        if alert.user_id:
+            try:
+                recipients.add(int(alert.user_id))
+            except Exception:
+                pass
+
+        db = get_db()
+        if alert.device_id and not recipients:
+            try:
+                device = await db.get_device_by_id(alert.device_id)
+                if device and device.users:
+                    recipients.update(int(u.id) for u in device.users)
+            except Exception:
+                pass
+
+        # Also push to all connected admins / company admins who have an active socket
+        try:
+            active_uids = list(self.active_connections.keys())
+            if active_uids:
+                active_users = await db.get_users_by_ids(active_uids)
+                for u in active_users:
+                    if u.is_admin:
+                        recipients.add(int(u.id))
+                    elif alert.device_id:
+                        device = await db.get_device_by_id(alert.device_id)
+                        if device and device.company_id is not None and u.company_id == device.company_id and u.is_company_admin:
+                            recipients.add(int(u.id))
+        except Exception as exc:
+            logger.debug("Failed adding admin recipients: %s", exc)
+
+        raw = json.dumps(message)
+        logger.info(
+            "Broadcasting alert #%s (%s) to %d user(s) %s (active sockets: %s)",
+            alert.id, alert.alert_type, len(recipients), list(recipients), list(self.active_connections.keys())
+        )
+
+        for uid in recipients:
+            await self._send_to_user(uid, raw)
+
+        if redis_pubsub.available and alert.device_id:
             await redis_pubsub.publish(f"device:{alert.device_id}", message)
-        else:
-            await self._broadcast_direct(alert.device_id, message)
 
 
 ws_manager = WebSocketManager()
@@ -1150,7 +1192,7 @@ async def _websocket_redis_loop(websocket: WebSocket, user_id: int):
                         try:
                             data = json.loads(message["data"])
                             nids = data.get("notify_user_ids")
-                            if nids is not None and user_id not in nids:
+                            if nids is not None and not any(str(x) == str(user_id) for x in nids):
                                 continue
                             await websocket.send_text(message["data"])
                         except Exception:

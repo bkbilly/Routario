@@ -90,6 +90,7 @@ class AlertRow(BaseModel):
     """One row from the frontend alert table."""
     uid:             int
     alertKey:        str
+    severity:        Optional[str]           = None
     params:          Dict[str, Any]          = Field(default_factory=dict)
     name:            Optional[str]           = None
     rule:            Optional[str]           = None
@@ -108,6 +109,7 @@ class CustomRule(BaseModel):
     """Definition for a custom alert rule"""
     name: str = Field(..., min_length=1)
     rule: str = Field(..., min_length=1)
+    severity: Optional[str] = "warning"
     channels: List[str] = Field(default_factory=list)
 
 

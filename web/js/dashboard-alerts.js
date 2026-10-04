@@ -60,17 +60,8 @@ function _placeAlertHighlight(lat, lng, alertObj, iconHtml, title) {
 async function jumpToAlert(alert) {
     closeAlertsModal();
 
-    const ICON_MAP = {
-        speeding: 'mdi-speedometer', geofence_enter: 'mdi-map-marker-check', geofence_exit: 'mdi-map-marker-minus',
-        offline: 'mdi-wifi-off', towing: 'mdi-tow-truck', low_battery: 'mdi-battery-low',
-        power_cut: 'mdi-power-plug-off', sos: 'mdi-alarm-light', tampering: 'mdi-alert',
-        route_waypoint_skipped: 'mdi-map-marker-off', route_off_route: 'mdi-map-marker-path',
-        route_completed: 'mdi-flag-checkered',
-    };
-    const icon  = `<i class="mdi ${ICON_MAP[alert.alert_type] || 'mdi-bell'}"></i>`;
-    const title = alert.alert_type === 'custom' && alert.alert_metadata?.rule_name
-        ? alert.alert_metadata.rule_name
-        : alert.alert_type.replace(/_/g, ' ').toUpperCase();
+    const icon  = typeof getAlertIconHtml === 'function' ? getAlertIconHtml(alert) : '<i class="mdi mdi-bell"></i>';
+    const title = typeof getAlertDisplayTitle === 'function' ? getAlertDisplayTitle(alert) : (alert.alert_type ? alert.alert_type.replace(/_/g, ' ').toUpperCase() : 'Alert');
 
     // Offline alerts have no GPS fix — pan to last known position only
     if (alert.alert_type === 'offline' || !alert.latitude || !alert.longitude) {
@@ -118,34 +109,9 @@ async function jumpToAlert(alert) {
 
 // ── Build a single alert-item element ────────────────────────────────────────
 function _buildAlertItem(alert, { dimmed = false, clickable = true, dismissable = true } = {}) {
-    const ICON_MAP = {
-        speeding:       'mdi-speedometer',
-        geofence_enter: 'mdi-map-marker-check',
-        geofence_exit:  'mdi-map-marker-minus',
-        offline:        'mdi-wifi-off',
-        towing:         'mdi-tow-truck',
-        low_battery:    'mdi-battery-low',
-        power_cut:      'mdi-power-plug-off',
-        sos:            'mdi-alarm-light',
-        tampering:      'mdi-alert',
-        notification:   'mdi-message-badge',
-        route_waypoint_skipped: 'mdi-map-marker-off',
-        route_off_route: 'mdi-map-marker-path',
-        route_completed: 'mdi-flag-checkered',
-    };
-    const icon = `<i class="mdi ${ICON_MAP[alert.alert_type] || 'mdi-bell'}"></i>`;
-
-    let title, messageText;
-    if (alert.alert_type === 'custom' && alert.alert_metadata?.rule_name) {
-        title       = alert.alert_metadata.rule_name;
-        messageText = alert.alert_metadata.rule_condition || alert.message;
-    } else if (alert.alert_type === 'notification' && alert.alert_metadata?.title) {
-        title       = alert.alert_metadata.title;
-        messageText = alert.message;
-    } else {
-        title       = alert.alert_type.replace(/_/g, ' ').toUpperCase();
-        messageText = alert.message;
-    }
+    const icon = typeof getAlertIconHtml === 'function' ? getAlertIconHtml(alert) : '<i class="mdi mdi-bell"></i>';
+    const title = typeof getAlertDisplayTitle === 'function' ? getAlertDisplayTitle(alert) : (alert.alert_type ? alert.alert_type.replace(/_/g, ' ').toUpperCase() : 'Alert');
+    const messageText = alert.alert_metadata?.rule_condition || alert.message;
 
     const device     = devices.find(d => d.id === alert.device_id);
     const vehicleTag = device
@@ -209,32 +175,95 @@ function _buildAlertItem(alert, { dimmed = false, clickable = true, dismissable 
     return item;
 }
 
+// ── Alert button state and icon management ─────────────────────────────────────
+function updateAlertsButtonState(count, hasCritical = false) {
+    const btn = document.getElementById('alertsBtn');
+    const badge = document.getElementById('alertCount');
+    let icon = document.getElementById('alertsBtnIcon');
+
+    if (!icon && btn) {
+        const existingIcon = btn.querySelector('i, svg');
+        if (existingIcon && existingIcon.id !== 'alertCount') {
+            if (existingIcon.tagName.toLowerCase() === 'svg') {
+                const newI = document.createElement('i');
+                newI.id = 'alertsBtnIcon';
+                newI.style.fontSize = '16px';
+                btn.replaceChild(newI, existingIcon);
+                icon = newI;
+            } else {
+                existingIcon.id = 'alertsBtnIcon';
+                icon = existingIcon;
+            }
+        } else {
+            const newI = document.createElement('i');
+            newI.id = 'alertsBtnIcon';
+            newI.style.fontSize = '16px';
+            btn.insertBefore(newI, btn.firstChild);
+            icon = newI;
+        }
+    }
+
+    const numCount = parseInt(count, 10) || 0;
+
+    if (badge) {
+        if (numCount > 0) {
+            badge.textContent = numCount > 99 ? '99+' : String(numCount);
+            badge.style.setProperty('display', 'inline-flex', 'important');
+            badge.classList.add('visible');
+        } else {
+            badge.textContent = '0';
+            badge.style.setProperty('display', 'none', 'important');
+            badge.classList.remove('visible');
+        }
+    }
+
+    if (btn) {
+        if (numCount > 0) {
+            btn.classList.add('has-alerts');
+            if (hasCritical) {
+                btn.classList.add('has-critical-alerts');
+            } else {
+                btn.classList.remove('has-critical-alerts');
+            }
+        } else {
+            btn.classList.remove('has-alerts', 'has-critical-alerts');
+        }
+    }
+
+    if (icon) {
+        if (numCount > 0) {
+            icon.className = hasCritical
+                ? 'mdi mdi-bell-alert'
+                : 'mdi mdi-bell-ring';
+        } else {
+            icon.className = 'mdi mdi-bell-outline';
+        }
+        icon.style.removeProperty('color');
+    }
+}
+window.updateAlertsButtonState = updateAlertsButtonState;
+
 // ── Load & render unread alerts ───────────────────────────────────────────────
 async function loadAlerts() {
     try {
-        const response = await apiFetch(`${API_BASE}/alerts?unread_only=true`);
+        const response = await apiFetch(`${API_BASE}/alerts?unread_only=true&_t=${Date.now()}`);
         loadedAlerts = await response.json();
+        window.loadedAlerts = loadedAlerts;
 
-        const badge = document.getElementById('alertCount');
-        if (badge) {
-            if (loadedAlerts.length > 0) {
-                badge.textContent = loadedAlerts.length > 99 ? '99+' : loadedAlerts.length;
-                badge.style.display = 'block';
-            } else {
-                badge.style.display = 'none';
-            }
-        }
+        const hasCritical = Array.isArray(loadedAlerts) && loadedAlerts.some(a => a.severity === 'critical' || a.severity === 'high');
+        updateAlertsButtonState(loadedAlerts.length, hasCritical);
 
         const list = document.getElementById('alertsList');
-        list.innerHTML = '';
+        if (list) {
+            list.innerHTML = '';
+            if (loadedAlerts.length === 0) {
+                list.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">No alerts</div>';
+                applyDeviceAlertHighlights();
+                return;
+            }
 
-        if (loadedAlerts.length === 0) {
-            list.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">No alerts</div>';
-            applyDeviceAlertHighlights();
-            return;
+            loadedAlerts.forEach(alert => list.appendChild(_buildAlertItem(alert)));
         }
-
-        loadedAlerts.forEach(alert => list.appendChild(_buildAlertItem(alert)));
         applyDeviceAlertHighlights();
     } catch (error) {
         console.error('Error loading alerts:', error);

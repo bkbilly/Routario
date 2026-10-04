@@ -123,7 +123,13 @@ class AlertEngine:
                 send_voip = row.get('send_voip', False)
                 action_cmd = row.get('action_command')
                 action_cmd_payload = row.get('action_command_payload')
+                row_sev = row.get('severity')
                 for r in results:
+                    if row_sev:
+                        try:
+                            r['severity'] = Severity(str(row_sev).lower())
+                        except Exception:
+                            r['severity'] = row_sev
                     r.setdefault('send_push', send_push)
                     r.setdefault('send_email', send_email)
                     r.setdefault('send_voip', send_voip)
@@ -203,6 +209,11 @@ class AlertEngine:
             logger.error("Alert-triggered report schedule failed: %s", exc, exc_info=True)
 
         notify_ids = alert_data.get('notify_user_ids')
+        if notify_ids is not None:
+            try:
+                notify_ids = [int(u) for u in notify_ids if str(u).isdigit()]
+            except Exception:
+                pass
         db = get_db()
         if notify_ids is not None:
             users = await db.get_users_by_ids(notify_ids)
@@ -799,6 +810,12 @@ async def periodic_alert_task():
                         await db.update_device_alert_state(device.id, state.alert_states)
 
                         if result:
+                            row_sev = row.get('severity')
+                            if row_sev:
+                                try:
+                                    result['severity'] = Severity(str(row_sev).lower())
+                                except Exception:
+                                    result['severity'] = row_sev
                             result.setdefault('latitude',  state.last_latitude)
                             result.setdefault('longitude', state.last_longitude)
                             result.setdefault('send_push', row.get('send_push', True))

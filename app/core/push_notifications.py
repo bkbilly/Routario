@@ -249,12 +249,14 @@ class PushNotificationService:
         })
 
         user_str = f"user {user_id}" if user_id else "unknown user"
+        urgency = "high" if severity in ("critical", "high") else "normal"
         try:
             webpush(
                 subscription_info=subscription,
                 data=payload,
                 vapid_private_key=self._private_key,
                 vapid_claims={"sub": self._mailto},
+                headers={"Urgency": urgency},
             )
             return True, None
         except Exception as ex:
