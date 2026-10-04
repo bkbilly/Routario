@@ -324,21 +324,7 @@ async def trigger_test_alert(
     lon = dev_state.last_longitude if dev_state else None
     addr = dev_state.last_address if dev_state else None
 
-    created_alert = await db.create_alert(
-        AlertCreate(
-            user_id=current_user.id,
-            device_id=device.id,
-            alert_type=req.alert_type,
-            severity=sev_enum.value,
-            message=msg,
-            latitude=lat,
-            longitude=lon,
-            address=addr,
-            alert_metadata=alert_meta,
-        )
-    )
-
-    # 6. Dispatch notifications via AlertEngine
+    # 5. Create AlertHistory records for target users and dispatch notifications
     from core.alert_engine import get_alert_engine
 
     alert_data = {
@@ -354,38 +340,59 @@ async def trigger_test_alert(
     }
 
     engine = get_alert_engine()
+    created_alerts = []
     for target_user in notify_users:
+        user_alert = await db.create_alert(
+            AlertCreate(
+                user_id=target_user.id,
+                device_id=device.id,
+                alert_type=req.alert_type,
+                severity=sev_enum.value,
+                message=msg,
+                latitude=lat,
+                longitude=lon,
+                address=addr,
+                alert_metadata=dict(alert_meta),
+            )
+        )
+        created_alerts.append(user_alert)
         try:
             await engine._send_notification(
                 user=target_user,
                 device=device,
                 alert_data=alert_data,
-                alert_id=created_alert.id,
+                alert_id=user_alert.id,
             )
         except Exception as e:
             logger.error("Test alert notification dispatch failed for user %s: %s", getattr(target_user, 'id', None), e, exc_info=True)
 
-    # 6. Broadcast via WebSocket
+    # 6. Broadcast via WebSocket ONLY to notify_users
     try:
         from main import handle_new_alert
-        await handle_new_alert(created_alert, notify_user_ids=[u.id for u in notify_users])
+        if created_alerts:
+            target_ids = [u.id for u in notify_users]
+            await handle_new_alert(created_alerts[0], notify_user_ids=target_ids)
     except Exception:
         pass
 
     # 7. Fetch updated alert with channel_status
-    async with db.get_session() as session:
-        refreshed = await session.get(AlertHistory, created_alert.id)
-        final_meta = refreshed.alert_metadata or {} if refreshed else alert_meta
+    primary_alert = created_alerts[0] if created_alerts else None
+    if primary_alert:
+        async with db.get_session() as session:
+            refreshed = await session.get(AlertHistory, primary_alert.id)
+            final_meta = refreshed.alert_metadata or {} if refreshed else alert_meta
+    else:
+        final_meta = alert_meta
 
     return {
-        "id": created_alert.id,
-        "device_id": created_alert.device_id,
+        "id": primary_alert.id if primary_alert else None,
+        "device_id": device.id,
         "device_name": device.name,
-        "alert_type": created_alert.alert_type,
-        "severity": created_alert.severity,
-        "message": created_alert.message,
-        "is_read": created_alert.is_read,
-        "created_at": created_alert.created_at.isoformat() if created_alert.created_at else None,
+        "alert_type": req.alert_type,
+        "severity": sev_enum.value,
+        "message": msg,
+        "is_read": False,
+        "created_at": primary_alert.created_at.isoformat() if primary_alert and primary_alert.created_at else None,
         "alert_metadata": final_meta,
         "channel_status": final_meta.get("channel_status", []),
     }

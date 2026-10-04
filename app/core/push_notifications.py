@@ -32,8 +32,27 @@ class PushSubscription(Base):
     )
 
 
-DEFAULT_VAPID_PUBLIC_KEY = "BGQ3prURPQf1PZSGKySh1Mnr1QQW5pVBGZujTApG_zhqKxGnCz30umqOg5Mh_Q6U-5nNbAtO7XVmz0G-3RR_84g"
-DEFAULT_VAPID_PRIVATE_KEY = "Qk1wdfPJGQ4nLYN2SKLNGR5Z3FrD-e_LfByMTUyJ3Hc"
+def generate_vapid_keypair() -> tuple[str, str]:
+    """
+    Generate a cryptographically secure ECDSA P-256 keypair formatted for Web Push (VAPID).
+    Returns (public_key_b64, private_key_b64).
+    """
+    import base64
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives import serialization
+
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    scalar = private_key.private_numbers().private_value
+    priv_bytes = scalar.to_bytes(32, "big")
+    priv_b64 = base64.urlsafe_b64encode(priv_bytes).decode("ascii").rstrip("=")
+
+    pub_bytes = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.X962,
+        format=serialization.PublicFormat.UncompressedPoint,
+    )
+    pub_b64 = base64.urlsafe_b64encode(pub_bytes).decode("ascii").rstrip("=")
+
+    return pub_b64, priv_b64
 
 
 class PushNotificationService:
@@ -44,16 +63,12 @@ class PushNotificationService:
     @property
     def _private_key(self) -> str:
         key = getattr(get_settings(), "vapid_private_key", "")
-        if key and key.strip():
-            return key.strip()
-        return DEFAULT_VAPID_PRIVATE_KEY
+        return key.strip() if key else ""
 
     @property
     def _public_key(self) -> str:
         key = getattr(get_settings(), "vapid_public_key", "")
-        if key and key.strip():
-            return key.strip()
-        return DEFAULT_VAPID_PUBLIC_KEY
+        return key.strip() if key else ""
 
     @property
     def _mailto(self) -> str:

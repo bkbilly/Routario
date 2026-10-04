@@ -1068,8 +1068,8 @@ function handleWebSocketMessage(message) {
     } else if (message.type === 'alert') {
         const nids = message.notify_user_ids;
         const myId = parseInt(localStorage.getItem('user_id'), 10);
-        loadAlerts();
         if (nids && !nids.includes(myId)) return;
+        loadAlerts();
         let title, toastMessage;
         if (message.data.type === 'custom' && message.data.alert_metadata?.rule_name) {
             title        = message.data.alert_metadata.rule_name;

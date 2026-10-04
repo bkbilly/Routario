@@ -1502,6 +1502,15 @@ function renderSystemSettings(restoreScrollPos = null) {
                     <span id="testVoipStatus" style="font-size:0.82rem;color:var(--text-muted);"></span>
                 </div>
             `;
+        } else if (catName === 'Web Push Notifications') {
+            categoryFooterHtml = `
+                <div id="sys_vapid_generate_container" style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border-color);display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                    <button type="button" class="btn btn-secondary" id="generateVapidBtn" onclick="generateVapidKeys()" style="font-size:0.84rem;">
+                        <i class="mdi mdi-key-plus"></i> Generate New VAPID Keypair
+                    </button>
+                    <span id="generateVapidStatus" style="font-size:0.82rem;color:var(--text-muted);"></span>
+                </div>
+            `;
         }
 
         cardHtmls.push(`
@@ -1849,3 +1858,52 @@ async function testVoipSettings() {
         }
     }
 }
+
+window.generateVapidKeys = async function() {
+    if (!confirm('Generate a new VAPID keypair? Any installed PWA or browser app will automatically refresh its subscription when opened.')) {
+        return;
+    }
+    const btn = document.getElementById('generateVapidBtn');
+    const statusEl = document.getElementById('generateVapidStatus');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> Generating...';
+    }
+    if (statusEl) {
+        statusEl.textContent = 'Generating keypair...';
+        statusEl.style.color = 'var(--text-muted)';
+    }
+
+    try {
+        const res = await apiFetch(`${API_BASE}/system-settings/generate-vapid-keys`, {
+            method: 'POST',
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showAlert(data.message || 'New VAPID keypair generated successfully!', 'success');
+            if (statusEl) {
+                statusEl.textContent = '✓ Keypair generated!';
+                statusEl.style.color = 'var(--color-success, #22c55e)';
+            }
+            await loadSystemSettings();
+        } else {
+            showAlert('Key Generation Failed: ' + (data.detail || 'Could not generate keys'), 'error');
+            if (statusEl) {
+                statusEl.textContent = '✗ ' + (data.detail || 'Failed');
+                statusEl.style.color = 'var(--accent-danger, #ef4444)';
+            }
+        }
+    } catch (e) {
+        showAlert('Key Generation Error: ' + e.message, 'error');
+        if (statusEl) {
+            statusEl.textContent = '✗ ' + e.message;
+            statusEl.style.color = 'var(--accent-danger, #ef4444)';
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="mdi mdi-key-plus"></i> Generate New VAPID Keypair';
+        }
+    }
+};
+

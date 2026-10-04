@@ -30,11 +30,34 @@ async def load_system_settings_from_db_session(session) -> None:
     stmt = select(SystemSetting)
     res = await session.execute(stmt)
     records = res.scalars().all()
+    records_map = {row.key: row for row in records}
+
     for row in records:
         if row.key in SYSTEM_SETTINGS_METADATA:
             meta = SYSTEM_SETTINGS_METADATA[row.key]
             if not meta.get("readonly", False):
                 apply_setting_to_runtime(row.key, row.value)
+
+    # Auto-generate and persist VAPID keys on startup if missing
+    runtime_settings = get_settings()
+    pub = getattr(runtime_settings, "vapid_public_key", "")
+    priv = getattr(runtime_settings, "vapid_private_key", "")
+
+    if not (pub and pub.strip() and priv and priv.strip()):
+        from core.push_notifications import generate_vapid_keypair
+        new_pub, new_priv = generate_vapid_keypair()
+        for k, v in [("vapid_public_key", new_pub), ("vapid_private_key", new_priv)]:
+            if k in records_map:
+                records_map[k].value = v
+                records_map[k].updated_at = datetime.utcnow()
+            else:
+                session.add(SystemSetting(key=k, value=v, updated_at=datetime.utcnow()))
+            apply_setting_to_runtime(k, v)
+        try:
+            await session.commit()
+            logger.info("[Push] Auto-generated and persisted new VAPID keypair in system settings")
+        except Exception as e:
+            logger.error("[Push] Failed to persist auto-generated VAPID keypair: %s", e)
 
 
 @router.get("/public", response_model=Dict[str, Any])
@@ -326,4 +349,40 @@ async def test_voip_configuration(
     return {
         "success": True,
         "message": f"Test VoIP voice call completed successfully to '{target}'!",
+    }
+
+
+@router.post("/generate-vapid-keys", response_model=Dict[str, Any])
+async def generate_vapid_keys_endpoint(
+    request: Request,
+    current_user: User = Depends(require_admin),
+) -> Dict[str, Any]:
+    """Generate a fresh VAPID keypair, persist it in system settings, and update runtime."""
+    from core.push_notifications import generate_vapid_keypair
+    pub_key, priv_key = generate_vapid_keypair()
+    db = get_db()
+    async with db.get_session() as session:
+        for k, v in [("vapid_public_key", pub_key), ("vapid_private_key", priv_key)]:
+            res = await session.execute(select(SystemSetting).where(SystemSetting.key == k))
+            row = res.scalar_one_or_none()
+            if row:
+                row.value = v
+                row.updated_at = datetime.utcnow()
+            else:
+                session.add(SystemSetting(key=k, value=v, updated_at=datetime.utcnow()))
+            apply_setting_to_runtime(k, v)
+        await session.commit()
+
+    await write_audit_log(
+        action="generate_vapid_keys",
+        actor=current_user,
+        target_type="system",
+        target_id="vapid_keys",
+        request=request,
+        metadata={"action": "Generated new VAPID keypair for Web Push"},
+    )
+    return {
+        "success": True,
+        "vapid_public_key": pub_key,
+        "message": "New VAPID keypair generated and saved successfully",
     }

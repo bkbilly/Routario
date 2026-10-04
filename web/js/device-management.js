@@ -2125,14 +2125,14 @@ function openAlertHistoryForAlert(uid) {
                         <div style="font-size:0.85rem;color:var(--text-secondary);">Click <strong>"Trigger Test Alert"</strong> above to dispatch and verify notifications.</div>
                     </div>
                     <div class="alerts-table-wrap alert-history-wrap" id="alertRuleHistoryTableWrap" style="display:none;border:1px solid var(--border-color);border-radius:12px;overflow-x:auto;background:var(--bg-secondary);">
-                        <table class="alert-history-table raw-data-table" id="alertRuleHistoryTable" style="width:100%;min-width:720px;">
+                        <table class="alert-history-table raw-data-table" id="alertRuleHistoryTable" style="width:100%;min-width:760px;">
                             <thead>
                                 <tr>
                                     <th style="width:145px;">Date / Time</th>
-                                    <th style="width:105px;">Severity</th>
+                                    <th style="width:95px;">Severity</th>
                                     <th>Message</th>
-                                    <th style="width:250px;">Channels Triggered</th>
-                                    <th style="width:85px;text-align:center;">Status</th>
+                                    <th style="width:230px;">Channels Triggered</th>
+                                    <th style="width:200px;">Recipients &amp; Status</th>
                                 </tr>
                             </thead>
                             <tbody id="alertRuleHistoryTableBody"></tbody>
@@ -2221,25 +2221,66 @@ async function loadAlertRuleHistoryData() {
         if (wrapEl) wrapEl.style.display = 'block';
         if (tableEl) tableEl.style.display = 'table';
         if (tbody) {
-            tbody.innerHTML = data.map(item => {
-                let ts = '—';
-                if (item.created_at) {
-                    const raw = String(item.created_at);
-                    const dtObj = new Date(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z');
-                    if (!isNaN(dtObj.getTime())) {
-                        const datePart = typeof formatDateValue === 'function' ? formatDateValue(dtObj) : dtObj.toLocaleDateString();
-                        const timePart = typeof formatTimeValue === 'function' ? formatTimeValue(dtObj, { withSeconds: true }) : dtObj.toLocaleTimeString();
-                        ts = `<span style="display:block;font-weight:600;color:var(--text-primary);font-size:0.84rem;">${_esc(datePart)}</span><span style="display:block;color:var(--text-muted);font-size:0.75rem;">${_esc(timePart)}</span>`;
+            // Group records by alert event: same alert_type, same message, same device_id, timestamp within 5 seconds
+            const groups = [];
+            data.forEach(item => {
+                const raw = String(item.created_at || '');
+                const dtObj = new Date(raw.endsWith('Z') || raw.includes('+') ? raw : raw + 'Z');
+                const timeMs = dtObj.getTime();
+
+                const match = groups.find(g =>
+                    g.alert_type === item.alert_type &&
+                    g.message === item.message &&
+                    (!item.device_id || !g.device_id || g.device_id === item.device_id) &&
+                    !isNaN(timeMs) && !isNaN(g.timeMs) &&
+                    Math.abs(g.timeMs - timeMs) <= 5000
+                );
+
+                const recipient = {
+                    userId: item.user_id,
+                    username: item.username || (item.user_id ? `User #${item.user_id}` : 'User'),
+                    is_read: !!item.is_read
+                };
+
+                if (match) {
+                    if (!match.recipients.some(r => r.userId === item.user_id && r.username === recipient.username)) {
+                        match.recipients.push(recipient);
                     }
+                    const newStatuses = item.channel_status || item.alert_metadata?.channel_status || [];
+                    newStatuses.forEach(st => {
+                        const exists = match.channel_status.some(existing =>
+                            existing.name === st.name &&
+                            existing.status === st.status &&
+                            existing.recipient === st.recipient
+                        );
+                        if (!exists) {
+                            match.channel_status.push(st);
+                        }
+                    });
+                } else {
+                    const initialStatuses = [ ...(item.channel_status || item.alert_metadata?.channel_status || []) ];
+                    groups.push({
+                        ...item,
+                        timeMs,
+                        dtObj,
+                        recipients: [recipient],
+                        channel_status: initialStatuses
+                    });
                 }
-                const sev = (item.severity || 'warning').toLowerCase();
+            });
+
+            tbody.innerHTML = groups.map(group => {
+                let ts = '—';
+                if (group.dtObj && !isNaN(group.dtObj.getTime())) {
+                    const datePart = typeof formatDateValue === 'function' ? formatDateValue(group.dtObj) : group.dtObj.toLocaleDateString();
+                    const timePart = typeof formatTimeValue === 'function' ? formatTimeValue(group.dtObj, { withSeconds: true }) : group.dtObj.toLocaleTimeString();
+                    ts = `<span style="display:block;font-weight:600;color:var(--text-primary);font-size:0.84rem;">${_esc(datePart)}</span><span style="display:block;color:var(--text-muted);font-size:0.75rem;">${_esc(timePart)}</span>`;
+                }
+                const sev = (group.severity || 'warning').toLowerCase();
                 const sevClass = (sev === 'critical' || sev === 'high') ? 'sev-critical' : (sev === 'warning' ? 'sev-warning' : 'sev-info');
-                const isRead = item.is_read
-                    ? '<span class="badge" style="background:rgba(255,255,255,0.05);color:var(--text-muted);border:1px solid var(--border-color);font-size:0.72rem;padding:0.2rem 0.55rem;border-radius:6px;font-weight:500;">Read</span>'
-                    : '<span class="badge" style="background:rgba(59,130,246,0.12);color:var(--accent-primary);border:1px solid rgba(59,130,246,0.28);font-size:0.72rem;padding:0.2rem 0.55rem;border-radius:6px;font-weight:700;">Unread</span>';
 
                 // Format channel badges matching the enhanced design
-                const channelStatuses = item.channel_status || item.alert_metadata?.channel_status || [];
+                const channelStatuses = group.channel_status || [];
                 let chHtml = '';
                 if (channelStatuses && channelStatuses.length) {
                     chHtml = channelStatuses.map(ch => {
@@ -2268,13 +2309,76 @@ async function loadAlertRuleHistoryData() {
                     chHtml = '<span style="color:var(--text-muted);font-size:0.78rem;">—</span>';
                 }
 
+                // Recipients & read status badges
+                const totalRecipients = group.recipients.length;
+                const readCount = group.recipients.filter(r => r.is_read).length;
+
+                let recipientsHtml = '';
+                if (totalRecipients > 1) {
+                    const allRead = readCount === totalRecipients;
+                    const noneRead = readCount === 0;
+                    const summaryColor = allRead ? '#10b981' : (noneRead ? 'var(--text-muted)' : '#f59e0b');
+                    const summaryIcon = allRead ? 'mdi-check-all' : (noneRead ? 'mdi-clock-outline' : 'mdi-progress-check');
+
+                    const badgesHtml = group.recipients.map(r => {
+                        if (r.is_read) {
+                            return `<span class="badge" title="${_esc(r.username)}: Read" style="display:inline-flex;align-items:center;gap:0.25rem;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.3);font-size:0.72rem;padding:0.18rem 0.45rem;border-radius:6px;font-weight:600;">
+                                <i class="mdi mdi-check-circle" style="font-size:0.72rem;"></i>
+                                <span>${_esc(r.username)}</span>
+                            </span>`;
+                        } else {
+                            return `<span class="badge" title="${_esc(r.username)}: Unread" style="display:inline-flex;align-items:center;gap:0.25rem;background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.28);font-size:0.72rem;padding:0.18rem 0.45rem;border-radius:6px;font-weight:600;">
+                                <i class="mdi mdi-clock-outline" style="font-size:0.72rem;"></i>
+                                <span>${_esc(r.username)}</span>
+                            </span>`;
+                        }
+                    }).join('');
+
+                    recipientsHtml = `
+                        <div>
+                            <div style="display:flex;align-items:center;gap:0.35rem;font-size:0.72rem;font-weight:700;color:${summaryColor};margin-bottom:0.35rem;">
+                                <i class="mdi ${summaryIcon}"></i>
+                                <span>${readCount} of ${totalRecipients} Read</span>
+                            </div>
+                            <div style="display:flex;flex-wrap:wrap;gap:0.3rem;">
+                                ${badgesHtml}
+                            </div>
+                        </div>
+                    `;
+                } else if (totalRecipients === 1) {
+                    const r = group.recipients[0];
+                    if (r.is_read) {
+                        recipientsHtml = `
+                            <div style="display:flex;align-items:center;gap:0.3rem;">
+                                <span class="badge" title="${_esc(r.username)}: Read" style="display:inline-flex;align-items:center;gap:0.35rem;background:rgba(16,185,129,0.12);color:#10b981;border:1px solid rgba(16,185,129,0.28);font-size:0.74rem;padding:0.2rem 0.55rem;border-radius:6px;font-weight:600;">
+                                    <i class="mdi mdi-check-circle" style="font-size:0.8rem;"></i>
+                                    <span>${_esc(r.username)}</span>
+                                    <span style="font-size:0.68rem;opacity:0.85;font-weight:500;">(Read)</span>
+                                </span>
+                            </div>
+                        `;
+                    } else {
+                        recipientsHtml = `
+                            <div style="display:flex;align-items:center;gap:0.3rem;">
+                                <span class="badge" title="${_esc(r.username)}: Unread" style="display:inline-flex;align-items:center;gap:0.35rem;background:rgba(59,130,246,0.12);color:var(--accent-primary);border:1px solid rgba(59,130,246,0.28);font-size:0.74rem;padding:0.2rem 0.55rem;border-radius:6px;font-weight:700;">
+                                    <i class="mdi mdi-clock-outline" style="font-size:0.8rem;"></i>
+                                    <span>${_esc(r.username)}</span>
+                                    <span style="font-size:0.68rem;opacity:0.85;font-weight:500;">(Unread)</span>
+                                </span>
+                            </div>
+                        `;
+                    }
+                } else {
+                    recipientsHtml = '<span style="color:var(--text-muted);font-size:0.78rem;">—</span>';
+                }
+
                 return `
-                    <tr>
+                    <tr style="vertical-align: top;">
                         <td style="white-space:nowrap;line-height:1.35;">${ts}</td>
                         <td><span class="severity-badge ${sevClass}" style="font-size:0.72rem;padding:0.2rem 0.55rem;text-transform:capitalize;font-weight:700;">${_esc(sev)}</span></td>
-                        <td style="font-size:0.85rem;color:var(--text-primary);max-width:280px;line-height:1.45;word-break:break-word;font-weight:500;">${_esc(item.message || '')}</td>
+                        <td style="font-size:0.85rem;color:var(--text-primary);max-width:280px;line-height:1.45;word-break:break-word;font-weight:500;">${_esc(group.message || '')}</td>
                         <td><div style="display:flex;flex-wrap:wrap;gap:0.3rem;">${chHtml}</div></td>
-                        <td style="text-align:center;">${isRead}</td>
+                        <td>${recipientsHtml}</td>
                     </tr>
                 `;
             }).join('');

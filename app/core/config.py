@@ -73,8 +73,8 @@ class Settings(BaseSettings):
     enable_command_queue: bool = True
 
     # Push Notifications (VAPID)
-    vapid_private_key: str = "Qk1wdfPJGQ4nLYN2SKLNGR5Z3FrD-e_LfByMTUyJ3Hc"
-    vapid_public_key: str = "BGQ3prURPQf1PZSGKySh1Mnr1QQW5pVBGZujTApG_zhqKxGnCz30umqOg5Mh_Q6U-5nNbAtO7XVmz0G-3RR_84g"
+    vapid_private_key: str = ""
+    vapid_public_key: str = ""
     vapid_mailto: str = "mailto:admin@example.com"
 
     # Email & SMTP Notifications
