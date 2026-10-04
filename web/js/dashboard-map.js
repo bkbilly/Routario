@@ -1071,6 +1071,11 @@ function handleWebSocketMessage(message) {
         updateStats();
         refreshClusterIcons();
     } else if (message.type === 'alert') {
+        const nids = message.notify_user_ids;
+        const myId = parseInt(localStorage.getItem('user_id'), 10);
+        if (Array.isArray(nids) && nids.length > 0 && !nids.map(Number).includes(myId)) {
+            return;
+        }
         console.log('[WebSocket] Alert message received:', message);
         const isCritical = message.data?.severity === 'critical' || message.data?.severity === 'high';
         if (typeof updateAlertsButtonState === 'function') {
@@ -1088,7 +1093,12 @@ function handleWebSocketMessage(message) {
             : (alertData.alert_metadata?.rule_name || alertData.alert_metadata?.event_label || (alertData.alert_type ? alertData.alert_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Alert'));
         const toastMessage = alertData.alert_metadata?.rule_condition || alertData.message || 'New alert triggered';
 
-        showAlert({ title, message: toastMessage, type: alertData.severity || 'info' });
+        showAlert({
+            title,
+            message: toastMessage,
+            type: alertData.severity || 'info',
+            alertId: alertData.id || alertData.alert_id,
+        });
     } else if (message.type === 'route_update') {
         if (typeof applyDashboardRouteUpdate === 'function') {
             applyDashboardRouteUpdate(message.data);

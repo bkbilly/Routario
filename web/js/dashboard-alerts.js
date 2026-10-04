@@ -134,6 +134,7 @@ function _buildAlertItem(alert, { dimmed = false, clickable = true, dismissable 
 
     const item = document.createElement('div');
     item.className = `alert-item ${alert.severity}`;
+    item.dataset.alertId = String(alert.id);
     if (dimmed) item.style.opacity = '0.6';
 
     if (clickable) {
@@ -312,9 +313,16 @@ function closeAlertsModal() {
 
 async function dismissAlert(alertId) {
     try {
+        if (typeof handleAlertDismissedLocally === 'function') {
+            handleAlertDismissedLocally(alertId, true);
+        }
         const res = await apiFetch(`${API_BASE}/alerts/${alertId}/read`, { method: 'POST' });
         if (res.ok) {
-            await loadAlerts();
+            if (typeof handleAlertDismissedLocally === 'function') {
+                handleAlertDismissedLocally(alertId, true);
+            } else {
+                await loadAlerts();
+            }
             if (historyVisible) {
                 historyOffset = 0;
                 const list = document.getElementById('alertsHistoryList');
@@ -327,15 +335,28 @@ async function dismissAlert(alertId) {
 }
 
 async function clearAllAlerts() {
-    if (loadedAlerts.length === 0) return;
+    if (!loadedAlerts || loadedAlerts.length === 0) return;
     if (!confirm('Mark all alerts as read?')) return;
 
-    await Promise.all(loadedAlerts.map(alert =>
-        apiFetch(`${API_BASE}/alerts/${alert.id}/read`, { method: 'POST' })
-            .catch(e => console.error('Failed to clear alert', alert.id, e))
-    ));
+    if (typeof handleAlertsClearedLocally === 'function') {
+        handleAlertsClearedLocally(true);
+    }
 
-    await loadAlerts();
+    try {
+        await apiFetch(`${API_BASE}/alerts/read-all`, { method: 'POST' });
+    } catch (_) {
+        await Promise.all(loadedAlerts.map(alert =>
+            apiFetch(`${API_BASE}/alerts/${alert.id}/read`, { method: 'POST' })
+                .catch(e => console.error('Failed to clear alert', alert.id, e))
+        ));
+    }
+
+    if (typeof handleAlertsClearedLocally === 'function') {
+        handleAlertsClearedLocally(true);
+    } else {
+        await loadAlerts();
+    }
+
     if (historyVisible) {
         historyOffset = 0;
         const list = document.getElementById('alertsHistoryList');

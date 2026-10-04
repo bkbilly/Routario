@@ -3901,6 +3901,7 @@ async function loadAlerts() {
             const iconCls = alert.type === 'speeding' ? 'mdi-lightning-bolt' : alert.type === 'offline' ? 'mdi-wifi-off' : 'mdi-bell';
             const item = document.createElement('div');
             item.className = `alert-item ${alert.severity}`;
+            item.dataset.alertId = String(alert.id);
             item.innerHTML = `
                 <div class="alert-icon"><i class="mdi ${iconCls}"></i></div>
                 <div class="alert-content">
@@ -3916,8 +3917,17 @@ async function loadAlerts() {
 
 async function dismissAlert(id) {
     try {
+        if (typeof handleAlertDismissedLocally === 'function') {
+            handleAlertDismissedLocally(id, true);
+        }
         const r = await apiFetch(`${API_BASE}/alerts/${id}/read`, { method: 'POST' });
-        if (r.ok) loadAlerts();
+        if (r.ok) {
+            if (typeof handleAlertDismissedLocally === 'function') {
+                handleAlertDismissedLocally(id, true);
+            } else {
+                loadAlerts();
+            }
+        }
     } catch { /* ignore */ }
 }
 
@@ -3926,10 +3936,21 @@ function closeAlertsModal() { document.getElementById('alertsModal')?.classList.
 
 async function clearAllAlerts() {
     if (!loadedAlerts.length || !confirm('Mark all alerts as read?')) return;
-    for (const a of loadedAlerts) {
-        try { await apiFetch(`${API_BASE}/alerts/${a.id}/read`, { method: 'POST' }); } catch { /* ignore */ }
+    if (typeof handleAlertsClearedLocally === 'function') {
+        handleAlertsClearedLocally(true);
     }
-    loadAlerts();
+    try {
+        await apiFetch(`${API_BASE}/alerts/read-all`, { method: 'POST' });
+    } catch (_) {
+        for (const a of loadedAlerts) {
+            try { await apiFetch(`${API_BASE}/alerts/${a.id}/read`, { method: 'POST' }); } catch { /* ignore */ }
+        }
+    }
+    if (typeof handleAlertsClearedLocally === 'function') {
+        handleAlertsClearedLocally(true);
+    } else {
+        loadAlerts();
+    }
     showAlert('All alerts cleared', 'success');
 }
 

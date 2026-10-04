@@ -542,6 +542,7 @@ class AlertEngine:
                 try:
                     push = get_push_service()
                     type_str = alert_data['type'].value if hasattr(alert_data['type'], 'value') else str(alert_data['type'])
+                    resolved_aid = alert_id or alert_data.get('id') or alert_data.get('alert_id')
                     ok, push_err = await push.notify_user(
                         db_service=get_db(),
                         user_id=user.id,
@@ -549,6 +550,7 @@ class AlertEngine:
                         message=alert_data['message'],
                         severity=alert_data.get('severity', 'info'),
                         device_name=device.name,
+                        alert_id=resolved_aid,
                     )
                     if ok:
                         channel_status.append({"name": "Web Push", "status": "sent"})
@@ -578,10 +580,20 @@ class AlertEngine:
                             logger.debug("System email alert skipped — email notifications are disabled on system settings.")
                             channel_status.append({"name": "System Email", "status": "skipped", "error": "Email notifications are disabled in System Settings"})
                         else:
+                            sev_raw = alert_data.get('severity', 'warning')
+                            sev = sev_raw.value if hasattr(sev_raw, 'value') else str(sev_raw).lower()
+                            sev_icon = {
+                                "critical": "🚨",
+                                "high": "🚨",
+                                "warning": "⚠️",
+                                "info": "ℹ️",
+                            }.get(sev, "🔔")
+                            sev_color = "#ef4444" if sev in ("critical", "high") else ("#f59e0b" if sev == "warning" else "#3b82f6")
+
                             rule_title = alert_data.get('alert_metadata', {}).get('rule_name')
                             alert_type_label = alert_data['type'].value.upper() if hasattr(alert_data['type'], 'value') else str(alert_data['type']).upper()
                             alert_label = rule_title if rule_title else alert_type_label
-                            subject = f"⚠️ Alert: {device.name} - {alert_label}"
+                            subject = f"{sev_icon} Alert: {device.name} - {alert_label}"
 
                             thresholds = self._extract_alert_thresholds(alert_data, device)
                             thresholds_text = ""
@@ -593,16 +605,13 @@ class AlertEngine:
                                 f"An alert was triggered for vehicle '{device.name}':\n\n"
                                 f"- Vehicle: {device.name}\n"
                                 f"- Alert Rule: {alert_label}\n"
-                                f"- Severity: {alert_data.get('severity', 'info')}\n"
+                                f"- Severity: {sev_icon} {sev.upper()}\n"
                                 f"- Message: {alert_data['message']}\n"
                                 f"- Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
                                 f"{thresholds_text}\n\n"
                                 f"Best regards,\n"
                                 f"Routario Telematics Platform"
                             )
-                            sev_raw = alert_data.get('severity', 'warning')
-                            sev = sev_raw.value if hasattr(sev_raw, 'value') else str(sev_raw).lower()
-                            sev_color = "#ef4444" if sev in ("critical", "high") else ("#f59e0b" if sev == "warning" else "#3b82f6")
 
                             lat = alert_data.get('latitude')
                             lon = alert_data.get('longitude')
@@ -645,7 +654,7 @@ class AlertEngine:
                             body_html = f"""
                             <div style="font-family:'Outfit','Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:540px;margin:0 auto;padding:28px 24px;background:#131825;color:#e5e7eb;border-radius:16px;border:1px solid #2a3447;box-shadow:0 12px 30px rgba(0,0,0,0.5);">
                                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-                                    <h2 style="color:#ffffff;margin:0;font-size:20px;font-weight:700;display:flex;align-items:center;gap:8px;">⚠️ Vehicle Alert</h2>
+                                    <h2 style="color:#ffffff;margin:0;font-size:20px;font-weight:700;display:flex;align-items:center;gap:8px;">{sev_icon} Vehicle Alert</h2>
                                     <span style="background:{sev_color}22;color:{sev_color};border:1px solid {sev_color}55;font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;text-transform:uppercase;letter-spacing:0.04em;">{sev.upper()}</span>
                                 </div>
                                 <p style="color:#9ca3af;font-size:14px;line-height:1.5;margin-top:0;">Hello <strong style="color:#ffffff;">{user.username}</strong>,</p>
@@ -665,7 +674,7 @@ class AlertEngine:
                                             </tr>
                                             <tr>
                                                 <td style="padding:4px 0;color:#94a3b8;">Severity:</td>
-                                                <td style="padding:4px 0;font-weight:600;color:{sev_color};text-align:right;">{sev.capitalize()}</td>
+                                                <td style="padding:4px 0;font-weight:600;color:{sev_color};text-align:right;">{sev_icon} {sev.capitalize()}</td>
                                             </tr>
                                             <tr>
                                                 <td style="padding:4px 0;color:#94a3b8;">Triggered At:</td>

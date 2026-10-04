@@ -4,7 +4,7 @@
  * Place this file at: /web/sw.js  (root of your web directory)
  */
 
-const CACHE_NAME = 'gps-dashboard-v131';
+const CACHE_NAME = 'gps-dashboard-v134';
 const STATIC_ASSETS = [
   '/login.html',
   '/gps-dashboard.html',
@@ -159,7 +159,39 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  if (event.action === 'dismiss') return;
+  if (event.action === 'dismiss') {
+    const alertId = event.notification.data?.alert_id;
+    const token = event.notification.data?.token;
+
+    event.waitUntil((async () => {
+      let markedRead = false;
+      if (alertId) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const url = token ? `/api/alerts/${alertId}/read?token=${encodeURIComponent(token)}` : `/api/alerts/${alertId}/read`;
+        try {
+          const res = await fetch(url, { method: 'POST', credentials: 'omit', headers });
+          if (res.ok) markedRead = true;
+        } catch (err) {
+          console.error('[SW] Failed to mark alert read on dismiss:', err);
+        }
+      }
+
+      try {
+        const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        for (const client of windowClients) {
+          client.postMessage({
+            type: 'ALERT_DISMISSED',
+            alertId: alertId,
+            needsApiCall: !markedRead
+          });
+        }
+      } catch (err) {
+        console.error('[SW] Failed notifying clients:', err);
+      }
+    })());
+    return;
+  }
 
   // Open or focus the dashboard
   const targetUrl = event.notification.data?.url || '/gps-dashboard.html';

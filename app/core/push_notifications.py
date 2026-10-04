@@ -87,6 +87,7 @@ class PushNotificationService:
         user_id: int,
         title: str,
         message: str,
+        alert_id: Optional[int] = None,
     ) -> bool:
         if not self._enabled:
             return False
@@ -100,7 +101,7 @@ class PushNotificationService:
             message=message,
             severity="info",
             device_name=None,
-            alert_id=None,
+            alert_id=alert_id,
             icon=icon,
             badge=badge,
             user_id=user_id,
@@ -238,6 +239,15 @@ class PushNotificationService:
             emoji = {"critical": "🚨", "high": "⚠️", "warning": "⚠️", "info": "ℹ️"}.get(severity, "🔔")
             title = f"{emoji} {device_name + ': ' if device_name else ''}{alert_type.replace('_', ' ').title()}"
 
+        push_token = None
+        if user_id:
+            try:
+                from core.auth import create_access_token
+                from datetime import timedelta
+                push_token = create_access_token({"sub": str(user_id)}, expires_delta=timedelta(days=7))
+            except Exception:
+                pass
+
         payload = json.dumps({
             "title":    title,
             "body":     message,
@@ -245,7 +255,11 @@ class PushNotificationService:
             "tag":      f"gps-alert-{alert_type}",
             "icon":     icon,
             "badge":    badge,
-            "data":     {"url": "/gps-dashboard.html", "alert_id": alert_id},
+            "data":     {
+                "url":      "/gps-dashboard.html",
+                "alert_id": alert_id,
+                "token":    push_token,
+            },
         })
 
         user_str = f"user {user_id}" if user_id else "unknown user"

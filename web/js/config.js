@@ -196,21 +196,43 @@ body.light-theme .toast-critical {
     document.head.appendChild(style);
 }
 
+function _dismissAlertById(alertId) {
+    if (!alertId) return;
+    if (typeof handleAlertDismissedLocally === 'function') {
+        handleAlertDismissedLocally(alertId, true);
+    }
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    fetch(`${API_BASE}/alerts/${alertId}/read`, { method: 'POST', headers })
+        .then(res => {
+            if (res.ok) {
+                if (typeof handleAlertDismissedLocally === 'function') {
+                    handleAlertDismissedLocally(alertId, true);
+                }
+            }
+        })
+        .catch(err => console.debug('Failed to dismiss alert:', err));
+}
+window._dismissAlertById = _dismissAlertById;
+
 /**
  * Show a toast notification.
  * Accepts either showAlert(message, type, duration)
- * or showAlert({ title, message, type, duration }).
+ * or showAlert({ title, message, type, duration, alertId }).
  */
 function showAlert(messageOrData, type = 'info', duration = 3000) {
     _ensureToastStyles();
 
-    let title = null, message, resolvedType = type, resolvedDuration = duration;
+    let title = null, message, resolvedType = type, resolvedDuration = duration, alertId = null;
 
     if (messageOrData && typeof messageOrData === 'object') {
         message          = messageOrData.message || '';
         title            = messageOrData.title   || null;
         resolvedType     = messageOrData.type    || type;
         resolvedDuration = messageOrData.duration || duration;
+        alertId          = messageOrData.alertId || messageOrData.id || null;
     } else if (Array.isArray(messageOrData)) {
         message = messageOrData.map(e => (typeof e === 'object' ? (e.msg || JSON.stringify(e)) : String(e))).join('\n');
     } else {
@@ -254,7 +276,24 @@ function showAlert(messageOrData, type = 'info', duration = 3000) {
 
     const toast = document.createElement('div');
     toast.className = `toast toast-${resolvedType}`;
-    toast.innerHTML = `<div class="toast-icon"><i class="mdi ${icon}"></i></div><div class="toast-content">${safeTitle ? `<div class="toast-title">${safeTitle}</div>` : ''}<div class="toast-message">${safeMsg}</div></div><button class="toast-close" onclick="this.closest('.toast').remove()" aria-label="Dismiss"><i class="mdi mdi-close"></i></button>`;
+    if (alertId) toast.dataset.alertId = String(alertId);
+
+    const iconHtml = `<div class="toast-icon"><i class="mdi ${icon}"></i></div>`;
+    const contentHtml = `<div class="toast-content">${safeTitle ? `<div class="toast-title">${safeTitle}</div>` : ''}<div class="toast-message">${safeMsg}</div></div>`;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'toast-close';
+    closeBtn.setAttribute('aria-label', 'Dismiss');
+    closeBtn.innerHTML = '<i class="mdi mdi-close"></i>';
+    closeBtn.onclick = () => {
+        toast.remove();
+        if (alertId) {
+            _dismissAlertById(alertId);
+        }
+    };
+
+    toast.innerHTML = iconHtml + contentHtml;
+    toast.appendChild(closeBtn);
     container.appendChild(toast);
 
     setTimeout(() => {
@@ -447,8 +486,180 @@ function initGlobalAlertWebSocket() {
     }
 }
 
+const _recentAlertKeys = new Set();
+function _isDuplicateAlert(message) {
+    if (!message || message.type !== 'alert') return false;
+    if (message._dedupChecked) return false;
+    const alertData = message.data || {};
+    const alertId = alertData.id || alertData.alert_id;
+    const alertKey = alertId
+        ? `id_${alertId}`
+        : `${message.device_id}_${alertData.alert_type}_${alertData.created_at || message.timestamp || ''}`;
+
+    if (_recentAlertKeys.has(alertKey)) {
+        return true;
+    }
+    _recentAlertKeys.add(alertKey);
+    message._dedupChecked = true;
+    setTimeout(() => _recentAlertKeys.delete(alertKey), 8000);
+    return false;
+}
+window._isDuplicateAlert = _isDuplicateAlert;
+
+const _alertsBroadcastChannel = (typeof BroadcastChannel !== 'undefined')
+    ? new BroadcastChannel('routario_alerts_sync')
+    : null;
+
+function handleAlertDismissedLocally(alertId, broadcastToOthers = false) {
+    if (!alertId) return;
+    const strAlertId = String(alertId);
+
+    // 1. Remove active toasts on this page matching this alertId
+    try {
+        const toasts = document.querySelectorAll(`.toast[data-alert-id="${strAlertId}"]`);
+        toasts.forEach(t => t.remove());
+    } catch (_) {}
+
+    // 2. Decrement in-memory loadedAlerts if present
+    if (Array.isArray(window.loadedAlerts)) {
+        window.loadedAlerts = window.loadedAlerts.filter(a => String(a.id) !== strAlertId);
+        if (typeof updateAlertsButtonState === 'function') {
+            const hasCritical = window.loadedAlerts.some(a => a.severity === 'critical' || a.severity === 'high');
+            updateAlertsButtonState(window.loadedAlerts.length, hasCritical);
+        }
+    } else if (typeof updateAlertsButtonState === 'function') {
+        const badge = document.getElementById('alertCount');
+        const currentCount = parseInt(badge?.textContent, 10) || 0;
+        updateAlertsButtonState(Math.max(0, currentCount - 1));
+    }
+
+    // 3. Remove item from any open alerts list modal on this page
+    try {
+        const modalItem = document.querySelector(`#alertsList [data-alert-id="${strAlertId}"]`);
+        if (modalItem) modalItem.remove();
+    } catch (_) {}
+
+    // 4. Reload alerts from server to guarantee sync
+    if (typeof loadAlerts === 'function') {
+        loadAlerts();
+    }
+    if (typeof loadAlertRuleHistoryData === 'function') {
+        loadAlertRuleHistoryData();
+    }
+    if (typeof historyVisible !== 'undefined' && historyVisible && typeof loadAlertHistory === 'function') {
+        loadAlertHistory();
+    }
+    if (typeof devices !== 'undefined' && Array.isArray(devices) && typeof updateSidebarCard === 'function') {
+        devices.forEach(d => updateSidebarCard(d.id));
+    }
+
+    // 5. Broadcast to other open tabs if requested
+    if (broadcastToOthers) {
+        if (_alertsBroadcastChannel) {
+            try { _alertsBroadcastChannel.postMessage({ type: 'ALERT_DISMISSED', alertId: strAlertId }); } catch (_) {}
+        }
+        try {
+            localStorage.setItem('routario_alert_sync', JSON.stringify({
+                type: 'ALERT_DISMISSED',
+                alertId: strAlertId,
+                _t: Date.now()
+            }));
+        } catch (_) {}
+    }
+}
+window.handleAlertDismissedLocally = handleAlertDismissedLocally;
+
+function handleAlertsClearedLocally(broadcastToOthers = false) {
+    // 1. Remove all active alert toasts
+    try {
+        document.querySelectorAll('.toast[data-alert-id]').forEach(t => t.remove());
+    } catch (_) {}
+
+    // 2. Clear in-memory loaded alerts and update badge
+    window.loadedAlerts = [];
+    if (typeof updateAlertsButtonState === 'function') {
+        updateAlertsButtonState(0, false);
+    }
+
+    // 3. Clear modal list
+    const list = document.getElementById('alertsList');
+    if (list) {
+        list.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">No alerts</div>';
+    }
+
+    // 4. Reload alerts / history
+    if (typeof loadAlerts === 'function') {
+        loadAlerts();
+    }
+    if (typeof loadAlertRuleHistoryData === 'function') {
+        loadAlertRuleHistoryData();
+    }
+    if (typeof historyVisible !== 'undefined' && historyVisible && typeof loadAlertHistory === 'function') {
+        loadAlertHistory();
+    }
+    if (typeof devices !== 'undefined' && Array.isArray(devices) && typeof updateSidebarCard === 'function') {
+        devices.forEach(d => updateSidebarCard(d.id));
+    }
+
+    // 5. Broadcast to other open tabs if requested
+    if (broadcastToOthers) {
+        if (_alertsBroadcastChannel) {
+            try { _alertsBroadcastChannel.postMessage({ type: 'ALERTS_CLEARED' }); } catch (_) {}
+        }
+        try {
+            localStorage.setItem('routario_alert_sync', JSON.stringify({
+                type: 'ALERTS_CLEARED',
+                _t: Date.now()
+            }));
+        } catch (_) {}
+    }
+}
+window.handleAlertsClearedLocally = handleAlertsClearedLocally;
+
+// Cross-tab BroadcastChannel listener
+if (_alertsBroadcastChannel) {
+    _alertsBroadcastChannel.onmessage = (event) => {
+        if (!event.data) return;
+        if (event.data.type === 'ALERT_DISMISSED') {
+            handleAlertDismissedLocally(event.data.alertId, false);
+        } else if (event.data.type === 'ALERTS_CLEARED') {
+            handleAlertsClearedLocally(false);
+        }
+    };
+}
+
+// Storage event listener fallback (for other windows/tabs)
+window.addEventListener('storage', (event) => {
+    if (event.key === 'routario_alert_sync' && event.newValue) {
+        try {
+            const data = JSON.parse(event.newValue);
+            if (data.type === 'ALERT_DISMISSED') {
+                handleAlertDismissedLocally(data.alertId, false);
+            } else if (data.type === 'ALERTS_CLEARED') {
+                handleAlertsClearedLocally(false);
+            }
+        } catch (_) {}
+    }
+});
+
 function _dispatchGlobalWebSocketMessage(message) {
     if (!message) return;
+
+    if (message.type === 'alert_dismissed') {
+        handleAlertDismissedLocally(message.alert_id, true);
+        return;
+    }
+    if (message.type === 'alerts_cleared') {
+        handleAlertsClearedLocally(true);
+        return;
+    }
+
+    if (message.type === 'alert') {
+        if (_isDuplicateAlert(message)) {
+            console.debug('[WebSocket] Duplicate alert message suppressed:', message);
+            return;
+        }
+    }
 
     // If on dashboard, delegate full handling to dashboard-map.js
     if (typeof handleWebSocketMessage === 'function') {
@@ -469,7 +680,13 @@ function _dispatchGlobalWebSocketMessage(message) {
             title,
             message: toastMessage,
             type: alertData.severity || 'info',
+            alertId: alertData.id || alertData.alert_id,
         });
+
+        if (typeof updateAlertsButtonState === 'function') {
+            const currentCount = Array.isArray(window.loadedAlerts) ? window.loadedAlerts.length : (typeof loadedAlerts !== 'undefined' && Array.isArray(loadedAlerts) ? loadedAlerts.length : 0);
+            updateAlertsButtonState(currentCount + 1, alertData.severity === 'critical' || alertData.severity === 'high');
+        }
 
         if (typeof loadAlertRuleHistoryData === 'function') {
             loadAlertRuleHistoryData();
@@ -478,6 +695,20 @@ function _dispatchGlobalWebSocketMessage(message) {
             loadAlerts();
         }
     }
+}
+
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data?.type === 'ALERT_DISMISSED') {
+            if (event.data.needsApiCall && event.data.alertId) {
+                _dismissAlertById(event.data.alertId);
+            } else {
+                handleAlertDismissedLocally(event.data.alertId, true);
+            }
+        } else if (event.data?.type === 'ALERTS_CLEARED') {
+            handleAlertsClearedLocally(true);
+        }
+    });
 }
 
 window.initGlobalAlertWebSocket = initGlobalAlertWebSocket;

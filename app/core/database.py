@@ -1594,6 +1594,15 @@ class DatabaseService:
             )
             return result.rowcount > 0
 
+    async def mark_all_alerts_read(self, user_id: int) -> int:
+        async with self.get_session() as session:
+            result = await session.execute(
+                update(AlertHistory)
+                .where(AlertHistory.user_id == user_id, AlertHistory.is_read == False)
+                .values(is_read=True, read_at=datetime.utcnow())
+            )
+            return result.rowcount
+
     async def delete_alert(self, alert_id: int) -> bool:
         async with self.get_session() as session:
             result = await session.execute(

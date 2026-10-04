@@ -316,17 +316,78 @@ class WebSocketManager:
         except Exception as exc:
             logger.debug("Failed adding admin recipients: %s", exc)
 
+        message["notify_user_ids"] = list(recipients) if recipients else None
         raw = json.dumps(message)
         logger.info(
             "Broadcasting alert #%s (%s) to %d user(s) %s (active sockets: %s)",
             alert.id, alert.alert_type, len(recipients), list(recipients), list(self.active_connections.keys())
         )
 
-        for uid in recipients:
-            await self._send_to_user(uid, raw)
-
         if redis_pubsub.available and alert.device_id:
             await redis_pubsub.publish(f"device:{alert.device_id}", message)
+        else:
+            for uid in recipients:
+                await self._send_to_user(uid, raw)
+
+    async def broadcast_alert_dismissed(
+        self, alert_id: int, user_id: int, device_id: Optional[int] = None
+    ):
+        message = {
+            "type":      "alert_dismissed",
+            "alert_id":  alert_id,
+            "user_id":   user_id,
+            "device_id": device_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        recipients = {int(user_id)}
+        try:
+            db = get_db()
+            active_uids = list(self.active_connections.keys())
+            if active_uids:
+                active_users = await db.get_users_by_ids(active_uids)
+                for u in active_users:
+                    if u.is_admin:
+                        recipients.add(int(u.id))
+        except Exception:
+            pass
+
+        raw = json.dumps(message)
+        logger.debug("Broadcasting alert_dismissed #%s to users %s", alert_id, recipients)
+
+        if redis_pubsub.available:
+            for uid in recipients:
+                await redis_pubsub.publish(f"user:{uid}", message)
+        else:
+            for uid in recipients:
+                await self._send_to_user(uid, raw)
+
+    async def broadcast_alerts_cleared(self, user_id: int):
+        message = {
+            "type":      "alerts_cleared",
+            "user_id":   user_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        recipients = {int(user_id)}
+        try:
+            db = get_db()
+            active_uids = list(self.active_connections.keys())
+            if active_uids:
+                active_users = await db.get_users_by_ids(active_uids)
+                for u in active_users:
+                    if u.is_admin:
+                        recipients.add(int(u.id))
+        except Exception:
+            pass
+
+        raw = json.dumps(message)
+        logger.debug("Broadcasting alerts_cleared to users %s", recipients)
+
+        if redis_pubsub.available:
+            for uid in recipients:
+                await redis_pubsub.publish(f"user:{uid}", message)
+        else:
+            for uid in recipients:
+                await self._send_to_user(uid, raw)
 
 
 ws_manager = WebSocketManager()
@@ -1182,6 +1243,7 @@ async def _websocket_redis_loop(websocket: WebSocket, user_id: int):
         db = get_db()
         devices = await db.get_websocket_devices_for_user(user_id)
         channels = [f"device:{d.id}" for d in devices]
+        channels.append(f"user:{user_id}")
         if channels:
             await pubsub.subscribe(*channels)
 

@@ -109,7 +109,7 @@ async def admin_notify_user(
 
     # Push notification (best-effort — no error if user has no subscription)
     push = get_push_service()
-    push_delivered = await push.notify_user_direct(db, user_id, payload.title, payload.message)
+    push_delivered = await push.notify_user_direct(db, user_id, payload.title, payload.message, alert_id=alert.id)
 
     return {"status": "sent", "push_delivered": push_delivered}
 

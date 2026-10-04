@@ -12,6 +12,9 @@ from core.database import get_db
 from core.audit import request_ip
 from models import User
 
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
 bearer_scheme = HTTPBearer(
     scheme_name="Routario API Key",
     description=(
@@ -21,6 +24,17 @@ bearer_scheme = HTTPBearer(
     ),
     auto_error=False,
 )
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    settings = get_settings()
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(days=7)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
 
 
 async def get_current_user(
@@ -34,8 +48,13 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     if not credentials:
-        raise credentials_exception
-    token = credentials.credentials
+        query_token = request.query_params.get("token")
+        if query_token:
+            token = query_token
+        else:
+            raise credentials_exception
+    else:
+        token = credentials.credentials
 
     api_user, api_key = await authenticate_api_key(token, request_ip(request))
     if api_user and api_key:

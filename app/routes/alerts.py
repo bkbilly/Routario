@@ -136,16 +136,37 @@ async def _get_alert_owned(alert_id: int, current_user: User):
     return alert
 
 
+@router.post("/read-all")
+async def mark_all_alerts_read(
+    current_user: User = Depends(get_current_user),
+):
+    db = get_db()
+    count = await db.mark_all_alerts_read(current_user.id)
+    try:
+        from main import ws_manager
+        await ws_manager.broadcast_alerts_cleared(user_id=current_user.id)
+    except Exception as exc:
+        logger.debug("Failed broadcasting alerts_cleared: %s", exc)
+    return {"status": "success", "count": count}
+
+
 @router.post("/{alert_id}/read")
 async def mark_alert_read(
     alert_id: int,
     current_user: User = Depends(get_current_user),
 ):
-    await _get_alert_owned(alert_id, current_user)
+    alert = await _get_alert_owned(alert_id, current_user)
     db = get_db()
     success = await db.mark_alert_read(alert_id)
     if not success:
         raise HTTPException(status_code=404, detail="Alert not found")
+    try:
+        from main import ws_manager
+        await ws_manager.broadcast_alert_dismissed(
+            alert_id=alert_id, user_id=current_user.id, device_id=alert.device_id
+        )
+    except Exception as exc:
+        logger.debug("Failed broadcasting alert_dismissed: %s", exc)
     return {"status": "success"}
 
 
@@ -154,11 +175,18 @@ async def delete_alert(
     alert_id: int,
     current_user: User = Depends(get_current_user),
 ):
-    await _get_alert_owned(alert_id, current_user)
+    alert = await _get_alert_owned(alert_id, current_user)
     db = get_db()
     success = await db.delete_alert(alert_id)
     if not success:
         raise HTTPException(status_code=404, detail="Alert not found")
+    try:
+        from main import ws_manager
+        await ws_manager.broadcast_alert_dismissed(
+            alert_id=alert_id, user_id=current_user.id, device_id=alert.device_id
+        )
+    except Exception as exc:
+        logger.debug("Failed broadcasting alert_dismissed: %s", exc)
     return {"status": "deleted"}
 
 
