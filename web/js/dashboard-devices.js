@@ -181,8 +181,41 @@ function _sidebarMaintenanceHtml(device) {
         </div>`;
 }
 
+// Toggle search & sort visibility when 1 or fewer devices are available
+function updateSearchAndSortVisibility() {
+    const searchRow = document.querySelector('.search-bar-row');
+    const searchWrap = document.querySelector('.search-input-wrap');
+    const sortSelect = document.getElementById('sortSelect');
+    const searchInput = document.getElementById('deviceSearchInput');
+    const routeCloseBtn = document.getElementById('selectedRouteCloseBtn');
+    if (!searchRow) return;
+
+    const hasMultiple = Array.isArray(devices) && devices.length > 1;
+    if (!hasMultiple) {
+        if (searchWrap) searchWrap.style.display = 'none';
+        if (sortSelect) sortSelect.style.display = 'none';
+        if (searchInput) searchInput.value = '';
+
+        const routeCloseVisible = routeCloseBtn && routeCloseBtn.style.display !== 'none';
+        if (routeCloseVisible) {
+            searchRow.style.display = 'flex';
+            searchRow.style.justifyContent = 'flex-end';
+        } else {
+            searchRow.style.display = 'none';
+        }
+    } else {
+        if (searchWrap) searchWrap.style.display = '';
+        if (sortSelect) sortSelect.style.display = '';
+        searchRow.style.display = '';
+        searchRow.style.justifyContent = '';
+    }
+}
+window.updateSearchAndSortVisibility = updateSearchAndSortVisibility;
+
 // Render Device List
 function renderDeviceList() {
+    updateSearchAndSortVisibility();
+
     // Clear search when re-rendering (optional, but good UX)
     const searchInput = document.getElementById('deviceSearchInput');
     if (searchInput) {
@@ -213,6 +246,10 @@ function renderDeviceList() {
 
         list.appendChild(card);
     });
+
+    if (typeof updateBottomBarMaxHeight === 'function') {
+        updateBottomBarMaxHeight();
+    }
 }
 
 // Helper to generate card content (used for initial render and updates)
@@ -487,10 +524,27 @@ function filterDevices() {
             }
         }
     });
+
+    if (typeof updateBottomBarMaxHeight === 'function') {
+        updateBottomBarMaxHeight();
+    }
 }
 
 // Toggle Sidebar function
 function toggleSidebar() {
+    if (typeof isSidebarBottomBar === 'function' && isSidebarBottomBar()) {
+        if (typeof toggleBottomBarCompact === 'function') {
+            toggleBottomBarCompact();
+        }
+        setTimeout(() => {
+            if (map) map.invalidateSize();
+            if (selectedDevice && markers[selectedDevice]?.isPopupOpen?.() && typeof _ensurePopupInVisibleMap === 'function') {
+                _ensurePopupInVisibleMap(selectedDevice);
+            }
+        }, 150);
+        return;
+    }
+
     document.querySelector('.dashboard').classList.toggle('sidebar-hidden');
     setTimeout(() => {
         map.invalidateSize();

@@ -152,8 +152,9 @@ function initMap() {
     });
     map.on('click', () => {
         closeAllMapFlyouts();
-        if (window.innerWidth <= 630) {
+        if (window.innerWidth <= 768) {
             if (popupWasOpen) return;
+            if (typeof isSidebarBottomBar === 'function' && isSidebarBottomBar()) return;
             const dashboard = document.querySelector('.dashboard');
             if (!dashboard.classList.contains('sidebar-hidden')) {
                 dashboard.classList.add('sidebar-hidden');
@@ -736,20 +737,37 @@ function restoreMarkerRotation(deviceId) {
 
 // ── Map fit ───────────────────────────────────────────────────────────────────
 
-// Returns the width of the visible sidebar in pixels (0 when hidden).
+// Returns the width of the visible sidebar in pixels (0 when hidden or when in bottom-bar mode).
 function getSidebarOffset() {
     const dashboard = document.querySelector('.dashboard');
     if (!dashboard || dashboard.classList.contains('sidebar-hidden')) return 0;
+    if (typeof isSidebarBottomBar === 'function' && isSidebarBottomBar()) return 0;
     const sidebar = document.querySelector('.sidebar');
     return sidebar ? sidebar.offsetWidth : 0;
 }
 
-// Shifts a latlng left so it appears centred in the visible map area (right of sidebar).
+// Returns the height of the visible bottom bar in pixels (0 when hidden or not in bottom-bar mode).
+function getSidebarBottomOffset() {
+    const dashboard = document.querySelector('.dashboard');
+    if (!dashboard || dashboard.classList.contains('sidebar-hidden')) return 0;
+    if (typeof isSidebarBottomBar !== 'function' || !isSidebarBottomBar()) return 0;
+    const sidebar = document.querySelector('.sidebar');
+    return sidebar ? sidebar.offsetHeight : 0;
+}
+// Returns the height of the top header bar in pixels.
+function getHeaderOffset() {
+    const header = document.querySelector('.header');
+    return header ? header.offsetHeight : 70;
+}
+window.getHeaderOffset = getHeaderOffset;
+
+// Shifts a latlng left/up so it appears centred in the visible map area (right of sidebar / between header and bottom bar).
 function applyLatLngOffset(latlng, zoom) {
     const offset = getSidebarOffset();
-    if (!offset) return L.latLng(latlng);
+    const bottomOffset = getSidebarBottomOffset();
+    const topOffset = getHeaderOffset();
     const point = map.project(L.latLng(latlng), zoom);
-    return map.unproject(L.point(point.x - offset / 2, point.y), zoom);
+    return map.unproject(L.point(point.x - offset / 2, point.y + (bottomOffset - topOffset) / 2), zoom);
 }
 
 // Ensures an open vehicle popup stays completely visible within the open map area (not obscured by sidebar or off-screen).
@@ -757,15 +775,17 @@ function _ensurePopupInVisibleMap(deviceId, targetLatLng = null) {
     if (!map || !markers[deviceId] || !markers[deviceId].isPopupOpen()) return;
     if (map.dragging && map.dragging.moving && map.dragging.moving()) return;
 
+    const headerOffset = getHeaderOffset();
     const sidebarOffset = getSidebarOffset();
+    const sidebarBottomOffset = getSidebarBottomOffset();
     const mapSize = map.getSize();
     const destLatLng = targetLatLng || markers[deviceId].getLatLng();
     const markerPt = map.latLngToContainerPoint(destLatLng);
 
     const visibleWidth = mapSize.x - sidebarOffset;
-    const visibleHeight = mapSize.y;
+    const visibleHeight = mapSize.y - sidebarBottomOffset - headerOffset;
     const visibleCenterX = sidebarOffset + visibleWidth / 2;
-    const visibleCenterY = visibleHeight / 2;
+    const visibleCenterY = headerOffset + visibleHeight / 2;
 
     const popup = markers[deviceId].getPopup();
     const popupEl = popup?.getElement();
@@ -781,8 +801,8 @@ function _ensurePopupInVisibleMap(deviceId, targetLatLng = null) {
     const isVehicleOnVisibleMap = (
         markerPt.x >= sidebarOffset &&
         markerPt.x <= mapSize.x &&
-        markerPt.y >= 0 &&
-        markerPt.y <= mapSize.y
+        markerPt.y >= headerOffset &&
+        markerPt.y <= (mapSize.y - sidebarBottomOffset)
     );
 
     if (!hasEnoughRoom) {
@@ -803,16 +823,18 @@ function _ensurePopupInVisibleMap(deviceId, targetLatLng = null) {
     // When there IS enough room on the map:
     // Only center if the vehicle is behind the sidebar, off-screen, or drifted too far from the visible center
     const isBehindSidebar = markerPt.x < sidebarOffset;
-    const isOffscreen = markerPt.x > mapSize.x || markerPt.y < 0 || markerPt.y > mapSize.y;
+    const isOffscreen = markerPt.x > mapSize.x || markerPt.y < headerOffset || markerPt.y > (mapSize.y - sidebarBottomOffset);
 
-    // Check if the popup is significantly obscured by the sidebar or screen edges
+    // Check if the popup is significantly obscured by the sidebar, header, or screen edges
     let popupObscured = false;
     if (popupEl) {
         const popupRect = popupEl.getBoundingClientRect();
         const mapRect = map.getContainer().getBoundingClientRect();
         const screenVisibleLeft = mapRect.left + sidebarOffset;
+        const screenVisibleBottom = mapRect.bottom - sidebarBottomOffset;
+        const screenVisibleTop = mapRect.top + headerOffset;
         if (popupRect.left < screenVisibleLeft || popupRect.right > mapRect.right ||
-            popupRect.top < mapRect.top || popupRect.bottom > mapRect.bottom) {
+            popupRect.top < screenVisibleTop || popupRect.bottom > screenVisibleBottom) {
             popupObscured = true;
         }
     }
@@ -832,7 +854,7 @@ function _ensurePopupInVisibleMap(deviceId, targetLatLng = null) {
     const centerPoint = map.project(L.latLng(destLatLng), map.getZoom());
     const adjustedPoint = L.point(
         centerPoint.x - sidebarOffset / 2,
-        centerPoint.y - verticalOffsetPx
+        centerPoint.y - verticalOffsetPx + Math.floor((sidebarBottomOffset - headerOffset) / 2)
     );
     const targetCenterLatLng = map.unproject(adjustedPoint, map.getZoom());
 
@@ -937,13 +959,15 @@ function zoomToClusterWithSidebarOffset(cluster) {
     if (!cluster || !map) return;
 
     const sidebarOffset = getSidebarOffset();
+    const sidebarBottom = getSidebarBottomOffset();
+    const headerOffset = getHeaderOffset();
     const bounds = cluster.getBounds?.();
     const maxZoom = clusterGroup?.options?.disableClusteringAtZoom || map.getMaxZoom();
 
     if (bounds?.isValid?.() && bounds.getNorthEast && !bounds.getNorthEast().equals(bounds.getSouthWest())) {
         map.fitBounds(bounds.pad(0.2), {
-            paddingTopLeft: [sidebarOffset, 16],
-            paddingBottomRight: [16, 16],
+            paddingTopLeft: [sidebarOffset + 16, headerOffset + 16],
+            paddingBottomRight: [16, sidebarBottom > 0 ? sidebarBottom + 16 : 16],
             maxZoom,
         });
         return;
@@ -958,12 +982,17 @@ function fitMapToMarkers() {
     if (validMarkers.length === 0) return;
 
     const sidebarOffset = getSidebarOffset();
+    const sidebarBottom = getSidebarBottomOffset();
+    const headerOffset = getHeaderOffset();
     if (validMarkers.length === 1) {
         const zoom = 15;
         map.setView(applyLatLngOffset(validMarkers[0].getLatLng(), zoom), zoom);
     } else {
         const group = L.featureGroup(validMarkers);
-        map.fitBounds(group.getBounds().pad(0.2), { paddingTopLeft: [sidebarOffset, 0] });
+        map.fitBounds(group.getBounds().pad(0.2), {
+            paddingTopLeft: [sidebarOffset + 16, headerOffset + 16],
+            paddingBottomRight: [16, sidebarBottom > 0 ? sidebarBottom + 16 : 16]
+        });
     }
 }
 

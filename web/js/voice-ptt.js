@@ -52,6 +52,7 @@
     // On dashboard: append to .map-ctrl-group as another map-ctrl-bar.
 
     function _injectButton() {
+        if (document.getElementById('dashVoicePttBtn') || document.getElementById('pttTriggerBtn')) return;
         const btnHtml = `
             <button class="map-ctrl-btn" id="pttTriggerBtn" onclick="pttToggleModal()" title="Voice PTT">
                 <i class="mdi mdi-microphone-message" style="font-size:15px;"></i>
@@ -300,7 +301,7 @@
         if (!b) return;
         const n = _unreadIds.size;
         b.textContent   = n > 99 ? '99+' : n;
-        b.style.display = n ? 'block' : 'none';
+        b.style.display = n ? 'inline-block' : 'none';
     }
 
     // ── Modal open/close ──────────────────────────────────────────

@@ -47,7 +47,7 @@
     <div class="dashboard">
         <header class="header">
             <div style="display: flex; align-items: center; gap: 1rem;">
-                <button class="btn-icon" onclick="toggleSidebar()" style="border:none; background: transparent; color: var(--text-primary); font-size: 1.25rem; width: auto; height: auto;"><i class="mdi mdi-menu"></i></button>
+                <button class="btn-icon sidebar-toggle-btn" id="sidebarToggleBtn" onclick="toggleSidebar()" title="Toggle Sidebar" style="border:none; background: transparent; color: var(--text-primary); font-size: 1.25rem; width: auto; height: auto;"><i class="mdi mdi-menu"></i></button>
                 <div class="logo">
                     <img src="/icons/icon-192.png" class="logo-icon">
                     <span class="logo-text">Routario</span>
@@ -139,6 +139,28 @@
 
                 <div class="header-menu-divider"></div>
 
+                <!-- Voice PTT -->
+                <button type="button" class="header-menu-item" id="dashVoicePttBtn" onclick="pttToggleModal(); closeHeaderMenu();">
+                    <span class="header-menu-item-icon"><i class="mdi mdi-microphone-message" style="font-size:15px;"></i></span>
+                    <span>Voice PTT</span>
+                    <span class="header-menu-badge" id="pttBadge" style="display:none; background:var(--accent-danger); color:#fff;"></span>
+                </button>
+
+                <!-- Routes -->
+                <button type="button" class="header-menu-item" id="dashboardRoutesBtn" onclick="openDashboardRoutesModal(); closeHeaderMenu();" style="display:none;">
+                    <span class="header-menu-item-icon"><i class="mdi mdi-map-marker-path" style="font-size:15px;"></i></span>
+                    <span>Routes</span>
+                    <span class="header-menu-badge" id="routeCount" style="display:none; background:var(--accent-primary); color:#fff;"></span>
+                </button>
+
+                <!-- AI Copilot -->
+                <button type="button" class="header-menu-item" id="dashboardAiCopilotWrap" onclick="openAiCopilotModal(); closeHeaderMenu();" style="display:none;">
+                    <span class="header-menu-item-icon"><i class="mdi mdi-robot-excited-outline" style="font-size:15px;"></i></span>
+                    <span>AI Copilot</span>
+                </button>
+
+                <div class="header-menu-divider"></div>
+
                 <button class="header-menu-item" onclick="clearDashboardCache()">
                     <span class="header-menu-item-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
@@ -168,6 +190,9 @@
         </header>
         
         <aside class="sidebar">
+            <div class="sidebar-drag-handle" id="sidebarDragHandle" title="Drag to resize or tap to toggle" tabindex="0" role="button" aria-label="Toggle or resize bottom bar">
+                <div class="sidebar-drag-pill"></div>
+            </div>
             <div class="sidebar-section" id="sidebarDeviceList" style="flex: 1; overflow-y: auto;">
                 <div class="search-bar-row">
                     <div class="search-input-wrap">
@@ -192,10 +217,13 @@
             </div>
 
             <div class="sidebar-section" id="sidebarHistoryDetails" style="display: none; flex: 1; overflow-y: auto; padding-bottom: 0;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0 0 0 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding: 0 0 0 0;">
                     <h3 class="section-title" id="historyDeviceName" style="margin-bottom: 0;">History Details</h3>
-                    <button class="sidebar-close-btn" onclick="exitHistoryMode()" title="Close History" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer;"><i class="mdi mdi-close"></i></button>
+                    <button class="sidebar-close-btn" onclick="exitHistoryMode()" title="Close History"><i class="mdi mdi-close"></i></button>
                 </div>
+
+                <!-- Merged History Controls Container (Active in Bottom Bar Mode) -->
+                <div id="historyControlsMergedSlot"></div>
 
                 <!-- Tab switcher -->
                 <div class="history-tab-bar" style="display:flex; gap:0.5rem; margin-bottom:1rem;">
@@ -223,6 +251,14 @@
 
             <!-- Map Control Buttons -->
             <div class="map-ctrl-group">
+                <!-- Alerts button (at top) -->
+                <div class="map-ctrl-bar">
+                    <button class="map-ctrl-btn" id="alertsBtn" onclick="openAlertsModal()" title="Alerts">
+                        <i class="mdi mdi-bell-outline" id="alertsBtnIcon" style="font-size:16px;"></i>
+                        <span class="map-ctrl-badge" id="alertCount"></span>
+                    </button>
+                </div>
+
                 <!-- Layers button -->
                 <div class="map-ctrl-bar">
                     <button class="map-ctrl-btn" id="mapLayersBtn" onclick="toggleMapCtrlFlyout('mapLayersFlyout', event)" title="Map Layers">
@@ -289,29 +325,6 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Alerts button -->
-                <div class="map-ctrl-bar">
-                    <button class="map-ctrl-btn" id="alertsBtn" onclick="openAlertsModal()" title="Alerts">
-                        <i class="mdi mdi-bell-outline" id="alertsBtnIcon" style="font-size:16px;"></i>
-                        <span class="map-ctrl-badge" id="alertCount"></span>
-                    </button>
-                </div>
-
-                <!-- Routes button; Voice PTT is injected immediately above this. -->
-                <div class="map-ctrl-bar">
-                    <button class="map-ctrl-btn" id="dashboardRoutesBtn" onclick="openDashboardRoutesModal()" title="Routes" style="display:none;">
-                        <i class="mdi mdi-map-marker-path" style="font-size:16px;"></i>
-                        <span class="map-ctrl-badge" id="routeCount"></span>
-                    </button>
-                </div>
-
-                <!-- AI Copilot button (placed right below Routes) -->
-                <div class="map-ctrl-bar" id="dashboardAiCopilotWrap" style="display:none;">
-                    <button class="map-ctrl-btn" id="dashboardAiCopilotBtn" onclick="openAiCopilotModal()" title="AI Copilot">
-                        <i class="mdi mdi-robot-excited-outline" style="font-size:16px;"></i>
-                    </button>
-                </div>
             </div>
 
             <!-- Geofence Edit Toolbar (shown when a geofence is selected) -->
@@ -347,41 +360,43 @@
                 </button>
             </div>
 
-            <!-- Floating History Controls (Shown when history is active) -->
-            <div id="historyControls" class="history-controls" style="display: none;">
-                <!-- Row 1: timestamp · trip pill · close -->
-                <div class="history-controls-top">
-                    <span id="historyTimestamp" class="history-time">--:--:--</span>
-                    <span id="historyTripLabel" class="history-trip-label"></span>
-                    <button class="history-close-btn" onclick="exitHistoryMode()" title="Exit History"><i class="mdi mdi-close"></i></button>
-                </div>
-                <!-- Row 2: playback buttons -->
-                <div class="history-controls-buttons">
-                    <button class="btn-icon" id="historySpeedBtn" onclick="cyclePlaybackSpeed()" title="Playback speed">1×</button>
-                    <button class="btn-icon"
-                        onmousedown="_startStepHold(-1)" onmouseup="_stopStepHold()" onmouseleave="_stopStepHold()"
-                        ontouchstart="event.preventDefault();_startStepHold(-1)" ontouchend="_stopStepHold()"
-                        title="Previous Event"><i class="mdi mdi-skip-previous"></i></button>
-                    <button class="btn-icon btn-icon-play" onclick="togglePlayback()" id="playbackBtn" title="Play/Pause"><i class="mdi mdi-play"></i></button>
-                    <button class="btn-icon"
-                        onmousedown="_startStepHold(1)" onmouseup="_stopStepHold()" onmouseleave="_stopStepHold()"
-                        ontouchstart="event.preventDefault();_startStepHold(1)" ontouchend="_stopStepHold()"
-                        title="Next Event"><i class="mdi mdi-skip-next"></i></button>
-                    <div class="history-controls-right-btns">
-                        <button class="btn-icon" id="historyEcoEventsToggleBtn" onclick="toggleHistoryEcoEvents()" title="Show eco driving events on map" style="display: none;"><i class="mdi mdi-leaf"></i></button>
-                        <button class="btn-icon" id="historyLineModeBtn" onclick="toggleHistoryLineMode()" title="Switch to animated lines"><i class="mdi mdi-waves"></i></button>
+            <!-- Floating History Controls Slot (Default desktop / non-bottom-bar mode) -->
+            <div id="historyControlsDefaultSlot">
+                <div id="historyControls" class="history-controls" style="display: none;">
+                    <!-- Row 1: timestamp · trip pill · close -->
+                    <div class="history-controls-top">
+                        <span id="historyTimestamp" class="history-time">--:--:--</span>
+                        <span id="historyTripLabel" class="history-trip-label"></span>
+                        <button class="history-close-btn" onclick="exitHistoryMode()" title="Exit History"><i class="mdi mdi-close"></i></button>
                     </div>
-                </div>
-                <!-- Row 3: slider -->
-                <div class="history-slider-row">
-                    <input type="range" class="history-slider" id="historySlider" min="0" max="100" value="0" oninput="seekHistory(this.value)">
-                    <span class="history-slider-counter" id="historySliderCounter">0 / 0</span>
-                </div>
-                <!-- Row 4: batch pagination (only shown when needed) -->
-                <div id="historyBatchNav" style="display:none; justify-content:center; align-items:center; gap:0.5rem; padding-top:0.25rem;">
-                    <button id="historyPrevBatch" class="btn btn-secondary" style="font-size:0.75rem;padding:0.3rem 0.7rem;" onclick="loadHistoryBatch(-1)"><i class="mdi mdi-chevron-left"></i> Prev</button>
-                    <span id="historyBatchLabel" style="font-size:0.75rem;color:var(--text-muted);"></span>
-                    <button id="historyNextBatch" class="btn btn-secondary" style="font-size:0.75rem;padding:0.3rem 0.7rem;" onclick="loadHistoryBatch(1)">Next <i class="mdi mdi-chevron-right"></i></button>
+                    <!-- Row 2: playback buttons -->
+                    <div class="history-controls-buttons">
+                        <button class="btn-icon" id="historySpeedBtn" onclick="cyclePlaybackSpeed()" title="Playback speed">1×</button>
+                        <button class="btn-icon"
+                            onmousedown="_startStepHold(-1)" onmouseup="_stopStepHold()" onmouseleave="_stopStepHold()"
+                            ontouchstart="event.preventDefault();_startStepHold(-1)" ontouchend="_stopStepHold()"
+                            title="Previous Event"><i class="mdi mdi-skip-previous"></i></button>
+                        <button class="btn-icon btn-icon-play" onclick="togglePlayback()" id="playbackBtn" title="Play/Pause"><i class="mdi mdi-play"></i></button>
+                        <button class="btn-icon"
+                            onmousedown="_startStepHold(1)" onmouseup="_stopStepHold()" onmouseleave="_stopStepHold()"
+                            ontouchstart="event.preventDefault();_startStepHold(1)" ontouchend="_stopStepHold()"
+                            title="Next Event"><i class="mdi mdi-skip-next"></i></button>
+                        <div class="history-controls-right-btns">
+                            <button class="btn-icon" id="historyEcoEventsToggleBtn" onclick="toggleHistoryEcoEvents()" title="Show eco driving events on map" style="display: none;"><i class="mdi mdi-leaf"></i></button>
+                            <button class="btn-icon" id="historyLineModeBtn" onclick="toggleHistoryLineMode()" title="Switch to animated lines"><i class="mdi mdi-waves"></i></button>
+                        </div>
+                    </div>
+                    <!-- Row 3: slider -->
+                    <div class="history-slider-row">
+                        <input type="range" class="history-slider" id="historySlider" min="0" max="100" value="0" oninput="seekHistory(this.value)">
+                        <span class="history-slider-counter" id="historySliderCounter">0 / 0</span>
+                    </div>
+                    <!-- Row 4: batch pagination (only shown when needed) -->
+                    <div id="historyBatchNav" style="display:none; justify-content:center; align-items:center; gap:0.5rem; padding-top:0.25rem;">
+                        <button id="historyPrevBatch" class="btn btn-secondary" style="font-size:0.75rem;padding:0.3rem 0.7rem;" onclick="loadHistoryBatch(-1)"><i class="mdi mdi-chevron-left"></i> Prev</button>
+                        <span id="historyBatchLabel" style="font-size:0.75rem;color:var(--text-muted);"></span>
+                        <button id="historyNextBatch" class="btn btn-secondary" style="font-size:0.75rem;padding:0.3rem 0.7rem;" onclick="loadHistoryBatch(1)">Next <i class="mdi mdi-chevron-right"></i></button>
+                    </div>
                 </div>
             </div>
         </main>
@@ -910,6 +925,7 @@
     <script src="js/dashboard-routes.js"></script>
 
     <script src="js/dashboard-geofences.js"></script>
+    <script src="js/dashboard-bottom-bar.js"></script>
     <script src="js/dashboard.js"></script>
 
     
@@ -942,6 +958,13 @@
             if (menuRole) menuRole.textContent = isAdmin ? 'Super Admin' : isCompanyAdmin ? 'Company Admin' : 'User';
             if (companiesMenuItem) companiesMenuItem.style.display = isAdmin ? '' : 'none';
         }
+        function closeHeaderMenu() {
+            const dropdown = document.getElementById('headerMenuDropdown');
+            const btn = document.getElementById('headerGearBtn');
+            if (dropdown) dropdown.classList.remove('open');
+            if (btn) btn.classList.remove('active');
+        }
+        window.closeHeaderMenu = closeHeaderMenu;
         async function clearDashboardCache() {
             const timestamp = Date.now();
             const dropdown = document.getElementById('headerMenuDropdown');
@@ -1011,8 +1034,8 @@
                 applySidebarCompact(localStorage.getItem('sidebar_compact') === 'true');
             }
             
-            // Auto-collapse sidebar on mobile/tablet load
-            if (window.innerWidth <= 630) {
+            // Auto-collapse sidebar on mobile/tablet load only if not in bottom bar mode
+            if (window.innerWidth <= 768 && (!window.shouldEnableBottomBar || !window.shouldEnableBottomBar())) {
                 document.querySelector('.dashboard').classList.add('sidebar-hidden');
                 // Tell Leaflet about the new map size once it has initialised
                 setTimeout(() => { if (map) map.invalidateSize(); }, 200);
@@ -1032,19 +1055,21 @@
         });
 
         // Add resize listener to handle dynamic window resizing
-        let lastWasWide = window.innerWidth > 630;
+        let lastWasWide = window.innerWidth > 768;
 
         window.addEventListener('resize', () => {
             setAppHeight();
 
             const dashboard = document.querySelector('.dashboard');
-            const isWide = window.innerWidth > 630;
+            const isWide = window.innerWidth > 768;
 
             if (!lastWasWide && !isWide) {
-                // Still in mobile range — don't touch the sidebar
+                // Still in mobile/tablet range — don't touch the sidebar
             } else if (lastWasWide && !isWide) {
-                // Crossed INTO mobile — hide sidebar
-                dashboard.classList.add('sidebar-hidden');
+                // Crossed INTO mobile/tablet — hide sidebar only if not in bottom bar mode
+                if (!window.shouldEnableBottomBar || !window.shouldEnableBottomBar()) {
+                    dashboard.classList.add('sidebar-hidden');
+                }
             } else if (!lastWasWide && isWide) {
                 // Crossed INTO desktop — show sidebar
                 dashboard.classList.remove('sidebar-hidden');

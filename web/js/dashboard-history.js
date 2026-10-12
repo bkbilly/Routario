@@ -653,6 +653,8 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { pres
 
         const footer = document.getElementById('historyControls');
         if (footer) footer.style.display = 'flex';
+        if (typeof syncHistoryControlsPlacement === 'function') syncHistoryControlsPlacement();
+        if (typeof updateBottomBarMaxHeight === 'function') updateBottomBarMaxHeight();
         if (map && map.keyboard) map.keyboard.disable();
         pushModalState('history_playback');
         _updateLineModeBtn();
@@ -666,8 +668,9 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { pres
         if (allLayers.length > 0) {
             requestAnimationFrame(() => {
                 const bottomPad = (footer?.offsetHeight ?? 0) + 48; // 48 ≈ 2rem offset + gap
+                const headerOffset = typeof getHeaderOffset === 'function' ? getHeaderOffset() : 70;
                 map.fitBounds(polylines['history'].getBounds(), {
-                    paddingTopLeft: [getSidebarOffset(), 16],
+                    paddingTopLeft: [getSidebarOffset() + 16, headerOffset + 16],
                     paddingBottomRight: [16, bottomPad],
                 });
             });
@@ -969,6 +972,7 @@ function exitHistoryMode(fromPopState = false) {
         if (details) details.style.paddingBottom = '';
         const sidebar = document.querySelector('.sidebar');
         if (sidebar) sidebar.classList.remove('history-active');
+        if (typeof updateBottomBarMaxHeight === 'function') updateBottomBarMaxHeight();
         if (map && map.keyboard) map.keyboard.enable();
 
         document.getElementById('historySlider')?.style.removeProperty('--track-gradient');
@@ -1574,6 +1578,10 @@ function applyHistoryControlsPadding() {
     const footer = document.getElementById('historyControls');
     const details = document.getElementById('sidebarHistoryDetails');
     if (!footer || !details) return;
+    if (typeof isSidebarBottomBar === 'function' && isSidebarBottomBar()) {
+        details.style.paddingBottom = '0.75rem';
+        return;
+    }
     const height = footer.offsetHeight;
     const bottomOffset = parseInt(getComputedStyle(footer).bottom) || 16;
     details.style.paddingBottom = (height + bottomOffset + 8) + 'px';

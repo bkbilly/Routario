@@ -420,6 +420,7 @@ function renderSelectedRoutePanel(route, routeList = []) {
         panel.style.display = 'none';
         panel.innerHTML = '';
         if (closeBtn) closeBtn.style.display = 'none';
+        if (typeof updateSearchAndSortVisibility === 'function') updateSearchAndSortVisibility();
         return;
     }
 
@@ -444,6 +445,7 @@ function renderSelectedRoutePanel(route, routeList = []) {
 
     panel.style.display = '';
     if (closeBtn) closeBtn.style.display = '';
+    if (typeof updateSearchAndSortVisibility === 'function') updateSearchAndSortVisibility();
     panel.innerHTML = `
         <div class="selected-route-header">
             <div>
@@ -479,6 +481,7 @@ function renderSelectedRoutePanel(route, routeList = []) {
 function setSelectedRouteCloseButtonVisible(visible) {
     const closeBtn = document.getElementById('selectedRouteCloseBtn');
     if (closeBtn) closeBtn.style.display = visible ? '' : 'none';
+    if (typeof updateSearchAndSortVisibility === 'function') updateSearchAndSortVisibility();
 }
 
 function closeSelectedDashboardRoutePanel() {
@@ -1185,9 +1188,11 @@ function fitSelectedDashboardRoute({ fly = false } = {}) {
     if (!map || !selectedDashboardRoute) return;
     const bounds = dashboardRouteBounds(selectedDashboardRoute);
     if (!bounds.isValid()) return;
+    const headerOffset = typeof getHeaderOffset === 'function' ? getHeaderOffset() : 70;
+    const sidebarBottom = typeof getSidebarBottomOffset === 'function' ? getSidebarBottomOffset() : 0;
     const options = {
-        paddingTopLeft: [getSidebarOffset(), 16],
-        paddingBottomRight: [16, 16],
+        paddingTopLeft: [getSidebarOffset() + 16, headerOffset + 16],
+        paddingBottomRight: [16, sidebarBottom > 0 ? sidebarBottom + 16 : 16],
     };
     if (fly && typeof map.flyToBounds === 'function') {
         map.flyToBounds(bounds.pad(0.18), {
@@ -1208,9 +1213,11 @@ function fitDashboardRouteWithVehicle(route, vehicleLatLng) {
         bounds.extend(vehiclePoint);
     }
     if (!bounds.isValid()) return false;
+    const headerOffset = typeof getHeaderOffset === 'function' ? getHeaderOffset() : 70;
+    const sidebarBottom = typeof getSidebarBottomOffset === 'function' ? getSidebarBottomOffset() : 0;
     map.fitBounds(bounds.pad(0.18), {
-        paddingTopLeft: [getSidebarOffset(), 16],
-        paddingBottomRight: [16, 16],
+        paddingTopLeft: [getSidebarOffset() + 16, headerOffset + 16],
+        paddingBottomRight: [16, sidebarBottom > 0 ? sidebarBottom + 16 : 16],
         maxZoom: 16,
     });
     return true;
