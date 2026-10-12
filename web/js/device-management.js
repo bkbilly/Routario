@@ -3891,7 +3891,7 @@ let loadedAlerts = [];
 
 async function loadAlerts() {
     try {
-        const res = await apiFetch(`${API_BASE}/alerts?unread=true&limit=50`);
+        const res = await apiFetch(`${API_BASE}/alerts?unread_only=true&limit=50`);
         if (!res.ok) return;
         loadedAlerts = await res.json();
         const list = document.getElementById('alertsList');

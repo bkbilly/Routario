@@ -3040,7 +3040,7 @@ async function showTripMap(idx, focusOptions = null) {
         const tileKey   = localStorage.getItem('mapTileLayer') || 'openstreetmap_dark';
         const tile      = _TRIP_TILES[tileKey] || _TRIP_TILES['openstreetmap_dark'];
         _tripMapInst    = L.map('tripMapContainer', { zoomControl: true, wheelPxPerZoomLevel: 120, preferCanvas: true });
-        const tileLayer = L.tileLayer(tile.url, { maxZoom: tile.maxZoom, attribution: '© OpenStreetMap contributors' });
+        const tileLayer = L.tileLayer(tile.url, { maxZoom: tile.maxZoom, attribution: '© OpenStreetMap contributors', crossOrigin: true });
         tileLayer.addTo(_tripMapInst);
         if (tile.filter) {
             const pane = _tripMapInst.getPanes().tilePane;

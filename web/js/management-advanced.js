@@ -863,6 +863,7 @@ function rtpApplyRouteMapTileLayer() {
     _rtpTileLayer = L.tileLayer(tile.url, {
         attribution: tile.attribution,
         maxZoom: tile.maxZoom,
+        crossOrigin: true,
     }).addTo(_rtpMap);
     const tileContainer = _rtpTileLayer.getContainer();
     if (tileContainer) tileContainer.style.filter = tile.cssFilter || '';

@@ -197,7 +197,8 @@ function applyTileLayer(tileKey) {
 
     currentTileLayer = L.tileLayer(tile.url, {
         attribution: tile.attribution,
-        maxZoom: tile.maxZoom
+        maxZoom: tile.maxZoom,
+        crossOrigin: true
     }).addTo(map);
 
     const tileContainer = currentTileLayer.getContainer();
@@ -991,6 +992,7 @@ let wsConnectedUserId = null;
 function connectWebSocket() {
     if (typeof initGlobalAlertWebSocket === 'function') {
         initGlobalAlertWebSocket();
+        if (window.ws) ws = window.ws;
         return;
     }
 
@@ -1083,11 +1085,25 @@ function handleWebSocketMessage(message) {
             updateAlertsButtonState(currentCount + 1, isCritical);
         }
 
-        if (typeof loadAlerts === 'function') {
+        const alertData = message.data || {};
+        if (Array.isArray(window.loadedAlerts)) {
+            if (!window.loadedAlerts.some(a => a.id === alertData.id)) {
+                window.loadedAlerts.unshift(alertData);
+                if (typeof loadedAlerts !== 'undefined') loadedAlerts = window.loadedAlerts;
+                const list = document.getElementById('alertsList');
+                if (list && typeof _buildAlertItem === 'function') {
+                    if (list.querySelector('.text-muted') || list.textContent.includes('No alerts')) {
+                        list.innerHTML = '';
+                    }
+                    list.insertBefore(_buildAlertItem(alertData), list.firstChild);
+                }
+                if (typeof applyDeviceAlertHighlights === 'function') {
+                    applyDeviceAlertHighlights();
+                }
+            }
+        } else if (typeof loadAlerts === 'function') {
             loadAlerts();
         }
-
-        const alertData = message.data || {};
         const title = typeof getAlertDisplayTitle === 'function'
             ? getAlertDisplayTitle(alertData)
             : (alertData.alert_metadata?.rule_name || alertData.alert_metadata?.event_label || (alertData.alert_type ? alertData.alert_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Alert'));

@@ -4,7 +4,8 @@
  */
 
 // Load Devices
-async function loadDevices() {
+async function loadDevices(options = {}) {
+    const shouldFitMap = options?.fitMap !== false;
     try {
         const userId = localStorage.getItem('user_id');
         const response = await apiFetch(`${API_BASE}/devices?is_active=true&_t=${Date.now()}`);
@@ -47,12 +48,15 @@ async function loadDevices() {
         devices.forEach(device => updateDeviceMarker(device.id, device));
 
         updateStats();
-        fitMapToMarkers();
+        if (shouldFitMap) {
+            fitMapToMarkers();
+        }
     } catch (error) {
         console.error('Error loading devices:', error);
         showAlert({ title: 'Connection Failed', message: 'Unable to connect to the server.' });
     }
 }
+window.loadDevices = loadDevices;
 
 // Load Device State
 async function loadDeviceState(deviceId) {
@@ -499,10 +503,11 @@ function toggleSidebar() {
 // Periodic Updates
 function startPeriodicUpdate() {
     setInterval(() => {
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
-            // Fallback to polling if WebSocket is down
+        const activeWs = (typeof ws !== 'undefined' && ws) || window.ws;
+        if (!activeWs || activeWs.readyState !== WebSocket.OPEN) {
+            // Fallback to polling ONLY if WebSocket is down
             devices.forEach(device => loadDeviceState(device.id));
-            loadAlerts();
+            if (typeof loadAlerts === 'function') loadAlerts();
         }
     }, 30000); // Every 30 seconds
 }

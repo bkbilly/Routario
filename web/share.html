@@ -177,7 +177,8 @@
     function initMap() {
         map = L.map('map', { zoomControl: true, attributionControl: false, wheelPxPerZoomLevel: 120, preferCanvas: true });
         L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
-            maxZoom: 19
+            maxZoom: 19,
+            crossOrigin: true
         }).addTo(map);
         map.setView([0, 0], 2);
     }

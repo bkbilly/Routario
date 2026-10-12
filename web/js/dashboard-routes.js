@@ -882,6 +882,7 @@ function initDashboardRouteEditorMap() {
     dashboardRouteEditorTileLayer = L.tileLayer(tile.url, {
         attribution: tile.attribution,
         maxZoom: tile.maxZoom || 19,
+        crossOrigin: true,
     }).addTo(dashboardRouteEditorMap);
     setTimeout(() => {
         const tileContainer = dashboardRouteEditorTileLayer?.getContainer();

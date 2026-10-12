@@ -4,7 +4,11 @@
  * Place this file at: /web/sw.js  (root of your web directory)
  */
 
-const CACHE_NAME = 'gps-dashboard-v134';
+const CACHE_NAME = 'gps-dashboard-v138';
+const TILE_CACHE_NAME = 'routario-map-tiles-v1';
+const MAX_CACHED_TILES = 1500;
+let tileInsertCount = 0;
+
 const STATIC_ASSETS = [
   '/login.html',
   '/gps-dashboard.html',
@@ -49,6 +53,52 @@ const STATIC_ASSETS = [
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 ];
 
+/**
+ * Checks whether a GET request is fetching a map tile image.
+ */
+function isMapTileRequest(request, url) {
+  if (request.method !== 'GET') return false;
+  const host = url.hostname;
+  if (
+    host.endsWith('tile.openstreetmap.org') ||
+    host.endsWith('basemaps.cartocdn.com') ||
+    host.endsWith('tiles.stadiamaps.com') ||
+    host.endsWith('arcgisonline.com') ||
+    host.endsWith('opentopomap.org') ||
+    host.endsWith('openseamap.org') ||
+    (host.endsWith('google.com') && url.pathname.includes('/vt/'))
+  ) {
+    return true;
+  }
+  // Generic XYZ tile pattern: e.g. /12/234/567.png or /tile/12/234/567
+  if (/\/\d+\/\d+\/\d+(\.[a-z0-9_-]+)?$/i.test(url.pathname)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Writes tile to cache and periodically prunes oldest tiles to respect storage limits.
+ */
+async function putAndTrimTile(cache, request, response) {
+  try {
+    await cache.put(request, response);
+    tileInsertCount++;
+    if (tileInsertCount >= 40) {
+      tileInsertCount = 0;
+      const keys = await cache.keys();
+      if (keys.length > MAX_CACHED_TILES) {
+        const deleteCount = keys.length - MAX_CACHED_TILES;
+        for (let i = 0; i < deleteCount; i++) {
+          await cache.delete(keys[i]);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[SW] Tile cache write failed:', err);
+  }
+}
+
 // ── Install: pre-cache static assets ─────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -62,13 +112,13 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// ── Activate: clean up old caches ────────────────────────────────
+// ── Activate: clean up old caches (preserve map tile cache) ──────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter((key) => key !== CACHE_NAME)
+          .filter((key) => key !== CACHE_NAME && key !== TILE_CACHE_NAME)
           .map((key) => caches.delete(key))
       )
     ).then(() => self.clients.claim())
@@ -77,7 +127,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// ── Fetch: cache-first for static, network-first for API ─────────
+// ── Fetch: cache-first for static & tiles, network-first for API ─────────
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
@@ -86,6 +136,31 @@ self.addEventListener('fetch', (event) => {
     return; // Let browser handle normally
   }
 
+  // Map Tile Caching: Cache-First with bounded LRU eviction
+  if (isMapTileRequest(event.request, url)) {
+    event.respondWith(
+      caches.open(TILE_CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(event.request);
+        if (cached) {
+          return cached;
+        }
+        try {
+          const networkResponse = await fetch(event.request);
+          if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
+            const clone = networkResponse.clone();
+            event.waitUntil(putAndTrimTile(cache, event.request, clone));
+          }
+          return networkResponse;
+        } catch (err) {
+          if (cached) return cached;
+          throw err;
+        }
+      })
+    );
+    return;
+  }
+
+  // Static Assets & App Shell Caching
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;

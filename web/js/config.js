@@ -436,6 +436,9 @@ window.getAlertIconHtml     = getAlertIconHtml;
 let _globalWs = null;
 let _globalWsReconnectTimer = null;
 let _globalWsConnectedUserId = null;
+let _globalWsPingInterval = null;
+let _globalWsReconnectDelay = 2000;
+let _globalWsHasConnected = false;
 
 function initGlobalAlertWebSocket() {
     const userId = localStorage.getItem('user_id');
@@ -459,9 +462,36 @@ function initGlobalAlertWebSocket() {
     try {
         _globalWs = new WebSocket(wsUrl);
         window.ws = _globalWs;
+        if (typeof ws !== 'undefined') {
+            try { ws = _globalWs; } catch (_) {}
+        }
 
         _globalWs.onopen = () => {
             console.log('[WebSocket] Global socket connected for user', userId, 'on', window.location.pathname);
+            _globalWsReconnectDelay = 2000;
+
+            // Heartbeat ping every 25 seconds to keep reverse proxies / firewalls alive
+            if (_globalWsPingInterval) clearInterval(_globalWsPingInterval);
+            _globalWsPingInterval = setInterval(() => {
+                if (_globalWs && _globalWs.readyState === WebSocket.OPEN) {
+                    try { _globalWs.send(JSON.stringify({ type: 'ping' })); } catch (_) {}
+                }
+            }, 25000);
+
+            // Reconnection state catch-up: refresh vehicle positions and alerts without resetting camera
+            if (_globalWsHasConnected) {
+                console.log('[WebSocket] Reconnection established! Triggering position and state catch-up sync...');
+                if (typeof loadDevices === 'function') {
+                    loadDevices({ fitMap: false });
+                }
+                if (typeof loadAlerts === 'function') {
+                    loadAlerts();
+                }
+                if (typeof loadAlertRuleHistoryData === 'function') {
+                    loadAlertRuleHistoryData();
+                }
+            }
+            _globalWsHasConnected = true;
         };
 
         _globalWs.onmessage = (event) => {
@@ -477,9 +507,25 @@ function initGlobalAlertWebSocket() {
             console.debug('[WebSocket] Socket error on', window.location.pathname, e);
         };
 
-        _globalWs.onclose = () => {
+        _globalWs.onclose = (e) => {
+            if (_globalWsPingInterval) {
+                clearInterval(_globalWsPingInterval);
+                _globalWsPingInterval = null;
+            }
+            if (typeof ws !== 'undefined') {
+                try { ws = null; } catch (_) {}
+            }
             if (!localStorage.getItem('auth_token')) return;
-            _globalWsReconnectTimer = setTimeout(initGlobalAlertWebSocket, 5000);
+
+            // Don't auto-reconnect if rejected by server due to bad/expired token
+            if (e && (e.code === 4001 || e.code === 4003)) {
+                console.warn('[WebSocket] Connection closed by server due to authorization (code', e.code, '). Reconnect halted.');
+                return;
+            }
+
+            const delay = _globalWsReconnectDelay;
+            _globalWsReconnectDelay = Math.min(_globalWsReconnectDelay * 2, 30000);
+            _globalWsReconnectTimer = setTimeout(initGlobalAlertWebSocket, delay);
         };
     } catch (e) {
         console.warn('[WebSocket] Global init failed:', e);
@@ -539,8 +585,8 @@ function handleAlertDismissedLocally(alertId, broadcastToOthers = false) {
         if (modalItem) modalItem.remove();
     } catch (_) {}
 
-    // 4. Reload alerts from server to guarantee sync
-    if (typeof loadAlerts === 'function') {
+    // 4. Reload alerts from server only if not tracked in memory
+    if (typeof loadAlerts === 'function' && !Array.isArray(window.loadedAlerts)) {
         loadAlerts();
     }
     if (typeof loadAlertRuleHistoryData === 'function') {
@@ -588,7 +634,7 @@ function handleAlertsClearedLocally(broadcastToOthers = false) {
     }
 
     // 4. Reload alerts / history
-    if (typeof loadAlerts === 'function') {
+    if (typeof loadAlerts === 'function' && !Array.isArray(window.loadedAlerts)) {
         loadAlerts();
     }
     if (typeof loadAlertRuleHistoryData === 'function') {
@@ -691,7 +737,12 @@ function _dispatchGlobalWebSocketMessage(message) {
         if (typeof loadAlertRuleHistoryData === 'function') {
             loadAlertRuleHistoryData();
         }
-        if (typeof loadAlerts === 'function') {
+        if (Array.isArray(window.loadedAlerts)) {
+            if (!window.loadedAlerts.some(a => a.id === alertData.id)) {
+                window.loadedAlerts.unshift(alertData);
+                if (typeof loadedAlerts !== 'undefined') loadedAlerts = window.loadedAlerts;
+            }
+        } else if (typeof loadAlerts === 'function') {
             loadAlerts();
         }
     }
@@ -720,6 +771,30 @@ if (document.readyState === 'loading') {
 } else {
     initGlobalAlertWebSocket();
 }
+
+// Re-verify socket and sync state upon returning to tab or waking from sleep
+let _lastVisibilitySync = Date.now();
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        const activeWs = (typeof ws !== 'undefined' && ws) || window.ws;
+        const isClosed = !activeWs || activeWs.readyState === WebSocket.CLOSED || activeWs.readyState === WebSocket.CLOSING;
+        const now = Date.now();
+        const shouldSync = isClosed || (now - _lastVisibilitySync > 15000);
+
+        if (isClosed) {
+            console.log('[WebSocket] Tab became visible and socket is disconnected. Reconnecting...');
+            _globalWsReconnectDelay = 2000;
+            initGlobalAlertWebSocket();
+        }
+
+        if (shouldSync) {
+            _lastVisibilitySync = now;
+            if (typeof loadDevices === 'function') loadDevices({ fitMap: false });
+            if (typeof loadAlerts === 'function') loadAlerts();
+            if (typeof loadAlertRuleHistoryData === 'function') loadAlertRuleHistoryData();
+        }
+    }
+});
 
 function hasPermission(perm) {
     if (localStorage.getItem('is_admin') === 'true') return true;
