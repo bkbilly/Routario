@@ -1315,6 +1315,9 @@ body.sidebar-compact .device-card .device-actions,
 #historyDeviceName {
     color: var(--text-primary) !important;
     font-weight: 700;
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 0.95rem;
 }
 
 .detail-grid {
@@ -3233,6 +3236,44 @@ body.sidebar-compact .vp-actions,
     border-color: var(--accent-primary);
     color: var(--accent-primary);
 }
+
+.vp-sensor-row-clickable {
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    user-select: none;
+}
+
+.vp-sensor-row-clickable:hover {
+    background: rgba(99, 102, 241, 0.12) !important;
+}
+
+.vp-clickable {
+    cursor: pointer;
+    transition: color 0.15s, opacity 0.15s;
+    user-select: none;
+}
+
+.vp-clickable:hover {
+    color: var(--accent-primary) !important;
+}
+
+.sensor-range-btn.active {
+    background: var(--accent-primary) !important;
+    color: #fff !important;
+    border-color: var(--accent-primary) !important;
+}
+
+.sensor-stat-card {
+    cursor: default;
+    transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.sensor-stat-card:hover {
+    border-color: var(--accent-primary) !important;
+    background: var(--bg-hover) !important;
+}
+
+
 
 /* ── Smaller Screen Heights: Compact popup with scrollable attributes ── */
 @media (max-height: 800px) {

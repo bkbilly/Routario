@@ -639,7 +639,9 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { pres
         }
 
         const device = devices.find(d => d.id === deviceId);
-        document.getElementById('historyDeviceName').textContent = device ? device.name : 'History Details';
+        const icon = device ? ((typeof VEHICLE_ICONS !== 'undefined' && VEHICLE_ICONS[device.vehicle_type]) || { emoji: '🚗' }).emoji : '🚗';
+        const name = device ? device.name : 'History Details';
+        document.getElementById('historyDeviceName').textContent = `${icon} ${name}`;
 
         // Load and populate trips and deterministic color map first
         updateHistoryLoadingSubtitle('Loading trips…');
@@ -1517,6 +1519,38 @@ function seekToTrip(startTimeStr) {
         map.panTo(typeof applyLatLngOffset === 'function' ? applyLatLngOffset(pos, map.getZoom()) : pos);
     }
 }
+
+function seekToHistoryTime(isoTimeStr, { openPopup = true } = {}) {
+    if (!historyData || !historyData.length) return false;
+    const target = new Date(isoTimeStr).getTime();
+    let closest = 0;
+    let closestDiff = Infinity;
+    historyData.forEach((f, idx) => {
+        const diff = Math.abs(new Date(f.properties.time).getTime() - target);
+        if (diff < closestDiff) { closestDiff = diff; closest = idx; }
+    });
+    historyIndex = closest;
+    stopPlayback();
+    updatePlaybackUI();
+    const pos = [
+        historyData[closest].geometry.coordinates[1],
+        historyData[closest].geometry.coordinates[0]
+    ];
+    if (openPopup && markers['history_pos']) {
+        markers['history_pos'].openPopup();
+    }
+    const targetZoom = Math.max(map.getZoom(), 16);
+    if (markers['history_pos'] && markers['history_pos'].isPopupOpen() && typeof _ensurePopupInVisibleMap === 'function') {
+        _ensurePopupInVisibleMap('history_pos', pos);
+    } else {
+        const centerPos = typeof applyLatLngOffset === 'function' ? applyLatLngOffset(pos, targetZoom) : pos;
+        map.setView(centerPos, targetZoom, { animate: true });
+    }
+    return true;
+}
+window.seekToHistoryTime = seekToHistoryTime;
+window.seekToTrip = seekToTrip;
+window.loadHistory = loadHistory;
 
 function getCurrentTripForPoint(isoTimeStr) {
     if (!historyTrips.length || !isoTimeStr) return null;

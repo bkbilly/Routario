@@ -334,6 +334,7 @@ function updateDeviceMarker(deviceId, state) {
     }
 
     // Build sensors rows
+    const canViewHist = hasPermission('view_history');
     const skipKeys = new Set(['raw', 'event_code']);
     const sensorRows = Object.entries(sensors)
         .filter(([k, v]) => !skipKeys.has(k) && v !== null && v !== undefined)
@@ -343,8 +344,9 @@ function updateDeviceMarker(deviceId, state) {
             let display = Array.isArray(v) || (v !== null && typeof v === 'object')
                 ? JSON.stringify(v)
                 : String(v);
-            return `<div style="display:flex;justify-content:space-between;align-items:baseline;
-                                gap:0.5rem;padding:0.2rem 0;border-bottom:1px solid var(--border-color);flex-wrap:wrap;">
+            const clickAttr = canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, '${_esc(k)}', '${_esc(label)}')" role="button" title="Click to view ${label} history"` : '';
+            return `<div class="vp-sensor-row ${canViewHist ? 'vp-sensor-row-clickable' : ''}" ${clickAttr} style="display:flex;justify-content:space-between;align-items:baseline;
+                                gap:0.5rem;padding:0.25rem 0.35rem;border-bottom:1px solid var(--border-color);flex-wrap:wrap;border-radius:4px;">
                         <span style="color:var(--text-muted);font-size:0.75rem;flex-shrink:0;">${label}</span>
                         <span style="font-family:JetBrains Mono,monospace;font-size:0.72rem;
                                      color:var(--text-primary);word-break:break-all;text-align:right;">${display}</span>
@@ -383,12 +385,12 @@ function updateDeviceMarker(deviceId, state) {
                 <span class="vp-name">${deviceName}</span>
             </div>
             <div class="vp-grid" onscroll="_popupGridScroll[${deviceId}] = this.scrollTop">
-                ${state.ignition_on != null ? `<span class="vp-label">Ignition</span>   <span class="vp-value" style="color:${ignitionColor};font-weight:700;">${ignitionText}</span>` : ''}
+                ${state.ignition_on != null ? `<span class="vp-label ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'ignition', 'Ignition')" title="Click to view Ignition history"` : ''}>Ignition</span>   <span class="vp-value ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'ignition', 'Ignition')" title="Click to view Ignition history"` : ''} style="color:${ignitionColor};font-weight:700;">${ignitionText}</span>` : ''}
                 ${lastGpsTimeStr !== '—'     ? `<span class="vp-label">Last GPS</span>   <span class="vp-value vp-mono" style="font-size:0.72rem;">${lastGpsTimeStr}</span>` : ''}
-                ${state.last_speed != null   ? `<span class="vp-label">Speed</span>      <span class="vp-value">${fmtSpeed(state.last_speed)}</span>` : ''}
-                ${satellites !== '—'         ? `<span class="vp-label">Satellites</span> <span class="vp-value">${satellites}</span>` : ''}
-                <span class="vp-label">Altitude</span>   <span class="vp-value">${fmtAlt(altitude)}</span>
-                <span class="vp-label">Odometer</span>   <span class="vp-value">${fmtOdometer(state.total_odometer || 0)}</span>
+                ${state.last_speed != null   ? `<span class="vp-label ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'speed', 'Speed')" title="Click to view Speed history"` : ''}>Speed</span>      <span class="vp-value ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'speed', 'Speed')" title="Click to view Speed history"` : ''}>${fmtSpeed(state.last_speed)}</span>` : ''}
+                ${satellites !== '—'         ? `<span class="vp-label ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'satellites', 'Satellites')" title="Click to view Satellites history"` : ''}>Satellites</span> <span class="vp-value ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'satellites', 'Satellites')" title="Click to view Satellites history"` : ''}>${satellites}</span>` : ''}
+                <span class="vp-label ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'altitude', 'Altitude')" title="Click to view Altitude history"` : ''}>Altitude</span>   <span class="vp-value ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'altitude', 'Altitude')" title="Click to view Altitude history"` : ''}>${fmtAlt(altitude)}</span>
+                <span class="vp-label ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'odometer', 'Odometer')" title="Click to view Odometer history"` : ''}>Odometer</span>   <span class="vp-value ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'odometer', 'Odometer')" title="Click to view Odometer history"` : ''}>${fmtOdometer(state.total_odometer || 0)}</span>
             </div>
             ${sensorRows ? `
             <div style="border-top:1px solid var(--border-color);">
@@ -769,6 +771,7 @@ function applyLatLngOffset(latlng, zoom) {
     const point = map.project(L.latLng(latlng), zoom);
     return map.unproject(L.point(point.x - offset / 2, point.y + (bottomOffset - topOffset) / 2), zoom);
 }
+window.applyLatLngOffset = applyLatLngOffset;
 
 // Ensures an open vehicle popup stays completely visible within the open map area (not obscured by sidebar or off-screen).
 function _ensurePopupInVisibleMap(deviceId, targetLatLng = null) {

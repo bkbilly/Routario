@@ -546,6 +546,160 @@ async def get_trip_eco_scorecard(
         }
 
 
+
+@router.get("/{device_id}/sensors/{sensor_key}/history")
+async def get_device_sensor_history(
+    device_id: int,
+    sensor_key: str,
+    start_time: Optional[datetime] = Query(None),
+    end_time: Optional[datetime] = Query(None),
+    limit: int = Query(1000, ge=1, le=5000),
+    caller: User = Depends(verify_device_access),
+    _: User = Depends(require_permission("view_history")),
+):
+    """Return historical readings, summary statistics, and deltas for a specific sensor of a device."""
+    db = get_db()
+    if not end_time:
+        end_time = datetime.utcnow()
+    if not start_time:
+        start_time = end_time - timedelta(hours=24)
+
+    start_utc = _to_naive_utc(start_time)
+    end_utc = _to_naive_utc(end_time)
+
+    from reports.sensor_graphs import get_sensor_meta
+    meta = get_sensor_meta(sensor_key)
+
+    async with db.get_session() as session:
+        dev_res = await session.execute(select(Device).where(Device.id == device_id))
+        device = dev_res.scalar_one_or_none()
+        if not device:
+            raise HTTPException(status_code=404, detail="Device not found")
+
+        query = (
+            select(
+                PositionRecord.device_time,
+                PositionRecord.latitude,
+                PositionRecord.longitude,
+                PositionRecord.speed,
+                PositionRecord.altitude,
+                PositionRecord.satellites,
+                PositionRecord.ignition,
+                PositionRecord.sensors,
+            )
+            .where(
+                PositionRecord.device_id == device_id,
+                PositionRecord.device_time >= start_utc,
+                PositionRecord.device_time <= end_utc,
+            )
+            .order_by(PositionRecord.device_time.asc())
+        )
+        result = await session.execute(query)
+        rows = result.all()
+
+        readings = []
+        is_numeric = False
+        sum_val = 0.0
+        min_val = None
+        max_val = None
+        numeric_count = 0
+        on_count = 0
+        off_count = 0
+        changes_count = 0
+        prev_val = None
+
+        for r in rows:
+            time_val, lat, lon, spd, alt, sats, ign, sensors_dict = r
+            sensors_dict = sensors_dict or {}
+
+            val = None
+            if sensor_key == "speed":
+                val = spd
+            elif sensor_key == "altitude":
+                val = alt
+            elif sensor_key == "satellites":
+                val = sats
+            elif sensor_key == "ignition":
+                val = ign
+            elif sensor_key in ("odometer", "total_odometer"):
+                val = sensors_dict.get("total_odometer") if "total_odometer" in sensors_dict else sensors_dict.get("odometer")
+            else:
+                val = sensors_dict.get(sensor_key)
+
+            if val is None:
+                continue
+
+            delta = None
+            if isinstance(val, (int, float)) and not isinstance(val, bool):
+                is_numeric = True
+                fval = float(val)
+                sum_val += fval
+                numeric_count += 1
+                min_val = fval if min_val is None else min(min_val, fval)
+                max_val = fval if max_val is None else max(max_val, fval)
+                if prev_val is not None and isinstance(prev_val, (int, float)) and not isinstance(prev_val, bool):
+                    delta = round(fval - float(prev_val), meta.get("decimals", 2))
+            elif isinstance(val, bool):
+                if val:
+                    on_count += 1
+                else:
+                    off_count += 1
+                if prev_val is not None and prev_val != val:
+                    changes_count += 1
+                    delta = "ON" if val else "OFF"
+            else:
+                if prev_val is not None and prev_val != val:
+                    changes_count += 1
+                    delta = "changed"
+
+            prev_val = val
+            time_iso = time_val.isoformat() + "Z" if time_val.tzinfo is None else time_val.isoformat()
+
+            readings.append({
+                "time": time_iso,
+                "value": val,
+                "delta": delta,
+                "latitude": round(lat, 6) if lat is not None else None,
+                "longitude": round(lon, 6) if lon is not None else None,
+            })
+
+        total_readings = len(readings)
+        latest_val = readings[-1]["value"] if readings else None
+
+        # Reverse readings so newest are first
+        readings.reverse()
+        truncated = False
+        if len(readings) > limit:
+            readings = readings[:limit]
+            truncated = True
+
+        summary = {
+            "count": total_readings,
+            "latest": latest_val,
+            "min": round(min_val, meta.get("decimals", 1)) if min_val is not None else None,
+            "max": round(max_val, meta.get("decimals", 1)) if max_val is not None else None,
+            "avg": round(sum_val / numeric_count, meta.get("decimals", 1)) if numeric_count > 0 else None,
+            "is_numeric": is_numeric,
+            "on_count": on_count,
+            "off_count": off_count,
+            "changes_count": changes_count,
+        }
+
+        return {
+            "device_id": device_id,
+            "device_name": device.name,
+            "sensor_key": sensor_key,
+            "label": meta["label"],
+            "unit": meta.get("unit", ""),
+            "type": meta.get("type", "auto"),
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "summary": summary,
+            "truncated": truncated,
+            "readings": readings,
+        }
+
+
 @router.get("/{device_id}/users", response_model=List[UserResponse])
 async def get_device_users(device_id: int, admin: User = Depends(require_company_admin)):
     """Get users assigned to this device. Admin or company admin."""

@@ -165,6 +165,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         await _loadReportTypes();
         await _loadScheduleTriggers();
         _updateDescription();
+        if (window.location.search) {
+            await _applyReportUrlParams();
+        }
     }
     _injectNavScheduleAction();
     const hash = RoutarioTabs.hashValue();
@@ -891,6 +894,57 @@ function onReportTypeChange() {
 function _updateDescription() {
     const type = document.getElementById('reportType').value;
     document.getElementById('reportDescription').textContent = _reportDefMap[type]?.description || '';
+}
+
+async function _applyReportUrlParams() {
+    const params = new URLSearchParams(window.location.search);
+    const type = params.get('type');
+    if (!type) return;
+
+    const reportTypeSelect = document.getElementById('reportType');
+    if (reportTypeSelect && [...reportTypeSelect.options].some(o => o.value === type)) {
+        reportTypeSelect.value = type;
+        onReportTypeChange();
+    }
+
+    const startParam = params.get('start') || params.get('start_date');
+    if (startParam) {
+        const d = new Date(startParam);
+        if (!isNaN(d.getTime())) setReportInputDate('startDate', d);
+    }
+    const endParam = params.get('end') || params.get('end_date');
+    if (endParam) {
+        const d = new Date(endParam);
+        if (!isNaN(d.getTime())) setReportInputDate('endDate', d);
+    }
+
+    const deviceIdsParam = params.get('device_ids') || params.get('device_id');
+    if (deviceIdsParam) {
+        const ids = deviceIdsParam.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+        if (ids.length) {
+            _selectedIds = new Set(ids);
+            document.querySelectorAll('#vehOptsList input[type=checkbox]').forEach(el => {
+                el.checked = _selectedIds.has(parseInt(el.dataset.id, 10));
+            });
+            _updateVehLabel();
+            _syncAllCheck();
+        }
+    }
+
+    if (type === 'sensor_graphs') {
+        await _fetchAvailableSensors();
+        const sensorsParam = params.get('sensors') || params.get('sensor');
+        if (sensorsParam) {
+            const requested = sensorsParam.split(',').map(s => s.trim()).filter(Boolean);
+            _selectedSensors.clear();
+            requested.forEach(k => _selectedSensors.add(k));
+            _renderSensorPills();
+        }
+    }
+
+    if (params.get('autorun') === '1' || params.get('autorun') === 'true') {
+        await runReport();
+    }
 }
 
 function onHistoryCheckChange() {

@@ -1719,6 +1719,91 @@
             if (method === 'PUT') Object.assign(d, body);
             return json(d);
         }
+        if (apiPath.match(/^\/devices\/\d+\/sensors\/[^/]+\/history/)) {
+            const parts = apiPath.split('/');
+            const devId = Number(parts[2]);
+            const sensorKey = decodeURIComponent(parts[4].split('?')[0]);
+            const d = devices.find(item => item.id === devId) || devices[0];
+            const pts = historyPositions({ device_id: devId });
+            const metaLabels = {
+                speed: { label: 'Speed', unit: 'km/h', decimals: 1 },
+                altitude: { label: 'Altitude', unit: 'm', decimals: 0 },
+                satellites: { label: 'Satellites', unit: '', decimals: 0 },
+                ignition: { label: 'Ignition', unit: '', decimals: 0 },
+                odometer: { label: 'Odometer', unit: 'km', decimals: 1 },
+                total_odometer: { label: 'Total Odometer', unit: 'km', decimals: 1 },
+                battery: { label: 'Battery', unit: '%', decimals: 0 },
+                battery_voltage: { label: 'Battery Voltage', unit: 'V', decimals: 2 },
+                fuel_level: { label: 'Fuel Level', unit: '%', decimals: 0 },
+                fuel: { label: 'Fuel', unit: '%', decimals: 0 },
+                temperature: { label: 'Temperature', unit: '°C', decimals: 1 },
+                temp: { label: 'Temperature', unit: '°C', decimals: 1 },
+                rpm: { label: 'Engine RPM', unit: 'RPM', decimals: 0 },
+            };
+            const meta = metaLabels[sensorKey] || { label: sensorKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), unit: '', decimals: 1 };
+            let isNumeric = false;
+            let sum = 0, count = 0, min = null, max = null;
+            let onCount = 0, offCount = 0, changes = 0;
+            let prevVal = null;
+
+            const readings = pts.map(p => {
+                const props = p.properties;
+                let val = null;
+                if (sensorKey === 'speed') val = props.speed;
+                else if (sensorKey === 'altitude') val = props.altitude;
+                else if (sensorKey === 'satellites') val = props.satellites;
+                else if (sensorKey === 'ignition') val = props.ignition;
+                else if (sensorKey === 'odometer' || sensorKey === 'total_odometer') val = props.sensors?.total_odometer || props.sensors?.odometer || 12045.2;
+                else val = props.sensors?.[sensorKey] ?? (sensorKey === 'battery_voltage' ? 12.4 + (props.id % 5) * 0.1 : 50 + (props.id % 10));
+
+                let delta = null;
+                if (typeof val === 'number') {
+                    isNumeric = true;
+                    sum += val;
+                    count++;
+                    min = min === null ? val : Math.min(min, val);
+                    max = max === null ? val : Math.max(max, val);
+                    if (prevVal !== null && typeof prevVal === 'number') {
+                        delta = Number((val - prevVal).toFixed(meta.decimals));
+                    }
+                } else if (typeof val === 'boolean') {
+                    if (val) onCount++; else offCount++;
+                    if (prevVal !== null && prevVal !== val) {
+                        changes++;
+                        delta = val ? 'ON' : 'OFF';
+                    }
+                }
+                prevVal = val;
+                return {
+                    time: props.time,
+                    value: val,
+                    delta,
+                    latitude: p.geometry.coordinates[1],
+                    longitude: p.geometry.coordinates[0],
+                };
+            });
+            readings.reverse();
+            return json({
+                device_id: d.id,
+                device_name: d.name,
+                sensor_key: sensorKey,
+                label: meta.label,
+                unit: meta.unit,
+                summary: {
+                    count: readings.length,
+                    latest: readings[0]?.value ?? null,
+                    min: min !== null ? Number(min.toFixed(meta.decimals)) : null,
+                    max: max !== null ? Number(max.toFixed(meta.decimals)) : null,
+                    avg: count > 0 ? Number((sum / count).toFixed(meta.decimals)) : null,
+                    is_numeric: isNumeric,
+                    on_count: onCount,
+                    off_count: offCount,
+                    changes_count: changes,
+                },
+                truncated: false,
+                readings,
+            });
+        }
         if (apiPath.match(/^\/devices\/\d+\/trips$/)) return json(historyTrips(Number(apiPath.split('/')[2])));
         if (apiPath.match(/^\/devices\/\d+\/state$/)) return json(devices.find(d => d.id === Number(apiPath.split('/')[2]))?.state || {});
         if (apiPath.match(/^\/devices\/\d+\/users$/)) {
