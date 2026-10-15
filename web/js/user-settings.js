@@ -415,9 +415,176 @@ async function loadPasskeys() {
     try {
         passkeys = await settingsJson(`${API_BASE}/passkeys`);
         renderPasskeys();
+        renderBiometricLockSettings();
     } catch (e) {
         list.innerHTML = `<div class="profile-passkey-state">${settingsEsc(e.message || 'Unable to load passkeys')}</div>`;
+        renderBiometricLockSettings();
     }
+}
+
+function renderBiometricLockSettings() {
+    const toggle = document.getElementById('biometricLockToggle');
+    const options = document.getElementById('biometricLockOptions');
+    const timeoutSelect = document.getElementById('biometricLockTimeout');
+    const notice = document.getElementById('biometricLockNoPasskeysNotice');
+
+    if (!toggle) return;
+
+    const hasPasskeys = Array.isArray(passkeys) && passkeys.length > 0;
+    const hasPin = Boolean(localStorage.getItem('routario_app_lock_pin_hash'));
+    const isEnabled = localStorage.getItem('routario_biometric_lock_enabled') === 'true';
+    const timeout = localStorage.getItem('routario_biometric_lock_timeout') || '0';
+
+    toggle.checked = isEnabled && hasPasskeys && hasPin;
+    if (timeoutSelect) timeoutSelect.value = timeout;
+
+    if (!hasPasskeys) {
+        if (notice) notice.style.display = 'block';
+        if (options) options.style.display = 'none';
+        if (isEnabled) {
+            localStorage.setItem('routario_biometric_lock_enabled', 'false');
+        }
+    } else {
+        if (notice) notice.style.display = 'none';
+        if (options) options.style.display = toggle.checked ? 'block' : 'none';
+    }
+}
+
+let _appLockPinModalMode = 'setup';
+
+function openAppLockPinModal(mode = 'setup') {
+    _appLockPinModalMode = mode;
+    const modal = document.getElementById('appLockPinModal');
+    const title = document.getElementById('appLockPinModalTitle');
+    const desc = document.getElementById('appLockPinModalDesc');
+    const newInput = document.getElementById('appLockNewPin');
+    const confInput = document.getElementById('appLockConfirmPin');
+    const err = document.getElementById('appLockPinModalError');
+    const newLabel = document.getElementById('appLockNewPinLabel');
+
+    if (!modal) return;
+
+    if (newInput) newInput.value = '';
+    if (confInput) confInput.value = '';
+    if (err) err.style.display = 'none';
+
+    if (mode === 'change') {
+        if (title) title.textContent = 'Change Backup PIN';
+        if (desc) desc.textContent = 'Enter a new 4 to 8 digit backup PIN.';
+        if (newLabel) newLabel.textContent = 'New PIN (4 to 8 digits)';
+    } else {
+        if (title) title.textContent = 'Set Backup PIN';
+        if (desc) desc.textContent = 'Setting a backup PIN is mandatory when enabling biometrics so you can quickly unlock without having to log in again.';
+        if (newLabel) newLabel.textContent = 'PIN (4 to 8 digits)';
+    }
+
+    modal.classList.add('active');
+    setTimeout(() => {
+        if (newInput) newInput.focus();
+    }, 100);
+}
+
+function closeAppLockPinModal() {
+    const modal = document.getElementById('appLockPinModal');
+    if (modal) modal.classList.remove('active');
+    renderBiometricLockSettings();
+}
+
+async function submitAppLockPin() {
+    const newInput = document.getElementById('appLockNewPin');
+    const confInput = document.getElementById('appLockConfirmPin');
+    const err = document.getElementById('appLockPinModalError');
+    const btn = document.getElementById('saveAppLockPinBtn');
+
+    if (err) err.style.display = 'none';
+
+    const newPin = (newInput ? newInput.value : '').trim();
+    const confPin = (confInput ? confInput.value : '').trim();
+
+    if (!newPin || newPin.length < 4 || newPin.length > 8 || !/^\d+$/.test(newPin)) {
+        if (err) { err.textContent = 'PIN must be between 4 and 8 digits'; err.style.display = 'block'; }
+        if (newInput) newInput.focus();
+        return;
+    }
+
+    if (newPin !== confPin) {
+        if (err) { err.textContent = 'PIN confirmation does not match'; err.style.display = 'block'; }
+        if (confInput) confInput.focus();
+        return;
+    }
+
+    btn.disabled = true;
+    try {
+        if (window.RoutarioAppLock && typeof window.RoutarioAppLock.setPin === 'function') {
+            await window.RoutarioAppLock.setPin(newPin);
+        } else {
+            const array = new Uint8Array(16);
+            crypto.getRandomValues(array);
+            const salt = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
+            const encoder = new TextEncoder();
+            const data = encoder.encode(salt + ':' + newPin);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+            localStorage.setItem('routario_app_lock_pin_salt', salt);
+            localStorage.setItem('routario_app_lock_pin_hash', hash);
+        }
+
+        if (_appLockPinModalMode === 'setup') {
+            localStorage.setItem('routario_biometric_lock_enabled', 'true');
+            sessionStorage.setItem('routario_biometric_unlocked', 'true');
+            localStorage.setItem('routario_biometric_last_active', String(Date.now()));
+            showAlert('Backup PIN set and Biometric App Lock enabled', 'success');
+        } else {
+            showAlert('Backup PIN updated successfully', 'success');
+        }
+
+        const modal = document.getElementById('appLockPinModal');
+        if (modal) modal.classList.remove('active');
+        renderBiometricLockSettings();
+    } catch (e) {
+        if (err) { err.textContent = e.message || 'Failed to save PIN'; err.style.display = 'block'; }
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function toggleBiometricLockSetting(enabled) {
+    const hasPasskeys = Array.isArray(passkeys) && passkeys.length > 0;
+    const toggle = document.getElementById('biometricLockToggle');
+    const options = document.getElementById('biometricLockOptions');
+
+    if (enabled && !hasPasskeys) {
+        if (toggle) toggle.checked = false;
+        if (confirm('You must register at least one passkey first to use Biometric App Lock. Would you like to add one now?')) {
+            await registerPasskey();
+        }
+        return;
+    }
+
+    if (enabled) {
+        // PIN is mandatory when enabling
+        const hasPin = Boolean(localStorage.getItem('routario_app_lock_pin_hash'));
+        if (!hasPin) {
+            if (toggle) toggle.checked = false;
+            openAppLockPinModal('setup');
+            return;
+        }
+
+        localStorage.setItem('routario_biometric_lock_enabled', 'true');
+        sessionStorage.setItem('routario_biometric_unlocked', 'true');
+        localStorage.setItem('routario_biometric_last_active', String(Date.now()));
+        showAlert('Biometric app lock enabled', 'success');
+        if (options) options.style.display = 'block';
+    } else {
+        localStorage.setItem('routario_biometric_lock_enabled', 'false');
+        showAlert('Biometric app lock disabled', 'info');
+        if (options) options.style.display = 'none';
+    }
+}
+
+function updateBiometricLockTimeoutSetting(val) {
+    localStorage.setItem('routario_biometric_lock_timeout', String(val));
+    showAlert('Auto-lock timeout updated', 'success');
 }
 
 function renderPasskeys() {

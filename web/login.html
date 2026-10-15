@@ -464,6 +464,8 @@
             localStorage.setItem('time_format', data.time_format || 'auto');
             localStorage.setItem('date_format', data.date_format || 'auto');
             localStorage.setItem('permissions', JSON.stringify(data.permissions || []));
+            sessionStorage.setItem('routario_biometric_unlocked', 'true');
+            localStorage.setItem('routario_biometric_last_active', String(Date.now()));
             if (String(data.company_id ?? '') !== localStorage.getItem('company_login_slug_company_id')) {
                 localStorage.removeItem('company_login_slug');
                 localStorage.removeItem('company_login_slug_company_id');

@@ -837,8 +837,10 @@ function handleLogout() {
     ['auth_token','user_id','username','is_admin','units','currency','theme','is_company_admin','company_id',
      'permissions',
      'impersonation_stack',
-     'impersonating_admin_token','impersonating_admin_user_id','impersonating_admin_username']
+     'impersonating_admin_token','impersonating_admin_user_id','impersonating_admin_username',
+     'routario_biometric_last_active','routario_biometric_hidden_time']
         .forEach(k => localStorage.removeItem(k));
+    sessionStorage.removeItem('routario_biometric_unlocked');
     applyTheme('dark');
     window.location.href = loginUrl;
 }

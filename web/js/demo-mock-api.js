@@ -2633,6 +2633,33 @@
             demoPasskeys.push(newKey);
             return json(newKey, 201);
         }
+        if (apiPath === '/passkeys/login/options') {
+            return json({
+                state: 'demo-passkey-login-state',
+                options: JSON.stringify({
+                    challenge: 'demo-login-challenge',
+                    rpId: location.hostname,
+                    allowCredentials: [],
+                    userVerification: 'required'
+                })
+            });
+        }
+        if (apiPath === '/passkeys/login/verify') {
+            return json({
+                access_token: 'demo-token',
+                token_type: 'bearer',
+                user_id: 1,
+                username: 'demo',
+                is_admin: true,
+                mfa_required: false,
+                is_company_admin: true,
+                company_id: null,
+                units: 'metric',
+                currency: 'EUR',
+                theme: DEMO_USER.theme || 'dark',
+                permissions: DEMO_USER.permissions
+            });
+        }
         if (apiPath.match(/^\/passkeys\/[^/]+$/)) {
             const keyId = apiPath.split('/')[2];
             const idx = demoPasskeys.findIndex(k => k.id === keyId);

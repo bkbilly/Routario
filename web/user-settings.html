@@ -25,6 +25,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <link rel="stylesheet" href="css/tables.css">
     <link rel="stylesheet" href="css/user-settings.css">
+    <link rel="stylesheet" href="css/app-lock.css">
     <script src="js/settings-nav.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
@@ -276,6 +277,46 @@
                         </div>
                         <div id="passkeySupportNote" style="display:none;color:var(--text-muted);font-size:0.86rem;margin-bottom:0.75rem;">Passkeys are not supported by this browser.</div>
                         <div id="passkeyList" class="profile-passkey-list"></div>
+
+                        <!-- Biometric App Lock Options -->
+                        <div id="biometricLockSection" style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border-color);">
+                            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;">
+                                <div>
+                                    <div style="font-weight:600;font-size:0.9rem;display:flex;align-items:center;gap:0.45rem;">
+                                        <i class="mdi mdi-shield-lock-outline" style="color:var(--accent-primary);font-size:1.15rem;"></i>
+                                        Biometric App Lock
+                                    </div>
+                                    <div style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.25rem;">
+                                        Require Face ID, Touch ID, or biometric verification every time the app opens or returns from background.
+                                    </div>
+                                </div>
+                                <label class="toggle-switch" style="margin-top:0.2rem;">
+                                    <input type="checkbox" id="biometricLockToggle" onchange="toggleBiometricLockSetting(this.checked)">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+
+                            <div id="biometricLockOptions" style="display:none;margin-top:0.85rem;padding:0.75rem 0.85rem;background:var(--bg-tertiary);border-radius:8px;">
+                                <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;">
+                                    <div>
+                                        <label class="form-label" style="font-size:0.78rem;margin-bottom:0.35rem;display:block;">Auto-lock when idle or in background</label>
+                                        <select id="biometricLockTimeout" class="form-input" style="max-width:320px;font-size:0.85rem;" onchange="updateBiometricLockTimeoutSetting(this.value)">
+                                            <option value="0">Immediately (every time app opens or resumes)</option>
+                                            <option value="60">After 1 minute</option>
+                                            <option value="300">After 5 minutes</option>
+                                            <option value="900">After 15 minutes</option>
+                                        </select>
+                                    </div>
+                                    <button type="button" class="btn btn-secondary btn-small" id="biometricLockChangePinBtn" onclick="openAppLockPinModal('change')">
+                                        <i class="mdi mdi-key-edit"></i> Change PIN
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="biometricLockNoPasskeysNotice" style="display:none;font-size:0.8rem;color:var(--accent-warning);margin-top:0.65rem;">
+                                <i class="mdi mdi-alert-circle-outline"></i> You need to register at least one passkey above to enable Biometric App Lock.
+                            </div>
+                        </div>
                     </section>
                 </div>
             </div>
@@ -763,8 +804,37 @@
         </div>
     </div>
 
+    <!-- App Lock PIN Modal -->
+    <div class="modal" id="appLockPinModal" onclick="if(event.target===this)closeAppLockPinModal()">
+        <div class="modal-content" style="max-width:400px;height:auto !important;max-height:92vh;overflow-y:auto;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="appLockPinModalTitle">Set Backup PIN</h2>
+                <button type="button" class="modal-close" onclick="closeAppLockPinModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
+                <p id="appLockPinModalDesc" style="font-size:0.85rem;color:var(--text-secondary);margin:0 0 1rem;line-height:1.4;">
+                    A backup PIN is mandatory when enabling biometrics so you can quickly unlock without having to log in again.
+                </p>
+                <div style="margin-bottom:0.85rem;">
+                    <label class="form-label" id="appLockNewPinLabel">PIN (4 to 8 digits)</label>
+                    <input type="password" id="appLockNewPin" class="form-input" inputmode="numeric" maxlength="8" placeholder="Enter 4-8 digit PIN" autocomplete="off">
+                </div>
+                <div style="margin-bottom:0.85rem;">
+                    <label class="form-label">Confirm PIN</label>
+                    <input type="password" id="appLockConfirmPin" class="form-input" inputmode="numeric" maxlength="8" placeholder="Re-enter PIN" autocomplete="off">
+                </div>
+                <div id="appLockPinModalError" style="display:none;color:var(--accent-danger);font-size:0.82rem;margin-top:0.5rem;"></div>
+            </div>
+            <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:0.5rem;padding:0.75rem 1.5rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeAppLockPinModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveAppLockPinBtn" onclick="submitAppLockPin()"><i class="mdi mdi-check"></i> Save PIN</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script src="js/config.js"></script>
+    <script src="js/app-lock.js"></script>
     <script src="js/units.js"></script>
     <script src="js/impersonation.js"></script>
     <script src="js/ui-utils.js"></script>

@@ -407,7 +407,7 @@ function _deviceSortValue(d, col) {
         case 'name':      return (d.name || '').toLowerCase();
         case 'protocol':  return (d.protocol || '').toLowerCase();
         case 'plate':     return (d.license_plate || '').toLowerCase();
-        case 'company':   return (allCompanies.find(c => c.id === d.company_id)?.name || '').toLowerCase();
+        case 'company':   return (allCompanies.find(c => _sameId(c.id, d.company_id))?.name || d.company_name || d.company?.name || '').toLowerCase();
         case 'last_seen': return d.state?.last_update ? new Date(d.state.last_update).getTime() : -Infinity;
         case 'odometer':  return d.state?.total_odometer ?? -Infinity;
         default:          return '';
@@ -417,12 +417,17 @@ function _deviceSortValue(d, col) {
 function filterDevices() {
     const q = (document.getElementById('deviceSearch').value || '').toLowerCase().trim();
     const filtered = q
-        ? allDevices.filter(d =>
-            (d.name          || '').toLowerCase().includes(q) ||
-            (d.imei          || '').toLowerCase().includes(q) ||
-            (d.license_plate || '').toLowerCase().includes(q) ||
-            (d.protocol      || '').toLowerCase().includes(q) ||
-            (d.vehicle_type  || '').toLowerCase().includes(q))
+        ? allDevices.filter(d => {
+            const companyName = (allCompanies.find(c => _sameId(c.id, d.company_id))?.name || d.company_name || d.company?.name || '').toLowerCase();
+            return (
+                (d.name          || '').toLowerCase().includes(q) ||
+                (d.imei          || '').toLowerCase().includes(q) ||
+                (d.license_plate || '').toLowerCase().includes(q) ||
+                (d.protocol      || '').toLowerCase().includes(q) ||
+                (d.vehicle_type  || '').toLowerCase().includes(q) ||
+                companyName.includes(q)
+            );
+        })
         : allDevices;
     const sorted = [...filtered].sort((a, b) => {
         const av = _deviceSortValue(a, sortCol);
