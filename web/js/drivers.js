@@ -67,15 +67,11 @@ function _assignedDevice(driverId) {
 function _render() {
     const query = (document.getElementById('driverSearch')?.value ?? '').toLowerCase();
     const list = [..._drivers.filter(d =>
-        d.name.toLowerCase().includes(query) ||
-        (d.phone || '').toLowerCase().includes(query) ||
-        (d.license_number || '').toLowerCase().includes(query)
+        d.name.toLowerCase().includes(query)
     )].sort((a, b) => {
         let av, bv;
         switch (_drvSortCol) {
-            case 'phone':   av = a.phone || ''; bv = b.phone || ''; break;
-            case 'licence': av = a.license_number || ''; bv = b.license_number || ''; break;
-            case 'company': av = _companies.find(c => c.id === a.company_id)?.name || ''; bv = _companies.find(c => c.id === b.company_id)?.name || ''; break;
+            case 'company': av = _companies.find(c => c.id === d.company_id)?.name || ''; bv = _companies.find(c => c.id === b.company_id)?.name || ''; break;
             case 'vehicle': av = (_assignedDevice(a.id)?.name || ''); bv = (_assignedDevice(b.id)?.name || ''); break;
             default:        av = a.name || ''; bv = b.name || '';
         }
@@ -86,7 +82,7 @@ function _render() {
 
     const tbody = document.getElementById('driversTableBody');
     if (list.length === 0) {
-        tbody.innerHTML = RoutarioTables.stateRow('<div style="font-size:2.5rem;margin-bottom:0.75rem;">&#128100;</div>No drivers found', 5, { padding: '3rem' });
+        tbody.innerHTML = RoutarioTables.stateRow('<div style="font-size:2.5rem;margin-bottom:0.75rem;">&#128100;</div>No drivers found', _drvIsAdmin ? 4 : 3, { padding: '3rem' });
         return;
     }
 
@@ -101,12 +97,11 @@ function _render() {
         return `
         <tr class="device-row" ondblclick="openDriverModal(${d.id})" style="cursor:pointer;">
             <td><span class="device-row-name">${_esc(d.name)}</span>${nameBadge}</td>
-            <td style="color:var(--text-secondary);">${_esc(d.phone || '—')}</td>
-            <td style="font-family:var(--font-mono);font-size:0.85rem;">${_esc(d.license_number || '—')}</td>
             ${_drvIsAdmin ? `<td style="color:var(--text-secondary);font-size:0.85rem;">${_esc(company)}</td>` : '<td style="display:none;"></td>'}
             <td>${assigned ? `<span style="font-size:0.85rem;">${assignedEmoji} ${_esc(assigned.name)}</span>` : '<span style="color:var(--text-muted);">—</span>'}</td>
             <td style="text-align:right;white-space:nowrap;">
-                <button class="btn btn-secondary tbl-btn" onclick="openDriverModal(${d.id})"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Edit</span></button>
+                <button class="btn btn-secondary tbl-btn" onclick="openDriverAssignModal(${d.id})" title="Assign vehicle"><i class="mdi mdi-car"></i> <span class="drv-btn-label">Assign</span></button>
+                <button class="btn btn-secondary tbl-btn" onclick="openDriverModal(${d.id})" title="Edit driver"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Edit</span></button>
             </td>
         </tr>`;
     }).join('');
@@ -123,21 +118,84 @@ function sortDrivers(col) {
     _render();
 }
 
-// ── Driver Modal ──────────────────────────────────────────────────
+// ── Auto-Assignment Mode & Clear Descriptions ────────────────────
+const DRIVER_MODE_DESCRIPTIONS = {
+    '': 'Auto-assignment is disabled. Drivers must be assigned to vehicles manually.',
+    'one_time': 'Assigns the driver immediately when the rule matches. The assignment stays active until cleared by the condition below.',
+    'continuous': 'The driver remains assigned only while the rule condition is actively met (e.g., Bluetooth beacon in range). Automatically unassigns if the rule stops matching.'
+};
 
-function _buildVehicleList(selectedVehicleIds) {
+const DRIVER_CLEAR_DESCRIPTIONS = {
+    'never': 'The assignment is never automatically cleared. It remains active until manually changed or overwritten.',
+    'ignition_off': 'Automatically clears the driver assignment as soon as the vehicle ignition is turned off.',
+    'trip_end': 'Automatically clears the driver assignment when the vehicle completes and finalizes its trip.',
+    'rule_stops': 'Automatically clears the driver assignment when the continuous rule condition ceases to match (after the grace period).'
+};
+
+function _updateDriverModeDescription() {
+    const mode = document.getElementById('driverAssignMode')?.value ?? '';
+    const descEl = document.getElementById('driverModeHelp');
+    if (descEl) {
+        descEl.textContent = DRIVER_MODE_DESCRIPTIONS[mode] || '';
+    }
+}
+
+function _updateDriverClearDescription() {
+    const clear = document.getElementById('driverAssignClear')?.value ?? '';
+    const descEl = document.getElementById('driverClearHelp');
+    if (descEl) {
+        descEl.textContent = DRIVER_CLEAR_DESCRIPTIONS[clear] || '';
+    }
+}
+
+// ── Company Change Handler (Auto-filter vehicles) ────────────────
+function onDriverCompanyChange() {
+    const sel = document.getElementById('driverCompanySelect');
+    const compId = sel?.value ? parseInt(sel.value, 10) : null;
+    const checkedIds = [...document.querySelectorAll('#driverVehiclesList .drv-vehicle-cb:checked')]
+        .map(cb => parseInt(cb.value, 10));
+    _buildVehicleList(checkedIds, compId);
+}
+
+// ── Vehicle List Builder ──────────────────────────────────────────
+function _buildVehicleList(selectedVehicleIds, companyIdOverride = undefined) {
     const list = document.getElementById('driverVehiclesList');
     if (!list) return;
     list.innerHTML = '';
 
-    // Filter devices by the editing driver's company when admin, or all devices for company admin
-    let visibleDevices = _devices;
-    if (_drvIsAdmin && _editingDriver?.company_id) {
-        visibleDevices = _devices.filter(d => d.company_id === _editingDriver.company_id);
-    } else if (_drvIsAdmin && !_editingDriver) {
-        // new driver — show all devices; company filter applied after company is selected
-        visibleDevices = _devices;
+    let targetCompanyId = undefined;
+    if (companyIdOverride !== undefined) {
+        targetCompanyId = companyIdOverride;
+    } else if (_drvIsAdmin) {
+        const compVal = document.getElementById('driverCompanySelect')?.value;
+        if (compVal) {
+            targetCompanyId = parseInt(compVal, 10);
+        } else if (_editingDriver && _editingDriver.company_id !== undefined) {
+            targetCompanyId = _editingDriver.company_id;
+        } else {
+            targetCompanyId = null;
+        }
     }
+
+    let visibleDevices = _devices;
+    if (_drvIsAdmin) {
+        if (targetCompanyId) {
+            visibleDevices = _devices.filter(d => d.company_id === targetCompanyId);
+        } else if (targetCompanyId === null && document.getElementById('driverCompanySelect')?.value === "") {
+            visibleDevices = _devices.filter(d => !d.company_id);
+        }
+    }
+
+    if (visibleDevices.length === 0) {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.style.cssText = 'color:var(--text-muted);font-size:0.8rem;padding:0.4rem 0;font-style:italic;';
+        emptyDiv.textContent = 'No vehicles available for this company';
+        list.appendChild(emptyDiv);
+        return;
+    }
+
+    const allCb = document.getElementById('driverVehiclesAll');
+    const isAllChecked = allCb ? allCb.checked : false;
 
     visibleDevices.forEach(d => {
         const emoji = (VEHICLE_ICONS[d.vehicle_type] || VEHICLE_ICONS['other']).emoji;
@@ -149,7 +207,11 @@ function _buildVehicleList(selectedVehicleIds) {
         cb.dataset.vehicleId = d.id;
         cb.style.cursor = 'pointer';
         cb.className = 'drv-vehicle-cb';
-        if (selectedVehicleIds && selectedVehicleIds.includes(d.id)) cb.checked = true;
+        if (isAllChecked) {
+            cb.disabled = true;
+        } else if (selectedVehicleIds && selectedVehicleIds.includes(d.id)) {
+            cb.checked = true;
+        }
         const span = document.createElement('span');
         span.style.color = 'var(--text-secondary)';
         span.textContent = `${emoji} ${d.name}` + (d.license_plate ? ` (${d.license_plate})` : '');
@@ -168,6 +230,7 @@ function _updateClearOptions(mode) {
         sel.value = 'rule_stops';
         sel.disabled = true;
         _updateGraceVisibility();
+        _updateDriverClearDescription();
         return;
     }
 
@@ -178,8 +241,13 @@ function _updateClearOptions(mode) {
         <option value="trip_end">On trip end</option>
     `;
     // Restore previous selection if still valid
-    if ([...sel.options].some(o => o.value === current)) sel.value = current;
+    if ([...sel.options].some(o => o.value === current)) {
+        sel.value = current;
+    } else {
+        sel.value = 'never';
+    }
     _updateGraceVisibility();
+    _updateDriverClearDescription();
 }
 
 function _updateGraceVisibility() {
@@ -191,10 +259,12 @@ function _updateGraceVisibility() {
 function onDriverModeChange() {
     const mode = document.getElementById('driverAssignMode')?.value;
     _updateClearOptions(mode);
+    _updateDriverModeDescription();
 }
 
 function onDriverClearChange() {
     _updateGraceVisibility();
+    _updateDriverClearDescription();
 }
 
 function onDriverVehiclesAllChange() {
@@ -206,24 +276,33 @@ function onDriverVehiclesAllChange() {
     });
 }
 
+function _adjustDriverRuleHeight() {
+    const el = document.getElementById('driverAssignRule');
+    if (!el) return;
+    el.style.height = 'auto';
+    if (el.scrollHeight > 0) {
+        el.style.height = Math.max(el.scrollHeight, 54) + 'px';
+    }
+}
+
+// ── Driver Modal ──────────────────────────────────────────────────
 function openDriverModal(driverId = null) {
     _editingDriver = driverId ? _drivers.find(d => d.id === driverId) : null;
     const isNew    = !_editingDriver;
     const isUser   = !!_editingDriver?.user_id;
 
     document.getElementById('driverModalTitle').textContent = isNew ? 'Add Driver' : 'Edit Driver';
-    document.getElementById('driverName').value    = _editingDriver?.name    || '';
-    document.getElementById('driverPhone').value   = _editingDriver?.phone   || '';
-    document.getElementById('driverLicence').value = _editingDriver?.license_number || '';
-    document.getElementById('driverNotes').value   = _editingDriver?.notes   || '';
+    document.getElementById('driverName').value  = _editingDriver?.name  || '';
+    document.getElementById('driverNotes').value = _editingDriver?.notes || '';
 
-    // User-linked drivers: name and licence are read-only, no delete
+    // User-linked drivers: name is read-only, no delete
     document.getElementById('driverName').disabled = isUser;
     document.getElementById('deleteDriverBtn').style.display = (isNew || isUser) ? 'none' : 'inline-flex';
 
     const userNote = document.getElementById('driverUserNote');
     if (userNote) userNote.style.display = isUser ? '' : 'none';
 
+    let initialCompanyId = _editingDriver?.company_id ?? null;
     const companyGroup = document.getElementById('driverCompanyGroup');
     if (_drvIsAdmin && companyGroup) {
         companyGroup.style.display = isUser ? 'none' : '';
@@ -237,25 +316,8 @@ function openDriverModal(driverId = null) {
                 if (c.id === _editingDriver?.company_id) opt.selected = true;
                 sel.appendChild(opt);
             });
+            initialCompanyId = sel.value ? parseInt(sel.value, 10) : null;
         }
-    }
-
-    // ── Current vehicle (manual assignment) ──────────────────────
-    const currentDevice = driverId ? _assignedDevice(driverId) : null;
-    const visibleDevices = (_drvIsAdmin && _editingDriver?.company_id)
-        ? _devices.filter(d => d.company_id === _editingDriver.company_id)
-        : _devices;
-    const vehicleSel = document.getElementById('driverCurrentVehicle');
-    if (vehicleSel) {
-        vehicleSel.innerHTML = '<option value="">— Unassigned —</option>';
-        visibleDevices.forEach(d => {
-            const opt = document.createElement('option');
-            opt.value = d.id;
-            const emoji = (VEHICLE_ICONS[d.vehicle_type] || VEHICLE_ICONS['other']).emoji;
-            opt.textContent = `${emoji} ${d.name}` + (d.license_plate ? ` (${d.license_plate})` : '');
-            if (currentDevice?.id === d.id) opt.selected = true;
-            vehicleSel.appendChild(opt);
-        });
     }
 
     // ── Auto-assignment fields ────────────────────────────────────
@@ -265,12 +327,16 @@ function openDriverModal(driverId = null) {
     const grace = _editingDriver?.assignment_grace_period ?? '';
     const vehicles = _editingDriver?.assignment_vehicles || null; // null = all
 
-    document.getElementById('driverAssignRule').value  = rule;
+    const ruleEl = document.getElementById('driverAssignRule');
+    if (ruleEl) {
+        ruleEl.value = rule;
+        ruleEl.style.height = 'auto';
+    }
     document.getElementById('driverAssignMode').value  = mode;
     document.getElementById('driverAssignGrace').value = grace;
 
-    // Build vehicle list
-    _buildVehicleList(vehicles);
+    // Build vehicle list filtered by the driver's company
+    _buildVehicleList(vehicles, initialCompanyId);
 
     // Set "All" checkbox: checked when vehicles is null/empty
     const allCb = document.getElementById('driverVehiclesAll');
@@ -286,12 +352,26 @@ function openDriverModal(driverId = null) {
     document.getElementById('driverAssignClear').value = clear;
     _updateGraceVisibility();
 
+    // Set descriptions for Mode and Clear When
+    _updateDriverModeDescription();
+    _updateDriverClearDescription();
+
     document.getElementById('driverModal').classList.add('active');
+
+    // Recalculate height after modal is active and laid out in the DOM
+    _adjustDriverRuleHeight();
+    requestAnimationFrame(_adjustDriverRuleHeight);
+    setTimeout(_adjustDriverRuleHeight, 50);
 }
 
 function closeDriverModal() {
     document.getElementById('driverModal').classList.remove('active');
     document.getElementById('driverName').disabled = false;
+    const ruleEl = document.getElementById('driverAssignRule');
+    if (ruleEl) {
+        ruleEl.value = '';
+        ruleEl.style.height = 'auto';
+    }
     _editingDriver = null;
 }
 
@@ -316,14 +396,12 @@ async function saveDriver() {
 
     const payload = {
         name,
-        phone:                 document.getElementById('driverPhone').value.trim() || null,
-        license_number:        document.getElementById('driverLicence').value.trim() || null,
-        notes:                 document.getElementById('driverNotes').value.trim() || null,
-        assignment_rule:       assignRule,
-        assignment_vehicles:   assignVehicles,
-        assignment_mode:       assignMode,
+        notes:                   document.getElementById('driverNotes').value.trim() || null,
+        assignment_rule:         assignRule,
+        assignment_vehicles:     assignVehicles,
+        assignment_mode:         assignMode,
         assignment_grace_period: assignGrace,
-        assignment_clear:      assignClear,
+        assignment_clear:        assignClear,
     };
     if (_drvIsAdmin) {
         const cid = parseInt(document.getElementById('driverCompanySelect')?.value);
@@ -346,34 +424,8 @@ async function saveDriver() {
             });
         }
         if (!res.ok) throw new Error((await res.json()).detail || 'Save failed');
-        const savedDriver = await res.json();
-
-        // Handle manual vehicle assignment change
-        const newDeviceId = parseInt(document.getElementById('driverCurrentVehicle')?.value) || null;
-        const prevDevice  = _editingDriver ? _assignedDevice(_editingDriver.id) : null;
-        const prevDeviceId = prevDevice?.id || null;
-        if (newDeviceId !== prevDeviceId) {
-            if (prevDeviceId) {
-                await apiFetch(`${API_BASE}/drivers/assign?device_id=${prevDeviceId}`, { method: 'POST' });
-            }
-            if (newDeviceId) {
-                await apiFetch(`${API_BASE}/drivers/assign?device_id=${newDeviceId}&driver_id=${savedDriver.id}`, { method: 'POST' });
-            }
-            // Notify GPS dashboard tabs in the same browser immediately
-            try {
-                const bc = new BroadcastChannel('routario_driver_updates');
-                if (prevDeviceId) {
-                    bc.postMessage({ device_id: prevDeviceId, current_driver_id: null, current_driver_name: null });
-                }
-                if (newDeviceId) {
-                    bc.postMessage({ device_id: newDeviceId, current_driver_id: savedDriver.id, current_driver_name: savedDriver.name });
-                }
-                bc.close();
-            } catch (_) {}
-        }
 
         closeDriverModal();
-        await _loadDevices();
         await _loadDrivers();
         showAlert(isEdit ? 'Driver updated' : 'Driver added', 'success');
     } catch (e) { showAlert(e.message || 'Save failed', 'error'); }
@@ -390,7 +442,125 @@ async function deleteDriver() {
     } catch (e) { showAlert(e.message || 'Delete failed', 'error'); }
 }
 
+// ── Separate Vehicle Assignment Modal ────────────────────────────
+let _assigningDriverId = null;
+
+function openDriverAssignModal(driverId) {
+    const driver = _drivers.find(d => d.id === driverId);
+    if (!driver) return;
+    _assigningDriverId = driverId;
+
+    const nameEl = document.getElementById('assignModalDriverName');
+    if (nameEl) nameEl.textContent = driver.name;
+
+    const compEl = document.getElementById('assignModalCompanyName');
+    if (compEl) {
+        if (_drvIsAdmin) {
+            const comp = _companies.find(c => c.id === driver.company_id);
+            compEl.textContent = comp ? `Company: ${comp.name}` : 'No company';
+            compEl.style.display = '';
+        } else {
+            compEl.style.display = 'none';
+        }
+    }
+
+    // Filter vehicles by the driver's company
+    const vehicleSel = document.getElementById('driverAssignVehicleSelect');
+    if (vehicleSel) {
+        vehicleSel.innerHTML = '<option value="">— Unassigned —</option>';
+
+        let visibleDevices = _devices;
+        if (_drvIsAdmin && driver.company_id) {
+            visibleDevices = _devices.filter(d => d.company_id === driver.company_id);
+        } else if (_drvIsAdmin && !driver.company_id) {
+            visibleDevices = _devices.filter(d => !d.company_id);
+        }
+
+        const currentlyAssigned = _assignedDevice(driverId);
+
+        visibleDevices.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            const emoji = (VEHICLE_ICONS[d.vehicle_type] || VEHICLE_ICONS['other']).emoji;
+            const otherDriverId = d.state?.current_driver_id;
+            let extra = '';
+            if (otherDriverId && otherDriverId !== driverId) {
+                const otherDriver = _drivers.find(dr => dr.id === otherDriverId);
+                extra = otherDriver ? ` (Currently with ${otherDriver.name})` : ' (Assigned)';
+            }
+            opt.textContent = `${emoji} ${d.name}` + (d.license_plate ? ` (${d.license_plate})` : '') + extra;
+            if (currentlyAssigned?.id === d.id) opt.selected = true;
+            vehicleSel.appendChild(opt);
+        });
+    }
+
+    document.getElementById('driverAssignModal')?.classList.add('active');
+}
+
+function closeDriverAssignModal() {
+    document.getElementById('driverAssignModal')?.classList.remove('active');
+    _assigningDriverId = null;
+}
+
+async function saveDriverAssignment() {
+    if (!_assigningDriverId) return;
+    const driverId = _assigningDriverId;
+    const driver = _drivers.find(d => d.id === driverId);
+    const newDeviceId = parseInt(document.getElementById('driverAssignVehicleSelect')?.value) || null;
+    const prevDevice = _assignedDevice(driverId);
+    const prevDeviceId = prevDevice?.id || null;
+
+    if (newDeviceId === prevDeviceId) {
+        closeDriverAssignModal();
+        return;
+    }
+
+    try {
+        if (prevDeviceId) {
+            await apiFetch(`${API_BASE}/drivers/assign?device_id=${prevDeviceId}`, { method: 'POST' });
+        }
+        if (newDeviceId) {
+            await apiFetch(`${API_BASE}/drivers/assign?device_id=${newDeviceId}&driver_id=${driverId}`, { method: 'POST' });
+        }
+
+        // Notify GPS dashboard tabs in the same browser immediately
+        try {
+            const bc = new BroadcastChannel('routario_driver_updates');
+            if (prevDeviceId) {
+                bc.postMessage({ device_id: prevDeviceId, current_driver_id: null, current_driver_name: null });
+            }
+            if (newDeviceId) {
+                bc.postMessage({ device_id: newDeviceId, current_driver_id: driverId, current_driver_name: driver?.name });
+            }
+            bc.close();
+        } catch (_) {}
+
+        closeDriverAssignModal();
+        await _loadDevices();
+        _render();
+        showAlert(newDeviceId ? 'Vehicle assigned successfully' : 'Vehicle unassigned', 'success');
+    } catch (e) {
+        showAlert(e.message || 'Assignment failed', 'error');
+    }
+}
 
 function _esc(s) {
     return RoutarioUI.escapeHtml(s);
 }
+
+// Window bindings
+window.initDriversSection = initDriversSection;
+window.filterDrivers = filterDrivers;
+window.sortDrivers = sortDrivers;
+window.openDriverModal = openDriverModal;
+window.closeDriverModal = closeDriverModal;
+window.saveDriver = saveDriver;
+window.deleteDriver = deleteDriver;
+window.openDriverAssignModal = openDriverAssignModal;
+window.closeDriverAssignModal = closeDriverAssignModal;
+window.saveDriverAssignment = saveDriverAssignment;
+window.onDriverCompanyChange = onDriverCompanyChange;
+window.onDriverModeChange = onDriverModeChange;
+window.onDriverClearChange = onDriverClearChange;
+window.onDriverVehiclesAllChange = onDriverVehiclesAllChange;
+window._adjustDriverRuleHeight = _adjustDriverRuleHeight;

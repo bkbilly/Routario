@@ -1662,18 +1662,17 @@ body.light-theme .toast-close:hover {
 .cmp-chip {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
-    padding: 0.18rem 0.5rem;
-    border-radius: 6px;
-    font-size: 0.76rem;
+    gap: 0.25rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 9999px;
+    font-size: 0.68rem;
     font-weight: 500;
     line-height: 1.35;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
+    background: rgba(148, 163, 184, 0.08);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    color: var(--text-secondary);
     max-width: 140px;
     white-space: nowrap;
-    transition: background 0.15s, border-color 0.15s;
     user-select: none;
 }
 
@@ -1684,23 +1683,18 @@ body.light-theme .toast-close:hover {
 }
 
 .cmp-chip i {
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
     flex-shrink: 0;
 }
 
 .cmp-chip.user-admin {
-    border-color: rgba(59, 130, 246, 0.35);
+    border-color: rgba(59, 130, 246, 0.3);
     background: rgba(59, 130, 246, 0.08);
 }
 
 .cmp-chip.user-admin i {
     color: var(--accent-primary);
-}
-
-.cmp-chip:hover {
-    background: var(--bg-hover);
-    border-color: var(--text-muted);
 }
 
 .cmp-more-btn,

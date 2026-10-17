@@ -28,6 +28,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    try {
+        sessionStorage.setItem('routario_prev_page', window.location.pathname);
+        window.addEventListener('beforeunload', () => {
+            sessionStorage.setItem('routario_prev_page', window.location.pathname);
+        });
+    } catch (_) {}
+
     // Hide elements the current user has no permission to access
     if (!hasPermission('manage_geofences')) {
         document.getElementById('drawGeofenceBtn')?.style.setProperty('display', 'none', 'important');

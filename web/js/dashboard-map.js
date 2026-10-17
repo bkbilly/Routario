@@ -290,12 +290,6 @@ function updateDeviceMarker(deviceId, state) {
     const toLng  = state.last_longitude;
     const toHead = state.last_course ?? null;
     const deviceName = device ? device.name : 'Unknown Device';
-    const companyName = device?.company_name || device?.company?.name || (device?.company_id ? `Company #${device.company_id}` : null);
-    const companyChip = companyName ? `
-        <span class="cmp-chip" title="${_esc(companyName)}">
-            <i class="mdi mdi-office-building"></i>
-            <span class="cmp-chip-text">${_esc(companyName)}</span>
-        </span>` : '';
 
     const ignitionColor = state.ignition_on === true  ? '#10b981'
                         : state.ignition_on === false ? '#ef4444'
@@ -388,10 +382,7 @@ function updateDeviceMarker(deviceId, state) {
         <div class="vp-popup">
             <div class="vp-header">
                 <span class="vp-icon">${vehicle.emoji}</span>
-                <div class="vp-title-wrap">
-                    <span class="vp-name">${deviceName}</span>
-                    ${companyChip}
-                </div>
+                <span class="vp-name">${deviceName}</span>
             </div>
             <div class="vp-grid" onscroll="_popupGridScroll[${deviceId}] = this.scrollTop">
                 ${state.ignition_on != null ? `<span class="vp-label ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'ignition', 'Ignition')" title="Click to view Ignition history"` : ''}>Ignition</span>   <span class="vp-value ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'ignition', 'Ignition')" title="Click to view Ignition history"` : ''} style="color:${ignitionColor};font-weight:700;">${ignitionText}</span>` : ''}

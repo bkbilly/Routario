@@ -28,7 +28,30 @@ _rule_cache: dict = {}
 
 
 def _build_ctx(position: NormalizedPosition) -> dict:
-    return {"speed": position.speed or 0, "ignition": position.ignition, **(position.sensors or {})}
+    ctx = {"speed": position.speed or 0, "ignition": position.ignition, **(position.sensors or {})}
+    for k, v in list((position.sensors or {}).items()):
+        if "." in k:
+            parts = k.split(".")
+            d = ctx
+            for part in parts[:-1]:
+                d = d.setdefault(part, {})
+            d[parts[-1]] = v
+            d_cap = ctx
+            for part in parts[:-1]:
+                d_cap = d_cap.setdefault(part.capitalize(), {})
+            d_cap[parts[-1].capitalize()] = v
+
+    beacons = ctx.get("beacon_ids") or (ctx.get("ble", {}).get("beacons") if isinstance(ctx.get("ble"), dict) else None)
+    if beacons:
+        ctx.setdefault("beacon_ids", beacons)
+        ble = ctx.setdefault("ble", {})
+        if isinstance(ble, dict):
+            ble.setdefault("beacons", beacons)
+        Ble = ctx.setdefault("Ble", {})
+        if isinstance(Ble, dict):
+            Ble.setdefault("Beacons", beacons)
+
+    return ctx
 
 
 def _eval_rule(rule_str: str, ctx: dict) -> bool:

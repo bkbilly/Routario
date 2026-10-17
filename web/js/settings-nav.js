@@ -113,6 +113,7 @@
             color: var(--text-secondary);
             font-size: 1.1rem;
             cursor: pointer;
+            text-decoration: none;
             transition: all var(--transition-base);
             flex-shrink: 0;
         }
@@ -335,17 +336,80 @@
         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
         stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
 
+    // ── Back navigation helper ────────────────────────────────────────────────
+    function _canGoBackToRoutario() {
+        if (!document.referrer || window.history.length <= 1) return false;
+        try {
+            const refUrl = new URL(document.referrer);
+            if (refUrl.origin !== window.location.origin) return false;
+            const refPath = refUrl.pathname.toLowerCase();
+            if (refPath.endsWith('/login.html') || refPath.endsWith('/login')) return false;
+            if (refUrl.pathname === window.location.pathname) {
+                const prevPage = sessionStorage.getItem('routario_prev_page');
+                if (!prevPage || prevPage === window.location.pathname) return false;
+            }
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function _navigateBack() {
+        const fallbackUrl = (typeof hasPermission === 'function' && !hasPermission('view_dashboard'))
+            ? ((typeof hasPermission === 'function' && (hasPermission('view_reports') || hasPermission('view_audit') || hasPermission('view_health'))) ? 'reports.html' : 'user-settings.html')
+            : 'gps-dashboard.html';
+
+        if (_canGoBackToRoutario()) {
+            const currentUrl = window.location.href;
+            let fallbackTimer = setTimeout(() => {
+                if (window.location.href === currentUrl) {
+                    window.location.replace(fallbackUrl);
+                }
+            }, 350);
+            window.addEventListener('pagehide', () => clearTimeout(fallbackTimer), { once: true });
+            window.history.back();
+        } else {
+            window.location.replace(fallbackUrl);
+        }
+    }
+
+    window.settingsNavGoBack = _navigateBack;
+    try {
+        window.addEventListener('beforeunload', () => {
+            sessionStorage.setItem('routario_prev_page', window.location.pathname);
+        });
+    } catch (_) {}
+
+    function _getBackHref() {
+        if (_canGoBackToRoutario() && document.referrer) {
+            return document.referrer;
+        }
+        return (typeof hasPermission === 'function' && !hasPermission('view_dashboard'))
+            ? ((typeof hasPermission === 'function' && (hasPermission('view_reports') || hasPermission('view_audit') || hasPermission('view_health'))) ? 'reports.html' : 'user-settings.html')
+            : 'gps-dashboard.html';
+    }
+
+    function _onBackClick(e) {
+        if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) {
+            return;
+        }
+        e.preventDefault();
+        _navigateBack();
+    }
+
+    window.settingsNavOnBackClick = _onBackClick;
+
     // ── Nav HTML (built in DOMContentLoaded so hasPermission() is available) ──
     function _buildNav() {
     const nav = document.createElement('div');
     nav.className = 'settings-nav';
     nav.innerHTML = `
         <div class="settings-nav-inner">
-        <button class="settings-nav-home" onclick="history.back()" title="Go back">
+        <a class="settings-nav-home" id="snBackBtn" href="${_getBackHref()}" onclick="settingsNavOnBackClick(event)" title="Go back">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="15 18 9 12 15 6"/>
             </svg>
-        </button>
+        </a>
         <span class="settings-nav-title"><span>${pageTitle}</span></span>
         <div class="settings-nav-right">
         <div class="header-menu-wrap">
@@ -382,7 +446,7 @@
                 <div class="header-menu-divider"></div>
 
                 ${(typeof hasPermission === 'function' ? hasPermission('view_dashboard') : true)
-                    ? `<button class="header-menu-item" onclick="location.replace('gps-dashboard.html')">
+                    ? `<a href="gps-dashboard.html" class="header-menu-item" id="snDashboardLink" onclick="if (!event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); location.replace('gps-dashboard.html'); }">
                         <span class="header-menu-item-icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none"
                                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -392,7 +456,7 @@
                         </span>
                         <span>Dashboard</span>
                         ${chevron}
-                       </button>
+                       </a>
                        <div class="header-menu-divider"></div>`
                     : ''
                 }

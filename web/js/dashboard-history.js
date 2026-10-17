@@ -634,6 +634,8 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { pres
         document.getElementById('historySlider').max = historyData.length - 1;
         document.getElementById('historySlider').value = 0;
 
+        _buildHistoryAttrIndex();
+
         if (!isSameSession) {
             tripColorMap = {}; // only reset when starting a new history session or new device
         }
@@ -880,6 +882,8 @@ function exitHistoryMode(fromPopState = false) {
         historyEndTime = null;
         historyData = [];
         historyIndex = 0;
+        _historyAttrTimeline = {};
+        _historyAllAttrKeys = [];
         historyLineRenderMode = null;
         _historyZoomLineSwitchActive = false;
         tripColorMap = {};
@@ -1148,6 +1152,31 @@ function updatePlaybackUI() {
 
     const vehicle = VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other'];
     const ignColor = p.ignition === true ? '#10b981' : p.ignition === false ? '#ef4444' : '#6b7280';
+
+    let pinnedPopupRows = '';
+    const pinnedAttrsForPopup = getPinnedHistoryAttrs(historyDeviceId);
+    if (pinnedAttrsForPopup.length > 0) {
+        pinnedPopupRows = pinnedAttrsForPopup.map(key => {
+            const res = _resolveHistoryAttrAt(key, historyIndex);
+            let valStr = '—';
+            let tag = '';
+            if (res.status === 'not_seen') {
+                valStr = '<span style="color:var(--text-muted);font-style:italic;">Not yet recorded</span>';
+                tag = ' <span class="attr-badge-mini" style="background:rgba(148,163,184,0.15);color:var(--text-muted);">Not seen</span>';
+            } else {
+                valStr = _formatHistorySensorDisplay(key, res.value);
+                if (res.status === 'first_seen') {
+                    tag = ' <span class="attr-badge-mini first">First seen</span>';
+                } else if (res.status === 'historical') {
+                    tag = ` <span class="attr-badge-mini hist" title="Recorded at ${_formatHistoryAttrTime(res.rawTime)}">Historical</span>`;
+                } else {
+                    tag = ' <span class="attr-badge-mini curr">Current</span>';
+                }
+            }
+            return `<span class="vp-label" title="Pinned attribute: ${_esc(key)}"><i class="mdi mdi-pin" style="color:var(--accent-primary);font-size:0.75rem;"></i> ${_esc(key)}</span><span class="vp-value">${valStr}${tag}</span>`;
+        }).join('');
+    }
+
     const historyPopup = `
         <div class="vp-popup">
             <div class="vp-header">
@@ -1163,6 +1192,7 @@ function updatePlaybackUI() {
                 <span class="vp-label">Satellites</span><span class="vp-value">${p.satellites != null ? p.satellites : '—'}</span>
                 <span class="vp-label">Altitude</span>  <span class="vp-value">${fmtAlt(p.altitude || 0)}</span>
                 <span class="vp-label">Lat/Lng</span>   <span class="vp-value">${position[0].toFixed(5)}, ${position[1].toFixed(5)}</span>
+                ${pinnedPopupRows}
             </div>
         </div>
     `;
@@ -1267,9 +1297,172 @@ function updatePlaybackUI() {
     });
 }
 
+// ── Pinned Attributes in History ──────────────────────────────────────────────
+let _historyAttrTimeline = {}; // { [key: string]: number[] (sorted point indices) }
+let _historyAllAttrKeys = [];  // string[] sorted unique sensor keys across historyData
+
+function _buildHistoryAttrIndex() {
+    _historyAttrTimeline = {};
+    const keysSet = new Set();
+    if (Array.isArray(historyData)) {
+        for (let i = 0; i < historyData.length; i++) {
+            const sensors = historyData[i].properties?.sensors;
+            if (sensors && typeof sensors === 'object') {
+                for (const k of Object.keys(sensors)) {
+                    if (sensors[k] !== undefined && sensors[k] !== null) {
+                        keysSet.add(k);
+                        if (!_historyAttrTimeline[k]) {
+                            _historyAttrTimeline[k] = [i];
+                        } else {
+                            _historyAttrTimeline[k].push(i);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    _historyAllAttrKeys = Array.from(keysSet).sort((a, b) => a.localeCompare(b));
+}
+
+function getPinnedHistoryAttrs(deviceId) {
+    if (!deviceId) return [];
+    try {
+        const raw = localStorage.getItem(`pinned_history_attrs_${deviceId}`);
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+        return [];
+    }
+}
+
+function setPinnedHistoryAttrs(deviceId, attrs) {
+    if (!deviceId) return;
+    try {
+        localStorage.setItem(`pinned_history_attrs_${deviceId}`, JSON.stringify(attrs));
+    } catch (_) {}
+}
+
+function togglePinHistoryAttr(key) {
+    if (!historyDeviceId || !key) return;
+    const current = getPinnedHistoryAttrs(historyDeviceId);
+    const idx = current.indexOf(key);
+    if (idx >= 0) {
+        current.splice(idx, 1);
+    } else {
+        current.push(key);
+    }
+    setPinnedHistoryAttrs(historyDeviceId, current);
+    if (historyData && historyData[historyIndex]) {
+        updatePointDetails(historyData[historyIndex]);
+        if (markers['history_pos'] && typeof markers['history_pos'].isPopupOpen === 'function' && markers['history_pos'].isPopupOpen()) {
+            updatePlaybackUI();
+        }
+    }
+}
+window.togglePinHistoryAttr = togglePinHistoryAttr;
+
+function _resolveHistoryAttrAt(key, curIdx) {
+    const timeline = _historyAttrTimeline[key];
+    if (!timeline || timeline.length === 0) {
+        return {
+            status: 'not_seen',
+            value: null,
+            rawIndex: null,
+            rawTime: null,
+            firstIndex: null
+        };
+    }
+
+    const firstIdx = timeline[0];
+
+    // Binary search for greatest index in timeline <= curIdx
+    let low = 0;
+    let high = timeline.length - 1;
+    let bestIdx = -1;
+
+    while (low <= high) {
+        const mid = (low + high) >> 1;
+        if (timeline[mid] <= curIdx) {
+            bestIdx = timeline[mid];
+            low = mid + 1;
+        } else {
+            high = mid - 1;
+        }
+    }
+
+    if (bestIdx === -1) {
+        return {
+            status: 'not_seen',
+            value: null,
+            rawIndex: null,
+            rawTime: null,
+            firstIndex: firstIdx,
+            firstTime: historyData[firstIdx]?.properties?.time
+        };
+    }
+
+    const feat = historyData[bestIdx];
+    const val = feat.properties?.sensors?.[key];
+
+    if (bestIdx === curIdx) {
+        if (bestIdx === firstIdx) {
+            return {
+                status: 'first_seen',
+                value: val,
+                rawIndex: bestIdx,
+                rawTime: feat.properties?.time,
+                firstIndex: firstIdx
+            };
+        } else {
+            return {
+                status: 'current',
+                value: val,
+                rawIndex: bestIdx,
+                rawTime: feat.properties?.time,
+                firstIndex: firstIdx
+            };
+        }
+    } else {
+        return {
+            status: 'historical',
+            value: val,
+            rawIndex: bestIdx,
+            rawTime: feat.properties?.time,
+            firstIndex: firstIdx
+        };
+    }
+}
+
+function _formatHistorySensorDisplay(key, v) {
+    if (v === null || v === undefined) {
+        return '<span class="text-muted">—</span>';
+    }
+    if (key === 'beacon_ids' && Array.isArray(v)) {
+        return v.map(b => `${_esc(b.id)}${b.rssi !== undefined ? ` (${_esc(b.rssi)}dBm)` : ''}`).join('<br>');
+    }
+    if (Array.isArray(v) || (typeof v === 'object')) {
+        return `<code style="font-size:0.75rem">${_esc(JSON.stringify(v))}</code>`;
+    }
+    if (typeof v === 'boolean') {
+        return v ? '<span style="color:var(--accent-success);font-weight:600;">true</span>' : '<span style="color:var(--accent-danger);font-weight:600;">false</span>';
+    }
+    return _esc(String(v));
+}
+
+function _formatHistoryAttrTime(timeStr) {
+    if (!timeStr) return '';
+    const raw = timeStr.endsWith('Z') ? timeStr : timeStr + 'Z';
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return timeStr;
+    return typeof formatTimeValue === 'function'
+        ? formatTimeValue(d, { withSeconds: true })
+        : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
 function updatePointDetails(feature) {
     const p = feature.properties;
     const content = document.getElementById('pointDetailsContent');
+    if (!content) return;
 
     const di = (key, val, style = '') =>
         val != null ? `<div class="detail-item"><span class="detail-key">${key}</span><div class="detail-val"${style ? ` style="${style}"` : ''}>${val}</div></div>` : '';
@@ -1288,23 +1481,105 @@ function updatePointDetails(feature) {
             ${di('Ignition',   ignVal, ignStyle)}
         </div>
     `;
-    if (p.sensors && Object.keys(p.sensors).length > 0) {
-        html += '<h4 style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem;">Attributes</h4>';
-        html += '<table class="attr-table" style="table-layout:fixed;"><tbody>';
-        Object.keys(p.sensors).sort().forEach(key => {
-            const v = p.sensors[key];
-            let display;
-            if (key === 'beacon_ids' && Array.isArray(v)) {
-                display = v.map(b => `${b.id}${b.rssi !== undefined ? ` (${b.rssi}dBm)` : ''}`).join('<br>');
-            } else if (Array.isArray(v) || (v !== null && typeof v === 'object')) {
-                display = `<code style="font-size:0.75rem">${JSON.stringify(v)}</code>`;
-            } else {
-                display = v;
+
+    const pinnedKeys = getPinnedHistoryAttrs(historyDeviceId);
+    const pointSensors = p.sensors || {};
+    const unpinnedCurrentKeys = Object.keys(pointSensors).filter(k => !pinnedKeys.includes(k)).sort();
+
+    const hasAttributes = pinnedKeys.length > 0 || Object.keys(pointSensors).length > 0;
+
+    if (hasAttributes) {
+        html += `
+            <div class="attr-header-bar">
+                <h4 class="attr-section-title"><i class="mdi mdi-tune"></i> Attributes</h4>
+            </div>
+        `;
+
+        // 1. Pinned Attributes Section
+        if (pinnedKeys.length > 0) {
+            html += `
+                <div class="pinned-attrs-section">
+                    <div class="pinned-attrs-heading">
+                        <i class="mdi mdi-pin"></i> Pinned Attributes
+                    </div>
+                    <table class="attr-table pinned-attrs-table" style="table-layout:fixed;"><tbody>
+            `;
+            pinnedKeys.forEach(key => {
+                const res = _resolveHistoryAttrAt(key, historyIndex);
+                let badgeHtml = '';
+                let subTextHtml = '';
+                let display = '—';
+
+                if (res.status === 'first_seen') {
+                    display = _formatHistorySensorDisplay(key, res.value);
+                    const timeStr = _formatHistoryAttrTime(res.rawTime);
+                    badgeHtml = `<span class="attr-badge badge-first-seen" title="First time recorded in this history timeline at ${timeStr}"><i class="mdi mdi-star"></i> First recorded</span>`;
+                } else if (res.status === 'current') {
+                    display = _formatHistorySensorDisplay(key, res.value);
+                    const timeStr = _formatHistoryAttrTime(res.rawTime);
+                    badgeHtml = `<span class="attr-badge badge-current" title="Recorded at this event (${timeStr})"><i class="mdi mdi-check-circle"></i> Current</span>`;
+                } else if (res.status === 'historical') {
+                    display = _formatHistorySensorDisplay(key, res.value);
+                    const timeStr = _formatHistoryAttrTime(res.rawTime);
+                    badgeHtml = `<span class="attr-badge badge-historical" title="Carried over from event #${res.rawIndex + 1} (${timeStr})"><i class="mdi mdi-history"></i> Historical</span>`;
+                    subTextHtml = `<div class="attr-sub-time"><i class="mdi mdi-clock-outline"></i> Last recorded: ${timeStr} (#${res.rawIndex + 1})</div>`;
+                } else {
+                    display = '<span class="text-muted" style="font-style:italic;font-size:0.75rem;">Not yet recorded</span>';
+                    badgeHtml = `<span class="attr-badge badge-not-seen" title="This attribute has not appeared yet in the timeline"><i class="mdi mdi-clock-outline"></i> Not yet seen</span>`;
+                    if (res.firstTime) {
+                        subTextHtml = `<div class="attr-sub-time"><i class="mdi mdi-arrow-right"></i> Appears at ${_formatHistoryAttrTime(res.firstTime)} (#${res.firstIndex + 1})</div>`;
+                    }
+                }
+
+                html += `
+                    <tr class="attr-row attr-row-pinned ${res.status}" onclick="togglePinHistoryAttr('${_esc(key)}')" title="Click to unpin ${_esc(key)}">
+                        <td class="attr-key">
+                            <div class="attr-key-wrap">
+                                <i class="mdi mdi-pin attr-pinned-icon"></i>
+                                <span class="attr-name" title="${_esc(key)}">${_esc(key)}</span>
+                                ${badgeHtml}
+                            </div>
+                        </td>
+                        <td class="attr-val">
+                            <div class="attr-val-main">${display}</div>
+                            ${subTextHtml}
+                        </td>
+                    </tr>
+                `;
+            });
+            html += '</tbody></table></div>';
+        }
+
+        // 2. Other Attributes Section
+        if (unpinnedCurrentKeys.length > 0) {
+            if (pinnedKeys.length > 0) {
+                html += '<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin:0.5rem 0 0.25rem;">Other Attributes</div>';
             }
-            html += `<tr><td class="attr-key">${key}</td><td class="attr-val">${display}</td></tr>`;
-        });
-        html += '</tbody></table>';
-    } else html += '<div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.875rem;">No additional attributes</div>';
+            html += '<table class="attr-table" style="table-layout:fixed;"><tbody>';
+            unpinnedCurrentKeys.forEach(key => {
+                const v = pointSensors[key];
+                const display = _formatHistorySensorDisplay(key, v);
+                html += `
+                    <tr class="attr-row attr-row-clickable" onclick="togglePinHistoryAttr('${_esc(key)}')" title="Click to pin ${_esc(key)}">
+                        <td class="attr-key">
+                            <div class="attr-key-wrap">
+                                <span class="attr-name" title="${_esc(key)}">${_esc(key)}</span>
+                            </div>
+                        </td>
+                        <td class="attr-val">
+                            <div class="attr-val-main">${display}</div>
+                        </td>
+                    </tr>
+                `;
+            });
+            html += '</tbody></table>';
+        } else if (pinnedKeys.length > 0 && Object.keys(pointSensors).length === 0) {
+            html += '<div style="text-align: center; color: var(--text-muted); padding: 0.6rem; font-size: 0.78rem;">No additional attributes on this event</div>';
+        }
+    } else {
+        html += '<div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.875rem;">No additional attributes</div>';
+    }
+
     content.innerHTML = html;
 }
 

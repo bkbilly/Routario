@@ -638,7 +638,7 @@
             <div class="search-input-wrap">
                 <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
                 <input type="text" id="driverSearch" class="search-input"
-                    placeholder="Search by name, phone or licence&#8230;"
+                    placeholder="Search drivers&#8230;"
                     oninput="filterDrivers()">
             </div>
             <span class="devices-count" id="driverCount"></span>
@@ -648,16 +648,14 @@
                 <thead>
                     <tr>
                         <th data-sort="name" data-sort-dir="asc" onclick="sortDrivers('name')">Name</th>
-                        <th data-sort="phone" onclick="sortDrivers('phone')">Phone</th>
-                        <th data-sort="licence" onclick="sortDrivers('licence')">Licence</th>
                         <th id="driverCompanyHeader" data-sort="company" onclick="sortDrivers('company')" style="display:none;">Company</th>
                         <th data-sort="vehicle" onclick="sortDrivers('vehicle')">Vehicle</th>
-                        <th style="width:100px;text-align:center;">Actions</th>
+                        <th style="width:150px;text-align:right;">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="driversTableBody">
                     <tr>
-                        <td colspan="5" style="text-align:center;padding:3rem;color:var(--text-muted);">
+                        <td colspan="3" style="text-align:center;padding:3rem;color:var(--text-muted);">
                             <div class="loading" style="margin:0 auto 1rem;"></div>
                             Loading drivers&#8230;
                         </td>
@@ -1321,30 +1319,16 @@
                         <label class="form-label">Full Name *</label>
                         <input type="text" id="driverName" class="form-input" placeholder="John Smith">
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Phone</label>
-                        <input type="text" id="driverPhone" class="form-input" placeholder="+1 555 000 0000">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Licence Number</label>
-                        <input type="text" id="driverLicence" class="form-input" placeholder="DL-12345678">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Notes</label>
-                        <textarea id="driverNotes" class="form-input" rows="3" placeholder="Optional notes&#8230;" style="resize:vertical;"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Current Vehicle</label>
-                        <select id="driverCurrentVehicle" class="form-input">
-                            <option value="">&#8212; Unassigned &#8212;</option>
-                        </select>
+                    <div class="form-group" id="driverCompanyGroup" style="display:none;">
+                        <label class="form-label">Company</label>
+                        <select id="driverCompanySelect" class="form-input" onchange="onDriverCompanyChange()"></select>
                     </div>
                     <div id="driverUserNote" style="display:none;padding:0.6rem 0.75rem;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px;font-size:0.82rem;color:#818cf8;margin-bottom:0.75rem;">
                         <i class="mdi mdi-account"></i> This driver is linked to a user account. Name is managed via the Users section.
                     </div>
-                    <div class="form-group" id="driverCompanyGroup" style="display:none;">
-                        <label class="form-label">Company</label>
-                        <select id="driverCompanySelect" class="form-input"></select>
+                    <div class="form-group">
+                        <label class="form-label">Notes</label>
+                        <textarea id="driverNotes" class="form-input" rows="4" placeholder="Optional notes&#8230;" style="resize:vertical;"></textarea>
                     </div>
                 </div>
                 <!-- RIGHT: auto-assignment -->
@@ -1362,7 +1346,9 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">Rule</label>
-                        <input type="text" id="driverAssignRule" class="form-input" placeholder="e.g. authorized or speed > 0">
+                        <textarea id="driverAssignRule" class="form-input" rows="2" placeholder="e.g. authorized or speed > 0"
+                            style="resize:vertical;font-family:var(--font-mono);font-size:0.82rem;line-height:1.45;min-height:54px;white-space:pre-wrap;word-break:break-word;"
+                            oninput="_adjustDriverRuleHeight();"></textarea>
                         <details style="margin-top:0.4rem;">
                             <summary style="cursor:pointer;color:var(--text-muted);font-size:0.78rem;"><i class="mdi mdi-information-outline"></i> Syntax reference</summary>
                             <div style="margin-top:0.4rem;padding:0.65rem 0.85rem;background:var(--bg-secondary);border-radius:8px;font-size:0.76rem;line-height:1.9;color:var(--text-muted);">
@@ -1389,6 +1375,7 @@
                             <option value="one_time">One-time</option>
                             <option value="continuous">Continuous</option>
                         </select>
+                        <div id="driverModeHelp" style="font-size:0.75rem;color:var(--text-muted);margin-top:0.35rem;line-height:1.4;"></div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Clear When</label>
@@ -1397,6 +1384,7 @@
                             <option value="ignition_off">On ignition off</option>
                             <option value="trip_end">On trip end</option>
                         </select>
+                        <div id="driverClearHelp" style="font-size:0.75rem;color:var(--text-muted);margin-top:0.35rem;line-height:1.4;"></div>
                     </div>
                     <div class="form-group" id="driverGraceGroup" style="display:none;">
                         <label class="form-label">Grace Period (seconds)</label>
@@ -1411,6 +1399,37 @@
                 <button type="button" class="btn btn-secondary" onclick="closeDriverModal()">Cancel</button>
                 <button type="button" class="btn btn-primary" onclick="saveDriver()">Save</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- =============================================================
+     DRIVER VEHICLE ASSIGNMENT MODAL
+============================================================= -->
+<div class="modal" id="driverAssignModal">
+    <div class="modal-content" style="max-width:440px;height:auto;">
+        <div class="modal-header">
+            <h2 class="modal-title">Assign Vehicle</h2>
+            <button type="button" class="modal-close" onclick="closeDriverAssignModal()"><i class="mdi mdi-close"></i></button>
+        </div>
+        <div style="padding:1.25rem;">
+            <p style="color:var(--text-secondary);font-size:0.875rem;margin:0 0 1rem;">
+                Driver: <strong id="assignModalDriverName" style="color:var(--text-primary);"></strong>
+                <span id="assignModalCompanyName" style="display:block;font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem;"></span>
+            </p>
+            <div class="form-group">
+                <label class="form-label">Vehicle</label>
+                <select id="driverAssignVehicleSelect" class="form-input">
+                    <option value="">— Unassigned —</option>
+                </select>
+                <div id="driverAssignVehicleHelp" style="font-size:0.75rem;color:var(--text-muted);margin-top:0.35rem;">
+                    Select a vehicle to manually assign this driver to.
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeDriverAssignModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="saveDriverAssignment()">Save Assignment</button>
         </div>
     </div>
 </div>
@@ -2173,6 +2192,7 @@
             ['userNotifyModal',   () => usrCloseNotifyModal()],
             ['userAssignModal',   () => usrCloseAssignModal()],
             ['userModal',         () => closeUserModal()],
+            ['driverAssignModal', () => (typeof closeDriverAssignModal === 'function' ? closeDriverAssignModal() : document.getElementById('driverAssignModal')?.classList.remove('active'))],
             ['driverModal',      () => closeDriverModal()],
             ['simCardModal',     () => closeSimCardModal()],
             ['alertEditorModal', () => closeAlertEditor()],

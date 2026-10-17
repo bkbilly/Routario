@@ -385,6 +385,9 @@ class FlespiIntegration(BaseIntegration):
                 if key not in _POSITION_KEYS and key not in sensors:
                     sensors[key] = value
 
+            if 'ble.beacons' in sensors and 'beacon_ids' not in sensors:
+                sensors['beacon_ids'] = sensors['ble.beacons']
+
             return NormalizedPosition(
                 imei=imei,
                 protocol="flespi_cloud",
