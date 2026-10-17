@@ -40,18 +40,142 @@
         return localStorage.getItem(STORAGE_KEY_ENABLED) === 'true';
     }
 
+    // Check if user has registered passkeys
+    function hasPasskeys() {
+        return localStorage.getItem('routario_has_passkeys') === 'true';
+    }
+
+    async function syncPasskeysStatus() {
+        if (!isAuthenticated()) return false;
+        const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api';
+        const token = localStorage.getItem('auth_token');
+        if (!token) return false;
+        try {
+            const res = await fetch(`${apiBase}/passkeys`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const keys = await res.json();
+                const has = Array.isArray(keys) && keys.length > 0;
+                localStorage.setItem('routario_has_passkeys', has ? 'true' : 'false');
+                return has;
+            }
+        } catch (e) {
+            // Keep existing localStorage flag
+        }
+        return hasPasskeys();
+    }
+
+    function getSecureRandomBytes(len) {
+        const array = new Uint8Array(len);
+        if (typeof window !== 'undefined' && window.crypto && typeof window.crypto.getRandomValues === 'function') {
+            window.crypto.getRandomValues(array);
+        } else {
+            for (let i = 0; i < len; i++) {
+                array[i] = Math.floor(Math.random() * 256);
+            }
+        }
+        return array;
+    }
+
+    // Pure JavaScript SHA-256 fallback (for non-secure HTTP contexts where crypto.subtle is undefined)
+    function sha256Fallback(str) {
+        function rightRotate(value, amount) {
+            return (value >>> amount) | (value << (32 - amount));
+        }
+        var mathPow = Math.pow;
+        var maxWord = mathPow(2, 32);
+        var i, j;
+        var result = '';
+        var ascii = unescape(encodeURIComponent(str));
+        var words = [];
+        var asciiBitLength = ascii.length * 8;
+
+        if (!sha256Fallback.h) {
+            sha256Fallback.h = [];
+            sha256Fallback.k = [];
+            var primeCounter = 0;
+            var isComposite = {};
+            for (var candidate = 2; primeCounter < 64; candidate++) {
+                if (!isComposite[candidate]) {
+                    for (i = 0; i < 313; i += candidate) {
+                        isComposite[i] = candidate;
+                    }
+                    sha256Fallback.h[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;
+                    sha256Fallback.k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
+                }
+            }
+        }
+        var hash = sha256Fallback.h.slice(0);
+        var k = sha256Fallback.k;
+
+        ascii += '\x80';
+        while ((ascii.length % 64) !== 56) ascii += '\x00';
+        for (i = 0; i < ascii.length; i++) {
+            j = ascii.charCodeAt(i);
+            words[i >> 2] |= j << ((3 - i) % 4) * 8;
+        }
+        words[words.length] = ((asciiBitLength / maxWord) | 0);
+        words[words.length] = (asciiBitLength) | 0;
+
+        for (j = 0; j < words.length;) {
+            var w = words.slice(j, j += 16);
+            var oldHash = hash.slice(0);
+
+            for (i = 0; i < 64; i++) {
+                var w15 = w[i - 15], w2 = w[i - 2];
+                var a = hash[0], e = hash[4];
+                var temp1 = hash[7]
+                    + (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25))
+                    + ((e & hash[5]) ^ ((~e) & hash[6]))
+                    + k[i]
+                    + (w[i] = (i < 16) ? w[i] : (
+                            w[i - 16]
+                            + (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3))
+                            + w[i - 7]
+                            + (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))
+                        ) | 0
+                    );
+                var temp2 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22))
+                    + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
+
+                hash = [(temp1 + temp2) | 0].concat(hash.slice(0, 7));
+                hash[4] = (hash[4] + temp1) | 0;
+            }
+
+            for (i = 0; i < 8; i++) {
+                hash[i] = (hash[i] + oldHash[i]) | 0;
+            }
+        }
+
+        for (i = 0; i < 8; i++) {
+            for (j = 3; j >= 0; j--) {
+                var b = (hash[i] >> (j * 8)) & 255;
+                result += ((b < 16) ? '0' : '') + b.toString(16);
+            }
+        }
+        return result;
+    }
+
     // PIN Cryptographic Hashing (SHA-256 with Salt)
     async function hashPin(pin, salt) {
-        const encoder = new TextEncoder();
-        const data = encoder.encode(salt + ':' + pin);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        const text = salt + ':' + pin;
+        if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle && typeof window.crypto.subtle.digest === 'function') {
+            try {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(text);
+                const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            } catch (e) {
+                // Fall through to pure JS SHA-256 fallback
+            }
+        }
+        return sha256Fallback(text);
     }
 
     function generateSalt() {
-        const array = new Uint8Array(16);
-        crypto.getRandomValues(array);
+        const array = getSecureRandomBytes(16);
         return Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
@@ -273,6 +397,7 @@
         if (card) {
             card.addEventListener('click', (e) => {
                 if (e.target.closest('.routario-app-lock-actions') || e.target.closest('#routarioAppLockPinView')) return;
+                if (!hasPasskeys()) return;
                 unlockWithBiometrics();
             });
         }
@@ -287,18 +412,28 @@
         const subtitle = overlay.querySelector('#routarioAppLockSubtitle');
         const pinInput = overlay.querySelector('#routarioAppLockPinInput');
         const pinErr = overlay.querySelector('#routarioAppLockPinError');
+        const useBioBtn = overlay.querySelector('#routarioAppLockUseBioBtn');
 
         if (bioView) bioView.style.display = 'none';
         if (pinView) pinView.style.display = 'block';
         if (subtitle) subtitle.textContent = 'Enter your PIN to unlock';
         if (pinErr) pinErr.style.display = 'none';
+        if (useBioBtn) {
+            useBioBtn.style.display = hasPasskeys() ? 'inline-flex' : 'none';
+        }
         if (pinInput) {
             pinInput.value = '';
-            setTimeout(() => pinInput.focus(), 50);
+            setTimeout(() => {
+                if (typeof pinInput.focus === 'function') pinInput.focus();
+            }, 50);
         }
     }
 
     function switchToBioView() {
+        if (!hasPasskeys()) {
+            switchToPinView();
+            return;
+        }
         const overlay = getOverlay();
         const bioView = overlay.querySelector('#routarioAppLockBioView');
         const pinView = overlay.querySelector('#routarioAppLockPinView');
@@ -405,7 +540,11 @@
             bioBtn.innerHTML = '<div class="routario-app-lock-pulse"></div><i class="mdi mdi-fingerprint"></i>';
         }
 
-        switchToBioView();
+        if (hasPasskeys()) {
+            switchToBioView();
+        } else {
+            switchToPinView();
+        }
 
         _overlayEl.classList.remove('hidden');
 
@@ -423,8 +562,13 @@
         }
     }
 
-    // Biometric unlock logic via WebAuthn
+    // Biometric unlock logic via WebAuthn passkey
     async function unlockWithBiometrics() {
+        if (!hasPasskeys()) {
+            switchToPinView();
+            return;
+        }
+
         if (_isAuthenticating) return;
 
         const overlay = getOverlay();
@@ -445,6 +589,7 @@
                 errEl.textContent = 'Biometrics are not supported by this browser. Please use your PIN.';
                 errEl.style.display = 'block';
             }
+            switchToPinView();
             return;
         }
 
@@ -456,57 +601,51 @@
         if (promptEl) promptEl.textContent = 'Follow prompt on your device...';
 
         try {
-            const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api';
-            const username = localStorage.getItem('username') || '';
+            if (isDemo) {
+                await new Promise(r => setTimeout(r, 350));
+            } else {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api';
+                const username = localStorage.getItem('username') || '';
 
-            // 1. Request passkey authentication options
-            const optRes = await fetch(`${apiBase}/passkeys/login/options`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: username || null }),
-            });
+                // 1. Request passkey authentication options
+                const optRes = await fetch(`${apiBase}/passkeys/login/options`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username || null }),
+                });
 
-            if (!optRes.ok) {
-                throw new Error('Unable to start biometric authentication');
-            }
+                if (!optRes.ok) {
+                    throw new Error('Unable to start biometric authentication');
+                }
 
-            const challenge = await optRes.json();
+                const challenge = await optRes.json();
 
-            // 2. Prompt user for Face ID / Touch ID / Fingerprint
-            let credential;
-            try {
-                credential = await navigator.credentials.get({
+                // 2. Prompt user for Face ID / Touch ID / Fingerprint via passkey
+                const credential = await navigator.credentials.get({
                     publicKey: parseCredentialOptions(challenge.options, 'get'),
                 });
-            } catch (credErr) {
-                if (isDemo) {
-                    // In demo mode, simulate successful biometric unlock
-                    credential = { id: 'demo-cred-id', response: { clientDataJSON: 'demo' } };
-                } else {
-                    throw credErr;
+
+                if (promptEl) promptEl.textContent = 'Verifying...';
+
+                // 3. Verify passkey on server
+                const verifyRes = await fetch(`${apiBase}/passkeys/login/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        state: challenge.state,
+                        credential: credentialToJson(credential),
+                    }),
+                });
+
+                if (!verifyRes.ok) {
+                    const errData = await verifyRes.json().catch(() => ({}));
+                    throw new Error(errData.detail || 'Biometric verification failed');
                 }
-            }
 
-            if (promptEl) promptEl.textContent = 'Verifying...';
-
-            // 3. Verify passkey on server
-            const verifyRes = await fetch(`${apiBase}/passkeys/login/verify`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    state: challenge.state,
-                    credential: credentialToJson(credential),
-                }),
-            });
-
-            if (!verifyRes.ok && !isDemo) {
-                const errData = await verifyRes.json().catch(() => ({}));
-                throw new Error(errData.detail || 'Biometric verification failed');
-            }
-
-            const verifyData = await verifyRes.json().catch(() => ({}));
-            if (verifyData && verifyData.access_token) {
-                localStorage.setItem('auth_token', verifyData.access_token);
+                const verifyData = await verifyRes.json().catch(() => ({}));
+                if (verifyData && verifyData.access_token) {
+                    localStorage.setItem('auth_token', verifyData.access_token);
+                }
             }
 
             // Success state
@@ -543,6 +682,9 @@
 
     // Check if initial lock is required on script load
     function checkInitialLock() {
+        if (isAuthenticated()) {
+            syncPasskeysStatus();
+        }
         if (isExcludedPage() || !isAuthenticated() || !isLockEnabled()) return;
 
         const isUnlocked = sessionStorage.getItem(SESSION_KEY_UNLOCKED) === 'true';
@@ -596,6 +738,8 @@
     window.RoutarioAppLock = {
         isSupported: () => Boolean(window.PublicKeyCredential),
         isEnabled: isLockEnabled,
+        hasPasskeys,
+        syncPasskeysStatus,
         setEnabled: (enabled) => {
             localStorage.setItem(STORAGE_KEY_ENABLED, enabled ? 'true' : 'false');
             if (enabled) {
@@ -614,6 +758,8 @@
             localStorage.setItem(STORAGE_KEY_PIN_SALT, salt);
             localStorage.setItem(STORAGE_KEY_PIN_HASH, hash);
         },
+        generateSalt,
+        hashPin,
         verifyPin,
         lock: showLockScreen,
         unlock: unlockWithBiometrics,

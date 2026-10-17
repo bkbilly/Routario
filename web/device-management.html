@@ -21,6 +21,7 @@
     <link rel="stylesheet" href="css/tables.css">
     <link rel="stylesheet" href="css/device-management.css">
     <link rel="stylesheet" href="css/app-lock.css">
+    <link rel="stylesheet" href="css/device-wizard.css">
     <script src="js/settings-nav.js"></script>
 </head>
 <body>
@@ -422,6 +423,7 @@
 <script src="js/ui-utils.js"></script>
 <script src="js/vehicle-icons.js"></script>
 <script src="js/device-management.js"></script>
+<script src="js/device-wizard.js"></script>
 <script src="js/device-management-integrations.js"></script>
 <script src="js/device-commands.js"></script>
 <script src="js/voice-ptt.js"></script>
@@ -434,6 +436,7 @@ document.addEventListener('keydown', e => {
         ['alertProfileDevicePickerModal', () => closeAlertProfileDevicePicker()],
         ['alertEditorModal', () => closeAlertEditor()],
         ['deviceModal', () => closeDeviceModal()],
+        ['deviceWizardModal', () => closeDeviceWizard()],
     ];
     for (const [id, fn] of closers) {
         if (document.getElementById(id)?.classList.contains('active')) { fn(); break; }

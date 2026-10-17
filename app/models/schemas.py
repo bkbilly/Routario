@@ -593,6 +593,7 @@ class DriverCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     phone: Optional[str] = None
     license_number: Optional[str] = None
+    company_id: Optional[int] = None
     notes: Optional[str] = None
     assignment_rule: Optional[str] = None
     assignment_vehicles: Optional[List[int]] = None

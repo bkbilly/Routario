@@ -71,6 +71,52 @@ def _strip_regular_user_admin_permissions(
     return [p for p in permissions if p not in REGULAR_USER_FORBIDDEN_PERMISSIONS]
 
 
+PERMISSION_DEPENDENCIES = {
+    # Device Management
+    "view_devices": ["view_management"],
+    "edit_devices": ["view_devices"],
+    "send_commands": ["view_devices"],
+    "manage_alerts": ["view_devices"],
+    "manage_integrations": ["view_devices"],
+    # Dashboard
+    "view_history": ["view_dashboard"],
+    "manage_geofences": ["view_dashboard"],
+    "manage_routes": ["view_dashboard"],
+    "manage_logbook": ["view_dashboard"],
+    "manage_fuel": ["view_dashboard"],
+    "manage_maintenance": ["view_dashboard"],
+    "voice_ptt": ["view_dashboard"],
+    "live_share": ["view_dashboard"],
+    # Management
+    "manage_users": ["view_management"],
+    "manage_drivers": ["view_management"],
+    "manage_sim_cards": ["view_management"],
+    "manage_mfa": ["view_management", "manage_users"],
+    # Fleet Reports
+    "llm": ["view_reports"],
+    "view_health": ["view_reports"],
+    "view_audit": ["view_reports"],
+}
+
+
+def _enforce_permission_dependencies(permissions: List[str] | None) -> List[str] | None:
+    if not permissions:
+        return permissions
+    perm_set = set(permissions)
+    changed = True
+    while changed:
+        changed = False
+        to_remove = set()
+        for p in perm_set:
+            deps = PERMISSION_DEPENDENCIES.get(p, [])
+            if any(d not in perm_set for d in deps):
+                to_remove.add(p)
+        if to_remove:
+            perm_set -= to_remove
+            changed = True
+    return [p for p in permissions if p in perm_set]
+
+
 class NotificationTestRequest(BaseModel):
     name: str
     url: str
@@ -125,6 +171,7 @@ async def create_user(user_data: UserCreate, caller: User = Depends(require_comp
         is_admin=user_data.is_admin,
         is_company_admin=user_data.is_company_admin,
     )
+    user_data.permissions = _enforce_permission_dependencies(user_data.permissions)
 
     db = get_db()
     await _ensure_unique_user_identity(username=user_data.username, email=user_data.email)
@@ -233,6 +280,7 @@ async def update_user(
             is_admin=effective_is_admin,
             is_company_admin=effective_is_company_admin,
         )
+        user_data.permissions = _enforce_permission_dependencies(user_data.permissions)
 
     await _ensure_unique_user_identity(email=user_data.email, exclude_user_id=user_id)
     try:

@@ -20,12 +20,42 @@ let _usrAssignedDevices = new Set();
 // Permission groups definition (mirrors backend PERMISSION_GROUPS)
 const PERMISSION_GROUPS = [
     { label: 'Dashboard', perms: [['view_dashboard','View Dashboard'],['view_history','View History'],['manage_geofences','Manage Geofences'],['manage_routes','Manage Routes'],['manage_logbook','Manage Logbook'],['manage_fuel','Manage Fuel'],['manage_maintenance','Manage Maintenance'],['voice_ptt','Voice PTT'],['live_share','Live Share']] },
-    { label: 'Device Management', perms: [['view_devices','View Devices'],['edit_devices','Edit Devices'],['send_commands','Send Commands'],['manage_alerts','Manage Alerts'],['manage_integrations','Manage Integrations']] },
     { label: 'Management', perms: [['view_management','View Management'],['manage_users','Manage Users'],['manage_drivers','Manage Drivers'],['manage_sim_cards','Manage SIM Cards'],['manage_mfa',"Manage Users' MFA"]] },
+    { label: 'Device Management', perms: [['view_devices','View Devices'],['edit_devices','Edit Devices'],['send_commands','Send Commands'],['manage_alerts','Manage Alerts'],['manage_integrations','Manage Integrations']] },
     { label: 'Fleet Reports', perms: [['view_reports','View Reports'],['llm','AI Copilot & LLM Reports'],['view_health','View Health Checks'],['view_audit','View Audit Log']] },
     { label: 'User Settings', perms: [['manage_api_keys','Manage API Keys'],['manage_tickets','Manage Tickets'],['manage_webhooks','Manage Webhooks'],['manage_backups','Backup & Restore']] },
 ];
 const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap(g => g.perms.map(p => p[0]));
+
+const PERMISSION_DEPENDENCIES = {
+    // Device Management:
+    'view_devices': ['view_management'],
+    'edit_devices': ['view_devices'],
+    'send_commands': ['view_devices'],
+    'manage_alerts': ['view_devices'],
+    'manage_integrations': ['view_devices'],
+
+    // Dashboard:
+    'view_history': ['view_dashboard'],
+    'manage_geofences': ['view_dashboard'],
+    'manage_routes': ['view_dashboard'],
+    'manage_logbook': ['view_dashboard'],
+    'manage_fuel': ['view_dashboard'],
+    'manage_maintenance': ['view_dashboard'],
+    'voice_ptt': ['view_dashboard'],
+    'live_share': ['view_dashboard'],
+
+    // Management:
+    'manage_users': ['view_management'],
+    'manage_drivers': ['view_management'],
+    'manage_sim_cards': ['view_management'],
+    'manage_mfa': ['view_management', 'manage_users'],
+
+    // Fleet Reports:
+    'llm': ['view_reports'],
+    'view_health': ['view_reports'],
+    'view_audit': ['view_reports'],
+};
 
 let _usrSectionInitialized = false;
 
@@ -280,20 +310,73 @@ function _usrRenderPermissions() {
                 const isChecked = editPerms.has(key);
                 const disabled  = !canGrant ? 'disabled' : '';
                 const opacity   = !canGrant ? 'opacity:0.4;' : '';
-                return `<label style="display:flex;align-items:center;gap:0.5rem;cursor:${canGrant ? 'pointer' : 'default'};${opacity}">
+                return `<label class="usr-perm-item" data-perm="${key}" style="display:flex;align-items:center;gap:0.5rem;cursor:${canGrant ? 'pointer' : 'default'};${opacity}">
                     <input type="checkbox" class="usr-perm-cb" data-perm="${key}"
                         ${isChecked ? 'checked' : ''} ${disabled}
+                        onchange="_usrOnPermChange('${key}')"
                         style="accent-color:var(--accent-primary);width:14px;height:14px;flex-shrink:0;">
                     <span style="font-size:0.85rem;">${label}</span>
                 </label>`;
             }).join('');
 
         if (!rows) return '';
-        return `<div>
+        return `<div class="usr-perm-group">
             <div style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:0.35rem;">${group.label}</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.2rem 0.5rem;">${rows}</div>
         </div>`;
     }).join('');
+
+    _usrSyncPermissionDependencies();
+}
+
+function _usrOnPermChange(permKey) {
+    _usrSyncPermissionDependencies();
+}
+
+function _usrSyncPermissionDependencies() {
+    const cbs = Array.from(document.querySelectorAll('.usr-perm-cb'));
+    const permMap = new Map(cbs.map(cb => [cb.dataset.perm, cb]));
+
+    let changed = true;
+    while (changed) {
+        changed = false;
+        cbs.forEach(cb => {
+            const perm = cb.dataset.perm;
+            const deps = PERMISSION_DEPENDENCIES[perm];
+            if (!deps || !deps.length) return;
+
+            const labelEl = cb.closest('label');
+            if (!labelEl) return;
+
+            const allParentsActive = deps.every(d => {
+                const parentCb = permMap.get(d);
+                if (!parentCb) return false;
+                const parentLabel = parentCb.closest('label');
+                return parentCb.checked && (!parentLabel || parentLabel.style.display !== 'none');
+            });
+
+            if (!allParentsActive) {
+                if (labelEl.style.display !== 'none') {
+                    labelEl.style.display = 'none';
+                    if (cb.checked) {
+                        cb.checked = false;
+                        changed = true;
+                    }
+                }
+            } else {
+                if (labelEl.style.display === 'none') {
+                    labelEl.style.display = 'flex';
+                }
+            }
+        });
+    }
+
+    // Hide permission group container if all its permissions are hidden
+    document.querySelectorAll('#userModalPermissions .usr-perm-group').forEach(groupDiv => {
+        const labels = Array.from(groupDiv.querySelectorAll('label'));
+        const hasVisible = labels.some(l => l.style.display !== 'none');
+        groupDiv.style.display = hasVisible ? '' : 'none';
+    });
 }
 
 function onUserRoleChange() {
@@ -639,7 +722,9 @@ async function saveUser() {
     // Company admins cannot change their own permissions — leave them untouched
     let permissions = null;
     if (role !== 'admin' && !(isMe && !_usrIsAdmin)) {
-        permissions = [...document.querySelectorAll('.usr-perm-cb:checked:not(:disabled)')].map(cb => cb.dataset.perm);
+        permissions = [...document.querySelectorAll('.usr-perm-cb:checked:not(:disabled)')]
+            .filter(cb => cb.closest('label')?.style.display !== 'none')
+            .map(cb => cb.dataset.perm);
     }
 
     const phone = document.getElementById('userModalPhone')?.value.trim() || null;

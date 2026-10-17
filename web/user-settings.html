@@ -266,55 +266,57 @@
                         </div>
                     </section>
 
-                    <!-- Segment 4: Passkeys & Biometrics -->
+                    <!-- Segment 4: Passkeys -->
                     <section class="profile-settings-panel">
                         <div class="profile-passkey-header" style="padding-bottom:0.6rem;border-bottom:1px solid var(--border-color);">
                             <div style="display:flex;align-items:center;gap:0.5rem;">
-                                <i class="mdi mdi-fingerprint" style="font-size:1.25rem;color:var(--accent-primary);"></i>
-                                <h2 style="font-size:1rem;margin:0;font-weight:700;">Passkeys & Biometrics</h2>
+                                <i class="mdi mdi-key-variant" style="font-size:1.25rem;color:var(--accent-primary);"></i>
+                                <h2 style="font-size:1rem;margin:0;font-weight:700;">Passkeys</h2>
                             </div>
                             <button type="button" class="btn btn-primary btn-small" id="passkeyRegisterBtn" onclick="registerPasskey()"><i class="mdi mdi-plus"></i> Add Passkey</button>
                         </div>
+                        <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.75rem;">
+                            Passkeys let you sign in to your Routario account quickly and securely without entering your password.
+                        </p>
                         <div id="passkeySupportNote" style="display:none;color:var(--text-muted);font-size:0.86rem;margin-bottom:0.75rem;">Passkeys are not supported by this browser.</div>
                         <div id="passkeyList" class="profile-passkey-list"></div>
+                    </section>
 
-                        <!-- Biometric App Lock Options -->
-                        <div id="biometricLockSection" style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border-color);">
-                            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;">
+                    <!-- Segment 5: App Lock -->
+                    <section class="profile-settings-panel">
+                        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding-bottom:0.6rem;border-bottom:1px solid var(--border-color);">
+                            <div>
+                                <div style="font-weight:600;font-size:0.95rem;display:flex;align-items:center;gap:0.45rem;">
+                                    <i class="mdi mdi-shield-lock-outline" style="color:var(--accent-primary);font-size:1.2rem;"></i>
+                                    <span id="appLockPanelTitle">Biometric & PIN App Lock</span>
+                                </div>
+                                <div id="appLockPanelDesc" style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.25rem;">
+                                    Require PIN or biometric verification every time the app opens or returns from background.
+                                </div>
+                            </div>
+                            <label class="toggle-switch" style="margin-top:0.2rem;">
+                                <input type="checkbox" id="biometricLockToggle" onchange="toggleBiometricLockSetting(this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div id="appLockPasskeyNotice" style="display:none;font-size:0.8rem;color:var(--text-muted);margin-top:0.65rem;">
+                            <i class="mdi mdi-information-outline"></i> No passkey registered. App Lock will only use your PIN. Register a passkey above to enable fingerprint unlock.
+                        </div>
+
+                        <div id="biometricLockOptions" style="display:none;margin-top:0.85rem;padding:0.75rem 0.85rem;background:var(--bg-tertiary);border-radius:8px;">
+                            <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;">
                                 <div>
-                                    <div style="font-weight:600;font-size:0.9rem;display:flex;align-items:center;gap:0.45rem;">
-                                        <i class="mdi mdi-shield-lock-outline" style="color:var(--accent-primary);font-size:1.15rem;"></i>
-                                        Biometric App Lock
-                                    </div>
-                                    <div style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.25rem;">
-                                        Require Face ID, Touch ID, or biometric verification every time the app opens or returns from background.
-                                    </div>
+                                    <label class="form-label" style="font-size:0.78rem;margin-bottom:0.35rem;display:block;">Auto-lock when idle or in background</label>
+                                    <select id="biometricLockTimeout" class="form-input" style="max-width:320px;font-size:0.85rem;" onchange="updateBiometricLockTimeoutSetting(this.value)">
+                                        <option value="0">Immediately (every time app opens or resumes)</option>
+                                        <option value="60">After 1 minute</option>
+                                        <option value="300">After 5 minutes</option>
+                                        <option value="900">After 15 minutes</option>
+                                    </select>
                                 </div>
-                                <label class="toggle-switch" style="margin-top:0.2rem;">
-                                    <input type="checkbox" id="biometricLockToggle" onchange="toggleBiometricLockSetting(this.checked)">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-
-                            <div id="biometricLockOptions" style="display:none;margin-top:0.85rem;padding:0.75rem 0.85rem;background:var(--bg-tertiary);border-radius:8px;">
-                                <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;">
-                                    <div>
-                                        <label class="form-label" style="font-size:0.78rem;margin-bottom:0.35rem;display:block;">Auto-lock when idle or in background</label>
-                                        <select id="biometricLockTimeout" class="form-input" style="max-width:320px;font-size:0.85rem;" onchange="updateBiometricLockTimeoutSetting(this.value)">
-                                            <option value="0">Immediately (every time app opens or resumes)</option>
-                                            <option value="60">After 1 minute</option>
-                                            <option value="300">After 5 minutes</option>
-                                            <option value="900">After 15 minutes</option>
-                                        </select>
-                                    </div>
-                                    <button type="button" class="btn btn-secondary btn-small" id="biometricLockChangePinBtn" onclick="openAppLockPinModal('change')">
-                                        <i class="mdi mdi-key-edit"></i> Change PIN
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div id="biometricLockNoPasskeysNotice" style="display:none;font-size:0.8rem;color:var(--accent-warning);margin-top:0.65rem;">
-                                <i class="mdi mdi-alert-circle-outline"></i> You need to register at least one passkey above to enable Biometric App Lock.
+                                <button type="button" class="btn btn-secondary btn-small" id="biometricLockChangePinBtn" onclick="openAppLockPinModal('change')">
+                                    <i class="mdi mdi-key-edit"></i> Change PIN
+                                </button>
                             </div>
                         </div>
                     </section>

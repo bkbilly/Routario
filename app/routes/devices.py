@@ -95,6 +95,8 @@ async def create_device(
     caller: User = Depends(require_permission("edit_devices")),
 ):
     """Create a new device."""
+    if not (caller.is_admin or caller.is_company_admin):
+        raise HTTPException(status_code=403, detail="Regular users cannot create devices")
     if not caller.is_admin:
         device_data.company_id = caller.company_id  # force company for non-super admins
 

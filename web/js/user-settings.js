@@ -414,6 +414,7 @@ async function loadPasskeys() {
     list.innerHTML = '<div class="profile-passkey-state">Loading passkeys...</div>';
     try {
         passkeys = await settingsJson(`${API_BASE}/passkeys`);
+        localStorage.setItem('routario_has_passkeys', (Array.isArray(passkeys) && passkeys.length > 0) ? 'true' : 'false');
         renderPasskeys();
         renderBiometricLockSettings();
     } catch (e) {
@@ -426,27 +427,41 @@ function renderBiometricLockSettings() {
     const toggle = document.getElementById('biometricLockToggle');
     const options = document.getElementById('biometricLockOptions');
     const timeoutSelect = document.getElementById('biometricLockTimeout');
-    const notice = document.getElementById('biometricLockNoPasskeysNotice');
+    const notice = document.getElementById('appLockPasskeyNotice');
+    const panelTitle = document.getElementById('appLockPanelTitle');
+    const panelDesc = document.getElementById('appLockPanelDesc');
 
     if (!toggle) return;
 
-    const hasPasskeys = Array.isArray(passkeys) && passkeys.length > 0;
+    const hasKeys = Array.isArray(passkeys) && passkeys.length > 0;
+    localStorage.setItem('routario_has_passkeys', hasKeys ? 'true' : 'false');
+
     const hasPin = Boolean(localStorage.getItem('routario_app_lock_pin_hash'));
     const isEnabled = localStorage.getItem('routario_biometric_lock_enabled') === 'true';
     const timeout = localStorage.getItem('routario_biometric_lock_timeout') || '0';
 
-    toggle.checked = isEnabled && hasPasskeys && hasPin;
+    toggle.checked = isEnabled && hasPin;
     if (timeoutSelect) timeoutSelect.value = timeout;
 
-    if (!hasPasskeys) {
-        if (notice) notice.style.display = 'block';
-        if (options) options.style.display = 'none';
-        if (isEnabled) {
-            localStorage.setItem('routario_biometric_lock_enabled', 'false');
-        }
-    } else {
-        if (notice) notice.style.display = 'none';
-        if (options) options.style.display = toggle.checked ? 'block' : 'none';
+    if (options) {
+        options.style.display = toggle.checked ? 'block' : 'none';
+    }
+
+    if (notice) {
+        notice.style.display = hasKeys ? 'none' : 'block';
+    }
+
+    if (panelTitle) {
+        panelTitle.textContent = hasKeys ? 'Biometric & PIN App Lock' : 'PIN App Lock';
+    }
+    if (panelDesc) {
+        panelDesc.textContent = hasKeys
+            ? 'Require Face ID, Touch ID, or PIN every time the app opens or returns from background.'
+            : 'Require your PIN every time the app opens or returns from background.';
+    }
+
+    if (isEnabled && !hasPin) {
+        localStorage.setItem('routario_biometric_lock_enabled', 'false');
     }
 }
 
@@ -518,13 +533,20 @@ async function submitAppLockPin() {
         if (window.RoutarioAppLock && typeof window.RoutarioAppLock.setPin === 'function') {
             await window.RoutarioAppLock.setPin(newPin);
         } else {
-            const array = new Uint8Array(16);
-            crypto.getRandomValues(array);
-            const salt = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
-            const encoder = new TextEncoder();
-            const data = encoder.encode(salt + ':' + newPin);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-            const hash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+            const salt = (window.RoutarioAppLock && typeof window.RoutarioAppLock.generateSalt === 'function')
+                ? window.RoutarioAppLock.generateSalt()
+                : Math.random().toString(36).substring(2, 18);
+            let hash = '';
+            if (window.RoutarioAppLock && typeof window.RoutarioAppLock.hashPin === 'function') {
+                hash = await window.RoutarioAppLock.hashPin(newPin, salt);
+            } else if (window.crypto && window.crypto.subtle && typeof window.crypto.subtle.digest === 'function') {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(salt + ':' + newPin);
+                const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+                hash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+            } else {
+                hash = salt + ':' + newPin;
+            }
             localStorage.setItem('routario_app_lock_pin_salt', salt);
             localStorage.setItem('routario_app_lock_pin_hash', hash);
         }
@@ -533,9 +555,10 @@ async function submitAppLockPin() {
             localStorage.setItem('routario_biometric_lock_enabled', 'true');
             sessionStorage.setItem('routario_biometric_unlocked', 'true');
             localStorage.setItem('routario_biometric_last_active', String(Date.now()));
-            showAlert('Backup PIN set and Biometric App Lock enabled', 'success');
+            const hasKeys = localStorage.getItem('routario_has_passkeys') === 'true';
+            showAlert(hasKeys ? 'Backup PIN set and Biometric App Lock enabled' : 'PIN set and App Lock enabled', 'success');
         } else {
-            showAlert('Backup PIN updated successfully', 'success');
+            showAlert('PIN updated successfully', 'success');
         }
 
         const modal = document.getElementById('appLockPinModal');
@@ -549,17 +572,8 @@ async function submitAppLockPin() {
 }
 
 async function toggleBiometricLockSetting(enabled) {
-    const hasPasskeys = Array.isArray(passkeys) && passkeys.length > 0;
     const toggle = document.getElementById('biometricLockToggle');
     const options = document.getElementById('biometricLockOptions');
-
-    if (enabled && !hasPasskeys) {
-        if (toggle) toggle.checked = false;
-        if (confirm('You must register at least one passkey first to use Biometric App Lock. Would you like to add one now?')) {
-            await registerPasskey();
-        }
-        return;
-    }
 
     if (enabled) {
         // PIN is mandatory when enabling
@@ -573,11 +587,14 @@ async function toggleBiometricLockSetting(enabled) {
         localStorage.setItem('routario_biometric_lock_enabled', 'true');
         sessionStorage.setItem('routario_biometric_unlocked', 'true');
         localStorage.setItem('routario_biometric_last_active', String(Date.now()));
-        showAlert('Biometric app lock enabled', 'success');
+
+        const hasKeys = localStorage.getItem('routario_has_passkeys') === 'true';
+        showAlert(hasKeys ? 'Biometric & PIN app lock enabled' : 'PIN app lock enabled', 'success');
+
         if (options) options.style.display = 'block';
     } else {
         localStorage.setItem('routario_biometric_lock_enabled', 'false');
-        showAlert('Biometric app lock disabled', 'info');
+        showAlert('App lock disabled', 'info');
         if (options) options.style.display = 'none';
     }
 }

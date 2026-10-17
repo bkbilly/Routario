@@ -172,7 +172,7 @@ async function initDeviceSection() {
     _devSectionInitialized = true;
 
     document.querySelectorAll('button[onclick*="openAddDeviceModal"]').forEach(btn => {
-        btn.style.display = hasPermission('edit_devices') ? '' : 'none';
+        btn.style.display = (isAdmin || isCompanyAdmin) && hasPermission('edit_devices') ? '' : 'none';
     });
 
 
@@ -539,7 +539,10 @@ function setDeviceModalTitle(device = null) {
 }
 
 function openAddDeviceModal() {
-    if (!hasPermission('edit_devices')) return;
+    if (!(isAdmin || isCompanyAdmin) || !hasPermission('edit_devices')) {
+        showAlert('Regular users cannot add devices', 'error');
+        return;
+    }
     editingDeviceId = null;
 
     setDeviceModalTitle();
@@ -1522,6 +1525,10 @@ async function exportDeviceProfile() {
 }
 
 function triggerImportDeviceJson() {
+    if (!(isAdmin || isCompanyAdmin) || !hasPermission('edit_devices')) {
+        showAlert('Regular users cannot import devices', 'error');
+        return;
+    }
     let input = document.getElementById('importDeviceJsonFileInput');
     if (!input) {
         input = document.createElement('input');

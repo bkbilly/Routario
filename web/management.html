@@ -21,6 +21,7 @@
     <link rel="stylesheet" href="css/device-management.css">
     <link rel="stylesheet" href="css/plugins.css">
     <link rel="stylesheet" href="css/app-lock.css">
+    <link rel="stylesheet" href="css/device-wizard.css">
     <script src="js/settings-nav.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -1925,6 +1926,7 @@
 <script src="js/ui-utils.js"></script>
 <script src="js/vehicle-icons.js"></script>
 <script src="js/device-management.js"></script>
+<script src="js/device-wizard.js"></script>
 <script src="js/device-management-integrations.js"></script>
 <script src="js/device-commands.js"></script>
 <script src="js/company-management.js"></script>
@@ -2004,14 +2006,24 @@
         if (!el) return;
         const a    = _addActions[name];
         const perm = _addPermissions[name];
-        const allowed = !perm || hasPermission(perm);
+        const isAdmin = localStorage.getItem('is_admin') === 'true';
+        const isCompanyAdmin = localStorage.getItem('is_company_admin') === 'true';
+        const canManageDevices = isAdmin || isCompanyAdmin;
+
+        let allowed = !perm || hasPermission(perm);
+        if (name === 'devices') {
+            allowed = allowed && canManageDevices;
+        }
         el.innerHTML = (a && allowed) ? `<button class="header-menu-item" onclick="${a.fn}; ${_closeMenu}"><span class="header-menu-item-icon">${_plusIcon}</span><span>${a.label}</span></button>` : '';
 
         const notifyEl = document.getElementById('snNotifyAction');
         if (!notifyEl) return;
         notifyEl.innerHTML = '';
-        if (name === 'devices' && hasPermission('edit_devices')) {
-            notifyEl.innerHTML = `<button class="header-menu-item" onclick="triggerImportDeviceJson(); ${_closeMenu}"><span class="header-menu-item-icon"><i class="mdi mdi-upload" style="font-size:15px;"></i></span><span>Import Device</span></button>`;
+        if (name === 'devices' && hasPermission('edit_devices') && canManageDevices) {
+            notifyEl.innerHTML = `
+                <button class="header-menu-item" onclick="openDeviceWizard(); ${_closeMenu}"><span class="header-menu-item-icon"><i class="mdi mdi-magic-staff" style="font-size:15px;"></i></span><span>Setup Wizard</span></button>
+                <button class="header-menu-item" onclick="triggerImportDeviceJson(); ${_closeMenu}"><span class="header-menu-item-icon"><i class="mdi mdi-upload" style="font-size:15px;"></i></span><span>Import Device</span></button>
+            `;
         } else if (name === 'billing' && localStorage.getItem('is_admin') === 'true') {
             notifyEl.innerHTML = `<button class="header-menu-item" onclick="rtpOpenExchangeRatesModal(); ${_closeMenu}"><span class="header-menu-item-icon"><i class="mdi mdi-swap-horizontal" style="font-size:15px;"></i></span><span>Exchange Rates</span></button>`;
         } else if (name === 'plugins' && localStorage.getItem('is_admin') === 'true') {
@@ -2122,6 +2134,7 @@
             ['alertEditorModal', () => closeAlertEditor()],
             ['companyModal',     () => closeCompanyModal()],
             ['deviceModal',      () => closeDeviceModal()],
+            ['deviceWizardModal',() => closeDeviceWizard()],
         ];
         for (const [id, fn] of closers) {
             if (document.getElementById(id)?.classList.contains('active')) { fn(); break; }

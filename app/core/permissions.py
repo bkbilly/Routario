@@ -49,16 +49,6 @@ PERMISSION_GROUPS = [
         ],
     },
     {
-        "label": "Device Management",
-        "perms": [
-            ("view_devices",       "View Devices"),
-            ("edit_devices",       "Edit Devices"),
-            ("send_commands",      "Send Commands"),
-            ("manage_alerts",      "Manage Alerts"),
-            ("manage_integrations", "Manage Integrations"),
-        ],
-    },
-    {
         "label": "Management",
         "perms": [
             ("view_management",    "View Management"),
@@ -66,6 +56,16 @@ PERMISSION_GROUPS = [
             ("manage_drivers",     "Manage Drivers"),
             ("manage_sim_cards",   "Manage SIM Cards"),
             ("manage_mfa",         "Manage Users' MFA"),
+        ],
+    },
+    {
+        "label": "Device Management",
+        "perms": [
+            ("view_devices",       "View Devices"),
+            ("edit_devices",       "Edit Devices"),
+            ("send_commands",      "Send Commands"),
+            ("manage_alerts",      "Manage Alerts"),
+            ("manage_integrations", "Manage Integrations"),
         ],
     },
     {

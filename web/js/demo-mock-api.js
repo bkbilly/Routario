@@ -1701,6 +1701,22 @@
             return json(runtimeLogPayload(limit));
         }
         if (apiPath === '/devices' || apiPath === '/devices/all') {
+            if (method === 'POST') {
+                const isAdmin = localStorage.getItem('is_admin') === 'true';
+                const isCompanyAdmin = localStorage.getItem('is_company_admin') === 'true';
+                if (!isAdmin && !isCompanyAdmin) {
+                    return json({ detail: 'Regular users cannot create devices' }, 403);
+                }
+                const newDev = {
+                    id: Date.now(),
+                    created_at: iso(0),
+                    is_active: body?.is_active !== false,
+                    state: { total_odometer: 0, is_online: false },
+                    ...body,
+                };
+                devices.push(newDev);
+                return json(newDev);
+            }
             const activeOnly = url.searchParams.get('is_active') === 'true';
             return json(activeOnly ? devices.filter(d => d.is_active !== false) : devices);
         }
@@ -1810,7 +1826,28 @@
             if (method === 'POST') return json({ status: 'success' });
             return json(users);
         }
-        if (apiPath === '/drivers') return json(drivers);
+        if (apiPath === '/drivers') {
+            if (method === 'POST') {
+                const newDriver = {
+                    id: Date.now(),
+                    created_at: iso(0),
+                    ...body,
+                };
+                drivers.push(newDriver);
+                return json(newDriver, 201);
+            }
+            return json(drivers);
+        }
+        if (apiPath === '/drivers/assign') {
+            if (method === 'POST') {
+                const devId = Number(url.searchParams.get('device_id'));
+                const drvId = url.searchParams.get('driver_id') ? Number(url.searchParams.get('driver_id')) : null;
+                const drv = drivers.find(d => d.id === drvId);
+                if (drv) drv.assigned_device_id = devId;
+                return json({ status: 'assigned', device_id: devId, driver_id: drvId });
+            }
+            return json({ detail: 'Method not allowed' }, 405);
+        }
         if (apiPath === '/companies') {
             if (method === 'POST') {
                 const company = { id: Date.now(), user_count: 0, device_count: 0, users: [], devices: [], created_at: iso(0), branding_version: 1, icon_url: null, badge_url: null, ...body };

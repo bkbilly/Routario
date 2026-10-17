@@ -96,8 +96,9 @@ async def create_driver(
     _require_admin_access(current_user)
     db = get_db()
     async with db.get_session() as session:
+        company_id = data.company_id if current_user.is_admin else current_user.company_id
         driver = Driver(
-            company_id=current_user.company_id if not current_user.is_admin else None,
+            company_id=company_id,
             name=data.name,
             phone=data.phone,
             license_number=data.license_number,
