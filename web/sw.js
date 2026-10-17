@@ -4,7 +4,7 @@
  * Place this file at: /web/sw.js  (root of your web directory)
  */
 
-const CACHE_NAME = 'gps-dashboard-v148';
+const CACHE_NAME = 'gps-dashboard-v149';
 const TILE_CACHE_NAME = 'routario-map-tiles-v1';
 const MAX_CACHED_TILES = 1500;
 let tileInsertCount = 0;
@@ -211,6 +211,19 @@ self.addEventListener('push', (event) => {
     ? [500, 150, 500, 150, 500, 200, 800, 200, 1200]
     : (isWarning ? [250, 100, 250] : [150, 100, 150]);
 
+  const hasCoordinates = Boolean(
+    data.has_coordinates ||
+    data.data?.has_coordinates ||
+    (data.latitude != null && data.longitude != null && !isNaN(Number(data.latitude)) && !isNaN(Number(data.longitude))) ||
+    (data.data?.latitude != null && data.data?.longitude != null && !isNaN(Number(data.data.latitude)) && !isNaN(Number(data.data.longitude)))
+  );
+
+  const actions = [];
+  if (hasCoordinates) {
+    actions.push({ action: 'open', title: 'Open Map' });
+  }
+  actions.push({ action: 'dismiss', title: 'Dismiss' });
+
   const options = {
     body: data.body,
     icon: data.icon || '/icons/icon-192.png',
@@ -220,10 +233,7 @@ self.addEventListener('push', (event) => {
     requireInteraction: isCritical,
     renotify: true,
     vibrate: vibratePattern,
-    actions: [
-      { action: 'open', title: 'Open Map' },
-      { action: 'dismiss', title: 'Dismiss' }
-    ]
+    actions: actions
   };
 
   event.waitUntil(

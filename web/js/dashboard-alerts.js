@@ -58,53 +58,49 @@ function _placeAlertHighlight(lat, lng, alertObj, iconHtml, title) {
 
 // ── Main jump-to-alert handler ────────────────────────────────────────────────
 async function jumpToAlert(alert) {
+    if (!alert || alert.latitude == null || alert.longitude == null || isNaN(Number(alert.latitude)) || isNaN(Number(alert.longitude))) {
+        return;
+    }
     closeAlertsModal();
 
     const icon  = typeof getAlertIconHtml === 'function' ? getAlertIconHtml(alert) : '<i class="mdi mdi-bell"></i>';
     const title = typeof getAlertDisplayTitle === 'function' ? getAlertDisplayTitle(alert) : (alert.alert_type ? alert.alert_type.replace(/_/g, ' ').toUpperCase() : 'Alert');
 
-    // Offline alerts have no GPS fix — pan to last known position only
-    if (alert.alert_type === 'offline' || !alert.latitude || !alert.longitude) {
-        const device = devices.find(d => d.id === alert.device_id);
-        if (device?.last_latitude && device?.last_longitude) {
-            map.setView(applyLatLngOffset([device.last_latitude, device.last_longitude], 15), 15);
-            _placeAlertHighlight(device.last_latitude, device.last_longitude, alert, icon, `${title} (last known)`);
-        } else {
-            showAlert({ title: 'No location', message: 'No GPS position available for this alert.', type: 'warning' });
-        }
-        return;
-    }
+    const lat = Number(alert.latitude);
+    const lng = Number(alert.longitude);
 
     const alertTime = new Date(alert.created_at.endsWith('Z') ? alert.created_at : alert.created_at + 'Z');
     const startTime = new Date(alertTime.getTime() - 30 * 60 * 1000);
     const endTime   = new Date(alertTime.getTime() + 30 * 60 * 1000);
 
-    await loadHistory(alert.device_id, startTime, endTime);
+    if (alert.device_id) {
+        await loadHistory(alert.device_id, startTime, endTime);
 
-    // Ensure the sidebar is visible so the history panel can be seen
-    const dashboard = document.querySelector('.dashboard');
-    if (dashboard.classList.contains('sidebar-hidden')) {
-        dashboard.classList.remove('sidebar-hidden');
-        setTimeout(() => map.invalidateSize(), 300);
-    }
+        // Ensure the sidebar is visible so the history panel can be seen
+        const dashboard = document.querySelector('.dashboard');
+        if (dashboard.classList.contains('sidebar-hidden')) {
+            dashboard.classList.remove('sidebar-hidden');
+            setTimeout(() => map.invalidateSize(), 300);
+        }
 
-    // Seek slider to the closest point to the alert timestamp
-    if (historyData.length) {
-        const alertMs = alertTime.getTime();
-        let closestIdx = 0, closestDiff = Infinity;
-        historyData.forEach((f, idx) => {
-            const t = f.properties.time;
-            const diff = Math.abs(new Date(t.endsWith('Z') ? t : t + 'Z').getTime() - alertMs);
-            if (diff < closestDiff) { closestDiff = diff; closestIdx = idx; }
-        });
-        historyIndex = closestIdx;
-        stopPlayback();
-        updatePlaybackUI();
+        // Seek slider to the closest point to the alert timestamp
+        if (historyData.length) {
+            const alertMs = alertTime.getTime();
+            let closestIdx = 0, closestDiff = Infinity;
+            historyData.forEach((f, idx) => {
+                const t = f.properties.time;
+                const diff = Math.abs(new Date(t.endsWith('Z') ? t : t + 'Z').getTime() - alertMs);
+                if (diff < closestDiff) { closestDiff = diff; closestIdx = idx; }
+            });
+            historyIndex = closestIdx;
+            stopPlayback();
+            updatePlaybackUI();
+        }
     }
 
     // Drop the highlight pin and pan to it
-    map.setView(applyLatLngOffset([alert.latitude, alert.longitude], 16), 16);
-    _placeAlertHighlight(alert.latitude, alert.longitude, alert, icon, title);
+    map.setView(applyLatLngOffset([lat, lng], 16), 16);
+    _placeAlertHighlight(lat, lng, alert, icon, title);
 }
 
 // ── Build a single alert-item element ────────────────────────────────────────
@@ -125,26 +121,29 @@ function _buildAlertItem(alert, { dimmed = false, clickable = true, dismissable 
            </span>`
         : '';
 
-    const hasLocation = alert.latitude && alert.longitude;
-    const jumpHint = clickable && hasLocation
+    const hasGps = alert.latitude != null && alert.longitude != null && !isNaN(Number(alert.latitude)) && !isNaN(Number(alert.longitude));
+    const isClickable = clickable && hasGps;
+    const jumpHint = isClickable
         ? `<div style="font-size:0.68rem; color:var(--accent-primary); margin-top:0.2rem; opacity:0.8;">
                <i class="mdi mdi-map"></i> Click to view on map
            </div>`
         : '';
 
     const item = document.createElement('div');
-    item.className = `alert-item ${alert.severity}`;
+    item.className = `alert-item ${alert.severity}${isClickable ? ' alert-clickable' : ' alert-no-coords'}`;
     item.dataset.alertId = String(alert.id);
     if (dimmed) item.style.opacity = '0.6';
 
-    if (clickable) {
+    if (isClickable) {
         item.style.cursor = 'pointer';
-        item.title = hasLocation ? 'Click to jump to this alert on the map' : '';
+        item.title = 'Click to jump to this alert on the map';
         item.addEventListener('click', (e) => {
             // Don't trigger when clicking the dismiss button
             if (e.target.closest('.alert-dismiss')) return;
             jumpToAlert(alert);
         });
+    } else {
+        item.style.cursor = 'default';
     }
 
     const channelStatusList = alert.alert_metadata?.channel_status || alert.channel_status || [];

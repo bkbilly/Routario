@@ -1757,32 +1757,71 @@
 </div>
 
 <div class="modal" id="userNotifyModal">
-    <div class="modal-content" style="max-width:620px;height:auto;max-height:75vh;">
-        <div class="modal-header">
-            <h2 class="modal-title">Send Notification</h2>
-            <button type="button" class="modal-close" onclick="usrCloseNotifyModal()"><i class="mdi mdi-close"></i></button>
-        </div>
-        <div class="modal-scrollable" style="display:flex;gap:1.25rem;padding:1.25rem;flex-wrap:wrap;align-items:stretch;">
-            <div style="flex:1;min-width:180px;min-height:0;display:flex;flex-direction:column;gap:0.5rem;">
-                <label class="form-label">To <span id="userNotifyCount" style="font-size:0.78rem;color:var(--accent-primary);font-weight:600;margin-left:0.25rem;"></span></label>
-                <input type="text" id="userNotifySearch" class="form-input" placeholder="Search users&#8230;" oninput="usrFilterNotifyUsers()">
-                <div id="userNotifyList" style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:0.15rem;"></div>
-            </div>
-            <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:0.75rem;">
-                <div class="form-group">
-                    <label class="form-label">Title</label>
-                    <input type="text" id="userNotifyTitle" class="form-input" placeholder="Notification title" maxlength="100">
+    <div class="modal-content" style="max-width:840px;height:auto;max-height:88vh;">
+        <div class="modal-header" style="align-items:flex-start;padding:1.4rem 1.75rem 1.15rem;">
+            <div style="display:flex;align-items:center;gap:0.85rem;">
+                <div style="width:42px;height:42px;border-radius:12px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);display:flex;align-items:center;justify-content:center;color:var(--accent-primary);font-size:20px;flex-shrink:0;">
+                    <i class="mdi mdi-bell-ring-outline"></i>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Message</label>
-                    <textarea id="userNotifyMessage" class="form-input" rows="6" placeholder="Notification message" maxlength="500" style="resize:vertical;"></textarea>
+                <div>
+                    <h2 class="modal-title" style="font-size:1.35rem;line-height:1.2;margin:0;">Send Notification</h2>
+                    <p style="font-size:0.82rem;color:var(--text-muted);margin:0.25rem 0 0 0;">Dispatch in-app dashboard alerts and instant mobile push notifications.</p>
                 </div>
             </div>
+            <button type="button" class="modal-close" onclick="usrCloseNotifyModal()" title="Close"><i class="mdi mdi-close"></i></button>
         </div>
-        <div class="modal-footer">
+        <div class="modal-scrollable notify-modal-grid" style="padding:1.4rem 1.75rem;">
+            <!-- Left: Recipients -->
+            <div class="notify-recipients-col">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+                    <label class="form-label" style="margin:0;font-weight:600;display:flex;align-items:center;gap:0.4rem;">
+                        <span>Recipients</span>
+                        <span id="userNotifyCount" class="badge" style="font-size:0.72rem;background:rgba(59,130,246,0.15);color:var(--accent-primary);border-radius:999px;padding:0.15rem 0.55rem;font-weight:600;">0 selected</span>
+                    </label>
+                </div>
+                <div style="position:relative;margin-bottom:0.6rem;">
+                    <i class="mdi mdi-magnify" style="position:absolute;left:0.75rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:17px;pointer-events:none;"></i>
+                    <input type="text" id="userNotifySearch" class="form-input" style="padding-left:2.2rem;font-size:0.85rem;" placeholder="Search users&#8230;" oninput="usrFilterNotifyUsers()">
+                </div>
+                <div class="notify-users-box">
+                    <div id="userNotifyList" class="notify-users-scroll"></div>
+                </div>
+            </div>
+
+            <!-- Right: Composer -->
+            <div class="notify-composer-col">
+                <div class="form-group" style="margin-bottom:0.9rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.35rem;">
+                        <label class="form-label" style="margin:0;">Notification Title *</label>
+                        <span id="userNotifyTitleCount" style="font-size:0.75rem;color:var(--text-muted);font-family:var(--font-mono);">0/100</span>
+                    </div>
+                    <input type="text" id="userNotifyTitle" class="form-input" placeholder="e.g. Scheduled System Maintenance" maxlength="100" oninput="usrUpdateNotifyCounters()">
+                </div>
+
+                <div class="form-group" style="margin-bottom:1rem;flex:1;display:flex;flex-direction:column;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.35rem;">
+                        <label class="form-label" style="margin:0;">Message Body *</label>
+                        <span id="userNotifyMessageCount" style="font-size:0.75rem;color:var(--text-muted);font-family:var(--font-mono);">0/500</span>
+                    </div>
+                    <textarea id="userNotifyMessage" class="form-input" rows="8" placeholder="Enter message text to be delivered to user's dashboard and mobile push notification&#8230;" maxlength="500" style="resize:vertical;font-size:0.875rem;line-height:1.45;flex:1;min-height:160px;" oninput="usrUpdateNotifyCounters()"></textarea>
+                </div>
+
+                <div class="notify-delivery-hint">
+                    <i class="mdi mdi-information-outline"></i>
+                    <span>Recipients receive an immediate toast/alert on their dashboard and an external mobile push notification if subscribed.</span>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer" style="padding:1rem 1.75rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;">
+            <div id="userNotifyFooterSummary" style="font-size:0.84rem;color:var(--text-muted);display:flex;align-items:center;gap:0.4rem;">
+                <i class="mdi mdi-account-group-outline" style="font-size:16px;"></i>
+                <span id="userNotifySummaryText">No recipients selected</span>
+            </div>
             <div style="display:flex;gap:0.75rem;margin-left:auto;">
                 <button type="button" class="btn btn-secondary" onclick="usrCloseNotifyModal()">Cancel</button>
-                <button type="button" class="btn btn-primary" id="userNotifySendBtn" onclick="usrSendNotification()">Send</button>
+                <button type="button" class="btn btn-primary" id="userNotifySendBtn" onclick="usrSendNotification()">
+                    <i class="mdi mdi-send"></i> Send Notification
+                </button>
             </div>
         </div>
     </div>
@@ -2024,6 +2063,8 @@
                 <button class="header-menu-item" onclick="openDeviceWizard(); ${_closeMenu}"><span class="header-menu-item-icon"><i class="mdi mdi-magic-staff" style="font-size:15px;"></i></span><span>Setup Wizard</span></button>
                 <button class="header-menu-item" onclick="triggerImportDeviceJson(); ${_closeMenu}"><span class="header-menu-item-icon"><i class="mdi mdi-upload" style="font-size:15px;"></i></span><span>Import Device</span></button>
             `;
+        } else if (name === 'users' && (isAdmin || isCompanyAdmin)) {
+            notifyEl.innerHTML = `<button class="header-menu-item" onclick="usrOpenNotifyModal(); ${_closeMenu}"><span class="header-menu-item-icon"><i class="mdi mdi-bell" style="font-size:15px;"></i></span><span>Send Notification</span></button>`;
         } else if (name === 'billing' && localStorage.getItem('is_admin') === 'true') {
             notifyEl.innerHTML = `<button class="header-menu-item" onclick="rtpOpenExchangeRatesModal(); ${_closeMenu}"><span class="header-menu-item-icon"><i class="mdi mdi-swap-horizontal" style="font-size:15px;"></i></span><span>Exchange Rates</span></button>`;
         } else if (name === 'plugins' && localStorage.getItem('is_admin') === 'true') {

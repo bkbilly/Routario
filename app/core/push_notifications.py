@@ -3,6 +3,7 @@ Push Notification Service (Web Push / VAPID)
 """
 import json
 import logging
+import math
 from datetime import datetime
 from typing import Any, Optional
 
@@ -88,6 +89,8 @@ class PushNotificationService:
         title: str,
         message: str,
         alert_id: Optional[int] = None,
+        latitude: Optional[float] = None,
+        longitude: Optional[float] = None,
     ) -> bool:
         if not self._enabled:
             return False
@@ -107,6 +110,8 @@ class PushNotificationService:
             user_id=user_id,
             db_service=db_service,
             title_override=title,
+            latitude=latitude,
+            longitude=longitude,
         )
         return ok
 
@@ -119,6 +124,8 @@ class PushNotificationService:
         severity: str = "info",
         device_name: Optional[str] = None,
         alert_id: Optional[int] = None,
+        latitude: Optional[float] = None,
+        longitude: Optional[float] = None,
     ) -> tuple[bool, Optional[str]]:
         if not self._enabled:
             return False, "Push notifications disabled: VAPID keys not configured on server"
@@ -137,6 +144,8 @@ class PushNotificationService:
             badge=badge,
             user_id=user_id,
             db_service=db_service,
+            latitude=latitude,
+            longitude=longitude,
         )
 
     async def save_subscription(self, db_service, user_id: int, subscription: dict):
@@ -226,6 +235,8 @@ class PushNotificationService:
         user_id: Optional[int] = None,
         db_service: Any = None,
         title_override: Optional[str] = None,
+        latitude: Optional[float] = None,
+        longitude: Optional[float] = None,
     ) -> tuple[bool, Optional[str]]:
         try:
             from pywebpush import webpush, WebPushException
@@ -248,17 +259,28 @@ class PushNotificationService:
             except Exception:
                 pass
 
+        has_coords = (
+            latitude is not None
+            and longitude is not None
+            and not (isinstance(latitude, float) and (math.isnan(latitude) or math.isinf(latitude)))
+            and not (isinstance(longitude, float) and (math.isnan(longitude) or math.isinf(longitude)))
+        )
+
         payload = json.dumps({
-            "title":    title,
-            "body":     message,
-            "severity": severity,
-            "tag":      f"gps-alert-{alert_type}",
-            "icon":     icon,
-            "badge":    badge,
+            "title":           title,
+            "body":            message,
+            "severity":        severity,
+            "tag":             f"gps-alert-{alert_type}",
+            "icon":            icon,
+            "badge":           badge,
+            "has_coordinates": has_coords,
             "data":     {
-                "url":      "/gps-dashboard.html",
-                "alert_id": alert_id,
-                "token":    push_token,
+                "url":             "/gps-dashboard.html",
+                "alert_id":        alert_id,
+                "token":           push_token,
+                "latitude":        latitude if has_coords else None,
+                "longitude":       longitude if has_coords else None,
+                "has_coordinates": has_coords,
             },
         })
 

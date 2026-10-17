@@ -1643,6 +1643,9 @@
             }
             return json({ categories: demoSystemSettingsCategories });
         }
+        if (apiPath.match(/^\/users\/\d+\/notify$/)) {
+            return json({ status: 'sent', push_delivered: true });
+        }
         if (apiPath === '/users/me' || apiPath === '/users/1' || apiPath.match(/^\/users\/\d+$/)) {
             const uid = apiPath === '/users/me' ? 1 : Number(apiPath.split('/').pop());
             const targetUser = users.find(u => u.id === uid) || (uid === 1 ? DEMO_USER : null);

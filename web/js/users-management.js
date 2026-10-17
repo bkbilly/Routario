@@ -159,6 +159,9 @@ function _usrRender() {
         const assignBtn = !isMe && !u.is_admin && !u.is_company_admin
             ? `<button class="btn btn-secondary" ${_sb} onclick="usrOpenAssignModal(${u.id})"><i class="mdi mdi-devices"></i> Devices</button>`
             : '';
+        const notifyBtn = (_usrIsAdmin || _usrIsCompanyAdmin)
+            ? `<button class="btn btn-secondary" ${_ib} onclick="event.stopPropagation(); usrOpenNotifyModal(${u.id})" title="Send Notification"><i class="mdi mdi-bell-outline"></i></button>`
+            : '';
 
         return `<tr class="device-row" ondblclick="openUserModal(${u.id})" style="cursor:pointer;">
             <td>
@@ -172,6 +175,7 @@ function _usrRender() {
             <td style="white-space:nowrap;text-align:right;">
                 ${assignBtn}
                 ${impersonateBtn}
+                ${notifyBtn}
                 <button class="btn btn-secondary" ${_ib} onclick="openUserModal(${u.id})" title="Edit"><i class="mdi mdi-pencil"></i></button>
             </td>
         </tr>`;
@@ -935,11 +939,22 @@ window.addEventListener('routario:devices-updated', () => {
 
 let _usrNotifySelected = new Set();
 
-function usrOpenNotifyModal(userId = null) {
+async function usrOpenNotifyModal(userId = null) {
+    if (_usrIsAdmin && (!_usrCompanies || !_usrCompanies.length)) {
+        await _usrLoadCompanies();
+    }
     _usrNotifySelected = userId ? new Set([userId]) : new Set();
-    document.getElementById('userNotifySearch').value  = '';
-    document.getElementById('userNotifyTitle').value   = '';
-    document.getElementById('userNotifyMessage').value = '';
+    const searchInput = document.getElementById('userNotifySearch');
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.placeholder = _usrIsAdmin ? 'Search users or companies…' : 'Search users…';
+    }
+    const titleInput = document.getElementById('userNotifyTitle');
+    if (titleInput) titleInput.value = '';
+    const msgInput = document.getElementById('userNotifyMessage');
+    if (msgInput) msgInput.value = '';
+
+    usrUpdateNotifyCounters();
     _usrRenderNotifyList();
     _usrUpdateNotifyCount();
     document.getElementById('userNotifyModal').classList.add('active');
@@ -953,38 +968,74 @@ function usrFilterNotifyUsers() {
     _usrRenderNotifyList(document.getElementById('userNotifySearch').value.trim());
 }
 
+function usrUpdateNotifyCounters() {
+    const titleVal = document.getElementById('userNotifyTitle')?.value || '';
+    const msgVal   = document.getElementById('userNotifyMessage')?.value || '';
+
+    const titleCount = document.getElementById('userNotifyTitleCount');
+    if (titleCount) titleCount.textContent = `${titleVal.length}/100`;
+
+    const msgCount = document.getElementById('userNotifyMessageCount');
+    if (msgCount) msgCount.textContent = `${msgVal.length}/500`;
+}
+
 function _usrRenderNotifyList(filter = '') {
     const lower      = filter.toLowerCase();
     const candidates = _usrUsers;
     const filtered   = lower
-        ? candidates.filter(u => u.username.toLowerCase().includes(lower) || (u.email || '').toLowerCase().includes(lower))
+        ? candidates.filter(u => {
+            const matchUser = u.username.toLowerCase().includes(lower) || (u.email || '').toLowerCase().includes(lower);
+            if (matchUser) return true;
+            if (_usrIsAdmin) {
+                const comp = _usrCompanies.find(c => c.id === u.company_id);
+                if (comp && comp.name.toLowerCase().includes(lower)) return true;
+            }
+            return false;
+        })
         : candidates;
 
     const list = document.getElementById('userNotifyList');
     if (!filtered.length) {
-        list.innerHTML = `<div style="color:var(--text-muted);font-size:0.875rem;padding:0.35rem 0;">No users found.</div>`;
+        list.innerHTML = `<div style="color:var(--text-muted);font-size:0.85rem;padding:2rem 1rem;text-align:center;">No users found.</div>`;
         return;
     }
 
     const allChecked = filtered.every(u => _usrNotifySelected.has(u.id));
     list.innerHTML = `
-        <label style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.6rem;border-radius:6px;cursor:pointer;border-bottom:1px solid var(--border-color);margin-bottom:0.2rem;">
+        <label class="notify-select-all-row">
             <input type="checkbox" id="usrNotifySelectAll" ${allChecked ? 'checked' : ''} onchange="_usrToggleSelectAll(this.checked)" style="accent-color:var(--accent-primary);">
-            <span style="font-size:0.82rem;color:var(--text-muted);">Select all${filtered.length < candidates.length ? ` filtered (${filtered.length})` : ` (${filtered.length})`}</span>
+            <span>Select all${filtered.length < candidates.length ? ` filtered (${filtered.length})` : ` (${filtered.length})`}</span>
         </label>
-        ${filtered.map(u => `
-        <label style="display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0.6rem;border-radius:6px;cursor:pointer;">
-            <input type="checkbox" class="usrNotifyCb" value="${u.id}" ${_usrNotifySelected.has(u.id) ? 'checked' : ''} onchange="_usrOnNotifyCbChange(this)" style="accent-color:var(--accent-primary);flex-shrink:0;">
-            <div>
-                <div style="font-size:0.875rem;font-weight:500;">${_usrEsc(u.username)}${u.id === _usrMyId ? `<span style="font-size:0.7rem;color:var(--accent-primary);font-weight:600;margin-left:0.35rem;">YOU</span>` : ''}</div>
-                <div style="font-size:0.75rem;color:var(--text-muted);">${_usrEsc(u.email)}</div>
+        <div style="padding-top:0.25rem;">
+        ${filtered.map(u => {
+            const isSelected = _usrNotifySelected.has(u.id);
+            const avatarLetter = (u.username || 'U').charAt(0).toUpperCase();
+            const comp = _usrIsAdmin ? _usrCompanies.find(c => c.id === u.company_id) : null;
+            const compHtml = (_usrIsAdmin && comp)
+                ? `<span style="font-size:0.7rem;color:var(--text-secondary);background:var(--bg-secondary, rgba(255,255,255,0.06));border:1px solid var(--border-color);border-radius:4px;padding:0.05rem 0.35rem;white-space:nowrap;"><i class="mdi mdi-domain" style="font-size:11px;vertical-align:middle;margin-right:2px;"></i>${_usrEsc(comp.name)}</span>`
+                : '';
+            return `
+        <label class="notify-user-row ${isSelected ? 'selected' : ''}">
+            <input type="checkbox" class="usrNotifyCb" value="${u.id}" ${isSelected ? 'checked' : ''} onchange="_usrOnNotifyCbChange(this)" style="accent-color:var(--accent-primary);flex-shrink:0;">
+            <div class="notify-user-avatar">${avatarLetter}</div>
+            <div style="flex:1;min-width:0;">
+                <div style="font-size:0.875rem;font-weight:500;display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_usrEsc(u.username)}</span>
+                    ${u.id === _usrMyId ? `<span style="font-size:0.68rem;color:var(--accent-primary);font-weight:700;">YOU</span>` : ''}
+                    ${compHtml}
+                </div>
+                <div style="font-size:0.75rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_usrEsc(u.email || 'No email')}</div>
             </div>
-        </label>`).join('')}`;
+        </label>`;
+        }).join('')}
+        </div>`;
 }
 
 function _usrOnNotifyCbChange(cb) {
     const id = parseInt(cb.value);
     cb.checked ? _usrNotifySelected.add(id) : _usrNotifySelected.delete(id);
+    const row = cb.closest('.notify-user-row');
+    if (row) row.classList.toggle('selected', cb.checked);
     _usrUpdateSelectAllState();
     _usrUpdateNotifyCount();
 }
@@ -994,6 +1045,8 @@ function _usrToggleSelectAll(checked) {
         cb.checked = checked;
         const id = parseInt(cb.value);
         checked ? _usrNotifySelected.add(id) : _usrNotifySelected.delete(id);
+        const row = cb.closest('.notify-user-row');
+        if (row) row.classList.toggle('selected', checked);
     });
     _usrUpdateNotifyCount();
 }
@@ -1009,9 +1062,19 @@ function _usrUpdateSelectAllState() {
 
 function _usrUpdateNotifyCount() {
     const el = document.getElementById('userNotifyCount');
-    if (!el) return;
+    const summary = document.getElementById('userNotifySummaryText');
     const n = _usrNotifySelected.size;
-    el.textContent = n > 0 ? `${n} selected` : '';
+    if (el) el.textContent = `${n} selected`;
+    if (summary) {
+        if (n === 0) {
+            summary.textContent = 'No recipients selected';
+        } else if (n === 1) {
+            const u = _usrUsers.find(item => _usrNotifySelected.has(item.id));
+            summary.textContent = u ? `Recipient: ${u.username}` : '1 recipient selected';
+        } else {
+            summary.textContent = `Ready to send to ${n} recipients`;
+        }
+    }
 }
 
 async function usrSendNotification() {

@@ -1051,12 +1051,14 @@
 
                 const avatarLetter = (u.username || 'U').charAt(0).toUpperCase();
                 const roleBadge = u.is_admin ? '<span class="badge" style="font-size:0.7rem;background:rgba(59,130,246,0.15);color:#3b82f6;">Admin</span>' : '';
+                const userComp = (isAdmin && u.company_id) ? cachedCompanies.find(c => c.id === u.company_id) : null;
+                const compBadge = userComp ? `<span class="badge" style="font-size:0.7rem;background:rgba(255,255,255,0.06);color:var(--text-secondary);border:1px solid var(--border-color);margin-left:0.35rem;"><i class="mdi mdi-domain" style="font-size:11px;vertical-align:middle;margin-right:2px;"></i>${_esc(userComp.name)}</span>` : '';
 
                 item.innerHTML = `
                     <input type="checkbox" style="accent-color:var(--accent-primary);" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); _toggleUserSelection(${u.id}, this.closest('.wizard-user-item'))">
                     <div class="wizard-user-avatar">${avatarLetter}</div>
                     <div class="wizard-user-info">
-                        <div class="wizard-user-name">${_esc(u.username)} ${roleBadge}</div>
+                        <div class="wizard-user-name">${_esc(u.username)} ${roleBadge} ${compBadge}</div>
                         <div class="wizard-user-email">${_esc(u.email || 'No email')}</div>
                     </div>
                 `;

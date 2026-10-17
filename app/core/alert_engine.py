@@ -551,6 +551,8 @@ class AlertEngine:
                         severity=alert_data.get('severity', 'info'),
                         device_name=device.name,
                         alert_id=resolved_aid,
+                        latitude=alert_data.get('latitude'),
+                        longitude=alert_data.get('longitude'),
                     )
                     if ok:
                         channel_status.append({"name": "Web Push", "status": "sent"})
