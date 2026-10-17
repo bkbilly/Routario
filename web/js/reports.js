@@ -3998,7 +3998,11 @@ function _healthDetails(row) {
         return _healthBox([['Accounts', row.active_accounts ?? 0], ['Errors', row.accounts_with_errors ?? 0, row.accounts_with_errors ? 'danger' : 'ok']], sample);
     }
     if (row.name === 'runtime') {
-        return _healthBox([['Version', row.app_version || '-'], ['Commit', row.git_commit || '-'], ['Uptime', `${row.uptime_seconds ?? 0}s`], ['Python', row.python_version || '-'], ['DB', row.database_type || '-']], [['Platform', row.platform || '-']]);
+        const isAdmin = localStorage.getItem('is_admin') === 'true';
+        const actionHtml = isAdmin
+            ? `<div style="margin-top:0.65rem;"><button type="button" class="btn btn-secondary btn-small" onclick="openSystemUpdateModal()"><i class="mdi mdi-arrow-up-bold-circle-outline"></i> Check for Updates</button></div>`
+            : '';
+        return _healthBox([['Version', row.app_version || '-'], ['Commit', row.git_commit || '-'], ['Uptime', `${row.uptime_seconds ?? 0}s`], ['Python', row.python_version || '-'], ['DB', row.database_type || '-']], [['Platform', row.platform || '-']]) + actionHtml;
     }
     if (row.degraded) return _healthBox([], [['State', 'degraded']], 'warn');
     return '';

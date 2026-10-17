@@ -2208,6 +2208,10 @@ function rtpHealthDetails(row) {
     }
 
     if (row.name === 'runtime') {
+        const isAdmin = localStorage.getItem('is_admin') === 'true';
+        const actionHtml = isAdmin
+            ? `<div style="margin-top:0.65rem;"><button type="button" class="btn btn-secondary btn-small" onclick="openSystemUpdateModal()"><i class="mdi mdi-arrow-up-bold-circle-outline"></i> Check for Updates</button></div>`
+            : '';
         return rtpHealthBox(
             [
                 ['Version', row.app_version || '-'],
@@ -2217,7 +2221,7 @@ function rtpHealthDetails(row) {
                 ['DB', row.database_type || '-'],
             ],
             [['Platform', row.platform || '-']]
-        );
+        ) + actionHtml;
     }
 
     if (row.degraded) return rtpHealthBox([], [['State', 'degraded']], 'warn');

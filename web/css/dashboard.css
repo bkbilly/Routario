@@ -416,7 +416,28 @@ body.sidebar-compact .device-card .device-name,
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
+    max-width: 100%;
+}
+
+body.sidebar-compact .device-card .device-title-wrap,
+.dashboard.sidebar-compact .device-card .device-title-wrap {
+    min-width: 0;
     flex: 1 1 auto;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.35rem;
+}
+
+body.sidebar-compact .device-card .cmp-chip,
+.dashboard.sidebar-compact .device-card .cmp-chip {
+    padding: 0.1rem 0.35rem;
+    font-size: 0.68rem;
+    max-width: 90px;
+    border-radius: 4px;
+}
+
+body.sidebar-compact .device-card .cmp-chip i,
+.dashboard.sidebar-compact .device-card .cmp-chip i {
+    font-size: 0.72rem;
 }
 
 body.sidebar-compact .device-card .device-meta,
@@ -1129,13 +1150,79 @@ body.sidebar-compact .device-card .device-actions,
 .device-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     margin-bottom: 0.4rem;
+    gap: 0.5rem;
 }
 
+.device-title-wrap {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.45rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.device-title-wrap .device-name,
 .device-name {
     font-weight: 600;
     font-size: 0.875rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+/* ── Company Chip ── */
+.cmp-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.18rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.76rem;
+    font-weight: 500;
+    line-height: 1.35;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    max-width: 140px;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.cmp-chip-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cmp-chip i {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.cmp-chip.user-admin {
+    border-color: rgba(59, 130, 246, 0.35);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.cmp-chip.user-admin i {
+    color: var(--accent-primary);
+}
+
+.cmp-chip:hover {
+    background: var(--bg-hover);
+    border-color: var(--text-muted);
+}
+
+.vp-header .cmp-chip {
+    font-size: 0.72rem;
+    padding: 0.15rem 0.45rem;
 }
 
 .device-meta {
@@ -3106,7 +3193,7 @@ body.light-theme .leaflet-bar a:hover {
 
 .vp-header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.5rem;
     padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--border-color);
@@ -3118,13 +3205,24 @@ body.light-theme .leaflet-bar a:hover {
 .vp-icon {
     font-size: 1.2rem;
     line-height: 1;
+    flex-shrink: 0;
 }
 
+.vp-title-wrap {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.5rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.vp-title-wrap .vp-name,
 .vp-name {
-    flex: 1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 100%;
 }
 
 .vp-grid {
@@ -4039,6 +4137,17 @@ path.leaflet-interactive:focus-visible,
     line-height: 1.2 !important;
 }
 
+.dashboard.sidebar-bottom-mode .device-header {
+    align-items: flex-start;
+}
+.dashboard.sidebar-bottom-mode .device-title-wrap {
+    flex-wrap: wrap;
+    gap: 0.3rem 0.45rem;
+}
+.dashboard.sidebar-bottom-mode .device-name {
+    max-width: 100%;
+}
+
 /* ── Mobile Side Drawer Fallback (landscape or short height < 630px) ── */
 @media (max-width: 630px) {
     .dashboard:not(.sidebar-bottom-mode) .history-controls {
@@ -4139,6 +4248,11 @@ path.leaflet-interactive:focus-visible,
     }
     .device-header {
         margin-bottom: 0.4rem;
+        align-items: flex-start;
+    }
+    .device-title-wrap {
+        flex-wrap: wrap;
+        gap: 0.25rem 0.35rem;
     }
     .device-name {
         font-size: 0.82rem;
@@ -4147,7 +4261,7 @@ path.leaflet-interactive:focus-visible,
         overflow: hidden;
         text-overflow: ellipsis;
         min-width: 0;
-        flex: 1;
+        max-width: 100%;
     }
     .device-meta {
         flex-shrink: 0;

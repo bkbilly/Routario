@@ -286,9 +286,18 @@ function getDeviceCardContent(device, icon) {
         ? `<span class="ign-badge off" title="${ignTooltip}">OFF</span>`
         : '';
 
+    const companyChip = companyName ? `
+        <span class="cmp-chip" title="${_esc(companyName)}">
+            <i class="mdi mdi-office-building"></i>
+            <span class="cmp-chip-text">${_esc(companyName)}</span>
+        </span>` : '';
+
     return `
         <div class="device-header">
-            <div class="device-name" title="${_esc(device.name)}">${icon} ${_esc(device.name)}</div>
+            <div class="device-title-wrap">
+                <div class="device-name" title="${_esc(device.name)}">${icon} ${_esc(device.name)}</div>
+                ${companyChip}
+            </div>
             <div class="device-meta">
                 ${ignBadge}
                 <span class="device-status ${vs.cls}" id="status-${device.id}"
@@ -305,11 +314,6 @@ function getDeviceCardContent(device, icon) {
             <div class="device-info-row">
                 <span class="info-label">Driver</span>
                 <span class="info-value"><i class="mdi mdi-account" style="font-size:0.8rem;"></i> ${device.current_driver_name}</span>
-            </div>` : ''}
-            ${(isSuperAdmin && companyName) ? `
-            <div class="device-info-row">
-                <span class="info-label">Company</span>
-                <span class="info-value" title="${_esc(companyName)}">${_esc(companyName)}</span>
             </div>` : ''}
             <div class="device-info-row">
                 <span class="info-label">IMEI</span>

@@ -21,9 +21,9 @@ from integrations.registry import IntegrationRegistry
 from models import Device, DeviceState
 from protocols import ProtocolRegistry
 
-router = APIRouter(tags=["health"])
+from core.system_update import get_app_version, get_git_commit
 
-_GIT_COMMIT: str | None = None
+router = APIRouter(tags=["health"])
 
 
 def _format_bytes(size: int) -> str:
@@ -277,36 +277,14 @@ async def _check_integration_accounts() -> dict:
     }
 
 
-def _git_commit() -> str | None:
-    global _GIT_COMMIT
-    if _GIT_COMMIT is not None:
-        return _GIT_COMMIT
-    _GIT_COMMIT = os.getenv("GIT_COMMIT") or os.getenv("ROUTARIO_COMMIT") or ""
-    if _GIT_COMMIT:
-        return _GIT_COMMIT
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=Path(__file__).resolve().parents[2],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=1,
-        )
-        _GIT_COMMIT = result.stdout.strip() if result.returncode == 0 else ""
-    except Exception:
-        _GIT_COMMIT = ""
-    return _GIT_COMMIT or None
-
-
 def _check_runtime() -> dict:
     db = get_db()
     now = datetime.now(timezone.utc)
     return {
         "ok": True,
         "optional": True,
-        "app_version": "1.0.0",
-        "git_commit": _git_commit(),
+        "app_version": get_app_version(),
+        "git_commit": get_git_commit(),
         "started_at": PROCESS_STARTED_AT.isoformat(),
         "uptime_seconds": round((now - PROCESS_STARTED_AT).total_seconds(), 1),
         "python_version": sys.version.split()[0],

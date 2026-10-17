@@ -1643,6 +1643,58 @@
             }
             return json({ categories: demoSystemSettingsCategories });
         }
+        if (apiPath.startsWith('/system/version')) {
+            return json({
+                current_version: '2026.10.0',
+                latest_version: '2026.10.0',
+                update_available: false,
+                has_newer_release: false,
+                commits_behind: 0,
+                release_name: 'Release 2026.10.0',
+                release_url: 'https://github.com/bkbilly/Routario/releases/tag/2026.10.0',
+                release_notes: '### Release 2026.10.0\n\n- Real-time alert toast & notification cross-page dismissal sync\n- Web push dismiss enhancements\n- Performance improvements and stability fixes',
+                newer_releases: [
+                    {
+                        tag: '2026.10.0',
+                        name: '2026.10.0',
+                        html_url: 'https://github.com/bkbilly/Routario/releases/tag/2026.10.0',
+                        published_at: '2026-10-04T17:44:00Z',
+                        body: '## 🌟 Highlights & What\'s New\n\n### 🔔 Real-time Alerts & Push Sync\n- **Toast Synchronization**: Real-time alert toasts synchronize across multiple browser tabs automatically.\n- **Web Push Action Buttons**: Dismiss notifications directly from system tray push notifications.\n- **Security & Integrity**: Cascading permission validation and role-based checks.',
+                    }
+                ],
+                newer_count: 0,
+                deployment: {
+                    mode: 'git',
+                    is_docker: false,
+                    has_git: true,
+                    can_auto_update: true,
+                    description: 'Demo environment (Mock Git)',
+                    manual_command: 'git pull && pip install -r requirements.txt',
+                },
+                version_details: {
+                    version: '2026.10.0',
+                    commit: 'demo',
+                    git_describe: '2026.10.0-demo',
+                    git_branch: 'main',
+                },
+            });
+        }
+        if (apiPath === '/system/update/status') {
+            return json({
+                status: 'idle',
+                stage: '',
+                progress: 0,
+                target_version: '2026.10.0',
+                logs: ['[Demo Mode] System update simulation ready.'],
+                error: null,
+            });
+        }
+        if (apiPath === '/system/update' && method === 'POST') {
+            return json({
+                ok: true,
+                message: 'Demo mode: Update simulated successfully.',
+            });
+        }
         if (apiPath.match(/^\/users\/\d+\/notify$/)) {
             return json({ status: 'sent', push_delivered: true });
         }
