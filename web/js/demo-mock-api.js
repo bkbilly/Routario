@@ -405,9 +405,11 @@
             included_devices: 5,
             included_positions: 250000,
             included_api_calls: 10000,
+            included_voip_calls: 50,
             price_per_device_cents: 900,
             price_per_1000_positions_cents: 12,
             price_per_1000_api_calls_cents: 30,
+            price_per_voip_call_cents: 15,
             is_active: true,
             created_at: iso(20000),
         },
@@ -419,9 +421,11 @@
             included_devices: 25,
             included_positions: 1500000,
             included_api_calls: 100000,
+            included_voip_calls: 300,
             price_per_device_cents: 650,
             price_per_1000_positions_cents: 8,
             price_per_1000_api_calls_cents: 18,
+            price_per_voip_call_cents: 10,
             is_active: true,
             created_at: iso(18000),
         },
@@ -874,6 +878,7 @@
         { key: 'sensor_graphs', label: 'Sensor Graphs', description: 'Interactive sensor graphs and data tables for up to 5 vehicles across a date range.', renderer: 'sensor_graphs', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
         { key: 'sensors', label: 'Vehicle Sensors', description: 'Current sensor readings for all vehicles. Enable historical data to view sensor values over a date range.', renderer: 'sensors', needs_date_range: false, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: true, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
         { key: 'sim_cards', label: 'SIM Cards', description: 'SIM card data usage, cost, and session history for assigned vehicles over the selected period.', renderer: 'table', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
+        { key: 'sip_calls', label: 'SIP Calls', description: 'Outbound VoIP and SIP voice call history, call duration, status, and destination extensions.', renderer: 'table', needs_date_range: true, supports_vehicle_filter: false, supports_user_filter: true, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: false, schedule_uses_user_filter: true, controls: [], schedule_controls: [] },
         { key: 'summary', label: 'Fleet Summary', description: 'Totals per vehicle for the selected period - trips, distance, driving time, and top speed.', renderer: 'summary', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
         { key: 'trips', label: 'Trip List', description: 'Individual trips with start/end location, distance, duration, and driver. Click any row to view the route on a map.', renderer: 'trips', needs_date_range: true, supports_vehicle_filter: true, supports_user_filter: false, supports_driver_filter: false, supports_historical_toggle: false, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: false, controls: [], schedule_controls: [] },
         { key: 'users', label: 'User Fleet', description: 'Account readiness by user - vehicle access, push status, notification channels, alert backlog, schedules, and key permissions.', renderer: 'users', needs_date_range: true, supports_vehicle_filter: false, supports_user_filter: true, supports_driver_filter: false, supports_historical_toggle: false, company_admin_required: true, schedule_supported: true, schedule_uses_device_filter: true, schedule_uses_user_filter: true, controls: [], schedule_controls: [] },
@@ -1502,14 +1507,44 @@
                 ['created_at', 'Time', 'datetime'], ['action', 'Action'], ['actor', 'User'], ['company', 'Company'], ['target', 'Target'], ['ip_address', 'IP'], ['metadata_text', 'Metadata'],
             ], [{ label: 'Events', value: rows.length }, { label: 'Actions', value: rows.length }], { key: 'created_at', dir: -1 });
         }
+        if (type === 'sip_calls') {
+            const rows = [
+                { id: 1, created_at: iso(15), recipient: '+306912345678', caller: 'routario-alert', status: 'completed', duration_seconds: 42, ring_duration_seconds: 6, server: 'sip.routario.net:5060', message: 'Alert: Vehicle 101 exceeded speed limit (112 km/h in 80 zone)', user: 'demo', company: 'Demo Fleet' },
+                { id: 2, created_at: iso(180), recipient: '+306987654321', caller: 'routario-alert', status: 'completed', duration_seconds: 28, ring_duration_seconds: 4, server: 'sip.routario.net:5060', message: 'Alert: Geofence Central Depot exit detected', user: 'demo', company: 'Demo Fleet' },
+                { id: 3, created_at: iso(360), recipient: '+306900112233', caller: 'routario-alert', status: 'no_answer', duration_seconds: 0, ring_duration_seconds: 25, server: 'sip.routario.net:5060', message: 'Alert: SOS panic button triggered for Vehicle 204', user: 'demo', company: 'Demo Fleet' },
+                { id: 4, created_at: iso(720), recipient: '+306944556677', caller: 'routario-alert', status: 'busy', duration_seconds: 0, ring_duration_seconds: 3, server: 'sip.routario.net:5060', message: 'Alert: Vehicle 302 low battery warning', user: 'demo', company: 'Demo Fleet' },
+                { id: 5, created_at: iso(1440), recipient: '+306999887766', caller: 'routario-alert', status: 'completed', duration_seconds: 35, ring_duration_seconds: 8, server: 'sip.routario.net:5060', message: 'Alert: Harsh braking event detected on Highway A1', user: 'demo', company: 'Demo Fleet' },
+            ];
+            const answered = rows.filter(r => r.status === 'completed');
+            const totalDuration = answered.reduce((acc, r) => acc + r.duration_seconds, 0);
+            const avgDuration = answered.length ? Math.round(totalDuration / answered.length) : 0;
+            return table('sip_calls', rows, [
+                ['created_at', 'Date / Time', 'datetime'],
+                ['recipient', 'Recipient', 'text'],
+                ['caller', 'Caller', 'text'],
+                ['status', 'Status', 'status'],
+                ['duration_seconds', 'Call Duration', 'duration_seconds'],
+                ['ring_duration_seconds', 'Ring Duration', 'duration_seconds'],
+                ['server', 'SIP Server', 'text'],
+                ['message', 'Message', 'text'],
+                ['user', 'User', 'text'],
+                ['company', 'Company', 'text'],
+            ], [
+                { label: 'Total Calls', value: rows.length },
+                { label: 'Answered', value: answered.length, tone: 'success' },
+                { label: 'Unanswered / Failed', value: rows.length - answered.length, tone: 'danger' },
+                { label: 'Total Duration', value: `${totalDuration}s` },
+                { label: 'Avg Duration', value: `${avgDuration}s` },
+            ], { key: 'created_at', dir: -1 });
+        }
         if (type === 'billing') {
             const company = demoCompanies[0];
             const plan = billingPlans.find(p => p.id === company.billing_plan_id);
             const rows = [
-                { company_id: company.id, company_name: company.name, period_key: `year:${now.getFullYear()}`, period_label: String(now.getFullYear()), plan_name: plan?.name || 'No plan', active_devices: devices.length, positions: 384200, api_calls: 12840, total_display_cents: 64200, currency: 'EUR' },
+                { company_id: company.id, company_name: company.name, period_key: `year:${now.getFullYear()}`, period_label: String(now.getFullYear()), plan_name: plan?.name || 'No plan', active_devices: devices.length, positions: 384200, api_calls: 12840, voip_calls: 42, total_display_cents: 64200, currency: 'EUR' },
             ];
             const payload = table('billing', rows, [
-                ['company_name', 'Company'], ['period_label', 'Period'], ['plan_name', 'Plan'], ['active_devices', 'Active Devices', 'integer'], ['positions', 'Positions', 'integer'], ['api_calls', 'API Calls', 'integer'], ['total_display_cents', 'Draft Total', 'currency_cents'],
+                ['company_name', 'Company'], ['period_label', 'Period'], ['plan_name', 'Plan'], ['active_devices', 'Active Devices', 'integer'], ['positions', 'Positions', 'integer'], ['api_calls', 'API Calls', 'integer'], ['voip_calls', 'VoIP Calls', 'integer'], ['total_display_cents', 'Draft Total', 'currency_cents'],
             ], [{ label: 'Companies', value: rows.length }, { label: 'Draft Total', value: '€642.00' }], { key: 'company_name', dir: 1 });
             payload.row_action = { type: 'billing_detail', label: 'View billing details' };
             return payload;
@@ -2174,15 +2209,18 @@
                     included_devices: plan.included_devices,
                     included_positions: plan.included_positions,
                     included_api_calls: plan.included_api_calls,
+                    included_voip_calls: plan.included_voip_calls ?? 0,
                     price_per_device_display_cents: plan.price_per_device_cents,
                     price_per_1000_positions_display_cents: plan.price_per_1000_positions_cents,
                     price_per_1000_api_calls_display_cents: plan.price_per_1000_api_calls_cents,
+                    price_per_voip_call_display_cents: plan.price_per_voip_call_cents ?? 0,
                 } : null,
-                usage: { active_devices: devices.length, positions: 384200, api_calls: 12840, events: { support_minutes: 35 } },
+                usage: { active_devices: devices.length, positions: 384200, api_calls: 12840, voip_calls: 42, events: { support_minutes: 35 } },
                 line_items: [
                     { label: 'Base subscription', quantity: 1, amount_display_cents: 4900 },
                     { label: 'Additional devices', quantity: 0, amount_display_cents: 0 },
                     { label: 'Position overage', quantity: 134200, amount_display_cents: 1610 },
+                    { label: 'Additional VoIP calls', quantity: 0, amount_display_cents: 0 },
                 ],
                 total_display_cents: 6510,
                 breakdown_grain: 'monthly',

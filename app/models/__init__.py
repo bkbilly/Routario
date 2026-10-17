@@ -5,6 +5,7 @@ from .models import (
     ScheduledReportRun, AuditLog, ApiKey, BillingPlan, UsageEvent,
     BillingInvoice, CurrencyRate, SupportTicket, SupportTicketComment,
     PlannedRoute, RouteStop, UserPasskey, SystemSetting, SimCard,
+    SipCallLog,
 )
 from .schemas import (
     NormalizedPosition, DeviceCreate, DeviceResponse, DeviceStateResponse,

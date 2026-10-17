@@ -339,6 +339,8 @@ async def test_voip_configuration(
         target_extension=target,
         message=msg,
         config_override=override,
+        user_id=getattr(current_user, "id", None),
+        company_id=getattr(current_user, "company_id", None),
     )
     if not ok:
         raise HTTPException(

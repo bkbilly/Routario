@@ -21,9 +21,11 @@ def _send_voip_call_sync(
     target_extension: str,
     message: str,
     config_override: Optional[dict] = None,
+    user_id: Optional[int] = None,
+    company_id: Optional[int] = None,
 ) -> Tuple[bool, str]:
     """Synchronous VoIP call sender called inside asyncio executor thread."""
-    from notifications.sip import SipChannel
+    from notifications.sip import SipChannel, record_sip_call_sync
 
     settings_obj = get_settings()
 
@@ -145,15 +147,27 @@ def _send_voip_call_sync(
     except (ValueError, TypeError):
         pause = 2
 
-    if not server or not username:
-        err = "VoIP dispatch failed — SIP server host and SIP username are required."
-        logger.warning(err)
-        return False, err
-
     clean_target = (target_extension or "").strip()
     if not clean_target:
         err = "VoIP dispatch skipped — no target phone number or SIP extension provided."
         logger.warning(err)
+        return False, err
+
+    if not server or not username:
+        err = "VoIP dispatch failed — SIP server host and SIP username are required."
+        logger.warning(err)
+        record_sip_call_sync(
+            caller=from_ext or username,
+            recipient=clean_target,
+            server=f"{server}:{port}" if server else None,
+            status="failed",
+            duration_seconds=0.0,
+            ring_duration_seconds=0.0,
+            message=message,
+            error_message=err,
+            user_id=user_id,
+            company_id=company_id,
+        )
         return False, err
 
     tts_params = {
@@ -175,9 +189,13 @@ def _send_voip_call_sync(
         "password": password,
         "extension": clean_target,
         "from_extension": from_ext,
+        "caller": from_ext or username,
         "repeat": repeat,
         "pause": pause,
         "tts": tts_engine,
+        "message": message,
+        "user_id": user_id,
+        "company_id": company_id,
         **tts_params,
     }
 
@@ -194,6 +212,18 @@ def _send_voip_call_sync(
         if not tts_ok:
             err = f"Text-to-speech generation failed using engine '{tts_engine}'."
             logger.error(f"VoIP: {err}")
+            record_sip_call_sync(
+                caller=from_ext or username,
+                recipient=clean_target,
+                server=f"{server}:{port}",
+                status="failed",
+                duration_seconds=0.0,
+                ring_duration_seconds=0.0,
+                message=message,
+                error_message=err,
+                user_id=user_id,
+                company_id=company_id,
+            )
             return False, err
 
         logger.info(
@@ -205,7 +235,7 @@ def _send_voip_call_sync(
             logger.info(f"VoIP voice call to '{clean_target}' completed successfully.")
             return True, f"Call to '{clean_target}' completed successfully."
         else:
-            err = f"Call to '{clean_target}' was not answered, rejected, or timed out."
+            err = getattr(call_ok, "error_message", None) or f"Call to '{clean_target}' was not answered, rejected, or timed out."
             logger.warning(f"VoIP: {err}")
             return False, err
     except Exception as exc:
@@ -224,9 +254,11 @@ async def send_voip_call_async(
     target_extension: str,
     message: str,
     config_override: Optional[dict] = None,
+    user_id: Optional[int] = None,
+    company_id: Optional[int] = None,
 ) -> bool:
     """Asynchronously place a VoIP voice call alarm using background thread execution."""
-    ok, _ = await asyncio.to_thread(_send_voip_call_sync, target_extension, message, config_override)
+    ok, _ = await asyncio.to_thread(_send_voip_call_sync, target_extension, message, config_override, user_id, company_id)
     return ok
 
 
@@ -234,6 +266,8 @@ async def test_voip_call_async(
     target_extension: str,
     message: str,
     config_override: Optional[dict] = None,
+    user_id: Optional[int] = None,
+    company_id: Optional[int] = None,
 ) -> Tuple[bool, str]:
     """Asynchronously test a VoIP configuration and return (success, message)."""
-    return await asyncio.to_thread(_send_voip_call_sync, target_extension, message, config_override)
+    return await asyncio.to_thread(_send_voip_call_sync, target_extension, message, config_override, user_id, company_id)

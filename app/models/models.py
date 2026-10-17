@@ -547,9 +547,11 @@ class BillingPlan(Base):
     included_devices: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     included_positions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     included_api_calls: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    included_voip_calls: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     price_per_device_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     price_per_1000_positions_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     price_per_1000_api_calls_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    price_per_voip_call_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active:   Mapped[bool]     = mapped_column(Boolean, default=True, nullable=False)
     created_at:  Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -690,4 +692,25 @@ class SystemSetting(Base):
     value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     updated_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+
+
+class SipCallLog(Base):
+    __tablename__ = 'sip_call_logs'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    caller: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    recipient: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    server: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default='completed', nullable=False, index=True)
+    duration_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    ring_duration_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    company_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('companies.id', ondelete='CASCADE'), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    company: Mapped[Optional["Company"]] = relationship("Company")
+    user: Mapped[Optional["User"]] = relationship("User")
+
 

@@ -463,6 +463,20 @@ def _pdf_cell_value(value, column: dict | None = None, timezone_name: str | None
                 return f"{sign}{h}h {m}m"
         except Exception:
             return str(value)
+    if column.get("type") == "duration_seconds":
+        try:
+            sec = float(value)
+            abs_sec = round(sec)
+            if abs_sec < 60:
+                return f"{int(abs_sec)}s"
+            m = int(abs_sec // 60)
+            s = int(abs_sec % 60)
+            if m < 60:
+                return f"{m}m {s}s"
+            h = int(m // 60)
+            return f"{h}h {m % 60}m {s}s"
+        except Exception:
+            return str(value)
     if isinstance(value, bool):
         return "Yes" if value else "No"
     if isinstance(value, list):
@@ -774,22 +788,24 @@ def _basic_billing_tables(pdf: _PdfDocument, detail: dict) -> None:
     if plan:
         pdf.subsection("Plan")
         pdf.table(
-            ["Plan", "Base", "Included Devices", "Included Positions", "Included API Calls"],
+            ["Plan", "Base", "Included Devices", "Included Positions", "Included API Calls", "Included VoIP Calls"],
             [[
                 plan.get("name") or "-",
                 _fmt_money_cents(plan.get("base_price_display_cents"), currency),
                 _fmt_int(plan.get("included_devices")),
                 _fmt_int(plan.get("included_positions")),
                 _fmt_int(plan.get("included_api_calls")),
+                _fmt_int(plan.get("included_voip_calls")),
             ]],
         )
     pdf.subsection("Usage")
     pdf.table(
-        ["Active Devices", "Positions", "API Calls", "Usage Events"],
+        ["Active Devices", "Positions", "API Calls", "VoIP Calls", "Usage Events"],
         [[
             _fmt_int(usage.get("active_devices")),
             _fmt_int(usage.get("positions")),
             _fmt_int(usage.get("api_calls")),
+            _fmt_int(usage.get("voip_calls")),
             _fmt_int(len(usage.get("events") or {})),
         ]],
     )
@@ -811,12 +827,13 @@ def _basic_billing_tables(pdf: _PdfDocument, detail: dict) -> None:
     grain = detail.get("breakdown_grain") or "monthly"
     pdf.subsection("Daily Usage" if grain == "daily" else "Monthly Breakdown")
     pdf.table(
-        ["Day" if grain == "daily" else "Month", "Devices", "Positions", "API Calls", "Total"],
+        ["Day" if grain == "daily" else "Month", "Devices", "Positions", "API Calls", "VoIP Calls", "Total"],
         [[
             item.get("label") or "-",
             _fmt_int((item.get("usage") or {}).get("active_devices")),
             _fmt_int((item.get("usage") or {}).get("positions")),
             _fmt_int((item.get("usage") or {}).get("api_calls")),
+            _fmt_int((item.get("usage") or {}).get("voip_calls")),
             "" if grain == "daily" else _fmt_money_cents(item.get("amount_display_cents"), currency),
         ] for item in (detail.get("breakdown") or detail.get("monthly") or [])],
     )
@@ -859,9 +876,11 @@ def _billing_detail_pdf_lines(detail: dict) -> list[str]:
             f"- Included Devices: {_fmt_int(plan.get('included_devices'))}",
             f"- Included Positions: {_fmt_int(plan.get('included_positions'))}",
             f"- Included API Calls: {_fmt_int(plan.get('included_api_calls'))}",
+            f"- Included VoIP Calls: {_fmt_int(plan.get('included_voip_calls'))}",
             f"- Extra Device: {_fmt_money_cents(plan.get('price_per_device_display_cents'), currency)}",
             f"- Extra 1,000 Positions: {_fmt_money_cents(plan.get('price_per_1000_positions_display_cents'), currency)}",
             f"- Extra 1,000 API Calls: {_fmt_money_cents(plan.get('price_per_1000_api_calls_display_cents'), currency)}",
+            f"- Extra VoIP Call: {_fmt_money_cents(plan.get('price_per_voip_call_display_cents'), currency)}",
         ])
     else:
         lines.append("- No billing plan is assigned.")
@@ -871,6 +890,7 @@ def _billing_detail_pdf_lines(detail: dict) -> list[str]:
         f"- Active Devices: {_fmt_int(usage.get('active_devices'))}",
         f"- Positions: {_fmt_int(usage.get('positions'))}",
         f"- API Calls: {_fmt_int(usage.get('api_calls'))}",
+        f"- VoIP Calls: {_fmt_int(usage.get('voip_calls'))}",
     ])
     events = usage.get("events") or {}
     if events:

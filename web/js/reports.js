@@ -384,7 +384,7 @@ function _populateReportSelect(id, defs) {
 
     const categoryMap = {
         'Fleet & Vehicles': ['summary', 'sensors', 'sensor_graphs', 'trips', 'daily', 'drivers', 'eco_driving', 'sim_cards', 'logbook', 'geofences'],
-        'System & Management': ['alerts', 'users', 'billing', 'audit'],
+        'System & Management': ['alerts', 'sip_calls', 'users', 'billing', 'audit'],
         'AI & Analytics': ['ai_custom'],
     };
 
@@ -2038,6 +2038,24 @@ function _formatValue(value, col = {}, row = {}) {
     if (col.type === 'datetime' || col.type === 'datetime_split') return _fmtDatetimeSplit(value);
     if (col.type === 'date' || col.key === 'expiry_date') return _esc(formatDateValue(value));
     if (col.type === 'duration_minutes') return _fmtDuration(Number(value));
+    if (col.type === 'duration_seconds') {
+        const sec = Number(value);
+        if (isNaN(sec) || value === null || value === undefined) return '<span style="color:var(--text-muted);">—</span>';
+        const absSec = Math.round(sec);
+        let text = '';
+        if (absSec < 60) {
+            text = `${absSec}s`;
+        } else if (absSec < 3600) {
+            const m = Math.floor(absSec / 60);
+            const s = absSec % 60;
+            text = `${m}m ${s}s`;
+        } else {
+            const h = Math.floor(absSec / 3600);
+            const m = Math.round((absSec % 3600) / 60);
+            text = `${h}h ${m}m`;
+        }
+        return `<span style="font-family:var(--font-mono);font-weight:600;color:var(--text-primary);">${_esc(text)}</span>`;
+    }
     if (col.type === 'time_diff') {
         const sec = Number(value);
         if (isNaN(sec)) return _esc(value || '—');
@@ -2114,15 +2132,15 @@ function _formatValue(value, col = {}, row = {}) {
         let color = 'var(--text-muted)';
         let border = 'rgba(148, 163, 184, 0.28)';
 
-        if (s === 'active' || s === 'completed' || s === 'ok' || s === 'passed' || s === 'full tank') {
+        if (s === 'active' || s === 'completed' || s === 'answered' || s === 'ok' || s === 'passed' || s === 'full tank') {
             bg = 'rgba(34, 197, 94, 0.12)';
             color = '#16a34a';
             border = 'rgba(34, 197, 94, 0.28)';
-        } else if (s.includes('waiting') || s === 'pending' || s === 'not active' || s === 'not-active' || s === 'inactive' || s === 'due soon' || s === 'low balance') {
+        } else if (s.includes('waiting') || s === 'pending' || s === 'no_answer' || s === 'no answer' || s === 'busy' || s === 'rejected' || s === 'not active' || s === 'not-active' || s === 'inactive' || s === 'due soon' || s === 'low balance') {
             bg = 'rgba(249, 115, 22, 0.12)';
             color = '#ea580c';
             border = 'rgba(249, 115, 22, 0.28)';
-        } else if (s.includes('error') || s === 'blocked' || s === 'suspended' || s === 'expired' || s === 'terminated' || s === 'due') {
+        } else if (s.includes('error') || s === 'failed' || s === 'blocked' || s === 'suspended' || s === 'expired' || s === 'terminated' || s === 'due') {
             bg = 'rgba(239, 68, 68, 0.12)';
             color = '#dc2626';
             border = 'rgba(239, 68, 68, 0.28)';
@@ -2345,6 +2363,14 @@ function _plainValue(value, col = {}) {
     if (value === null || value === undefined) return '';
     if (col.type === 'datetime' || col.type === 'datetime_split') return _fmtDatetime(value);
     if (col.type === 'duration_minutes') return String(value);
+    if (col.type === 'duration_seconds') {
+        const sec = Number(value);
+        if (isNaN(sec) || value === null || value === undefined) return '';
+        const absSec = Math.round(sec);
+        if (absSec < 60) return `${absSec}s`;
+        if (absSec < 3600) return `${Math.floor(absSec / 60)}m ${absSec % 60}s`;
+        return `${Math.floor(absSec / 3600)}h ${Math.round((absSec % 3600) / 60)}m`;
+    }
     if (col.type === 'time_diff') {
         const sec = Number(value);
         if (isNaN(sec)) return String(value || '');
@@ -2487,9 +2513,11 @@ function _billingDetailHtml(detail, pdf = false) {
                 ${_billingCard('Included Devices', _fmtInt(plan.included_devices))}
                 ${_billingCard('Included Positions', _fmtInt(plan.included_positions))}
                 ${_billingCard('Included API Calls', _fmtInt(plan.included_api_calls))}
+                ${_billingCard('Included VoIP Calls', _fmtInt(plan.included_voip_calls))}
                 ${_billingCard('Extra Device', _fmtMoneyCents(plan.price_per_device_display_cents, currency))}
                 ${_billingCard('Extra 1,000 Positions', _fmtMoneyCents(plan.price_per_1000_positions_display_cents, currency))}
                 ${_billingCard('Extra 1,000 API Calls', _fmtMoneyCents(plan.price_per_1000_api_calls_display_cents, currency))}
+                ${_billingCard('Extra VoIP Call', _fmtMoneyCents(plan.price_per_voip_call_display_cents, currency))}
             </div>` : '<div class="billing-detail-muted">No billing plan is assigned to this company.</div>'}
         </div>
 
@@ -2499,6 +2527,7 @@ function _billingDetailHtml(detail, pdf = false) {
                 ${_billingCard('Active Devices', _fmtInt(usage.active_devices))}
                 ${_billingCard('Positions', _fmtInt(usage.positions))}
                 ${_billingCard('API Calls', _fmtInt(usage.api_calls))}
+                ${_billingCard('VoIP Calls', _fmtInt(usage.voip_calls || 0))}
                 ${_billingCard('Usage Events', _fmtInt(Object.keys(usage.events || {}).length))}
             </div>
             ${_billingEventsTable(usage.events || {})}

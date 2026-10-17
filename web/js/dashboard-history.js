@@ -13,6 +13,7 @@ let _currentTripEcoFilter = 'all';
 let _tripEcoAbortController = null;
 let _historyZoomLineSwitchAttached = false;
 let _historyZoomLineSwitchActive = false;
+let _historyPopupGridScroll = 0;
 
 function _format2LineDatetime(rawGpsTime) {
     if (!rawGpsTime) return '—';
@@ -608,6 +609,7 @@ async function loadHistory(deviceId, startTime, endTime, batchOffset = 0, { pres
         historyHasNext = data.truncated;
         historyData = data.features;
         historyIndex = 0;
+        _historyPopupGridScroll = 0;
         if (historyData.length === 0) {
             showAlert({ title: 'History', message: 'No data found.', type: 'warning' });
             historyDeviceId = previousHistoryDeviceId;
@@ -882,6 +884,7 @@ function exitHistoryMode(fromPopState = false) {
         historyEndTime = null;
         historyData = [];
         historyIndex = 0;
+        _historyPopupGridScroll = 0;
         _historyAttrTimeline = {};
         _historyAllAttrKeys = [];
         historyLineRenderMode = null;
@@ -1173,7 +1176,7 @@ function updatePlaybackUI() {
                     tag = ' <span class="attr-badge-mini curr">Current</span>';
                 }
             }
-            return `<span class="vp-label" title="Pinned attribute: ${_esc(key)}"><i class="mdi mdi-pin" style="color:var(--accent-primary);font-size:0.75rem;"></i> ${_esc(key)}</span><span class="vp-value">${valStr}${tag}</span>`;
+            return `<span class="vp-label" title="Pinned attribute: ${_esc(key)}">${_esc(key)}</span><span class="vp-value">${valStr}${tag}</span>`;
         }).join('');
     }
 
@@ -1183,7 +1186,7 @@ function updatePlaybackUI() {
                 <span class="vp-icon">${vehicle.emoji}</span>
                 <span class="vp-name">${device?.name || 'History'}</span>
             </div>
-            <div class="vp-grid">
+            <div class="vp-grid" onscroll="_historyPopupGridScroll = this.scrollTop">
                 <span class="vp-label">Time</span>      <span class="vp-value vp-mono" style="font-size:0.72rem;">${_format2LineDatetime(p.time)}</span>
                 <span class="vp-label">Driver</span>    <span class="vp-value">${p.driver_name ? _esc(p.driver_name) : '—'}</span>
                 <span class="vp-label">Speed</span>     <span class="vp-value">${p.speed != null ? fmtSpeed(p.speed) : '—'}</span>
@@ -1199,26 +1202,53 @@ function updatePlaybackUI() {
     const isPopupOpen = markers['history_pos'] && typeof markers['history_pos'].isPopupOpen === 'function' && markers['history_pos'].isPopupOpen();
     const existingPopup = markers['history_pos'].getPopup();
 
+    let prevHistoryGridScroll = _historyPopupGridScroll;
+    if (existingPopup && isPopupOpen) {
+        const domGrid = existingPopup.getElement()?.querySelector('.vp-grid');
+        if (domGrid && domGrid.scrollTop != null) {
+            prevHistoryGridScroll = domGrid.scrollTop;
+            _historyPopupGridScroll = prevHistoryGridScroll;
+        }
+    }
+
     if (existingPopup) {
+        if (existingPopup.options) {
+            existingPopup.options.autoPan = false;
+            existingPopup.options.maxWidth = 380;
+            existingPopup.options.minWidth = 240;
+        }
         if (isPopupOpen) {
             existingPopup._content = historyPopup;
             const contentNode = existingPopup.getElement()?.querySelector('.leaflet-popup-content');
             if (contentNode) {
                 contentNode.innerHTML = historyPopup;
+                if (prevHistoryGridScroll) {
+                    const newGrid = contentNode.querySelector('.vp-grid');
+                    if (newGrid) newGrid.scrollTop = prevHistoryGridScroll;
+                }
             } else {
                 existingPopup.setContent(historyPopup);
             }
-            if (existingPopup.options) {
-                existingPopup.options.autoPan = false;
-            }
         } else {
             existingPopup.setContent(historyPopup);
-            if (existingPopup.options) {
-                existingPopup.options.autoPan = false;
+        }
+        if (typeof existingPopup.update === 'function') {
+            existingPopup.update();
+        }
+        if (isPopupOpen && prevHistoryGridScroll) {
+            const activeGrid = existingPopup.getElement()?.querySelector('.vp-grid');
+            if (activeGrid && activeGrid.scrollTop !== prevHistoryGridScroll) {
+                activeGrid.scrollTop = prevHistoryGridScroll;
             }
         }
     } else {
-        markers['history_pos'].bindPopup(historyPopup, { autoPan: false });
+        markers['history_pos'].bindPopup(historyPopup, { autoPan: false, maxWidth: 380, minWidth: 240 });
+        markers['history_pos'].on('popupopen', () => {
+            if (_historyPopupGridScroll) {
+                const grid = markers['history_pos'].getPopup()?.getElement()?.querySelector('.vp-grid');
+                if (grid) grid.scrollTop = _historyPopupGridScroll;
+            }
+        });
     }
 
     markers['history_pos'].setLatLng(position).setIcon(L.divIcon({
@@ -1441,7 +1471,7 @@ function _formatHistorySensorDisplay(key, v) {
         return v.map(b => `${_esc(b.id)}${b.rssi !== undefined ? ` (${_esc(b.rssi)}dBm)` : ''}`).join('<br>');
     }
     if (Array.isArray(v) || (typeof v === 'object')) {
-        return `<code style="font-size:0.75rem">${_esc(JSON.stringify(v))}</code>`;
+        return `<code style="font-size:0.72rem;white-space:pre-wrap;word-break:break-all;overflow-wrap:anywhere;">${_esc(JSON.stringify(v))}</code>`;
     }
     if (typeof v === 'boolean') {
         return v ? '<span style="color:var(--accent-success);font-weight:600;">true</span>' : '<span style="color:var(--accent-danger);font-weight:600;">false</span>';

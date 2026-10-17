@@ -60,6 +60,110 @@ GEMINI_LANG_NAMES = {
 logger = logging.getLogger(__name__)
 
 
+class SipCallResult:
+    """Represents the result of a SIP phone call attempt."""
+
+    def __init__(
+        self,
+        success: bool,
+        status: str,
+        duration: float = 0.0,
+        ring_duration: float = 0.0,
+        error: str = "",
+    ):
+        self.success = bool(success)
+        self.status = status
+        self.duration_seconds = round(max(0.0, float(duration)), 2)
+        self.ring_duration_seconds = round(max(0.0, float(ring_duration)), 2)
+        self.error_message = error or ""
+
+    def __bool__(self) -> bool:
+        return self.success
+
+    def __eq__(self, other) -> bool:
+        if isinstance(other, bool):
+            return self.success == other
+        return super().__eq__(other)
+
+    def __repr__(self) -> str:
+        return (
+            f"<SipCallResult success={self.success} status={self.status} "
+            f"duration={self.duration_seconds}s ring={self.ring_duration_seconds}s>"
+        )
+
+
+def record_sip_call_sync(
+    caller: str | None,
+    recipient: str,
+    server: str | None,
+    status: str,
+    duration_seconds: float = 0.0,
+    ring_duration_seconds: float = 0.0,
+    message: str | None = None,
+    error_message: str | None = None,
+    user_id: int | None = None,
+    company_id: int | None = None,
+) -> None:
+    """Safely queue or run a database insert for a SipCallLog record."""
+    try:
+        from core.database import get_db
+        from models import SipCallLog, User
+
+        async def _insert():
+            nonlocal company_id
+            db = get_db()
+            async with db.get_session() as session:
+                if company_id is None and user_id is not None:
+                    u = await session.get(User, user_id)
+                    if u and u.company_id:
+                        company_id = u.company_id
+
+                log_entry = SipCallLog(
+                    caller=caller,
+                    recipient=recipient or "-",
+                    server=server,
+                    status=status,
+                    duration_seconds=round(max(0.0, float(duration_seconds)), 2),
+                    ring_duration_seconds=round(max(0.0, float(ring_duration_seconds)), 2),
+                    message=message,
+                    error_message=error_message,
+                    user_id=user_id,
+                    company_id=company_id,
+                )
+                session.add(log_entry)
+
+                if company_id is not None:
+                    from models import UsageEvent
+                    session.add(
+                        UsageEvent(
+                            company_id=company_id,
+                            metric="voip_call",
+                            quantity=1,
+                            source="sip",
+                            metadata_json={
+                                "recipient": recipient,
+                                "status": status,
+                                "duration_seconds": round(max(0.0, float(duration_seconds)), 2),
+                            },
+                        )
+                    )
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            asyncio.run_coroutine_threadsafe(_insert(), loop)
+        else:
+            try:
+                asyncio.run(_insert())
+            except Exception as e:
+                logger.error(f"Failed to record SIP call log: {e}")
+    except Exception as exc:
+        logger.error(f"Failed to record SIP call log: {exc}", exc_info=True)
+
+
 class SipChannel(BaseNotificationChannel):
     """Delivers voice alarm calls over SIP / VoIP with TTS playback."""
 
@@ -67,7 +171,15 @@ class SipChannel(BaseNotificationChannel):
     def matches(cls, url: str) -> bool:
         return url.strip().lower().startswith("sip://")
 
-    async def send(self, url: str, title: str, message: str, attachments: list[str] | None = None) -> bool:
+    async def send(
+        self,
+        url: str,
+        title: str,
+        message: str,
+        attachments: list[str] | None = None,
+        user_id: int | None = None,
+        company_id: int | None = None,
+    ) -> bool:
         """
         Initiate an outbound SIP call to `url` and speak `message`.
         """
@@ -75,20 +187,39 @@ class SipChannel(BaseNotificationChannel):
         if not params:
             return False
 
+        full_message = f"{title}: {message}" if title and title not in message else message
+        params["message"] = full_message
+        params["caller"] = params.get("username", "")
+        params["user_id"] = user_id
+        params["company_id"] = company_id
+
         prerecorded = params.get("file")
 
         if prerecorded:
             # ── Pre-recorded file ─────────────────────────────────
             if not os.path.isfile(prerecorded):
                 logger.error(f"SIP: pre-recorded file not found: {prerecorded}")
+                record_sip_call_sync(
+                    caller=params.get("caller"),
+                    recipient=params.get("extension", ""),
+                    server=f"{params.get('server')}:{params.get('port', 5060)}" if params.get("server") else None,
+                    status="failed",
+                    duration_seconds=0.0,
+                    ring_duration_seconds=0.0,
+                    message=full_message,
+                    error_message=f"Pre-recorded file not found: {prerecorded}",
+                    user_id=user_id,
+                    company_id=company_id,
+                )
                 return False
             logger.info(
                 f"SIP: calling {params['extension']}@{params['server']} "
                 f"(repeat={params['repeat']}, file={prerecorded})"
             )
-            return await asyncio.get_event_loop().run_in_executor(
+            res = await asyncio.get_event_loop().run_in_executor(
                 None, self._call, params, prerecorded
             )
+            return bool(res)
 
         # ── TTS (default) ─────────────────────────────────────────
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
@@ -105,16 +236,30 @@ class SipChannel(BaseNotificationChannel):
                 audio_path,
             )
             if not tts_ok:
-                logger.error("SIP: TTS generation failed")
+                err_msg = f"TTS generation failed using engine '{tts_engine}'"
+                logger.error(f"SIP: {err_msg}")
+                record_sip_call_sync(
+                    caller=params.get("caller"),
+                    recipient=params.get("extension", ""),
+                    server=f"{params.get('server')}:{params.get('port', 5060)}" if params.get("server") else None,
+                    status="failed",
+                    duration_seconds=0.0,
+                    ring_duration_seconds=0.0,
+                    message=full_message,
+                    error_message=err_msg,
+                    user_id=user_id,
+                    company_id=company_id,
+                )
                 return False
 
             logger.info(
                 f"SIP: calling {params['extension']}@{params['server']} "
                 f"(repeat={params['repeat']}, tts={tts_engine})"
             )
-            return await asyncio.get_event_loop().run_in_executor(
+            res = await asyncio.get_event_loop().run_in_executor(
                 None, self._call, params, audio_path
             )
+            return bool(res)
         finally:
             try:
                 os.unlink(audio_path)
@@ -527,9 +672,20 @@ class SipChannel(BaseNotificationChannel):
             return wf.readframes(wf.getnframes()), wf.getframerate(), wf.getsampwidth()
 
     @staticmethod
-    def _call(params: dict, audio_path: str) -> bool:
+    def _call(params: dict, audio_path: str) -> SipCallResult:
         phone = None
-        call  = None
+        call = None
+        call_start = time.time()
+        answered_at = None
+        ring_duration = 0.0
+        duration = 0.0
+        caller = params.get("caller") or params.get("from_extension") or params.get("username")
+        recipient = params.get("extension", "")
+        server_str = f"{params.get('server')}:{params.get('port', 5060)}" if params.get("server") else None
+        msg_text = params.get("message")
+        user_id = params.get("user_id")
+        company_id = params.get("company_id")
+
         try:
             pcm_frames, _, _ = SipChannel._read_wav_frames(audio_path)
 
@@ -552,27 +708,70 @@ class SipChannel(BaseNotificationChannel):
                 logger.warning("SIP: registration timed out — attempting call anyway")
 
             call = phone.call(params["extension"])
+            ring_start = time.time()
 
             deadline = time.time() + 30
             while time.time() < deadline:
                 if call.state == CallState.ANSWERED:
+                    answered_at = time.time()
+                    ring_duration = answered_at - ring_start
                     break
                 if call.state == CallState.ENDED:
+                    ring_duration = time.time() - ring_start
                     logger.warning("SIP: call ended before being answered")
                     phone.stop()
-                    return False
+                    res = SipCallResult(
+                        success=False,
+                        status="busy",
+                        duration=0.0,
+                        ring_duration=ring_duration,
+                        error="Call ended before being answered (busy or rejected)",
+                    )
+                    record_sip_call_sync(
+                        caller=caller,
+                        recipient=recipient,
+                        server=server_str,
+                        status=res.status,
+                        duration_seconds=res.duration_seconds,
+                        ring_duration_seconds=res.ring_duration_seconds,
+                        message=msg_text,
+                        error_message=res.error_message,
+                        user_id=user_id,
+                        company_id=company_id,
+                    )
+                    return res
                 time.sleep(0.1)
             else:
+                ring_duration = time.time() - ring_start
                 logger.warning("SIP: timed out waiting for answer")
                 try:
                     call.hangup()
                 except InvalidStateError:
                     pass
                 phone.stop()
-                return False
+                res = SipCallResult(
+                    success=False,
+                    status="no_answer",
+                    duration=0.0,
+                    ring_duration=ring_duration,
+                    error="Timed out waiting for recipient to answer (30s)",
+                )
+                record_sip_call_sync(
+                    caller=caller,
+                    recipient=recipient,
+                    server=server_str,
+                    status=res.status,
+                    duration_seconds=res.duration_seconds,
+                    ring_duration_seconds=res.ring_duration_seconds,
+                    message=msg_text,
+                    error_message=res.error_message,
+                    user_id=user_id,
+                    company_id=company_id,
+                )
+                return res
 
-            repeat        = max(1, params.get("repeat", 1))
-            pause         = max(0, params.get("pause",  2))
+            repeat = max(1, params.get("repeat", 1))
+            pause = max(0, params.get("pause", 2))
             audio_seconds = len(pcm_frames) / 8000
 
             for i in range(repeat):
@@ -592,6 +791,9 @@ class SipChannel(BaseNotificationChannel):
                     while time.time() <= stop and call.state == CallState.ANSWERED:
                         time.sleep(0.1)
 
+            if answered_at:
+                duration = time.time() - answered_at
+
             try:
                 if call.state == CallState.ANSWERED:
                     call.hangup()
@@ -600,11 +802,35 @@ class SipChannel(BaseNotificationChannel):
 
             time.sleep(0.5)
             phone.stop()
-            logger.info(f"SIP: call to {params['extension']}@{params['server']} completed")
-            return True
+            logger.info(f"SIP: call to {params['extension']}@{params['server']} completed (duration: {duration:.1f}s)")
+            res = SipCallResult(
+                success=True,
+                status="completed",
+                duration=duration,
+                ring_duration=ring_duration,
+                error="",
+            )
+            record_sip_call_sync(
+                caller=caller,
+                recipient=recipient,
+                server=server_str,
+                status=res.status,
+                duration_seconds=res.duration_seconds,
+                ring_duration_seconds=res.ring_duration_seconds,
+                message=msg_text,
+                error_message=None,
+                user_id=user_id,
+                company_id=company_id,
+            )
+            return res
 
         except Exception as e:
+            err_str = str(e)
             logger.error(f"SIP: call failed: {e}", exc_info=True)
+            if answered_at:
+                duration = time.time() - answered_at
+            elif call:
+                ring_duration = time.time() - call_start
             try:
                 if call and call.state == CallState.ANSWERED:
                     call.hangup()
@@ -615,4 +841,23 @@ class SipChannel(BaseNotificationChannel):
                     phone.stop()
             except Exception:
                 pass
-            return False
+            res = SipCallResult(
+                success=False,
+                status="failed",
+                duration=duration,
+                ring_duration=ring_duration,
+                error=err_str,
+            )
+            record_sip_call_sync(
+                caller=caller,
+                recipient=recipient,
+                server=server_str,
+                status=res.status,
+                duration_seconds=res.duration_seconds,
+                ring_duration_seconds=res.ring_duration_seconds,
+                message=msg_text,
+                error_message=res.error_message,
+                user_id=user_id,
+                company_id=company_id,
+            )
+            return res

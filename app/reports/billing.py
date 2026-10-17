@@ -100,9 +100,11 @@ def _plan_stub(plan: Any) -> SimpleNamespace:
         included_devices=plan.included_devices,
         included_positions=plan.included_positions,
         included_api_calls=plan.included_api_calls,
+        included_voip_calls=getattr(plan, "included_voip_calls", 0),
         price_per_device_cents=plan.price_per_device_cents,
         price_per_1000_positions_cents=plan.price_per_1000_positions_cents,
         price_per_1000_api_calls_cents=plan.price_per_1000_api_calls_cents,
+        price_per_voip_call_cents=getattr(plan, "price_per_voip_call_cents", 0),
     )
 
 
@@ -129,12 +131,15 @@ def _plan_details(plan: Any, exchange_rate: float) -> Optional[dict]:
         "included_devices": plan.included_devices,
         "included_positions": plan.included_positions,
         "included_api_calls": plan.included_api_calls,
+        "included_voip_calls": getattr(plan, "included_voip_calls", 0),
         "price_per_device_cents": plan.price_per_device_cents,
         "price_per_device_display_cents": cents_at_rate(plan.price_per_device_cents, exchange_rate),
         "price_per_1000_positions_cents": plan.price_per_1000_positions_cents,
         "price_per_1000_positions_display_cents": cents_at_rate(plan.price_per_1000_positions_cents, exchange_rate),
         "price_per_1000_api_calls_cents": plan.price_per_1000_api_calls_cents,
         "price_per_1000_api_calls_display_cents": cents_at_rate(plan.price_per_1000_api_calls_cents, exchange_rate),
+        "price_per_voip_call_cents": getattr(plan, "price_per_voip_call_cents", 0),
+        "price_per_voip_call_display_cents": cents_at_rate(getattr(plan, "price_per_voip_call_cents", 0), exchange_rate),
     }
 
 
@@ -153,7 +158,7 @@ async def billing_detail_payload(session, current_user: Any, company_id: int, pe
     currency, exchange_rate = currency_snapshot(current_user)
 
     plan = await session.get(BillingPlan, company.billing_plan_id) if company.billing_plan_id else None
-    totals = {"active_devices": 0, "positions": 0, "api_calls": 0, "amount_cents": 0}
+    totals = {"active_devices": 0, "positions": 0, "api_calls": 0, "voip_calls": 0, "amount_cents": 0}
     events: dict[str, int] = {}
     line_totals: dict[tuple[str, str], dict] = {}
     monthly = []
@@ -184,6 +189,7 @@ async def billing_detail_payload(session, current_user: Any, company_id: int, pe
         totals["active_devices"] += int(usage.get("active_devices") or 0)
         totals["positions"] += int(usage.get("positions") or 0)
         totals["api_calls"] += int(usage.get("api_calls") or 0)
+        totals["voip_calls"] += int(usage.get("voip_calls") or 0)
         totals["amount_cents"] += amount_cents
         for metric, quantity in (usage.get("events") or {}).items():
             events[metric] = events.get(metric, 0) + int(quantity or 0)
@@ -234,6 +240,7 @@ async def billing_detail_payload(session, current_user: Any, company_id: int, pe
             "active_devices": totals["active_devices"],
             "positions": totals["positions"],
             "api_calls": totals["api_calls"],
+            "voip_calls": totals["voip_calls"],
             "events": events,
         },
         "line_items": _line_amounts(list(line_totals.values()), exchange_rate),
@@ -342,17 +349,18 @@ class BillingReport(Report):
             plans = {p.id: p for p in plan_rows}
 
         rows = []
-        totals = {"active_devices": 0, "positions": 0, "api_calls": 0, "amount_cents": 0}
+        totals = {"active_devices": 0, "positions": 0, "api_calls": 0, "voip_calls": 0, "amount_cents": 0}
 
         for company in companies:
             plan = plans.get(company.billing_plan_id)
-            usage = {"active_devices": 0, "positions": 0, "api_calls": 0, "events": {}}
+            usage = {"active_devices": 0, "positions": 0, "api_calls": 0, "voip_calls": 0, "events": {}}
             amount_cents = 0
             line_totals = {
                 "Base subscription": 0,
                 "Additional active devices": 0,
                 "Additional position messages": 0,
                 "Additional API calls": 0,
+                "Additional VoIP calls": 0,
             }
 
             for year, month, _label in months:
@@ -361,6 +369,7 @@ class BillingReport(Report):
                 usage["active_devices"] += int(month_usage.get("active_devices") or 0)
                 usage["positions"] += int(month_usage.get("positions") or 0)
                 usage["api_calls"] += int(month_usage.get("api_calls") or 0)
+                usage["voip_calls"] += int(month_usage.get("voip_calls") or 0)
                 for metric, quantity in (month_usage.get("events") or {}).items():
                     usage["events"][metric] = usage["events"].get(metric, 0) + int(quantity or 0)
 
@@ -375,6 +384,7 @@ class BillingReport(Report):
             totals["active_devices"] += usage["active_devices"]
             totals["positions"] += usage["positions"]
             totals["api_calls"] += usage["api_calls"]
+            totals["voip_calls"] += usage["voip_calls"]
             totals["amount_cents"] += amount_cents
 
             rows.append({
@@ -386,10 +396,12 @@ class BillingReport(Report):
                 "active_devices": usage["active_devices"],
                 "positions": usage["positions"],
                 "api_calls": usage["api_calls"],
+                "voip_calls": usage["voip_calls"],
                 "base_cents": cents_at_rate(line_totals["Base subscription"], exchange_rate),
                 "device_overage_cents": cents_at_rate(line_totals["Additional active devices"], exchange_rate),
                 "position_overage_cents": cents_at_rate(line_totals["Additional position messages"], exchange_rate),
                 "api_overage_cents": cents_at_rate(line_totals["Additional API calls"], exchange_rate),
+                "voip_overage_cents": cents_at_rate(line_totals["Additional VoIP calls"], exchange_rate),
                 "total_cents": cents_at_rate(amount_cents, exchange_rate),
                 "currency": currency,
             })
@@ -406,10 +418,12 @@ class BillingReport(Report):
                 {"key": "active_devices", "label": "Devices", "type": "integer"},
                 {"key": "positions", "label": "Positions", "type": "integer"},
                 {"key": "api_calls", "label": "API Calls", "type": "integer"},
+                {"key": "voip_calls", "label": "VoIP Calls", "type": "integer"},
                 {"key": "base_cents", "label": "Base", "type": "currency_cents", "currency_key": "currency"},
                 {"key": "device_overage_cents", "label": "Device Overage", "type": "currency_cents", "currency_key": "currency"},
                 {"key": "position_overage_cents", "label": "Position Overage", "type": "currency_cents", "currency_key": "currency"},
                 {"key": "api_overage_cents", "label": "API Overage", "type": "currency_cents", "currency_key": "currency"},
+                {"key": "voip_overage_cents", "label": "VoIP Overage", "type": "currency_cents", "currency_key": "currency"},
                 {"key": "total_cents", "label": "Draft Total", "type": "currency_cents", "currency_key": "currency"},
             ],
             [
@@ -417,6 +431,7 @@ class BillingReport(Report):
                 {"label": "Active Devices", "value": totals["active_devices"]},
                 {"label": "Positions", "value": totals["positions"]},
                 {"label": "API Calls", "value": totals["api_calls"]},
+                {"label": "VoIP Calls", "value": totals["voip_calls"]},
                 {"label": "Draft Total", "value": f"{currency} {cents_at_rate(totals['amount_cents'], exchange_rate) / 100:.2f}"},
             ],
             start,
@@ -429,6 +444,7 @@ class BillingReport(Report):
                 "active_devices": totals["active_devices"],
                 "positions": totals["positions"],
                 "api_calls": totals["api_calls"],
+                "voip_calls": totals["voip_calls"],
                 "total_cents": cents_at_rate(totals["amount_cents"], exchange_rate),
                 "currency": currency,
             },

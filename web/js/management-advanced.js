@@ -122,6 +122,7 @@ function rtpApplyBillingCurrencyLabels() {
         billDevicePriceLabel: `Per Device (${cur})`,
         billPositionPriceLabel: `Per 1000 Positions (${cur})`,
         billApiPriceLabel: `Per 1000 API Calls (${cur})`,
+        billVoipPriceLabel: `Per VoIP Call (${cur})`,
     };
     Object.entries(labels).forEach(([id, text]) => {
         const el = document.getElementById(id);
@@ -1616,8 +1617,8 @@ function rtpBillingValue(plan, col) {
     const values = {
         name: plan.name,
         base: Number(plan.base_price_cents) || 0,
-        included: (Number(plan.included_devices) || 0) + (Number(plan.included_positions) || 0) + (Number(plan.included_api_calls) || 0),
-        overage: (Number(plan.price_per_device_cents) || 0) + (Number(plan.price_per_1000_positions_cents) || 0) + (Number(plan.price_per_1000_api_calls_cents) || 0),
+        included: (Number(plan.included_devices) || 0) + (Number(plan.included_positions) || 0) + (Number(plan.included_api_calls) || 0) + (Number(plan.included_voip_calls) || 0),
+        overage: (Number(plan.price_per_device_cents) || 0) + (Number(plan.price_per_1000_positions_cents) || 0) + (Number(plan.price_per_1000_api_calls_cents) || 0) + (Number(plan.price_per_voip_call_cents) || 0),
         companies: assigned.map(c => c.name).join(', '),
     };
     return values[col];
@@ -1633,6 +1634,7 @@ function rtpRenderBillingTable() {
             p.included_devices,
             p.included_positions,
             p.included_api_calls,
+            p.included_voip_calls,
             rtpBillingValue(p, 'companies'),
         ].join(' ').toLowerCase().includes(q));
         rows.sort((a, b) => rtpCompareValues(rtpBillingValue(a, _rtpBillingSort.col), rtpBillingValue(b, _rtpBillingSort.col), _rtpBillingSort.dir));
@@ -1640,12 +1642,14 @@ function rtpRenderBillingTable() {
         if (count) count.textContent = `${rows.length} plan${rows.length !== 1 ? 's' : ''}`;
         rtpUpdateSortHeaders('section-billing', _rtpBillingSort);
         body.innerHTML = rows.length ? rows.map(p => {
+            const voipInc = p.included_voip_calls ? `<br>${p.included_voip_calls} VoIP calls` : '';
+            const voipOvr = p.price_per_voip_call_cents ? `<br>${rtpMoney(p.price_per_voip_call_cents, p.currency)} / VoIP call` : '';
             return `
                 <tr class="device-row" ondblclick="rtpEditPlan(${p.id})" style="cursor:pointer;">
                     <td>${rtpEsc(p.name)}</td>
                     <td>${rtpMoney(p.base_price_cents, p.currency)}</td>
-                    <td>${p.included_devices} devices<br>${p.included_positions} positions<br>${p.included_api_calls} API calls</td>
-                    <td>${rtpMoney(p.price_per_device_cents, p.currency)} / device<br>${rtpMoney(p.price_per_1000_positions_cents, p.currency)} / 1000 positions<br>${rtpMoney(p.price_per_1000_api_calls_cents, p.currency)} / 1000 API calls</td>
+                    <td>${p.included_devices} devices<br>${p.included_positions} positions<br>${p.included_api_calls} API calls${voipInc}</td>
+                    <td>${rtpMoney(p.price_per_device_cents, p.currency)} / device<br>${rtpMoney(p.price_per_1000_positions_cents, p.currency)} / 1000 positions<br>${rtpMoney(p.price_per_1000_api_calls_cents, p.currency)} / 1000 API calls${voipOvr}</td>
                     <td>${rtpRenderPlanCompanyChips(p)}</td>
                     <td style="text-align:center;">
                         <div class="table-actions" onclick="event.stopPropagation()">
@@ -1785,6 +1789,8 @@ function rtpFillPlanForm(plan = null) {
     document.getElementById('billPositionPrice').value = plan ? rtpCurrencyInput(plan.price_per_1000_positions_cents) : 0;
     document.getElementById('billIncApi').value = plan?.included_api_calls ?? 0;
     document.getElementById('billApiPrice').value = plan ? rtpCurrencyInput(plan.price_per_1000_api_calls_cents) : 0;
+    document.getElementById('billIncVoip').value = plan?.included_voip_calls ?? 0;
+    document.getElementById('billVoipPrice').value = plan ? rtpCurrencyInput(plan.price_per_voip_call_cents) : 0;
     const search = document.getElementById('billPlanCompanySearch');
     if (search) search.value = '';
     _rtpPlanCompanySelection = new Set(plan ? rtpCompaniesForPlan(plan.id).map(c => Number(c.id)) : []);
@@ -1918,6 +1924,8 @@ async function rtpCreatePlan() {
             price_per_1000_positions_cents: rtpCurrencyCentsFromInput('billPositionPrice'),
             included_api_calls: Number(document.getElementById('billIncApi').value || 0),
             price_per_1000_api_calls_cents: rtpCurrencyCentsFromInput('billApiPrice'),
+            included_voip_calls: Number(document.getElementById('billIncVoip').value || 0),
+            price_per_voip_call_cents: rtpCurrencyCentsFromInput('billVoipPrice'),
         };
         if (!payload.name) throw new Error('Plan name is required');
         const url = _rtpEditingPlanId ? `${API_BASE}/billing/plans/${_rtpEditingPlanId}` : `${API_BASE}/billing/plans`;

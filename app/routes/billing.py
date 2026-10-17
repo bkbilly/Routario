@@ -28,9 +28,11 @@ class BillingPlanIn(BaseModel):
     included_devices: int = Field(0, ge=0)
     included_positions: int = Field(0, ge=0)
     included_api_calls: int = Field(0, ge=0)
+    included_voip_calls: int = Field(0, ge=0)
     price_per_device_cents: int = Field(0, ge=0)
     price_per_1000_positions_cents: int = Field(0, ge=0)
     price_per_1000_api_calls_cents: int = Field(0, ge=0)
+    price_per_voip_call_cents: int = Field(0, ge=0)
     is_active: bool = True
 
 
@@ -57,9 +59,11 @@ def _plan_payload(plan: BillingPlan) -> dict:
         "included_devices": plan.included_devices,
         "included_positions": plan.included_positions,
         "included_api_calls": plan.included_api_calls,
+        "included_voip_calls": getattr(plan, "included_voip_calls", 0),
         "price_per_device_cents": plan.price_per_device_cents,
         "price_per_1000_positions_cents": plan.price_per_1000_positions_cents,
         "price_per_1000_api_calls_cents": plan.price_per_1000_api_calls_cents,
+        "price_per_voip_call_cents": getattr(plan, "price_per_voip_call_cents", 0),
         "is_active": plan.is_active,
         "created_at": plan.created_at,
     }

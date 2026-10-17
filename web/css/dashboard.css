@@ -3309,11 +3309,15 @@ body.light-theme .trip-time-start i {
     box-shadow: var(--shadow-lg);
     padding: 0;
     color: var(--text-primary);
+    overflow: hidden;
 }
 
 .leaflet-popup-content {
     margin: 0;
     line-height: 1.5;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .leaflet-popup-tip {
@@ -3367,18 +3371,23 @@ body.light-theme .leaflet-bar a:hover {
 
 .vp-popup {
     min-width: 220px;
+    max-width: 380px;
+    width: 100%;
+    box-sizing: border-box;
     font-family: 'Outfit', sans-serif;
 }
 
 .vp-header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 0.5rem;
     padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--border-color);
     font-size: 1rem;
     font-weight: 700;
     color: var(--text-primary);
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .vp-icon {
@@ -3391,15 +3400,20 @@ body.light-theme .leaflet-bar a:hover {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
 }
 
 .vp-grid {
     display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.4rem 1rem;
-    padding: 0.75rem 1rem;
+    grid-template-columns: minmax(min-content, 78px) minmax(0, 1fr);
+    gap: 0.35rem 0.6rem;
+    padding: 0.65rem 0.85rem;
     align-items: baseline;
+    box-sizing: border-box;
+    max-height: 280px;
+    overflow-y: auto;
+    overflow-x: hidden;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
@@ -3434,16 +3448,34 @@ body.light-theme .leaflet-bar a:hover {
 }
 
 .vp-label {
-    font-size: 0.78rem;
+    font-size: 0.76rem;
+    line-height: 1.25;
     color: var(--text-muted);
-    white-space: nowrap;
+    min-width: 0;
+    max-width: 82px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
 }
 
 .vp-value {
-    font-size: 0.85rem;
+    font-size: 0.84rem;
+    line-height: 1.35;
     color: var(--text-primary);
     text-align: right;
     font-weight: 500;
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.vp-value code {
+    white-space: pre-wrap;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.72rem;
 }
 
 .vp-mono {

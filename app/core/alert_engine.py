@@ -524,7 +524,17 @@ class AlertEngine:
                     if not ch:
                         return {"name": c_name, "status": "failed", "error": "Unsupported channel type"}
                     try:
-                        ok = await ch.send(url, title, message)
+                        from notifications.sip import SipChannel
+                        if isinstance(ch, SipChannel):
+                            ok = await ch.send(
+                                url,
+                                title,
+                                message,
+                                user_id=getattr(user, "id", None),
+                                company_id=getattr(user, "company_id", None),
+                            )
+                        else:
+                            ok = await ch.send(url, title, message)
                         return {"name": c_name, "status": "sent" if ok else "failed"}
                     except Exception as err:
                         return {"name": c_name, "status": "failed", "error": str(err)}
@@ -723,7 +733,12 @@ class AlertEngine:
                             alert_type_label = alert_data['type'].value.upper() if hasattr(alert_data['type'], 'value') else str(alert_data['type']).upper()
                             alert_label = rule_title if rule_title else alert_type_label
                             tts_msg = f"Alert warning for vehicle {device.name}. {alert_label}. {alert_data['message']}."
-                            ok = await send_voip_call_async(user_phone.strip(), tts_msg)
+                            ok = await send_voip_call_async(
+                                user_phone.strip(),
+                                tts_msg,
+                                user_id=getattr(user, "id", None),
+                                company_id=getattr(user, "company_id", None),
+                            )
                             if ok:
                                 channel_status.append({"name": "VoIP Call", "status": "sent"})
                             else:
