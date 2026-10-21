@@ -71,6 +71,8 @@ let _geofenceLayer = null;        // L.FeatureGroup holding all rendered shapes
 let _drawControl = null;          // Active Leaflet.draw control (if any)
 let _editingLayer = null;         // The single layer currently in edit mode
 let _editingGeofenceId = null;    // ID of geofence being edited (null = new)
+let _initialEditCoords = null;    // JSON snapshot of coordinates when entering edit mode
+let _isEditingGeofenceDirty = false; // Flag set if any vertex edit event is fired
 let _pendingCoords = null;        // Coords of a freshly drawn shape waiting to be saved
 let _pendingType = 'polygon';     // 'polygon' | 'polyline' | 'navigation-polyline'
 let _pendingSource = null;        // Additional context for generated geofences
@@ -288,7 +290,14 @@ function startDrawGeofence(type = 'polygon') {
         showAlert('Navigation geofences require Valhalla to be available.', 'warning');
         return;
     }
-    if (_editingLayer) _cancelEdit();
+    if (_editingLayer) {
+        if (_hasGeofenceChanged()) {
+            const discard = confirm('You have unsaved changes to this geofence. Discard them?');
+            if (!discard) return;
+        }
+        _cancelEdit();
+        reloadGeofences();
+    }
     _cancelDraw();
 
     _pendingType = type;
@@ -388,12 +397,31 @@ function _cancelDraw() {
 }
 
 // ── Edit Mode (existing geofence) ─────────────────────────────────────────────
+function _hasGeofenceChanged() {
+    if (!_editingLayer) return false;
+    if (_isEditingGeofenceDirty) return true;
+    if (_editingLayer.edited) return true;
+    if (!_initialEditCoords) return false;
+    const current = JSON.stringify(_getEditedCoords());
+    return current !== _initialEditCoords;
+}
+
 function _enterEditMode(layer, geofenceId) {
     if (_isHistoryActive()) return;
-    if (_editingLayer) _cancelEdit();
+    if (_editingLayer) {
+        if (_editingGeofenceId === geofenceId) return;
+        if (_hasGeofenceChanged()) {
+            const discard = confirm('You have unsaved changes to this geofence. Discard them?');
+            if (!discard) return;
+        }
+        _cancelEdit();
+        reloadGeofences();
+    }
 
     _editingLayer = layer;
     _editingGeofenceId = geofenceId;
+    _isEditingGeofenceDirty = false;
+    if (layer.edited !== undefined) layer.edited = false;
 
     // Immediately blur the layer element to prevent any focus outline
     const el = layer.getElement ? layer.getElement() : layer._path;
@@ -414,20 +442,40 @@ function _enterEditMode(layer, geofenceId) {
         }, 0);
     }
 
+    _initialEditCoords = JSON.stringify(_getEditedCoords());
+
+    const markDirty = () => {
+        _isEditingGeofenceDirty = true;
+    };
+    layer.on('edit', markDirty);
+    layer.on('editvertex', markDirty);
+    if (_map) _map.on('draw:editvertex', markDirty);
+
     // Show the floating edit toolbar
     _showEditToolbar(geofenceId);
 
     // Cancel on next map click outside the shape
-    setTimeout(() => _map.once('click', cancelGeofenceEdit), 0);
+    setTimeout(() => {
+        if (_editingLayer && _map) {
+            _map.once('click', cancelGeofenceEdit);
+        }
+    }, 0);
 }
 
 function _cancelEdit() {
     if (_editingLayer) {
         if (_editingLayer.editing) _editingLayer.editing.disable();
+        _editingLayer.off('edit');
+        _editingLayer.off('editvertex');
         _editingLayer = null;
         _editingGeofenceId = null;
     }
-    _map.off('click', cancelGeofenceEdit);
+    if (_map) {
+        _map.off('draw:editvertex');
+        _map.off('click', cancelGeofenceEdit);
+    }
+    _isEditingGeofenceDirty = false;
+    _initialEditCoords = null;
     _hideEditToolbar();
 }
 
@@ -463,7 +511,10 @@ function _showEditToolbar(geofenceId) {
             ownerEl.style.display = 'none';
         }
     }
-    if (toolbar) toolbar.style.display = 'flex';
+    if (toolbar) {
+        L.DomEvent.disableClickPropagation(toolbar);
+        toolbar.style.display = 'flex';
+    }
 }
 
 function _hideEditToolbar() {
@@ -474,6 +525,7 @@ function _hideEditToolbar() {
 // Called by the "Save" button in the edit toolbar
 function saveEditedGeofence() {
     if (!_editingLayer) return;
+    if (_map) _map.off('click', cancelGeofenceEdit);
     const gf = _geofences.find(g => g.id === _editingGeofenceId);
     _pendingCoords = _getEditedCoords();
     _openGeofenceModal(_editingGeofenceId, gf, gf?.geometry_type || 'polygon');
@@ -499,6 +551,17 @@ async function deleteGeofence() {
 
 // Called by "Cancel" in the edit toolbar
 function cancelGeofenceEdit() {
+    if (_editingLayer && _hasGeofenceChanged()) {
+        const discard = confirm('You have unsaved changes to this geofence. Discard them?');
+        if (!discard) {
+            setTimeout(() => {
+                if (_editingLayer && _map) {
+                    _map.once('click', cancelGeofenceEdit);
+                }
+            }, 0);
+            return;
+        }
+    }
     _cancelEdit();
     _cancelDraw();
     reloadGeofences(); // Re-render to discard any visual edits
@@ -586,6 +649,12 @@ function closeGeofenceModal() {
         _pendingCoords = null;
         _pendingSource = null;
         reloadGeofences();
+    } else if (_editingLayer && _map) {
+        setTimeout(() => {
+            if (_editingLayer && _map) {
+                _map.once('click', cancelGeofenceEdit);
+            }
+        }, 0);
     }
 }
 
@@ -665,11 +734,14 @@ function _setDrawButtonActive(active) {
     btn.title = active ? 'Click on map to draw — press ESC to cancel' : 'Draw Geofence';
 }
 
-// Cancel draw on ESC key
+// Cancel draw or edit on ESC key
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-        _cancelDraw();
-        _cancelEdit();
+        if (_drawControl) {
+            _cancelDraw();
+        } else if (_editingLayer) {
+            cancelGeofenceEdit();
+        }
     }
 });
 

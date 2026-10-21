@@ -88,8 +88,7 @@ function _render() {
 
     tbody.innerHTML = list.map(d => {
         const assigned = _assignedDevice(d.id);
-        const company  = _drvIsAdmin ? (_companies.find(c => c.id === d.company_id)?.name || '—') : null;
-        const assignedEmoji = assigned ? (VEHICLE_ICONS[assigned.vehicle_type] || VEHICLE_ICONS['other']).emoji : '';
+        const comp = _drvIsAdmin ? _companies.find(c => c.id === d.company_id) : null;
         const isUser = !!d.user_id;
         const nameBadge = isUser
             ? `<span style="font-size:0.68rem;font-weight:600;padding:0.1rem 0.4rem;border-radius:4px;background:rgba(99,102,241,0.15);color:#818cf8;margin-left:0.4rem;">USER</span>`
@@ -97,8 +96,8 @@ function _render() {
         return `
         <tr class="device-row" ondblclick="openDriverModal(${d.id})" style="cursor:pointer;">
             <td><span class="device-row-name">${_esc(d.name)}</span>${nameBadge}</td>
-            ${_drvIsAdmin ? `<td style="color:var(--text-secondary);font-size:0.85rem;">${_esc(company)}</td>` : '<td style="display:none;"></td>'}
-            <td>${assigned ? `<span style="font-size:0.85rem;">${assignedEmoji} ${_esc(assigned.name)}</span>` : '<span style="color:var(--text-muted);">—</span>'}</td>
+            ${_drvIsAdmin ? `<td>${RoutarioUI.companyChip(comp?.name)}</td>` : '<td style="display:none;"></td>'}
+            <td>${RoutarioUI.deviceChip(assigned)}</td>
             <td style="text-align:right;white-space:nowrap;">
                 <button class="btn btn-secondary tbl-btn" onclick="openDriverAssignModal(${d.id})" title="Assign vehicle"><i class="mdi mdi-car"></i> <span class="drv-btn-label">Assign</span></button>
                 <button class="btn btn-secondary tbl-btn" onclick="openDriverModal(${d.id})" title="Edit driver"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Edit</span></button>
@@ -132,6 +131,8 @@ const DRIVER_CLEAR_DESCRIPTIONS = {
     'rule_stops': 'Automatically clears the driver assignment when the continuous rule condition ceases to match (after the grace period).'
 };
 
+const DRIVER_GRACE_DESCRIPTION = 'Time in seconds to wait before unassigning the driver after the rule stops matching. Prevents unassignment during temporary sensor or signal gaps.';
+
 function _updateDriverModeDescription() {
     const mode = document.getElementById('driverAssignMode')?.value ?? '';
     const descEl = document.getElementById('driverModeHelp');
@@ -145,6 +146,13 @@ function _updateDriverClearDescription() {
     const descEl = document.getElementById('driverClearHelp');
     if (descEl) {
         descEl.textContent = DRIVER_CLEAR_DESCRIPTIONS[clear] || '';
+    }
+}
+
+function _updateDriverGraceDescription() {
+    const descEl = document.getElementById('driverGraceHelp');
+    if (descEl) {
+        descEl.textContent = DRIVER_GRACE_DESCRIPTION;
     }
 }
 
@@ -221,6 +229,20 @@ function _buildVehicleList(selectedVehicleIds, companyIdOverride = undefined) {
     });
 }
 
+function _updateAssignmentVisibility(mode) {
+    const isContinuous = mode === 'continuous';
+    const clearGrp = document.getElementById('driverClearGroup');
+    if (clearGrp) clearGrp.style.display = isContinuous ? 'none' : '';
+
+    const graceGrp = document.getElementById('driverGraceGroup');
+    if (graceGrp) graceGrp.style.display = isContinuous ? '' : 'none';
+}
+
+function _updateGraceVisibility() {
+    const mode = document.getElementById('driverAssignMode')?.value;
+    _updateAssignmentVisibility(mode);
+}
+
 function _updateClearOptions(mode) {
     const sel = document.getElementById('driverAssignClear');
     if (!sel) return;
@@ -229,8 +251,9 @@ function _updateClearOptions(mode) {
         sel.innerHTML = '<option value="rule_stops">When rule stops matching</option>';
         sel.value = 'rule_stops';
         sel.disabled = true;
-        _updateGraceVisibility();
+        _updateAssignmentVisibility(mode);
         _updateDriverClearDescription();
+        _updateDriverGraceDescription();
         return;
     }
 
@@ -246,18 +269,19 @@ function _updateClearOptions(mode) {
     } else {
         sel.value = 'never';
     }
-    _updateGraceVisibility();
+    _updateAssignmentVisibility(mode);
     _updateDriverClearDescription();
-}
-
-function _updateGraceVisibility() {
-    const mode  = document.getElementById('driverAssignMode')?.value;
-    const grp   = document.getElementById('driverGraceGroup');
-    if (grp) grp.style.display = mode === 'continuous' ? '' : 'none';
+    _updateDriverGraceDescription();
 }
 
 function onDriverModeChange() {
     const mode = document.getElementById('driverAssignMode')?.value;
+    if (mode === 'continuous') {
+        const graceInput = document.getElementById('driverAssignGrace');
+        if (graceInput && (!graceInput.value || graceInput.value === '0')) {
+            graceInput.value = '60';
+        }
+    }
     _updateClearOptions(mode);
     _updateDriverModeDescription();
 }
@@ -324,7 +348,7 @@ function openDriverModal(driverId = null) {
     const rule  = _editingDriver?.assignment_rule  || '';
     const mode  = _editingDriver?.assignment_mode  || '';
     const clear = mode === 'continuous' ? 'rule_stops' : (_editingDriver?.assignment_clear || 'never');
-    const grace = _editingDriver?.assignment_grace_period ?? '';
+    const grace = _editingDriver?.assignment_grace_period ?? (mode === 'continuous' ? 60 : '');
     const vehicles = _editingDriver?.assignment_vehicles || null; // null = all
 
     const ruleEl = document.getElementById('driverAssignRule');
@@ -355,6 +379,7 @@ function openDriverModal(driverId = null) {
     // Set descriptions for Mode and Clear When
     _updateDriverModeDescription();
     _updateDriverClearDescription();
+    _updateDriverGraceDescription();
 
     document.getElementById('driverModal').classList.add('active');
 
@@ -371,6 +396,10 @@ function closeDriverModal() {
     if (ruleEl) {
         ruleEl.value = '';
         ruleEl.style.height = 'auto';
+    }
+    const graceEl = document.getElementById('driverAssignGrace');
+    if (graceEl) {
+        graceEl.value = '';
     }
     _editingDriver = null;
 }
@@ -389,10 +418,15 @@ async function saveDriver() {
     }
 
     const assignMode  = document.getElementById('driverAssignMode').value || null;
-    const assignClear = document.getElementById('driverAssignClear').value || null;
+    const assignClear = assignMode === 'continuous' ? 'rule_stops' : (document.getElementById('driverAssignClear').value || null);
     const assignRule  = document.getElementById('driverAssignRule').value.trim() || null;
     const graceRaw    = document.getElementById('driverAssignGrace').value;
-    const assignGrace = graceRaw !== '' ? parseInt(graceRaw) : null;
+    let assignGrace   = graceRaw !== '' ? parseInt(graceRaw, 10) : null;
+    if (assignMode === 'continuous' && (assignGrace === null || isNaN(assignGrace))) {
+        assignGrace = 60;
+    } else if (assignMode !== 'continuous') {
+        assignGrace = null;
+    }
 
     const payload = {
         name,

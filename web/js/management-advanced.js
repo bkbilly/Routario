@@ -1460,7 +1460,7 @@ function rtpRenderRoutesTable() {
         <tr class="device-row" ondblclick="rtpEditRoute(${r.id})" style="cursor:pointer;">
             <td>${rtpEsc(r.name)}</td>
             <td><span class="proto-badge route-status-badge ${rtpRouteStatusClass(r.status)}">${rtpEsc(r.status)}</span></td>
-            <td>${rtpEsc(rtpRouteValue(r, 'vehicle') || '-')}</td>
+            <td>${RoutarioUI.deviceChip(_rtpDevices.find(d => d.id === r.device_id))}</td>
             <td>${rtpRouteStopsProgress(r)}</td>
             <td class="route-distance-col">${(r.distance_km || 0).toFixed(1)} km</td>
             <td class="route-duration-col">${(r.duration_minutes || 0).toFixed(0)} min</td>
@@ -1593,10 +1593,7 @@ function rtpRenderPlanCompanyChips(plan) {
 
     const chipsHtml = visible.map(c => {
         const tooltip = `${rtpEsc(c.name)}${c.device_count != null ? ` · ${c.device_count} device${c.device_count !== 1 ? 's' : ''}` : ''}`;
-        return `<span class="cmp-chip" title="${tooltip}">
-            <i class="mdi mdi-office-building"></i>
-            <span class="cmp-chip-text">${rtpEsc(c.name)}</span>
-        </span>`;
+        return RoutarioUI.companyChip(c.name, { title: tooltip });
     }).join('');
 
     let toggleBtn = '';
@@ -2003,7 +2000,7 @@ function rtpRenderAuditTable() {
             <td style="white-space:nowrap;">${rtpDateTimeSplit(l.created_at)}</td>
             <td>${rtpEsc(l.action)}</td>
             <td>${rtpEsc(l.actor_username || 'system')}${l.actor_user_id ? `<div class="stack-item-meta">#${l.actor_user_id}</div>` : ''}</td>
-            <td>${rtpEsc(l.company_name || '-')}${l.company_id ? `<div class="stack-item-meta">#${l.company_id}</div>` : ''}</td>
+            <td>${RoutarioUI.companyChip(l.company_name, { title: l.company_name && l.company_id ? `${l.company_name} · #${l.company_id}` : undefined })}</td>
             <td>${rtpEsc([l.target_type, l.target_id].filter(Boolean).join(' ')) || '-'}</td>
             <td>${rtpEsc(l.ip_address || '-')}</td>
         </tr>

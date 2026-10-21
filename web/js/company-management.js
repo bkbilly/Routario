@@ -192,13 +192,7 @@ function renderDeviceChips(company) {
     const visibleDevices = showAll ? devices : devices.slice(0, MAX_VISIBLE_CHIPS);
     const hiddenCount = devices.length - MAX_VISIBLE_CHIPS;
 
-    const chipsHtml = visibleDevices.map(d => {
-        const tooltip = `${_esc(d.name)}${d.license_plate ? ' [' + _esc(d.license_plate) + ']' : ''}${d.imei ? ' · IMEI: ' + _esc(d.imei) : ''}`;
-        return `<span class="cmp-chip" title="${tooltip}">
-            <i class="mdi mdi-car"></i>
-            <span class="cmp-chip-text">${_esc(d.name)}</span>
-        </span>`;
-    }).join('');
+    const chipsHtml = visibleDevices.map(d => RoutarioUI.deviceChip(d)).join('');
 
     let toggleBtn = '';
     if (devices.length > MAX_VISIBLE_CHIPS) {
@@ -241,6 +235,11 @@ function _companySortValue(c, col) {
 
 function _companyBillingPlanName(company) {
     return cmpBillingPlans.find(p => Number(p.id) === Number(company.billing_plan_id))?.name || '';
+}
+
+function renderBillingPlanChip(company) {
+    const plan = cmpBillingPlans.find(p => Number(p.id) === Number(company.billing_plan_id));
+    return RoutarioUI.planChip(plan || (company.billing_plan_id ? `Plan #${company.billing_plan_id}` : null));
 }
 
 function renderCompanyBillingPlanOptions(selectedPlanId = '') {
@@ -295,7 +294,7 @@ function renderTable(list) {
             <td style="font-weight:600;min-width:140px;"><span class="device-row-name">${_esc(c.name)}</span></td>
             <td style="min-width:180px;">${renderUserChips(c)}</td>
             <td style="min-width:180px;">${renderDeviceChips(c)}</td>
-            <td style="white-space:nowrap;">${c.billing_plan_id ? `<span class="proto-badge">${_esc(_companyBillingPlanName(c) || 'Assigned')}</span>` : '<span style="color:var(--text-muted);">No active plan</span>'}</td>
+            <td style="white-space:nowrap;">${renderBillingPlanChip(c)}</td>
             <td style="font-size:0.85rem;color:var(--text-secondary);white-space:nowrap;">${formatDate(c.created_at)}</td>
             <td style="text-align:right;white-space:nowrap;">
                 <button class="btn btn-secondary tbl-btn" onclick="openEditModal(${c.id})"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Edit</span></button>

@@ -165,10 +165,8 @@ function _renderSimTable() {
 
     tbody.innerHTML = list.map(s => {
         const comp = _simCompanies.find(c => c.id === s.company_id);
-        const compName = comp ? comp.name : (s.company_id ? `Company #${s.company_id}` : '—');
-        const devHtml = s.device_name
-            ? `<span style="display:inline-flex;align-items:center;gap:0.4rem;font-weight:500;"><i class="mdi mdi-car"></i> ${RoutarioUI.escapeHtml(s.device_name)}</span>`
-            : `<span style="color:var(--text-muted);font-style:italic;">— Unassigned —</span>`;
+        const compName = comp ? comp.name : (s.company_id ? `Company #${s.company_id}` : null);
+        const dev = _simDevices.find(d => d.id === s.device_id) || (s.device_name ? { name: s.device_name } : null);
 
         const expHtml = s.expiry_date
             ? `<span style="font-size:0.85rem;color:var(--text-secondary);">${RoutarioUI.escapeHtml(formatDateValue(s.expiry_date))}</span>`
@@ -179,8 +177,8 @@ function _renderSimTable() {
             <td>${_renderProviderBadge(s.provider_id)}</td>
             <td style="font-family:var(--font-mono);font-size:0.88rem;font-weight:600;">${RoutarioUI.escapeHtml(s.phone_number)}</td>
             <td>${expHtml}</td>
-            ${_simIsAdmin ? `<td style="font-size:0.85rem;color:var(--text-secondary);">${RoutarioUI.escapeHtml(compName)}</td>` : ''}
-            <td>${devHtml}</td>
+            ${_simIsAdmin ? `<td>${RoutarioUI.companyChip(compName)}</td>` : ''}
+            <td>${RoutarioUI.deviceChip(dev)}</td>
             <td style="text-align:center;white-space:nowrap;">
                 <button class="btn btn-secondary tbl-btn" onclick="openEditSimCardModal(${s.id})" title="Edit SIM Card"><i class="mdi mdi-pencil"></i></button>
             </td>

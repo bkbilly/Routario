@@ -468,7 +468,7 @@ function renderDeviceTable(list) {
             </td>
             <td>${protoBadgeHtml(d.protocol)}</td>
             <td>${_esc(plate)}</td>
-            <td class="company-col" style="font-size:0.85rem;color:var(--text-secondary);">${_esc(companyName)}</td>
+            <td class="company-col">${RoutarioUI.companyChip(companyName)}</td>
             <td style="font-size:0.85rem;color:var(--text-secondary);white-space:nowrap;">${lastSeen}</td>
             <td style="font-family:var(--font-mono);font-size:0.85rem;">${odometer}</td>
             <td style="text-align:right;white-space:nowrap;">

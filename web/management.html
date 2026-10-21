@@ -1377,7 +1377,7 @@
                         </select>
                         <div id="driverModeHelp" style="font-size:0.75rem;color:var(--text-muted);margin-top:0.35rem;line-height:1.4;"></div>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" id="driverClearGroup">
                         <label class="form-label">Clear When</label>
                         <select id="driverAssignClear" class="form-input" onchange="onDriverClearChange()">
                             <option value="never">Never</option>
@@ -1388,7 +1388,8 @@
                     </div>
                     <div class="form-group" id="driverGraceGroup" style="display:none;">
                         <label class="form-label">Grace Period (seconds)</label>
-                        <input type="number" id="driverAssignGrace" class="form-input" placeholder="0" min="0" step="1">
+                        <input type="number" id="driverAssignGrace" class="form-input" placeholder="60" min="0" step="1">
+                        <div id="driverGraceHelp" style="font-size:0.75rem;color:var(--text-muted);margin-top:0.35rem;line-height:1.4;">Time in seconds to wait before unassigning the driver after the rule stops matching. Prevents unassignment during temporary sensor or signal gaps.</div>
                     </div>
                 </div>
             </div>

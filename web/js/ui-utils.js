@@ -76,8 +76,75 @@
         });
     }
 
+    function companyChip(companyOrName, options = {}) {
+        const name = typeof companyOrName === 'object' && companyOrName !== null
+            ? companyOrName.name
+            : companyOrName;
+        if (!name || name === '—' || name === '-') {
+            const emptyLabel = options.emptyLabel || '—';
+            return `<span class="cmp-empty-text">${escapeHtml(emptyLabel)}</span>`;
+        }
+        const title = options.title ? escapeHtml(options.title) : escapeHtml(name);
+        return `<span class="cmp-chip" title="${title}">` +
+            `<i class="mdi mdi-office-building"></i>` +
+            `<span class="cmp-chip-text">${escapeHtml(name)}</span>` +
+        `</span>`;
+    }
+
+    function deviceChip(deviceOrName, options = {}) {
+        let name = '';
+        let tooltip = '';
+        if (typeof deviceOrName === 'object' && deviceOrName !== null) {
+            name = deviceOrName.name || '';
+            const plate = deviceOrName.license_plate ? ` [${escapeHtml(deviceOrName.license_plate)}]` : '';
+            const imei = deviceOrName.imei ? ` · IMEI: ${escapeHtml(deviceOrName.imei)}` : '';
+            tooltip = options.title ? escapeHtml(options.title) : `${escapeHtml(name)}${plate}${imei}`;
+        } else {
+            name = String(deviceOrName || '').trim();
+            tooltip = options.title ? escapeHtml(options.title) : escapeHtml(name);
+        }
+
+        if (!name || name === '—' || name === '-' || name.toLowerCase() === 'unassigned') {
+            const emptyLabel = options.emptyLabel || '—';
+            return `<span class="cmp-empty-text">${escapeHtml(emptyLabel)}</span>`;
+        }
+
+        return `<span class="cmp-chip" title="${tooltip}">` +
+            `<i class="mdi mdi-car"></i>` +
+            `<span class="cmp-chip-text">${escapeHtml(name)}</span>` +
+        `</span>`;
+    }
+
+    function planChip(planOrName, options = {}) {
+        let name = '';
+        let tooltip = '';
+        if (typeof planOrName === 'object' && planOrName !== null) {
+            name = planOrName.name || '';
+            const base = planOrName.base_price_cents != null
+                ? ` · Base: ${(planOrName.base_price_cents / 100).toFixed(2)} ${planOrName.currency || 'EUR'}`
+                : '';
+            tooltip = options.title ? escapeHtml(options.title) : `${escapeHtml(name)}${base}`;
+        } else {
+            name = String(planOrName || '').trim();
+            tooltip = options.title ? escapeHtml(options.title) : escapeHtml(name);
+        }
+
+        if (!name || name === '—' || name === '-') {
+            const emptyLabel = options.emptyLabel || 'No active plan';
+            return `<span class="cmp-empty-text">${escapeHtml(emptyLabel)}</span>`;
+        }
+
+        return `<span class="cmp-chip" title="${tooltip}">` +
+            `<i class="mdi mdi-credit-card-outline"></i>` +
+            `<span class="cmp-chip-text">${escapeHtml(name)}</span>` +
+        `</span>`;
+    }
+
     window.RoutarioUI = {
         escapeHtml,
+        companyChip,
+        deviceChip,
+        planChip,
     };
 
     window.RoutarioTables = {

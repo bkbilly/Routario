@@ -144,8 +144,9 @@ function _usrRender() {
             : u.is_company_admin
             ? `<span class="proto-badge" style="background:rgba(59,130,246,0.15);color:var(--accent-primary);">Company Admin</span>`
             : `<span style="color:var(--text-muted);font-size:0.82rem;">User</span>`;
+        const comp = _usrCompanies.find(c => c.id === u.company_id);
         const companyCell = _usrIsAdmin
-            ? `<td style="color:var(--text-secondary);font-size:0.85rem;">${_usrEsc(_usrCompanies.find(c => c.id === u.company_id)?.name || '—')}</td>`
+            ? `<td>${RoutarioUI.companyChip(comp?.name)}</td>`
             : '';
         const canImpersonate = !isMe && (
             _usrIsAdmin ||
