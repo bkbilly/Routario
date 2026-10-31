@@ -233,6 +233,10 @@ async function loadSettings() {
 
 function renderProfile() {
     if (!profileUser) return;
+    const avatarImg = document.getElementById('profileAvatarImg');
+    if (avatarImg) {
+        avatarImg.src = profileUser.avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar';
+    }
     document.getElementById('profileUsername').value = profileUser.username || '';
     document.getElementById('profileEmail').value = profileUser.email || '';
     const phoneEl = document.getElementById('profilePhone');
@@ -335,6 +339,8 @@ async function saveProfile() {
             body: JSON.stringify(payload),
         });
         profileUser = saved;
+        if (saved.email) localStorage.setItem('email', saved.email);
+        if (saved.avatar_url) localStorage.setItem('avatar_url', saved.avatar_url);
         localStorage.setItem('units', saved.units || payload.units);
         localStorage.setItem('currency', saved.currency || payload.currency);
         localStorage.setItem('theme', saved.theme || payload.theme);

@@ -454,6 +454,8 @@
             localStorage.setItem('auth_token', data.access_token);
             localStorage.setItem('user_id', data.user_id);
             localStorage.setItem('username', data.username);
+            if (data.email) localStorage.setItem('email', data.email);
+            if (data.avatar_url) localStorage.setItem('avatar_url', data.avatar_url);
             localStorage.setItem('is_admin', data.is_admin);
             localStorage.setItem('is_company_admin', data.is_company_admin || false);
             localStorage.setItem('company_id', data.company_id ?? '');

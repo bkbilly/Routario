@@ -28,6 +28,7 @@ from webauthn.helpers.structs import (
 )
 
 from core.audit import write_audit_log
+from models.schemas import gravatar_url_for_email
 from core.auth import get_current_user
 from core.config import get_settings
 from core.database import get_db
@@ -110,6 +111,8 @@ def _token_response(user: User) -> dict[str, Any]:
         "token_type": "bearer",
         "user_id": user.id,
         "username": user.username,
+        "email": user.email,
+        "avatar_url": gravatar_url_for_email(user.email),
         "is_admin": user.is_admin,
         "mfa_required": False,
         "is_company_admin": getattr(user, "is_company_admin", False) or False,

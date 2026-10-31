@@ -18,7 +18,7 @@ from core.email import send_email_async
 from core.mfa import hash_recovery_code, verify_totp
 from core.rate_limiter import get_client_ip, require_rate_limit, reset_rate_limit
 from models import User
-from models.schemas import UserLogin, Token, MagicLinkRequest, MagicLinkVerify
+from models.schemas import UserLogin, Token, MagicLinkRequest, MagicLinkVerify, gravatar_url_for_email
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,8 @@ def _build_user_token_response(user: User, token: str) -> Dict[str, Any]:
         "token_type": "bearer",
         "user_id": user.id,
         "username": user.username,
+        "email": user.email,
+        "avatar_url": gravatar_url_for_email(user.email),
         "is_admin": user.is_admin,
         "mfa_required": False,
         "is_company_admin": getattr(user, "is_company_admin", False) or False,
@@ -52,6 +54,8 @@ def _build_mfa_prompt_response(user: User) -> Dict[str, Any]:
         "token_type": "bearer",
         "user_id": user.id,
         "username": user.username,
+        "email": user.email,
+        "avatar_url": gravatar_url_for_email(user.email),
         "is_admin": user.is_admin,
         "mfa_required": True,
         "is_company_admin": getattr(user, "is_company_admin", False) or False,

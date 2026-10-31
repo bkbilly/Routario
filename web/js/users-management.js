@@ -132,7 +132,7 @@ function _usrRender() {
 
     const tbody = document.getElementById('usersTableBody');
     if (!list.length) {
-        const cols = _usrIsAdmin ? 6 : 5;
+        const cols = _usrIsAdmin ? 7 : 6;
         tbody.innerHTML = RoutarioTables.stateRow('<div style="font-size:2.5rem;margin-bottom:0.75rem;">&#128100;</div>No users found', cols, { padding: '3rem' });
         return;
     }
@@ -164,7 +164,12 @@ function _usrRender() {
             ? `<button class="btn btn-secondary" ${_ib} onclick="event.stopPropagation(); usrOpenNotifyModal(${u.id})" title="Send Notification"><i class="mdi mdi-bell-outline"></i></button>`
             : '';
 
+        const avatarUrl = u.avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar';
+
         return `<tr class="device-row" ondblclick="openUserModal(${u.id})" style="cursor:pointer;">
+            <td style="width:48px;text-align:center;vertical-align:middle;padding:0.4rem 0.5rem 0.4rem 0.85rem;">
+                <img src="${avatarUrl}" alt="${_usrEsc(u.username)}" class="user-list-avatar" onerror="this.onerror=null;this.src='https://www.gravatar.com/avatar/?d=wavatar';">
+            </td>
             <td>
                 <span class="device-row-name">${_usrEsc(u.username)}</span>
                 ${isMe ? `<span style="font-size:0.7rem;color:var(--accent-primary);font-weight:600;margin-left:0.35rem;">YOU</span>` : ''}
@@ -201,6 +206,15 @@ function openUserModal(userId = null) {
     const isNew = !_usrEditing;
 
     document.getElementById('userModalTitle').textContent = isNew ? 'Add User' : 'Edit User';
+    const modalAvatar = document.getElementById('userModalAvatar');
+    if (modalAvatar) {
+        if (_usrEditing) {
+            modalAvatar.src = _usrEditing.avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar';
+            modalAvatar.style.display = 'block';
+        } else {
+            modalAvatar.style.display = 'none';
+        }
+    }
 
     const usernameEl = document.getElementById('userModalUsername');
     usernameEl.value    = _usrEditing?.username || '';
@@ -825,6 +839,8 @@ async function usrImpersonate(userId) {
             auth_token:       localStorage.getItem('auth_token'),
             user_id:          localStorage.getItem('user_id'),
             username:         localStorage.getItem('username'),
+            email:            localStorage.getItem('email') || '',
+            avatar_url:       localStorage.getItem('avatar_url') || '',
             is_admin:         localStorage.getItem('is_admin'),
             is_company_admin: localStorage.getItem('is_company_admin'),
             company_id:       localStorage.getItem('company_id') || '',
@@ -857,6 +873,8 @@ async function usrImpersonate(userId) {
         localStorage.setItem('auth_token',       data.access_token);
         localStorage.setItem('user_id',          data.user_id);
         localStorage.setItem('username',         data.username);
+        if (data.email) localStorage.setItem('email', data.email);
+        if (data.avatar_url) localStorage.setItem('avatar_url', data.avatar_url);
         localStorage.setItem('is_admin',         data.is_admin);
         localStorage.setItem('is_company_admin', data.is_company_admin || false);
         localStorage.setItem('company_id',       data.company_id ?? '');
@@ -1010,6 +1028,7 @@ function _usrRenderNotifyList(filter = '') {
         <div style="padding-top:0.25rem;">
         ${filtered.map(u => {
             const isSelected = _usrNotifySelected.has(u.id);
+            const avatarUrl = u.avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar';
             const avatarLetter = (u.username || 'U').charAt(0).toUpperCase();
             const comp = _usrIsAdmin ? _usrCompanies.find(c => c.id === u.company_id) : null;
             const compHtml = (_usrIsAdmin && comp)
@@ -1018,7 +1037,10 @@ function _usrRenderNotifyList(filter = '') {
             return `
         <label class="notify-user-row ${isSelected ? 'selected' : ''}">
             <input type="checkbox" class="usrNotifyCb" value="${u.id}" ${isSelected ? 'checked' : ''} onchange="_usrOnNotifyCbChange(this)" style="accent-color:var(--accent-primary);flex-shrink:0;">
-            <div class="notify-user-avatar">${avatarLetter}</div>
+            <div class="notify-user-avatar">
+                <img src="${avatarUrl}" alt="${_usrEsc(u.username)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';">
+                <span style="display:none;width:100%;height:100%;align-items:center;justify-content:center;">${avatarLetter}</span>
+            </div>
             <div style="flex:1;min-width:0;">
                 <div style="font-size:0.875rem;font-weight:500;display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
                     <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_usrEsc(u.username)}</span>

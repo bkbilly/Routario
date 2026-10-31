@@ -1171,6 +1171,10 @@ const permissionsReady = (function () {
             localStorage.setItem('is_company_admin', user.is_company_admin);
         if (user.company_id !== undefined)
             localStorage.setItem('company_id', user.company_id ?? '');
+        if (user.email)
+            localStorage.setItem('email', user.email);
+        if (user.avatar_url)
+            localStorage.setItem('avatar_url', user.avatar_url);
         if (user.units)
             localStorage.setItem('units', user.units);
         if (user.currency)

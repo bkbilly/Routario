@@ -1049,6 +1049,7 @@
                 item.dataset.userId = u.id;
                 item.onclick = () => _toggleUserSelection(u.id, item);
 
+                const avatarUrl = u.avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar';
                 const avatarLetter = (u.username || 'U').charAt(0).toUpperCase();
                 const roleBadge = u.is_admin ? '<span class="badge" style="font-size:0.7rem;background:rgba(59,130,246,0.15);color:#3b82f6;">Admin</span>' : '';
                 const userComp = (isAdmin && u.company_id) ? cachedCompanies.find(c => c.id === u.company_id) : null;
@@ -1056,7 +1057,10 @@
 
                 item.innerHTML = `
                     <input type="checkbox" style="accent-color:var(--accent-primary);" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); _toggleUserSelection(${u.id}, this.closest('.wizard-user-item'))">
-                    <div class="wizard-user-avatar">${avatarLetter}</div>
+                    <div class="wizard-user-avatar">
+                        <img src="${avatarUrl}" alt="${_esc(u.username)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';">
+                        <span style="display:none;width:100%;height:100%;align-items:center;justify-content:center;">${avatarLetter}</span>
+                    </div>
                     <div class="wizard-user-info">
                         <div class="wizard-user-name">${_esc(u.username)} ${roleBadge} ${compBadge}</div>
                         <div class="wizard-user-email">${_esc(u.email || 'No email')}</div>

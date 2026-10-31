@@ -2000,6 +2000,18 @@ body.light-theme .cmp-chip {
     background: rgba(59, 130, 246, 0.1);
 }
 
+.user-list-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: inline-block;
+    vertical-align: middle;
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-tertiary);
+    flex-shrink: 0;
+}
+
 .notify-user-avatar {
     width: 32px;
     height: 32px;
@@ -2012,6 +2024,15 @@ body.light-theme .cmp-chip {
     font-size: 0.82rem;
     font-weight: 700;
     flex-shrink: 0;
+    overflow: hidden;
+}
+
+.notify-user-avatar img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
 }
 
 .notify-select-all-row {

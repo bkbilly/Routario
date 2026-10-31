@@ -29,6 +29,10 @@ function returnToAdmin() {
     localStorage.setItem('auth_token',        prev.auth_token);
     localStorage.setItem('user_id',           prev.user_id);
     localStorage.setItem('username',          prev.username);
+    if (prev.email) localStorage.setItem('email', prev.email);
+    else localStorage.removeItem('email');
+    if (prev.avatar_url) localStorage.setItem('avatar_url', prev.avatar_url);
+    else localStorage.removeItem('avatar_url');
     localStorage.setItem('is_admin',          prev.is_admin != null ? String(prev.is_admin) : 'false');
     localStorage.setItem('is_company_admin',  prev.is_company_admin != null ? String(prev.is_company_admin) : 'false');
     localStorage.setItem('company_id',        prev.company_id ?? '');

@@ -2,11 +2,19 @@
 Pydantic Schemas - Routario Platform
 Request/Response models with validation
 """
+import hashlib
 import json
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Union
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, ConfigDict, computed_field
 from enum import Enum
+
+
+def gravatar_url_for_email(email: Optional[str], size: Optional[int] = None) -> str:
+    clean = (email or "").strip().lower().encode("utf-8")
+    h = hashlib.sha256(clean).hexdigest()
+    size_str = f"&s={size}" if size else ""
+    return f"https://www.gravatar.com/avatar/{h}?d=wavatar{size_str}"
 
 
 # ==================== Enums ====================
@@ -255,6 +263,8 @@ class Token(BaseModel):
     token_type: str
     user_id: int
     username: str
+    email: Optional[str] = None
+    avatar_url: Optional[str] = None
     is_admin: bool
     mfa_required: bool = False
     is_company_admin: bool = False
@@ -305,6 +315,11 @@ class UserResponse(BaseModel):
     webhook_urls: List[str] = Field(default_factory=list)
     permissions: List[str] = Field(default_factory=list)
     mfa_enabled: bool = False
+
+    @computed_field
+    @property
+    def avatar_url(self) -> str:
+        return gravatar_url_for_email(self.email)
 
     @field_validator('notification_channels', 'webhook_urls', mode='before')
     @classmethod

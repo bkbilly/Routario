@@ -25,7 +25,7 @@ from core.auth import get_current_user, require_admin, require_company_admin, re
 from core.permissions import cap_permissions, ALL_PERMISSIONS, valid_permissions
 from notifications import get_channel
 from models import User, Driver, user_device_association
-from models.schemas import UserCreate, UserUpdate, UserResponse, DeviceResponse
+from models.schemas import UserCreate, UserUpdate, UserResponse, DeviceResponse, gravatar_url_for_email
 from sqlalchemy import and_
 
 router = APIRouter(prefix="/api/users", tags=["users"])
@@ -351,6 +351,8 @@ async def impersonate_user(user_id: int, admin: User = Depends(require_company_a
         "token_type":       "bearer",
         "user_id":          target.id,
         "username":         target.username,
+        "email":            target.email,
+        "avatar_url":       gravatar_url_for_email(target.email),
         "is_admin":         target.is_admin,
         "is_company_admin": getattr(target, "is_company_admin", False) or False,
         "company_id":       getattr(target, "company_id", None),

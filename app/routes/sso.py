@@ -20,6 +20,7 @@ from core.config import get_settings
 from core.database import get_db
 from core.permissions import ALL_PERMISSIONS, valid_permissions
 from models import User
+from models.schemas import gravatar_url_for_email
 
 router = APIRouter(prefix="/api/sso", tags=["sso"])
 SSO_STATE_COOKIE = "routario_sso_state"
@@ -100,6 +101,8 @@ def _token_response(user: User) -> dict[str, Any]:
         "token_type": "bearer",
         "user_id": user.id,
         "username": user.username,
+        "email": user.email,
+        "avatar_url": gravatar_url_for_email(user.email),
         "is_admin": user.is_admin,
         "mfa_required": False,
         "is_company_admin": getattr(user, "is_company_admin", False) or False,

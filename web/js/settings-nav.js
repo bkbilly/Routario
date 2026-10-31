@@ -219,6 +219,14 @@
             justify-content: center;
             flex-shrink: 0;
             color: white;
+            overflow: hidden;
+        }
+        .header-menu-avatar img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            display: block;
         }
         .header-menu-user-info {
             display: flex;
@@ -401,6 +409,7 @@
 
     // ── Nav HTML (built in DOMContentLoaded so hasPermission() is available) ──
     function _buildNav() {
+    const avatarUrl = localStorage.getItem('avatar_url') || '';
     const nav = document.createElement('div');
     nav.className = 'settings-nav';
     nav.innerHTML = `
@@ -430,9 +439,11 @@
             </button>
             <div class="header-menu-dropdown" id="snDropdown">
                 <div class="header-menu-user">
-                    <div class="header-menu-avatar">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <div class="header-menu-avatar" id="snMenuAvatar">
+                        ${avatarUrl ? `<img id="snMenuAvatarImg" src="${avatarUrl}" alt="${username}" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='block';">` : ''}
+                        <svg id="snMenuAvatarSvg" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                             style="${avatarUrl ? 'display:none;' : ''}">
                             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                             <circle cx="12" cy="7" r="4"/>
                         </svg>

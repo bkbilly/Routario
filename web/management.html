@@ -612,6 +612,7 @@
             <table class="devices-table settings-table" id="usersTable">
                 <thead>
                     <tr>
+                        <th style="width:48px;text-align:center;"></th>
                         <th data-sort="username" data-sort-dir="asc" onclick="sortUsers('username')">Username</th>
                         <th data-sort="email" onclick="sortUsers('email')">Email</th>
                         <th id="userCompanyHeader" data-sort="company" onclick="sortUsers('company')" style="display:none;">Company</th>
@@ -622,7 +623,7 @@
                 </thead>
                 <tbody id="usersTableBody">
                     <tr>
-                        <td colspan="6" style="text-align:center;padding:3rem;color:var(--text-muted);">
+                        <td colspan="7" style="text-align:center;padding:3rem;color:var(--text-muted);">
                             <div class="loading" style="margin:0 auto 1rem;"></div>
                             Loading users&#8230;
                         </td>
@@ -1659,7 +1660,10 @@
 <div class="modal" id="userModal">
     <div class="modal-content" style="max-width:860px;height:auto;max-height:90vh;">
         <div class="modal-header">
-            <h2 class="modal-title" id="userModalTitle">Add User</h2>
+            <div style="display:flex;align-items:center;gap:0.65rem;">
+                <img id="userModalAvatar" src="" alt="Avatar" style="width:32px;height:32px;border-radius:50%;object-fit:cover;display:none;border:1.5px solid var(--border-color);background:var(--bg-tertiary);">
+                <h2 class="modal-title" id="userModalTitle">Add User</h2>
+            </div>
             <button type="button" class="modal-close" onclick="closeUserModal()"><i class="mdi mdi-close"></i></button>
         </div>
         <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">

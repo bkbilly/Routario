@@ -74,8 +74,9 @@
             <div class="header-menu-dropdown" id="headerMenuDropdown">
                 <!-- User info header -->
                 <div class="header-menu-user">
-                    <div class="header-menu-avatar">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                    <div class="header-menu-avatar" id="dashMenuAvatar">
+                        <img id="dashMenuAvatarImg" src="" alt="Avatar" style="display:none;width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='block';">
+                        <svg id="dashMenuAvatarSvg" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
                              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                             <circle cx="12" cy="7" r="4"/>
@@ -1029,12 +1030,26 @@
             const username = localStorage.getItem('username') || 'User';
             const isAdmin = localStorage.getItem('is_admin') === 'true';
             const isCompanyAdmin = localStorage.getItem('is_company_admin') === 'true';
+            const avatarUrl = localStorage.getItem('avatar_url') || '';
             const menuUsername = document.getElementById('menuUsername');
             const menuRole = document.getElementById('menuRole');
             const companiesMenuItem = document.getElementById('companiesMenuItem');
+            const avatarImg = document.getElementById('dashMenuAvatarImg');
+            const avatarSvg = document.getElementById('dashMenuAvatarSvg');
             if (menuUsername) menuUsername.textContent = username;
             if (menuRole) menuRole.textContent = isAdmin ? 'Super Admin' : isCompanyAdmin ? 'Company Admin' : 'User';
             if (companiesMenuItem) companiesMenuItem.style.display = isAdmin ? '' : 'none';
+            if (avatarImg && avatarSvg) {
+                if (avatarUrl) {
+                    avatarImg.src = avatarUrl;
+                    avatarImg.alt = username;
+                    avatarImg.style.display = 'block';
+                    avatarSvg.style.display = 'none';
+                } else {
+                    avatarImg.style.display = 'none';
+                    avatarSvg.style.display = 'block';
+                }
+            }
         }
         function closeHeaderMenu() {
             const dropdown = document.getElementById('headerMenuDropdown');
