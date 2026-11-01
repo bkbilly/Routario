@@ -11,6 +11,7 @@ The main dashboard provides a real-time bird's-eye view of your entire fleet:
 - **Live markers** — all tracked devices appear on an interactive Leaflet map, updated in real time via WebSocket with no page refreshes.
 - **Device sidebar** — sortable list of all devices with live status indicators (online/offline), last-seen time, speed, and ignition state.
 - **Multiple tile layers** — switch between OpenStreetMap, dark, satellite, hybrid, and ESRI imagery.
+- **Offline map tile server** — host your own offline raster and vector maps (.mbtiles, .pmtiles, .gpkg, .zip) for 100% air-gapped tracking with zero external service dependencies.
 - **Jump to device** — clicking a device on the sidebar or map flies the view to its current position.
 
 ---

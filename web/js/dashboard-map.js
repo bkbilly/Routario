@@ -131,6 +131,7 @@ function initMap() {
     const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap_dark';
     applyTileLayer(savedTile);
     populateMapPicker();
+    loadOfflineMapLayers();
 
     // Close flyouts on map click; also auto-close sidebar on mobile
     let popupWasOpen = false;
@@ -224,6 +225,46 @@ function populateMapPicker() {
             <span>${tile.label}</span>
         </label>
     `).join('');
+}
+
+async function loadOfflineMapLayers() {
+    try {
+        const fetchFn = typeof apiFetch === 'function' ? apiFetch : fetch;
+        const res = await fetchFn('/api/tiles/maps');
+        if (!res.ok) return;
+        const maps = await res.json();
+        let defaultMapKey = null;
+
+        maps.forEach(m => {
+            const key = `offline_${m.id}`;
+            MAP_TILES[key] = {
+                label: `💾 ${m.name} (Offline)`,
+                url: m.tile_url,
+                attribution: m.description ? `© ${m.description}` : '© Local Offline Map',
+                minZoom: m.min_zoom ?? 0,
+                maxZoom: m.max_zoom ?? 18,
+                bounds: m.bounds,
+                center: m.center,
+                light: true,
+                isOffline: true
+            };
+            if (m.is_default) {
+                defaultMapKey = key;
+            }
+        });
+
+        if (maps.length > 0) {
+            populateMapPicker();
+            const savedTile = localStorage.getItem('mapTileLayer');
+            if (savedTile && savedTile.startsWith('offline_') && MAP_TILES[savedTile]) {
+                applyTileLayer(savedTile);
+            } else if (!savedTile && defaultMapKey) {
+                applyTileLayer(defaultMapKey);
+            }
+        }
+    } catch (e) {
+        console.warn('[OfflineTiles] Failed to load offline map layers:', e);
+    }
 }
 
 // ── Map control flyouts ───────────────────────────────────────────────────────

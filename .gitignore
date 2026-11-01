@@ -46,4 +46,11 @@ venv/
 .DS_Store
 Thumbs.db
 web/uploads
+data/tiles/*.mbtiles
+data/tiles/*.pmtiles
+data/tiles/*.gpkg
+data/tiles/*.zip
+data/tiles/*.tmp*
+data/tiles/manifest.json
+!data/tiles/.gitkeep
 site/

@@ -28,6 +28,7 @@ pydantic-settings==2.12.0
 shapely>=2.0.0
 geojson==3.2.0
 pyproj==3.7.2
+pmtiles>=3.8.0
 
 # Rule Engine & Alerts
 rule-engine==4.5.3

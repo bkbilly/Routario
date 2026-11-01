@@ -28,6 +28,7 @@ Routario connects directly to your GPS hardware over TCP/UDP and gives you a liv
 | | Feature | |
 |---|---|---|
 | 🗺️ | **Live fleet map** — see all your vehicles moving in real-time with speed, direction, and ignition status | |
+| 🛰️ | **Offline map tile server** — host your own offline raster and vector maps (.mbtiles, .pmtiles, .gpkg, .zip) for 100% air-gapped tracking | |
 | 🌓 | **Light & dark themes** — easily switch between sleek dark mode and clean light mode | |
 | 🕒 | **Trip history** — replay past trips on the map, review stops, and view speed and sensor graphs | |
 | 🚧 | **Geofences** — draw zones on the map and get alerted when vehicles enter, exit, or stay too long | |
@@ -57,7 +58,7 @@ Routario connects directly to your GPS hardware over TCP/UDP and gives you a liv
 
 ## Tech Stack
 
-**Backend** — Python 3.11+, FastAPI, SQLAlchemy 2.0 (async), asyncpg, Redis, PostGIS
+**Backend** — Python 3.11+, FastAPI, SQLAlchemy 2.0 (async), asyncpg, Redis, PostGIS, offline tile engine (MBTiles, PMTiles, GeoPackage, Zip XYZ)
 
 **Frontend** — Vanilla JS, Leaflet.js, Chart.js
 

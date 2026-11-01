@@ -23,11 +23,13 @@
     </script>
     <!-- Material Design Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="css/tables.css">
     <link rel="stylesheet" href="css/user-settings.css">
     <link rel="stylesheet" href="css/app-lock.css">
     <link rel="stylesheet" href="css/system-update.css">
     <script src="js/settings-nav.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         .form-grid {
@@ -838,6 +840,127 @@
         </div>
     </div>
 
+    <!-- Offline Maps Modals (Upload | Edit | Preview) -->
+    <div class="modal" id="uploadMapModal" onclick="if(event.target===this)closeUploadMapModal()">
+        <div class="modal-content" style="max-width: 540px; height: auto !important; max-height: 92vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2 class="modal-title" style="display:flex;align-items:center;gap:0.5rem;font-size:1.15rem;font-weight:700;">
+                    <i class="mdi mdi-map-plus" style="color:var(--accent-primary);"></i> Upload Offline Map (.mbtiles, .pmtiles, .gpkg, .zip)
+                </h2>
+                <button type="button" class="modal-close" onclick="closeUploadMapModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <form onsubmit="handleUploadMapSubmit(event)">
+                <div class="modal-body" style="padding:1.5rem;display:flex;flex-direction:column;gap:1.25rem;">
+                    <div class="map-dropzone" onclick="document.getElementById('uploadMapFileInput').click()" style="border: 2px dashed var(--border-color); border-radius: 12px; padding: 2rem 1.5rem; text-align: center; cursor: pointer; background: var(--bg-tertiary); transition: border-color 0.2s, background 0.2s;">
+                        <i class="mdi mdi-cloud-upload-outline" style="font-size: 42px; color: var(--accent-primary); display: block; margin-bottom: 0.5rem;"></i>
+                        <div id="uploadDropzoneText" style="color: var(--text-secondary); font-size: 0.95rem;">
+                            Drag & drop your <strong>.mbtiles, .pmtiles, .gpkg, or .zip</strong> file here, or click to browse
+                        </div>
+                        <input type="file" id="uploadMapFileInput" accept=".mbtiles,.pmtiles,.gpkg,.zip" style="display:none;" onchange="handleMapFileSelected(event)">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="uploadMapNameInput">Map Display Name</label>
+                        <input type="text" id="uploadMapNameInput" class="form-input" placeholder="e.g. Athens City Center (auto-filled if empty)">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="uploadMapDescInput">Description (Optional)</label>
+                        <input type="text" id="uploadMapDescInput" class="form-input" placeholder="e.g. Street-level raster map tiles">
+                    </div>
+
+                    <div style="display:flex;gap:1.5rem;flex-wrap:wrap;">
+                        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.9rem;">
+                            <input type="checkbox" id="uploadMapEnabledInput" checked>
+                            <span>Enable immediately</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.9rem;">
+                            <input type="checkbox" id="uploadMapDefaultInput">
+                            <span>Set as default map</span>
+                        </label>
+                    </div>
+
+                    <div id="uploadMapProgressContainer" style="display:none;background:var(--bg-tertiary);border-radius:10px;padding:1rem;border:1px solid var(--border-color);">
+                        <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:0.4rem;font-weight:600;">
+                            <span id="uploadMapProgressStatus">Uploading…</span>
+                            <span id="uploadMapProgressPercent">0%</span>
+                        </div>
+                        <div style="background:var(--bg-primary);border-radius:6px;height:8px;overflow:hidden;">
+                            <div id="uploadMapProgressBar" style="width:0%;height:100%;background:linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));transition:width 0.15s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:0.75rem;">
+                    <button type="button" class="btn btn-secondary" onclick="closeUploadMapModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="confirmUploadMapBtn"><i class="mdi mdi-upload"></i> Upload Map</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal" id="editMapModal" onclick="if(event.target===this)closeEditMapModal()">
+        <div class="modal-content" style="max-width: 520px; height: auto !important; max-height: 92vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h2 class="modal-title" style="display:flex;align-items:center;gap:0.5rem;font-size:1.15rem;font-weight:700;">
+                    <i class="mdi mdi-pencil" style="color:var(--accent-primary);"></i> Edit Offline Map
+                </h2>
+                <button type="button" class="modal-close" onclick="closeEditMapModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <form onsubmit="event.preventDefault(); saveEditMapModal();">
+                <input type="hidden" id="editMapId">
+                <div class="modal-body" style="padding:1.5rem;display:flex;flex-direction:column;gap:1.25rem;">
+                    <div class="form-group">
+                        <label class="form-label" for="editMapName">Display Name</label>
+                        <input type="text" id="editMapName" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="editMapDescription">Description</label>
+                        <input type="text" id="editMapDescription" class="form-input">
+                    </div>
+                    <div style="display:flex;gap:1.5rem;flex-wrap:wrap;">
+                        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.9rem;">
+                            <input type="checkbox" id="editMapEnabled">
+                            <span>Enabled in map picker</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.9rem;">
+                            <input type="checkbox" id="editMapDefault">
+                            <span>Platform default map</span>
+                        </label>
+                    </div>
+                    <div style="background:var(--bg-tertiary);border-radius:10px;padding:1rem;border:1px solid var(--border-color);font-size:0.85rem;display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;">
+                        <div><span style="color:var(--text-muted);">Filename:</span> <strong id="editMapFilename" style="color:var(--text-primary);word-break:break-all;"></strong></div>
+                        <div><span style="color:var(--text-muted);">Size:</span> <strong id="editMapSize" style="color:var(--text-primary);"></strong></div>
+                        <div><span style="color:var(--text-muted);">Format:</span> <strong id="editMapFormat" style="color:var(--text-primary);"></strong></div>
+                        <div><span style="color:var(--text-muted);">Zoom:</span> <strong id="editMapZoom" style="color:var(--text-primary);"></strong></div>
+                        <div style="grid-column:1/-1;"><span style="color:var(--text-muted);">Tile URL:</span> <code id="editMapUrl" style="color:var(--accent-primary);word-break:break-all;font-size:0.8rem;"></code></div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:0.75rem;">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditMapModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="saveEditMapBtn"><i class="mdi mdi-content-save"></i> Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal" id="previewMapModal" onclick="if(event.target===this)closePreviewMapModal()">
+        <div class="modal-content wide" style="max-width: 900px; height: 80vh; display:flex; flex-direction:column;">
+            <div class="modal-header">
+                <h2 class="modal-title" id="previewMapTitle" style="display:flex;align-items:center;gap:0.5rem;font-size:1.15rem;font-weight:700;">
+                    <i class="mdi mdi-eye" style="color:var(--accent-primary);"></i> Preview Offline Map
+                </h2>
+                <button type="button" class="modal-close" onclick="closePreviewMapModal()"><i class="mdi mdi-close"></i></button>
+            </div>
+            <div class="modal-body" style="flex:1;min-height:0;padding:0;position:relative;">
+                <div id="previewMapContainer" style="width:100%;height:100%;background:var(--bg-secondary);"></div>
+            </div>
+            <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:0.85rem;color:var(--text-muted);">Pan and zoom to inspect offline tiles</span>
+                <button type="button" class="btn btn-secondary" onclick="closePreviewMapModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script src="js/config.js"></script>
     <script src="js/app-lock.js"></script>
@@ -845,7 +968,8 @@
     <script src="js/impersonation.js"></script>
     <script src="js/ui-utils.js"></script>
     <script src="js/management-advanced.js"></script>
-    <script src="js/user-settings.js"></script>
+    <script src="js/maps-management.js?v=3"></script>
+    <script src="js/user-settings.js?v=3"></script>
     <script src="js/marked.min.js"></script>
     <script src="js/system-update.js"></script>
     <script src="js/pwa.js"></script>

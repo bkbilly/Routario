@@ -92,30 +92,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    closeQrZoomModal();
-    closeChannelModal();
-    closeWebhookModal();
+    if (typeof closeQrZoomModal === 'function') closeQrZoomModal();
+    if (typeof closeChannelModal === 'function') closeChannelModal();
+    if (typeof closeWebhookModal === 'function') closeWebhookModal();
     if (typeof rtpCloseCreateTicketModal === 'function') rtpCloseCreateTicketModal();
     if (typeof rtpCloseTicketModal === 'function') rtpCloseTicketModal();
-    closeApiKeyModal();
-    closeEditApiKeyModal();
-    closeUserModal();
-    usrCloseAssignModal();
-    usrCloseNotifyModal();
+    if (typeof closeApiKeyModal === 'function') closeApiKeyModal();
+    if (typeof closeEditApiKeyModal === 'function') closeEditApiKeyModal();
+    if (typeof closeUserModal === 'function') closeUserModal();
+    if (typeof usrCloseAssignModal === 'function') usrCloseAssignModal();
+    if (typeof usrCloseNotifyModal === 'function') usrCloseNotifyModal();
+    if (typeof closeUploadMapModal === 'function') closeUploadMapModal();
+    if (typeof closeEditMapModal === 'function') closeEditMapModal();
+    if (typeof closePreviewMapModal === 'function') closePreviewMapModal();
 });
 
 window.addEventListener('click', e => {
     if (e.target.classList && e.target.classList.contains('modal')) {
-        if (e.target.id === 'qrZoomModal') closeQrZoomModal();
-        else if (e.target.id === 'editApiKeyModal') closeEditApiKeyModal();
-        else if (e.target.id === 'apiKeyModal') closeApiKeyModal();
-        else if (e.target.id === 'webhookModal') closeWebhookModal();
-        else if (e.target.id === 'notificationChannelModal') closeChannelModal();
+        if (e.target.id === 'qrZoomModal' && typeof closeQrZoomModal === 'function') closeQrZoomModal();
+        else if (e.target.id === 'editApiKeyModal' && typeof closeEditApiKeyModal === 'function') closeEditApiKeyModal();
+        else if (e.target.id === 'apiKeyModal' && typeof closeApiKeyModal === 'function') closeApiKeyModal();
+        else if (e.target.id === 'webhookModal' && typeof closeWebhookModal === 'function') closeWebhookModal();
+        else if (e.target.id === 'notificationChannelModal' && typeof closeChannelModal === 'function') closeChannelModal();
         else if (e.target.id === 'ticketModal' && typeof rtpCloseTicketModal === 'function') rtpCloseTicketModal();
         else if (e.target.id === 'ticketCreateModal' && typeof rtpCloseCreateTicketModal === 'function') rtpCloseCreateTicketModal();
-        else if (e.target.id === 'userModal') closeUserModal();
-        else if (e.target.id === 'assignVehiclesModal') usrCloseAssignModal();
-        else if (e.target.id === 'notifySettingsModal') usrCloseNotifyModal();
+        else if (e.target.id === 'userModal' && typeof closeUserModal === 'function') closeUserModal();
+        else if (e.target.id === 'assignVehiclesModal' && typeof usrCloseAssignModal === 'function') usrCloseAssignModal();
+        else if (e.target.id === 'notifySettingsModal' && typeof usrCloseNotifyModal === 'function') usrCloseNotifyModal();
+        else if (e.target.id === 'uploadMapModal' && typeof closeUploadMapModal === 'function') closeUploadMapModal();
+        else if (e.target.id === 'editMapModal' && typeof closeEditMapModal === 'function') closeEditMapModal();
+        else if (e.target.id === 'previewMapModal' && typeof closePreviewMapModal === 'function') closePreviewMapModal();
     }
 });
 
@@ -135,7 +141,10 @@ function switchSettingsTab(name, pushState = true) {
     if (name === 'profile') initProfileSection();
     if (name === 'tickets') rtpInitTickets();
     if (name === 'apiKeys') initSettingsApiKeys();
-    if (name === 'system') loadSystemSettings();
+    if (name === 'system') {
+        loadSystemSettings();
+        if (typeof loadOfflineMapsAdmin === 'function') loadOfflineMapsAdmin();
+    }
     if (name !== 'system') {
         const bubble = document.getElementById('systemSaveFloatingBubble');
         if (bubble) bubble.style.display = 'none';
@@ -183,6 +192,11 @@ function updateSettingsGearAction(name = currentSettingsTab) {
             label: 'Create API Key',
             icon: 'mdi-key-plus',
             fn: 'openApiKeyModal()',
+        } : null,
+        system: IS_ADMIN ? {
+            label: 'Upload Map',
+            icon: 'mdi-map-plus',
+            fn: 'openUploadMapModal()',
         } : null,
     };
     const action = actions[name];
@@ -1587,6 +1601,7 @@ function renderSystemSettings(restoreScrollPos = null) {
 
     let totalCount = 0;
     let cardHtmls = [];
+    let offlineCardInserted = false;
 
     for (const [catName, settingsList] of Object.entries(systemSettingsCategories)) {
         const filteredList = settingsList.filter(item => {
@@ -1713,6 +1728,21 @@ function renderSystemSettings(restoreScrollPos = null) {
                 ${categoryFooterHtml}
             </div>
         `);
+
+        if (catName === 'Maps, Geocoding & Routing' && typeof getOfflineMapsCardHtml === 'function') {
+            const offlineCard = getOfflineMapsCardHtml(query);
+            if (offlineCard) {
+                cardHtmls.push(offlineCard);
+                offlineCardInserted = true;
+            }
+        }
+    }
+
+    if (!offlineCardInserted && typeof getOfflineMapsCardHtml === 'function') {
+        const offlineCard = getOfflineMapsCardHtml(query);
+        if (offlineCard) {
+            cardHtmls.push(offlineCard);
+        }
     }
 
     const countEl = document.getElementById('systemSettingsCount');
@@ -1722,6 +1752,10 @@ function renderSystemSettings(restoreScrollPos = null) {
         container.innerHTML = `<div style="grid-column: 1 / -1; text-align:center; padding:3rem; color:var(--text-muted);">No system settings match your filter.</div>`;
     } else {
         container.innerHTML = cardHtmls.join('');
+    }
+
+    if (typeof renderOfflineMapsAdmin === 'function') {
+        renderOfflineMapsAdmin();
     }
 
     if (container && !container._dirtyListenerAttached) {
@@ -1811,6 +1845,7 @@ function checkSystemSettingsDirty() {
 
 function filterSystemSettings() {
     renderSystemSettings();
+    if (typeof filterOfflineMaps === 'function') filterOfflineMaps();
 }
 
 async function saveSystemSettings() {

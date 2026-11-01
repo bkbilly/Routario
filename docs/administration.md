@@ -290,3 +290,24 @@ When branding is set:
 - Browser push notifications use the company's icon and badge when available.
 
 If a user logs in through a company slug and later logs out, Routario returns them to that company's login URL. If they then log into a company without a slug, the previous slug is cleared.
+
+---
+
+## Offline Maps & Tile Server
+
+Super admins can manage offline map files directly within Routario, allowing the dashboard and live tracking to run completely offline without external map tile providers (OpenStreetMap, Mapbox, Google).
+
+Supported formats:
+- **MBTiles (`.mbtiles`)** — SQLite tile pyramids.
+- **PMTiles (`.pmtiles`)** — Cloud-native single-file tile archives.
+- **GeoPackage (`.gpkg`)** — OGC standard SQLite geospatial tile matrices.
+- **Zipped XYZ (`.zip`)** — Compressed `{z}/{x}/{y}` directory structures.
+
+### Management
+
+Navigate to **User Settings → System Settings → Offline Map Layers**:
+- **Upload Map** — Stream and validate map files directly in the browser with upload progress.
+- **Scan Directory** — Automatically index map files placed directly in `data/tiles/` on the server host.
+- **Enable / Disable** — Toggle which offline layers appear in the dashboard Leaflet layer picker.
+- **Set Default** — Select the default base layer loaded when opening the map.
+- **Live Preview** — Test and inspect tiles in an interactive preview modal before enabling.

@@ -2058,6 +2058,29 @@
             });
         }
         if (apiPath === '/protocols') return json({ protocols: ['teltonika', 'gt06', 'osmand'], protocol_info: { teltonika: { port: 5027, protocol_types: ['tcp'] }, gt06: { port: 5023, protocol_types: ['tcp'] }, osmand: { port: 5055, protocol_types: ['http'] } } });
+        if (apiPath === '/tiles/maps' || apiPath === '/tiles/maps/admin') {
+            return json([
+                {
+                    id: 'demo_offline_map',
+                    filename: 'demo_city.mbtiles',
+                    name: 'Demo City (Offline)',
+                    description: 'Pre-bundled demo offline map',
+                    format: 'png',
+                    container_type: 'mbtiles',
+                    min_zoom: 10,
+                    max_zoom: 16,
+                    bounds: [23.6, 37.9, 23.8, 38.1],
+                    center: [23.7275, 37.9838, 12],
+                    size_bytes: 48500000,
+                    enabled: true,
+                    is_default: false,
+                    tile_url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                }
+            ]);
+        }
+        if (apiPath === '/tiles/maps/scan' && method === 'POST') {
+            return json([]);
+        }
         if (apiPath === '/integrations/providers' || apiPath === '/integrations/accounts') return json([]);
         if (apiPath === '/alerts/types') return json(alertTypes);
         if (apiPath.match(/^\/alerts\/\d+\/read$/) && method === 'POST') {
