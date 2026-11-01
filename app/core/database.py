@@ -423,12 +423,16 @@ class DatabaseService:
             "ALTER TABLE users ADD COLUMN avatar_filename VARCHAR(255)",
             "ALTER TABLE drivers ADD COLUMN icon_filename VARCHAR(255)",
             "ALTER TABLE users ADD COLUMN is_driver BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE trips ADD COLUMN driver_name VARCHAR(100)",
+            "ALTER TABLE trips ADD COLUMN driver_avatar_url VARCHAR(500)",
         ]
         if self._is_postgres:
             migrations.extend([
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_filename VARCHAR(255)",
                 "ALTER TABLE drivers ADD COLUMN IF NOT EXISTS icon_filename VARCHAR(255)",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_driver BOOLEAN DEFAULT TRUE",
+                "ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_name VARCHAR(100)",
+                "ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_avatar_url VARCHAR(500)",
                 "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS user_timezone VARCHAR(50) DEFAULT 'UTC'",
                 "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS options JSON DEFAULT '{}'",
                 "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS notification_channels JSON DEFAULT '[]'",
@@ -473,6 +477,28 @@ class DatabaseService:
                     await conn.execute(text(stmt))
             except Exception:
                 pass  # column/change already applied
+
+        # Backfill trips.driver_name and trips.driver_avatar_url for existing trips
+        try:
+            async with self.engine.begin() as conn:
+                await conn.execute(text("""
+                    UPDATE trips
+                    SET driver_name = (SELECT name FROM drivers WHERE drivers.id = trips.driver_id)
+                    WHERE trips.driver_name IS NULL AND trips.driver_id IS NOT NULL
+                """))
+                await conn.execute(text("""
+                    UPDATE trips
+                    SET driver_avatar_url = (
+                        SELECT CASE
+                            WHEN drivers.icon_filename IS NOT NULL THEN '/uploads/avatars/drivers/' || drivers.icon_filename
+                            ELSE '/icons/default-driver.svg'
+                        END
+                        FROM drivers WHERE drivers.id = trips.driver_id
+                    )
+                    WHERE trips.driver_avatar_url IS NULL AND trips.driver_id IS NOT NULL
+                """))
+        except Exception:
+            pass
 
         # Migrate SQLite sim_cards table if provider_id/account_label have NOT NULL constraint
         if not self._is_postgres:
@@ -894,9 +920,19 @@ class DatabaseService:
 
             # Keep any linked driver in sync with the user's driver status, company and username
             if not user.is_driver:
-                await session.execute(
-                    delete(Driver).where(Driver.user_id == user_id)
-                )
+                linked_driver = (await session.execute(
+                    select(Driver).where(Driver.user_id == user_id)
+                )).scalar_one_or_none()
+                if linked_driver:
+                    await session.execute(
+                        update(Trip)
+                        .where(Trip.driver_id == linked_driver.id)
+                        .values(
+                            _driver_name=linked_driver.name,
+                            _driver_avatar_url=linked_driver.avatar_url,
+                        )
+                    )
+                    await session.delete(linked_driver)
             else:
                 existing_driver = (await session.execute(
                     select(Driver).where(Driver.user_id == user_id)
@@ -1262,8 +1298,10 @@ class DatabaseService:
 
             if state.active_trip_id:
                 trip = await session.get(Trip, state.active_trip_id)
-                if trip and trip.driver_id != state.current_driver_id:
+                if trip and state.current_driver_id and trip.driver_id != state.current_driver_id:
                     trip.driver_id = state.current_driver_id
+                    trip.driver_name = state.current_driver_name
+                    trip.driver_avatar_url = state.current_driver_avatar_url
 
             rec = PositionRecord(
                 device_id=device.id,
@@ -1373,6 +1411,8 @@ class DatabaseService:
             except Exception as _geo_err:
                 logger.warning("Trip start geocode skip: %s", _geo_err)
 
+            driver_name = state.current_driver_name
+            driver_avatar = state.current_driver_avatar_url
             trip = Trip(
                 device_id=device.id,
                 start_time=device_time,
@@ -1381,6 +1421,8 @@ class DatabaseService:
                 start_address=start_addr,
                 distance_km=0.0,
                 driver_id=state.current_driver_id,
+                driver_name=driver_name,
+                driver_avatar_url=driver_avatar,
             )
             session.add(trip)
             await session.flush()
@@ -1438,6 +1480,13 @@ class DatabaseService:
                     trip.idling_duration_minutes = eco_res["idling_duration_minutes"]
                 except Exception as _eco_err:
                     logger.warning("Trip eco score calculation error: %s", _eco_err)
+
+                if not trip.driver_name and state.current_driver_name:
+                    trip.driver_name = state.current_driver_name
+                    trip.driver_avatar_url = state.current_driver_avatar_url
+                elif not trip.driver_name and trip.driver:
+                    trip.driver_name = trip.driver.name
+                    trip.driver_avatar_url = trip.driver.avatar_url
 
                 from core.config import get_settings
                 st = get_settings()

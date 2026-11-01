@@ -1596,13 +1596,15 @@
 
     function historyTrips(deviceId) {
         const d = devices.find(item => item.id === deviceId) || devices[0];
-        const driverName = d.state.current_driver?.name || drivers[0]?.name || null;
+        const driverName = 'Nikos Demo';
+        const driverAvatar = '/icons/default-driver.svg';
         return [
             {
                 id: 102,
                 device_id: d.id,
                 device_name: d.name,
                 driver_name: driverName,
+                driver_avatar_url: driverAvatar,
                 start_time: iso(160),
                 end_time: iso(90),
                 distance_km: 12.4,
@@ -1615,6 +1617,7 @@
                 device_id: d.id,
                 device_name: d.name,
                 driver_name: driverName,
+                driver_avatar_url: driverAvatar,
                 start_time: iso(240),
                 end_time: iso(170),
                 distance_km: 10.8,
@@ -1927,6 +1930,12 @@
                 return json(newDriver, 201);
             }
             return json(drivers);
+        }
+        if (apiPath.match(/^\/drivers\/\d+$/) && method === 'DELETE') {
+            const drvId = Number(apiPath.split('/')[2]);
+            const idx = drivers.findIndex(d => d.id === drvId);
+            if (idx >= 0) drivers.splice(idx, 1);
+            return json({ status: 'deleted' });
         }
         if (apiPath === '/drivers/assign') {
             if (method === 'POST') {

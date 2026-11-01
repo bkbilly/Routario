@@ -49,11 +49,14 @@ async def get_position_history(
 
     # Build a sorted list of (start, end, trip_id) for fast lookups
     trip_ranges = []
+    trip_driver_info = {}
     for t in trips:
         start = t.start_time.replace(tzinfo=None) if t.start_time else None
         end   = (t.end_time.replace(tzinfo=None) if t.end_time else datetime.max)
         if start is not None:
             trip_ranges.append((start, end, t.id))
+        if t.driver_name:
+            trip_driver_info[t.id] = (t.driver_name, t.driver_avatar_url)
     trip_ranges.sort(key=lambda x: x[0])
 
     def find_trip_id(pos_time: datetime):
@@ -77,7 +80,10 @@ async def get_position_history(
         if pos.speed:
             max_speed = max(max_speed, pos.speed)
 
+        tid = find_trip_id(pos.device_time)
         driver_info = driver_map.get(pos.driver_id) if pos.driver_id else None
+        if not driver_info and tid:
+            driver_info = trip_driver_info.get(tid)
         features.append(PositionGeoJSON(
             type="Feature",
             geometry={"type": "Point", "coordinates": [pos.longitude, pos.latitude]},
@@ -90,7 +96,7 @@ async def get_position_history(
                 "altitude":  pos.altitude,
                 "satellites": pos.satellites,
                 "sensors":   pos.sensors,
-                "trip_id":   find_trip_id(pos.device_time),
+                "trip_id":   tid,
                 "driver_id": pos.driver_id,
                 "driver_name": driver_info[0] if driver_info else None,
                 "driver_avatar_url": driver_info[1] if driver_info else None,

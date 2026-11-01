@@ -13,7 +13,7 @@ from typing import List, Optional
 import json
 
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from core.auth import get_current_user, require_permission, require_admin
 from core.config import get_settings, apply_setting_to_runtime
@@ -205,6 +205,16 @@ async def delete_driver(
         if driver.user_id:
             raise HTTPException(status_code=400, detail="User-linked drivers cannot be deleted here. Manage the user account instead.")
         _check_driver_access(driver, current_user)
+
+        # Snapshot driver name and avatar to all trips of this driver before deletion
+        await session.execute(
+            update(Trip)
+            .where(Trip.driver_id == driver_id)
+            .values(
+                _driver_name=driver.name,
+                _driver_avatar_url=driver.avatar_url,
+            )
+        )
         await session.delete(driver)
     return {"status": "deleted"}
 
@@ -233,10 +243,12 @@ async def assign_driver(
         state = await session.get(DeviceState, device_id)
         if state:
             state.current_driver_id = driver_id
-            if state.active_trip_id:
+            if state.active_trip_id and driver_id is not None:
                 trip = await session.get(Trip, state.active_trip_id)
                 if trip:
                     trip.driver_id = driver_id
+                    trip.driver_name = driver.name if driver else None
+                    trip.driver_avatar_url = driver.avatar_url if driver else None
         else:
             state = DeviceState(device_id=device_id, current_driver_id=driver_id)
             session.add(state)

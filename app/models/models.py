@@ -317,30 +317,44 @@ class Trip(Base):
     duration_minutes: Mapped[float]          = mapped_column(Float, default=0.0)
     start_address:    Mapped[Optional[str]]  = mapped_column(String(500), nullable=True)
     end_address:      Mapped[Optional[str]]  = mapped_column(String(500), nullable=True)
-    driver_id:        Mapped[Optional[int]]  = mapped_column(Integer, ForeignKey('drivers.id', ondelete='SET NULL'), nullable=True)
-    eco_score:        Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    harsh_accel_count: Mapped[int]           = mapped_column(Integer, default=0)
-    harsh_brake_count: Mapped[int]           = mapped_column(Integer, default=0)
-    harsh_corner_count: Mapped[int]          = mapped_column(Integer, default=0)
-    speeding_duration_minutes: Mapped[float] = mapped_column(Float, default=0.0)
-    idling_duration_minutes: Mapped[float]   = mapped_column(Float, default=0.0)
+    driver_id:          Mapped[Optional[int]]  = mapped_column(Integer, ForeignKey('drivers.id', ondelete='SET NULL'), nullable=True)
+    _driver_name:       Mapped[Optional[str]]  = mapped_column("driver_name", String(100), nullable=True)
+    _driver_avatar_url: Mapped[Optional[str]]  = mapped_column("driver_avatar_url", String(500), nullable=True)
+    eco_score:          Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    harsh_accel_count:  Mapped[int]            = mapped_column(Integer, default=0)
+    harsh_brake_count:  Mapped[int]            = mapped_column(Integer, default=0)
+    harsh_corner_count: Mapped[int]            = mapped_column(Integer, default=0)
+    speeding_duration_minutes: Mapped[float]   = mapped_column(Float, default=0.0)
+    idling_duration_minutes:   Mapped[float]   = mapped_column(Float, default=0.0)
 
     device: Mapped["Device"]           = relationship(back_populates="trips")
     driver: Mapped[Optional["Driver"]] = relationship(back_populates="trips")
 
     @property
     def driver_name(self) -> Optional[str]:
+        if self._driver_name:
+            return self._driver_name
         try:
             return self.driver.name if self.driver else None
         except Exception:
             return None
 
+    @driver_name.setter
+    def driver_name(self, value: Optional[str]) -> None:
+        self._driver_name = value
+
     @property
     def driver_avatar_url(self) -> Optional[str]:
+        if self._driver_avatar_url:
+            return self._driver_avatar_url
         try:
             return self.driver.avatar_url if self.driver else None
         except Exception:
             return None
+
+    @driver_avatar_url.setter
+    def driver_avatar_url(self, value: Optional[str]) -> None:
+        self._driver_avatar_url = value
 
 
 class Geofence(Base):
