@@ -5,6 +5,7 @@ Spatial operations are handled by Shapely (pure-Python) so any
 SQLAlchemy-supported database can be used.
 """
 from datetime import datetime
+import hashlib
 from typing import Optional, Dict, Any, List
 
 from sqlalchemy import (
@@ -75,6 +76,7 @@ class User(Base):
     is_admin:         Mapped[bool]          = mapped_column(Boolean, default=False, nullable=False)
     company_id:       Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('companies.id', ondelete='SET NULL'), nullable=True)
     is_company_admin: Mapped[bool]          = mapped_column(Boolean, default=False, nullable=False)
+    is_driver:        Mapped[bool]          = mapped_column(Boolean, default=True, nullable=False)
 
     notification_channels: Mapped[Dict] = mapped_column(JsonType, default={})
     webhook_urls:          Mapped[Optional[list]] = mapped_column(JsonType, nullable=True, default=list)
@@ -88,6 +90,7 @@ class User(Base):
     sidebar_compact: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     time_format: Mapped[str] = mapped_column(String(10),  default='auto')
     date_format: Mapped[str] = mapped_column(String(20),  default='auto')
+    avatar_filename: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_activity: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -99,6 +102,14 @@ class User(Base):
     devices:       Mapped[List["Device"]]       = relationship(secondary=user_device_association, back_populates="users")
     alert_history: Mapped[List["AlertHistory"]] = relationship(back_populates="user")
     passkeys:      Mapped[List["UserPasskey"]]  = relationship(back_populates="user", cascade="all, delete-orphan")
+
+    @property
+    def avatar_url(self) -> str:
+        if self.avatar_filename:
+            return f"/uploads/avatars/users/{self.avatar_filename}"
+        clean = (self.email or "").strip().lower().encode("utf-8")
+        h = hashlib.sha256(clean).hexdigest()
+        return f"https://www.gravatar.com/avatar/{h}?d=wavatar"
 
 
 class UserPasskey(Base):
@@ -125,6 +136,7 @@ class Driver(Base):
     name:           Mapped[str]           = mapped_column(String(100), nullable=False)
     phone:          Mapped[Optional[str]] = mapped_column(String(30),  nullable=True)
     license_number: Mapped[Optional[str]] = mapped_column(String(50),  nullable=True)
+    icon_filename:  Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     notes:          Mapped[Optional[str]] = mapped_column(Text,        nullable=True)
     assignment_rule:         Mapped[Optional[str]]  = mapped_column(Text,        nullable=True)
     assignment_vehicles:     Mapped[Optional[list]] = mapped_column(JsonType,    nullable=True)
@@ -136,6 +148,24 @@ class Driver(Base):
     company: Mapped[Optional["Company"]] = relationship("Company")
     user:    Mapped[Optional["User"]]    = relationship("User")
     trips:   Mapped[List["Trip"]]        = relationship(back_populates="driver")
+
+    @property
+    def avatar_url(self) -> Optional[str]:
+        if getattr(self, "_avatar_url_override", None):
+            return self._avatar_url_override
+        if "user" in self.__dict__ and self.user is not None:
+            return self.user.avatar_url
+        if self.icon_filename:
+            return f"/uploads/avatars/drivers/{self.icon_filename}"
+        try:
+            from core.config import get_settings
+            return getattr(get_settings(), "default_driver_icon", "/icons/default-driver.svg") or "/icons/default-driver.svg"
+        except Exception:
+            return "/icons/default-driver.svg"
+
+    @avatar_url.setter
+    def avatar_url(self, value: Optional[str]) -> None:
+        self._avatar_url_override = value
 
 
 class Device(Base):
@@ -236,6 +266,13 @@ class DeviceState(Base):
         except Exception:
             return None
 
+    @property
+    def current_driver_avatar_url(self) -> "Optional[str]":
+        try:
+            return self.current_driver.avatar_url if self.current_driver else None
+        except Exception:
+            return None
+
 
 class PositionRecord(Base):
     __tablename__ = 'position_records'
@@ -295,6 +332,13 @@ class Trip(Base):
     def driver_name(self) -> Optional[str]:
         try:
             return self.driver.name if self.driver else None
+        except Exception:
+            return None
+
+    @property
+    def driver_avatar_url(self) -> Optional[str]:
+        try:
+            return self.driver.avatar_url if self.driver else None
         except Exception:
             return None
 

@@ -114,7 +114,8 @@ function _usrRender() {
     const list  = [..._usrUsers.filter(u =>
         u.username.toLowerCase().includes(query) ||
         u.email.toLowerCase().includes(query) ||
-        (u.phone_number && u.phone_number.toLowerCase().includes(query))
+        (u.phone_number && u.phone_number.toLowerCase().includes(query)) ||
+        (u.is_driver && query === 'driver')
     )].sort((a, b) => {
         let av, bv;
         switch (_usrSortCol) {
@@ -165,14 +166,22 @@ function _usrRender() {
             : '';
 
         const avatarUrl = u.avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar';
+        const driverSubtitle = u.is_driver
+            ? `<span class="user-driver-subtitle"><i class="mdi mdi-steering" style="font-size:0.8rem;color:#38bdf8;"></i>Driver</span>`
+            : '';
 
         return `<tr class="device-row" ondblclick="openUserModal(${u.id})" style="cursor:pointer;">
-            <td style="width:48px;text-align:center;vertical-align:middle;padding:0.4rem 0.5rem 0.4rem 0.85rem;">
+            <td style="width:48px;text-align:center;vertical-align:middle;padding:0.45rem 0.5rem 0.45rem 0.85rem;">
                 <img src="${avatarUrl}" alt="${_usrEsc(u.username)}" class="user-list-avatar" onerror="this.onerror=null;this.src='https://www.gravatar.com/avatar/?d=wavatar';">
             </td>
             <td>
-                <span class="device-row-name">${_usrEsc(u.username)}</span>
-                ${isMe ? `<span style="font-size:0.7rem;color:var(--accent-primary);font-weight:600;margin-left:0.35rem;">YOU</span>` : ''}
+                <div class="user-name-cell">
+                    <div style="display:flex;align-items:center;gap:0.35rem;line-height:1.2;">
+                        <span class="device-row-name" style="line-height:1.2;">${_usrEsc(u.username)}</span>
+                        ${isMe ? `<span style="font-size:0.68rem;color:var(--accent-primary);font-weight:600;background:rgba(59,130,246,0.12);padding:0.05rem 0.35rem;border-radius:3px;line-height:1.2;">YOU</span>` : ''}
+                    </div>
+                    ${driverSubtitle}
+                </div>
             </td>
             <td style="color:var(--text-secondary);font-size:0.85rem;">${_usrEsc(u.email)}</td>
             ${companyCell}
@@ -207,13 +216,26 @@ function openUserModal(userId = null) {
 
     document.getElementById('userModalTitle').textContent = isNew ? 'Add User' : 'Edit User';
     const modalAvatar = document.getElementById('userModalAvatar');
-    if (modalAvatar) {
-        if (_usrEditing) {
-            modalAvatar.src = _usrEditing.avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar';
+    const modalAvatarLarge = document.getElementById('userModalAvatarLarge');
+    const avatarGroup = document.getElementById('userModalAvatarGroup');
+    const avatarResetBtn = document.getElementById('userModalAvatarResetBtn');
+    const avatarHint = document.getElementById('userModalAvatarHint');
+
+    if (_usrEditing) {
+        const avatarSrc = _usrEditing.avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar';
+        if (modalAvatar) {
+            modalAvatar.src = avatarSrc;
             modalAvatar.style.display = 'block';
-        } else {
-            modalAvatar.style.display = 'none';
         }
+        if (modalAvatarLarge) modalAvatarLarge.src = avatarSrc;
+        if (avatarGroup) avatarGroup.style.display = 'block';
+
+        const isCustom = Boolean(_usrEditing.avatar_filename) || (Boolean(_usrEditing.avatar_url) && _usrEditing.avatar_url.includes('/uploads/avatars/'));
+        if (avatarResetBtn) avatarResetBtn.style.display = isCustom ? 'inline-flex' : 'none';
+        if (avatarHint) avatarHint.textContent = isCustom ? 'Custom uploaded avatar' : 'Using Gravatar based on email';
+    } else {
+        if (modalAvatar) modalAvatar.style.display = 'none';
+        if (avatarGroup) avatarGroup.style.display = 'none';
     }
 
     const usernameEl = document.getElementById('userModalUsername');
@@ -246,6 +268,19 @@ function openUserModal(userId = null) {
     roleSelect.disabled = isMe;
     roleSelect.style.opacity = isMe ? '0.6' : '';
 
+    const isDriverCb = document.getElementById('userModalIsDriver');
+    if (isDriverCb) {
+        if (_usrEditing) {
+            if (_usrEditing.is_driver !== undefined && _usrEditing.is_driver !== null) {
+                isDriverCb.checked = Boolean(_usrEditing.is_driver);
+            } else {
+                isDriverCb.checked = !_usrEditing.is_admin && !_usrEditing.is_company_admin;
+            }
+        } else {
+            isDriverCb.checked = (roleSelect.value === 'user');
+        }
+    }
+
     if (_usrIsAdmin) {
         const sel = document.getElementById('userModalCompany');
         sel.innerHTML = '<option value="">— Select company —</option>';
@@ -265,6 +300,92 @@ function openUserModal(userId = null) {
     document.getElementById('userDeleteBtn').style.display =
         (isNew || _usrEditing?.id === _usrMyId) ? 'none' : 'inline-flex';
     document.getElementById('userModal').classList.add('active');
+}
+
+function usrClickAvatarUpload() {
+    const fileInput = document.getElementById('userModalAvatarFileInput');
+    if (fileInput) fileInput.click();
+}
+
+async function usrHandleAvatarUpload(input) {
+    if (!input.files || !input.files[0] || !_usrEditing) return;
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await apiFetch(`${API_BASE}/users/${_usrEditing.id}/avatar`, {
+            method: 'POST',
+            body: formData,
+        });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || 'Failed to upload avatar');
+        }
+        const data = await res.json();
+        showAlert('User avatar updated successfully', 'success');
+        _usrEditing.avatar_url = data.avatar_url;
+        _usrEditing.avatar_filename = data.avatar_filename;
+
+        const displayUrl = `${data.avatar_url}?v=${Date.now()}`;
+        const modalAvatar = document.getElementById('userModalAvatar');
+        if (modalAvatar) modalAvatar.src = displayUrl;
+        const modalAvatarLarge = document.getElementById('userModalAvatarLarge');
+        if (modalAvatarLarge) modalAvatarLarge.src = displayUrl;
+        const avatarResetBtn = document.getElementById('userModalAvatarResetBtn');
+        if (avatarResetBtn) avatarResetBtn.style.display = 'inline-flex';
+        const avatarHint = document.getElementById('userModalAvatarHint');
+        if (avatarHint) avatarHint.textContent = 'Custom uploaded avatar';
+
+        const myId = parseInt(localStorage.getItem('user_id'), 10);
+        if (_usrEditing.id === myId) {
+            localStorage.setItem('avatar_url', data.avatar_url);
+            const snImg = document.getElementById('snMenuAvatarImg');
+            if (snImg) snImg.src = displayUrl;
+        }
+
+        _usrRender();
+    } catch (err) {
+        showAlert(err.message || 'Failed to upload avatar', 'error');
+    } finally {
+        input.value = '';
+    }
+}
+
+async function usrResetAvatar() {
+    if (!_usrEditing) return;
+    try {
+        const res = await apiFetch(`${API_BASE}/users/${_usrEditing.id}/avatar`, {
+            method: 'DELETE',
+        });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || 'Failed to reset avatar');
+        }
+        const data = await res.json();
+        showAlert('Avatar reverted to Gravatar', 'success');
+        _usrEditing.avatar_url = data.avatar_url;
+        _usrEditing.avatar_filename = null;
+
+        const modalAvatar = document.getElementById('userModalAvatar');
+        if (modalAvatar) modalAvatar.src = data.avatar_url;
+        const modalAvatarLarge = document.getElementById('userModalAvatarLarge');
+        if (modalAvatarLarge) modalAvatarLarge.src = data.avatar_url;
+        const avatarResetBtn = document.getElementById('userModalAvatarResetBtn');
+        if (avatarResetBtn) avatarResetBtn.style.display = 'none';
+        const avatarHint = document.getElementById('userModalAvatarHint');
+        if (avatarHint) avatarHint.textContent = 'Using Gravatar based on email';
+
+        const myId = parseInt(localStorage.getItem('user_id'), 10);
+        if (_usrEditing.id === myId) {
+            localStorage.setItem('avatar_url', data.avatar_url);
+            const snImg = document.getElementById('snMenuAvatarImg');
+            if (snImg) snImg.src = data.avatar_url;
+        }
+
+        _usrRender();
+    } catch (err) {
+        showAlert(err.message || 'Failed to reset avatar', 'error');
+    }
 }
 
 function usrRenderCurrencyOptions(selected = 'EUR') {
@@ -403,6 +524,12 @@ function onUserRoleChange() {
     if (_usrIsAdmin) {
         const group = document.getElementById('userModalCompanyGroup');
         if (group) group.style.display = role === 'admin' ? 'none' : '';
+    }
+    if (!_usrEditing) {
+        const isDriverCb = document.getElementById('userModalIsDriver');
+        if (isDriverCb) {
+            isDriverCb.checked = (role === 'user');
+        }
     }
     _usrRenderPermissions();
 }
@@ -747,6 +874,7 @@ async function saveUser() {
     }
 
     const phone = document.getElementById('userModalPhone')?.value.trim() || null;
+    const isDriver = document.getElementById('userModalIsDriver')?.checked ?? false;
 
     const payload = {
         email,
@@ -754,6 +882,7 @@ async function saveUser() {
         units,
         currency,
         theme,
+        is_driver: isDriver,
         ...(!isMe && { is_admin: role === 'admin', is_company_admin: role === 'company_admin' }),
         company_id: companyId,
         ...(permissions !== null && { permissions }),
@@ -791,6 +920,9 @@ async function saveUser() {
             showAlert(isNew ? 'User created' : 'User updated', 'success');
             closeUserModal();
             await _usrLoad();
+            if (typeof _loadDrivers === 'function') {
+                try { await _loadDrivers(); } catch (_) {}
+            }
             window.dispatchEvent(new CustomEvent('routario:users-updated'));
         }
     } catch (e) {

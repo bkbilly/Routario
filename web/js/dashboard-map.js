@@ -1050,8 +1050,9 @@ try {
         if (devIdx < 0) return;
         devices[devIdx] = {
             ...devices[devIdx],
-            current_driver_id:   data.current_driver_id,
-            current_driver_name: data.current_driver_name,
+            current_driver_id:         data.current_driver_id,
+            current_driver_name:       data.current_driver_name,
+            current_driver_avatar_url: data.current_driver_avatar_url,
         };
         if (!historyDeviceId) updateSidebarCard(data.device_id);
     };

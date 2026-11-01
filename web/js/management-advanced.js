@@ -418,8 +418,18 @@ function rtpRenderTicketsTable() {
             <td><span class="proto-badge health-status ${rtpTicketBadgeClass(row.status, 'status')}">${rtpEsc(rtpTicketLabel(row.status, RTP_TICKET_STATUSES))}</span></td>
             <td><span class="proto-badge health-status ${rtpTicketBadgeClass(row.priority, 'priority')}">${rtpEsc(rtpTicketLabel(row.priority, RTP_TICKET_PRIORITIES))}</span></td>
             <td>${(row.comments || []).length}</td>
-            <td>${rtpEsc(row.creator_name || '-')}</td>
-            <td>${rtpEsc(row.assignee_name || 'Unassigned')}</td>
+            <td>
+                <div style="display:inline-flex;align-items:center;gap:6px;">
+                    ${row.creator_name ? `<img src="${row.creator_avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar'}" alt="" style="width:16px;height:16px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.src='https://www.gravatar.com/avatar/?d=wavatar'">` : ''}
+                    <span>${rtpEsc(row.creator_name || '-')}</span>
+                </div>
+            </td>
+            <td>
+                <div style="display:inline-flex;align-items:center;gap:6px;">
+                    ${row.assignee_name && row.assignee_name !== 'Unassigned' ? `<img src="${row.assignee_avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar'}" alt="" style="width:16px;height:16px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.src='https://www.gravatar.com/avatar/?d=wavatar'">` : ''}
+                    <span>${rtpEsc(row.assignee_name || 'Unassigned')}</span>
+                </div>
+            </td>
             <td style="text-align:right;white-space:nowrap;">
                 <button class="btn btn-secondary tbl-btn" onclick="rtpOpenTicketModal(${Number(row.id)})"><i class="mdi mdi-pencil"></i> <span class="drv-btn-label">Open</span></button>
             </td>
@@ -664,6 +674,7 @@ function rtpRenderTicketDetail(ticket) {
                 <div class="ticket-comment-card ${comment.is_internal ? 'internal' : ''}">
                     <div class="ticket-comment-header">
                         <div style="display:flex;align-items:center;gap:0.5rem;">
+                            <img src="${comment.author_avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar'}" alt="" style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.src='https://www.gravatar.com/avatar/?d=wavatar'">
                             <strong style="font-size:0.88rem;color:var(--text-primary);">${rtpEsc(comment.author_name || 'Unknown')}</strong>
                             ${comment.is_internal ? '<span class="proto-badge health-status health-status-degraded" style="font-size:0.7rem;">internal note</span>' : ''}
                         </div>
@@ -1999,7 +2010,13 @@ function rtpRenderAuditTable() {
         <tr>
             <td style="white-space:nowrap;">${rtpDateTimeSplit(l.created_at)}</td>
             <td>${rtpEsc(l.action)}</td>
-            <td>${rtpEsc(l.actor_username || 'system')}${l.actor_user_id ? `<div class="stack-item-meta">#${l.actor_user_id}</div>` : ''}</td>
+            <td>
+                <div style="display:inline-flex;align-items:center;gap:6px;">
+                    ${l.actor_username ? `<img src="${l.actor_avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar'}" alt="" style="width:16px;height:16px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.src='https://www.gravatar.com/avatar/?d=wavatar'">` : '<i class="mdi mdi-cog-outline" style="font-size:16px;color:var(--text-muted);"></i>'}
+                    <span>${rtpEsc(l.actor_username || 'system')}</span>
+                </div>
+                ${l.actor_user_id ? `<div class="stack-item-meta" style="margin-left:22px;">#${l.actor_user_id}</div>` : ''}
+            </td>
             <td>${RoutarioUI.companyChip(l.company_name, { title: l.company_name && l.company_id ? `${l.company_name} · #${l.company_id}` : undefined })}</td>
             <td>${rtpEsc([l.target_type, l.target_id].filter(Boolean).join(' ')) || '-'}</td>
             <td>${rtpEsc(l.ip_address || '-')}</td>

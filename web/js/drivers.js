@@ -82,7 +82,7 @@ function _render() {
 
     const tbody = document.getElementById('driversTableBody');
     if (list.length === 0) {
-        tbody.innerHTML = RoutarioTables.stateRow('<div style="font-size:2.5rem;margin-bottom:0.75rem;">&#128100;</div>No drivers found', _drvIsAdmin ? 4 : 3, { padding: '3rem' });
+        tbody.innerHTML = RoutarioTables.stateRow('<div style="font-size:2.5rem;margin-bottom:0.75rem;">&#128100;</div>No drivers found', _drvIsAdmin ? 5 : 4, { padding: '3rem' });
         return;
     }
 
@@ -93,8 +93,12 @@ function _render() {
         const nameBadge = isUser
             ? `<span style="font-size:0.68rem;font-weight:600;padding:0.1rem 0.4rem;border-radius:4px;background:rgba(99,102,241,0.15);color:#818cf8;margin-left:0.4rem;">USER</span>`
             : '';
+        const avatarSrc = d.avatar_url || '/icons/default-driver.svg';
         return `
         <tr class="device-row" ondblclick="openDriverModal(${d.id})" style="cursor:pointer;">
+            <td style="width:48px;text-align:center;vertical-align:middle;padding:0.4rem 0.5rem 0.4rem 0.85rem;">
+                <img src="${avatarSrc}" alt="${_esc(d.name)}" class="user-list-avatar" onerror="this.onerror=null;this.src='/icons/default-driver.svg';">
+            </td>
             <td><span class="device-row-name">${_esc(d.name)}</span>${nameBadge}</td>
             ${_drvIsAdmin ? `<td>${RoutarioUI.companyChip(comp?.name)}</td>` : '<td style="display:none;"></td>'}
             <td>${RoutarioUI.deviceChip(assigned)}</td>
@@ -319,6 +323,38 @@ function openDriverModal(driverId = null) {
     document.getElementById('driverName').value  = _editingDriver?.name  || '';
     document.getElementById('driverNotes').value = _editingDriver?.notes || '';
 
+    const modalAvatar = document.getElementById('driverModalAvatar');
+    const modalAvatarLarge = document.getElementById('driverModalAvatarLarge');
+    const avatarGroup = document.getElementById('driverAvatarGroup');
+    const avatarControls = document.getElementById('driverAvatarControls');
+    const avatarLinkedHint = document.getElementById('driverAvatarLinkedHint');
+    const avatarResetBtn = document.getElementById('driverAvatarResetBtn');
+    const avatarHint = document.getElementById('driverAvatarHint');
+
+    const currentAvatar = _editingDriver?.avatar_url || '/icons/default-driver.svg';
+    if (modalAvatar) modalAvatar.src = currentAvatar;
+
+    if (avatarGroup) {
+        if (isNew) {
+            avatarGroup.style.display = 'none';
+        } else {
+            avatarGroup.style.display = 'block';
+            if (modalAvatarLarge) modalAvatarLarge.src = currentAvatar;
+
+            if (isUser) {
+                if (avatarControls) avatarControls.style.display = 'none';
+                if (avatarLinkedHint) avatarLinkedHint.style.display = 'block';
+                if (avatarHint) avatarHint.textContent = 'Linked user avatar';
+            } else {
+                if (avatarControls) avatarControls.style.display = 'flex';
+                if (avatarLinkedHint) avatarLinkedHint.style.display = 'none';
+                const isCustom = Boolean(_editingDriver.icon_filename) || (Boolean(_editingDriver.avatar_url) && _editingDriver.avatar_url.includes('/uploads/avatars/drivers/'));
+                if (avatarResetBtn) avatarResetBtn.style.display = isCustom ? 'inline-flex' : 'none';
+                if (avatarHint) avatarHint.textContent = isCustom ? 'Custom driver icon' : 'Default driver icon';
+            }
+        }
+    }
+
     // User-linked drivers: name is read-only, no delete
     document.getElementById('driverName').disabled = isUser;
     document.getElementById('deleteDriverBtn').style.display = (isNew || isUser) ? 'none' : 'inline-flex';
@@ -387,6 +423,78 @@ function openDriverModal(driverId = null) {
     _adjustDriverRuleHeight();
     requestAnimationFrame(_adjustDriverRuleHeight);
     setTimeout(_adjustDriverRuleHeight, 50);
+}
+
+function drvClickAvatarUpload() {
+    const fileInput = document.getElementById('driverAvatarFileInput');
+    if (fileInput) fileInput.click();
+}
+
+async function drvHandleAvatarUpload(input) {
+    if (!input.files || !input.files[0] || !_editingDriver) return;
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await apiFetch(`${API_BASE}/drivers/${_editingDriver.id}/avatar`, {
+            method: 'POST',
+            body: formData,
+        });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || 'Failed to upload driver icon');
+        }
+        const data = await res.json();
+        showAlert('Driver icon updated successfully', 'success');
+        _editingDriver.avatar_url = data.avatar_url;
+        _editingDriver.icon_filename = data.icon_filename;
+
+        const displayUrl = `${data.avatar_url}?v=${Date.now()}`;
+        const modalAvatar = document.getElementById('driverModalAvatar');
+        if (modalAvatar) modalAvatar.src = displayUrl;
+        const modalAvatarLarge = document.getElementById('driverModalAvatarLarge');
+        if (modalAvatarLarge) modalAvatarLarge.src = displayUrl;
+        const avatarResetBtn = document.getElementById('driverAvatarResetBtn');
+        if (avatarResetBtn) avatarResetBtn.style.display = 'inline-flex';
+        const avatarHint = document.getElementById('driverAvatarHint');
+        if (avatarHint) avatarHint.textContent = 'Custom driver icon';
+
+        _render();
+    } catch (err) {
+        showAlert(err.message || 'Failed to upload driver icon', 'error');
+    } finally {
+        input.value = '';
+    }
+}
+
+async function drvResetAvatar() {
+    if (!_editingDriver) return;
+    try {
+        const res = await apiFetch(`${API_BASE}/drivers/${_editingDriver.id}/avatar`, {
+            method: 'DELETE',
+        });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || 'Failed to reset driver icon');
+        }
+        const data = await res.json();
+        showAlert('Driver icon reset to default', 'success');
+        _editingDriver.avatar_url = data.avatar_url;
+        _editingDriver.icon_filename = null;
+
+        const modalAvatar = document.getElementById('driverModalAvatar');
+        if (modalAvatar) modalAvatar.src = data.avatar_url;
+        const modalAvatarLarge = document.getElementById('driverModalAvatarLarge');
+        if (modalAvatarLarge) modalAvatarLarge.src = data.avatar_url;
+        const avatarResetBtn = document.getElementById('driverAvatarResetBtn');
+        if (avatarResetBtn) avatarResetBtn.style.display = 'none';
+        const avatarHint = document.getElementById('driverAvatarHint');
+        if (avatarHint) avatarHint.textContent = 'Default driver icon';
+
+        _render();
+    } catch (err) {
+        showAlert(err.message || 'Failed to reset driver icon', 'error');
+    }
 }
 
 function closeDriverModal() {
@@ -484,6 +592,9 @@ function openDriverAssignModal(driverId) {
     if (!driver) return;
     _assigningDriverId = driverId;
 
+    const avatarEl = document.getElementById('assignModalDriverAvatar');
+    if (avatarEl) avatarEl.src = driver.avatar_url || '/icons/default-driver.svg';
+
     const nameEl = document.getElementById('assignModalDriverName');
     if (nameEl) nameEl.textContent = driver.name;
 
@@ -561,10 +672,10 @@ async function saveDriverAssignment() {
         try {
             const bc = new BroadcastChannel('routario_driver_updates');
             if (prevDeviceId) {
-                bc.postMessage({ device_id: prevDeviceId, current_driver_id: null, current_driver_name: null });
+                bc.postMessage({ device_id: prevDeviceId, current_driver_id: null, current_driver_name: null, current_driver_avatar_url: null });
             }
             if (newDeviceId) {
-                bc.postMessage({ device_id: newDeviceId, current_driver_id: driverId, current_driver_name: driver?.name });
+                bc.postMessage({ device_id: newDeviceId, current_driver_id: driverId, current_driver_name: driver?.name, current_driver_avatar_url: driver?.avatar_url || null });
             }
             bc.close();
         } catch (_) {}

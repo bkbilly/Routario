@@ -45,7 +45,7 @@ async def get_position_history(
     if driver_ids:
         async with db.get_session() as session:
             result = await session.execute(select(Driver).where(Driver.id.in_(driver_ids)))
-            driver_map = {driver.id: driver.name for driver in result.scalars().all()}
+            driver_map = {driver.id: (driver.name, driver.avatar_url) for driver in result.scalars().all()}
 
     # Build a sorted list of (start, end, trip_id) for fast lookups
     trip_ranges = []
@@ -77,6 +77,7 @@ async def get_position_history(
         if pos.speed:
             max_speed = max(max_speed, pos.speed)
 
+        driver_info = driver_map.get(pos.driver_id) if pos.driver_id else None
         features.append(PositionGeoJSON(
             type="Feature",
             geometry={"type": "Point", "coordinates": [pos.longitude, pos.latitude]},
@@ -91,7 +92,8 @@ async def get_position_history(
                 "sensors":   pos.sensors,
                 "trip_id":   find_trip_id(pos.device_time),
                 "driver_id": pos.driver_id,
-                "driver_name": driver_map.get(pos.driver_id) if pos.driver_id else None,
+                "driver_name": driver_info[0] if driver_info else None,
+                "driver_avatar_url": driver_info[1] if driver_info else None,
             },
         ))
 

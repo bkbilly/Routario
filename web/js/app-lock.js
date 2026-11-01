@@ -281,6 +281,7 @@
         el.setAttribute('aria-labelledby', 'routarioAppLockTitle');
 
         const username = localStorage.getItem('username') || 'User';
+        const avatarUrl = localStorage.getItem('avatar_url') || 'https://www.gravatar.com/avatar/?d=wavatar';
 
         el.innerHTML = `
             <div class="routario-app-lock-card" id="routarioAppLockCard">
@@ -289,8 +290,8 @@
                 </div>
                 <h2 class="routario-app-lock-title" id="routarioAppLockTitle">Routario Locked</h2>
                 <p class="routario-app-lock-subtitle" id="routarioAppLockSubtitle">Confirm your identity with biometrics</p>
-                <div class="routario-app-lock-user">
-                    <i class="mdi mdi-account-circle"></i>
+                <div class="routario-app-lock-user" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;">
+                    <img id="routarioAppLockAvatar" src="${avatarUrl}" alt="${username}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;" onerror="this.src='https://www.gravatar.com/avatar/?d=wavatar'">
                     <span id="routarioAppLockUsername">${username}</span>
                 </div>
 
@@ -523,6 +524,10 @@
         const usernameEl = _overlayEl.querySelector('#routarioAppLockUsername');
         if (usernameEl) {
             usernameEl.textContent = localStorage.getItem('username') || 'User';
+        }
+        const avatarEl = _overlayEl.querySelector('#routarioAppLockAvatar');
+        if (avatarEl) {
+            avatarEl.src = localStorage.getItem('avatar_url') || 'https://www.gravatar.com/avatar/?d=wavatar';
         }
 
         const bioErr = _overlayEl.querySelector('#routarioAppLockBioError');

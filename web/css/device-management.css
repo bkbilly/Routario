@@ -2012,6 +2012,30 @@ body.light-theme .cmp-chip {
     flex-shrink: 0;
 }
 
+#usersTable td,
+#driversTableBody td {
+    padding-top: 0.45rem;
+    padding-bottom: 0.45rem;
+}
+
+.user-name-cell {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 36px;
+    line-height: 1.2;
+}
+
+.user-driver-subtitle {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    line-height: 1;
+    margin-top: 2px;
+}
+
 .notify-user-avatar {
     width: 32px;
     height: 32px;

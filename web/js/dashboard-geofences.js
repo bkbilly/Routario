@@ -231,8 +231,9 @@ function _addLayerToMap(gf) {
                 weight: 0,
                 className: 'geofence-corridor',
             });
+            const ownerAvatar = gf.owner_avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar';
             const corridorTooltip = (_canAssignOwner() && gf.owner_username)
-                ? `${gf.name}<br><span style="font-size:0.8em;opacity:0.7">${gf.owner_username}</span>`
+                ? `${gf.name}<br><span style="font-size:0.8em;opacity:0.85;display:inline-flex;align-items:center;gap:4px;"><img src="${ownerAvatar}" alt="" style="width:12px;height:12px;border-radius:50%;object-fit:cover;vertical-align:middle;" onerror="this.src='https://www.gravatar.com/avatar/?d=wavatar'"><span>${_esc(gf.owner_username)}</span></span>`
                 : gf.name;
             corridorLayer.bindTooltip(corridorTooltip, {
                 permanent: false,
@@ -260,8 +261,9 @@ function _addLayerToMap(gf) {
     layer._geofenceData = gf;
 
     // Label tooltip
+    const ownerAvatar = gf.owner_avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar';
     const tooltipContent = (_canAssignOwner() && gf.owner_username)
-        ? `${gf.name}<br><span style="font-size:0.8em;opacity:0.7">${gf.owner_username}</span>`
+        ? `${gf.name}<br><span style="font-size:0.8em;opacity:0.85;display:inline-flex;align-items:center;gap:4px;"><img src="${ownerAvatar}" alt="" style="width:12px;height:12px;border-radius:50%;object-fit:cover;vertical-align:middle;" onerror="this.src='https://www.gravatar.com/avatar/?d=wavatar'"><span>${_esc(gf.owner_username)}</span></span>`
         : gf.name;
     layer.bindTooltip(tooltipContent, {
         permanent: false,
@@ -505,7 +507,8 @@ function _showEditToolbar(geofenceId) {
     if (nameEl && gf) nameEl.textContent = gf.name;
     if (ownerEl) {
         if (_canAssignOwner() && gf?.owner_username) {
-            ownerEl.textContent = gf.owner_username;
+            const ownerAvatar = gf.owner_avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar';
+            ownerEl.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px;"><img src="${ownerAvatar}" alt="" style="width:14px;height:14px;border-radius:50%;object-fit:cover;vertical-align:middle;" onerror="this.src='https://www.gravatar.com/avatar/?d=wavatar'"><span>${_esc(gf.owner_username)}</span></span>`;
             ownerEl.style.display = '';
         } else {
             ownerEl.style.display = 'none';

@@ -1188,7 +1188,7 @@ function updatePlaybackUI() {
             </div>
             <div class="vp-grid" onscroll="_historyPopupGridScroll = this.scrollTop">
                 <span class="vp-label">Time</span>      <span class="vp-value vp-mono" style="font-size:0.72rem;">${_format2LineDatetime(p.time)}</span>
-                <span class="vp-label">Driver</span>    <span class="vp-value">${p.driver_name ? _esc(p.driver_name) : '—'}</span>
+                <span class="vp-label">Driver</span>    <span class="vp-value">${p.driver_name ? `<span style="display:inline-flex;align-items:center;gap:4px;"><img src="${p.driver_avatar_url || '/icons/default-driver.svg'}" style="width:14px;height:14px;border-radius:50%;object-fit:cover;vertical-align:middle;" onerror="this.src='/icons/default-driver.svg'"><span>${_esc(p.driver_name)}</span></span>` : '—'}</span>
                 <span class="vp-label">Speed</span>     <span class="vp-value">${p.speed != null ? fmtSpeed(p.speed) : '—'}</span>
                 <span class="vp-label">Heading</span>   <span class="vp-value">${p.course != null ? Number(p.course).toFixed(0) + '°' : '—'}</span>
                 <span class="vp-label">Ignition</span>  <span class="vp-value" style="color:${ignColor};font-weight:700;">${p.ignition === true ? 'ON' : p.ignition === false ? 'OFF' : '—'}</span>
@@ -1503,7 +1503,7 @@ function updatePointDetails(feature) {
     let html = `
         <div class="detail-grid">
             ${di('Lat/Lon', `${feature.geometry.coordinates[1].toFixed(5)}, ${feature.geometry.coordinates[0].toFixed(5)}`)}
-            ${di('Driver',     p.driver_name ? _esc(p.driver_name) : null)}
+            ${di('Driver',     p.driver_name ? `<span style="display:inline-flex;align-items:center;gap:4px;"><img src="${p.driver_avatar_url || '/icons/default-driver.svg'}" style="width:14px;height:14px;border-radius:50%;object-fit:cover;vertical-align:middle;" onerror="this.src='/icons/default-driver.svg'"><span>${_esc(p.driver_name)}</span></span>` : null)}
             ${di('Speed',      p.speed      != null ? fmtSpeed(p.speed)        : null)}
             ${di('Heading',    p.course     != null ? p.course.toFixed(0) + '°': null)}
             ${di('Altitude',   p.altitude   != null ? fmtAlt(p.altitude)       : null)}
@@ -1770,7 +1770,7 @@ async function loadTripsForHistory(deviceId, startTime, endTime, { preserveScrol
                     ${ecoBadge}
                 </div>
                 <div class="trip-card-body">
-                    ${trip.driver_name ? `<div class="trip-driver" title="${_esc(trip.driver_name)}"><i class="mdi mdi-account"></i><span>${_esc(trip.driver_name)}</span></div>` : ''}
+                    ${trip.driver_name ? `<div class="trip-driver" title="${_esc(trip.driver_name)}" style="display:inline-flex;align-items:center;gap:4px;"><img src="${trip.driver_avatar_url || '/icons/default-driver.svg'}" style="width:14px;height:14px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.src='/icons/default-driver.svg'"><span>${_esc(trip.driver_name)}</span></div>` : ''}
                     <div class="trip-time trip-time-list">
                         <div class="trip-time-row trip-time-end" title="End: ${end}">
                             <i class="mdi ${trip.end_time ? 'mdi-flag-checkered' : 'mdi-progress-clock'}"></i>

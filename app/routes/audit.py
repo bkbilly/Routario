@@ -17,11 +17,12 @@ def _require_audit_permission(user: User) -> None:
         raise HTTPException(status_code=403, detail="Super admin access required: view_audit")
 
 
-def _row(log: AuditLog, actor_username: Optional[str] = None, company_name: Optional[str] = None) -> dict:
+def _row(log: AuditLog, actor_username: Optional[str] = None, company_name: Optional[str] = None, actor_avatar_url: Optional[str] = None) -> dict:
     return {
         "id": log.id,
         "actor_user_id": log.actor_user_id,
         "actor_username": actor_username,
+        "actor_avatar_url": actor_avatar_url,
         "company_id": log.company_id,
         "company_name": company_name,
         "action": log.action,
@@ -51,11 +52,10 @@ async def list_audit_logs(
 
     db = get_db()
     async with db.get_session() as session:
-        actor = User.__table__.alias("actor_user")
         company = Company.__table__.alias("audit_company")
         q = (
-            select(AuditLog, actor.c.username, company.c.name)
-            .outerjoin(actor, AuditLog.actor_user_id == actor.c.id)
+            select(AuditLog, User, company.c.name)
+            .outerjoin(User, AuditLog.actor_user_id == User.id)
             .outerjoin(company, AuditLog.company_id == company.c.id)
             .where(AuditLog.created_at >= start_date, AuditLog.created_at <= end_date)
         )
@@ -69,4 +69,7 @@ async def list_audit_logs(
             q = q.where(AuditLog.actor_user_id == actor_user_id)
         q = q.order_by(desc(AuditLog.created_at)).limit(limit).offset(offset)
         result = await session.execute(q)
-        return [_row(log, actor_username, company_name) for log, actor_username, company_name in result.all()]
+        return [
+            _row(log, actor.username if actor else None, company_name, actor.avatar_url if actor else None)
+            for log, actor, company_name in result.all()
+        ]

@@ -112,7 +112,7 @@ def _token_response(user: User) -> dict[str, Any]:
         "user_id": user.id,
         "username": user.username,
         "email": user.email,
-        "avatar_url": gravatar_url_for_email(user.email),
+        "avatar_url": user.avatar_url,
         "is_admin": user.is_admin,
         "mfa_required": False,
         "is_company_admin": getattr(user, "is_company_admin", False) or False,

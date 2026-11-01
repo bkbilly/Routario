@@ -313,7 +313,12 @@ function getDeviceCardContent(device, icon) {
             ${device.current_driver_name ? `
             <div class="device-info-row">
                 <span class="info-label">Driver</span>
-                <span class="info-value"><i class="mdi mdi-account" style="font-size:0.8rem;"></i> ${device.current_driver_name}</span>
+                <span class="info-value" style="display:inline-flex;align-items:center;gap:5px;">
+                    <img src="${device.current_driver_avatar_url || '/icons/default-driver.svg'}"
+                         alt="" style="width:16px;height:16px;border-radius:50%;object-fit:cover;vertical-align:middle;flex-shrink:0;"
+                         onerror="this.src='/icons/default-driver.svg'">
+                    <span>${device.current_driver_name}</span>
+                </span>
             </div>` : ''}
             <div class="device-info-row">
                 <span class="info-label">IMEI</span>

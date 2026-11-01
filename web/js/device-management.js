@@ -3884,7 +3884,7 @@ function renderRawDataPage() {
             <td>${p.satellites != null ? p.satellites : '—'}</td>
             <td>${fmtAlt(p.altitude || 0)}</td>
             <td>${p.ignition === true ? '<span style="color:var(--accent-success);font-weight:600;">ON</span>' : p.ignition === false ? '<span style="color:var(--accent-danger);font-weight:600;">OFF</span>' : '<span style="color:var(--text-muted);">—</span>'}</td>
-            <td>${p.driver_name ? _esc(p.driver_name) : '—'}</td>
+            <td>${p.driver_name ? `<span style="display:inline-flex;align-items:center;gap:5px;"><img src="${p.driver_avatar_url || '/icons/default-driver.svg'}" alt="" style="width:16px;height:16px;border-radius:50%;object-fit:cover;vertical-align:middle;flex-shrink:0;" onerror="this.src='/icons/default-driver.svg'"><span>${_esc(p.driver_name)}</span></span>` : '—'}</td>
             <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono);font-size:0.72rem;"
                 title="${_esc(attrStr)}">${_esc(attrStr)}</td>`;
         tbody.appendChild(tr);

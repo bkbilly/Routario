@@ -420,9 +420,15 @@ class DatabaseService:
             "CREATE INDEX IF NOT EXISTS ix_audit_logs_actor_created ON audit_logs (actor_user_id, created_at)",
             "CREATE INDEX IF NOT EXISTS ix_audit_logs_company_created ON audit_logs (company_id, created_at)",
             "CREATE INDEX IF NOT EXISTS ix_usage_events_company_metric_created ON usage_events (company_id, metric, created_at)",
+            "ALTER TABLE users ADD COLUMN avatar_filename VARCHAR(255)",
+            "ALTER TABLE drivers ADD COLUMN icon_filename VARCHAR(255)",
+            "ALTER TABLE users ADD COLUMN is_driver BOOLEAN DEFAULT TRUE",
         ]
         if self._is_postgres:
             migrations.extend([
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_filename VARCHAR(255)",
+                "ALTER TABLE drivers ADD COLUMN IF NOT EXISTS icon_filename VARCHAR(255)",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_driver BOOLEAN DEFAULT TRUE",
                 "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS user_timezone VARCHAR(50) DEFAULT 'UTC'",
                 "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS options JSON DEFAULT '{}'",
                 "ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS notification_channels JSON DEFAULT '[]'",
@@ -714,7 +720,7 @@ class DatabaseService:
     ) -> List[Dict[str, Any]]:
         async with self.get_session() as session:
             query = (
-                select(Geofence, User.username)
+                select(Geofence, User)
                 .outerjoin(User, Geofence.user_id == User.id)
                 .where(Geofence.is_active == True)
             )
@@ -732,24 +738,25 @@ class DatabaseService:
 
         return [
             {
-                "id":             gf.id,
-                "user_id":        gf.user_id,
-                "owner_username": username,
-                "device_id":      gf.device_id,
-                "name":           gf.name,
-                "description":    gf.description,
-                "alert_on_enter": gf.alert_on_enter,
-                "alert_on_exit":  gf.alert_on_exit,
-                "is_active":      gf.is_active,
-                "color":          gf.color,
-                "geometry_type":  gf.geometry_type or "polygon",
-                "buffer_meters":  gf.buffer_meters or 50,
-                "created_at":     gf.created_at,
-                "coordinates":    wkt_to_geojson_coords(
+                "id":               gf.id,
+                "user_id":          gf.user_id,
+                "owner_username":   user.username if user else None,
+                "owner_avatar_url": user.avatar_url if user else None,
+                "device_id":        gf.device_id,
+                "name":             gf.name,
+                "description":      gf.description,
+                "alert_on_enter":   gf.alert_on_enter,
+                "alert_on_exit":    gf.alert_on_exit,
+                "is_active":        gf.is_active,
+                "color":            gf.color,
+                "geometry_type":    gf.geometry_type or "polygon",
+                "buffer_meters":    gf.buffer_meters or 50,
+                "created_at":       gf.created_at,
+                "coordinates":      wkt_to_geojson_coords(
                     gf.polygon_wkt, gf.geometry_type or "polygon"
                 ),
             }
-            for gf, username in rows
+            for gf, user in rows
         ]
 
     async def delete_geofence(self, geofence_id: int, user_id: Optional[int] = None):
@@ -772,6 +779,11 @@ class DatabaseService:
             pw_hash = bcrypt.hashpw(
                 user_data.password.encode(), bcrypt.gensalt()
             ).decode()
+            is_driver = (
+                user_data.is_driver
+                if user_data.is_driver is not None
+                else (not user_data.is_admin and not user_data.is_company_admin)
+            )
             user = User(
                 username=user_data.username,
                 email=user_data.email,
@@ -780,6 +792,7 @@ class DatabaseService:
                 is_admin=user_data.is_admin,
                 company_id=user_data.company_id,
                 is_company_admin=user_data.is_company_admin,
+                is_driver=is_driver,
                 notification_channels=user_data.notification_channels,
                 language=user_data.language or "en",
                 units=user_data.units or "metric",
@@ -790,6 +803,14 @@ class DatabaseService:
             session.add(user)
             await session.flush()
             await session.refresh(user)
+            if user.is_driver:
+                shadow = Driver(
+                    company_id=user.company_id,
+                    name=user.username,
+                    user_id=user.id,
+                )
+                session.add(shadow)
+                await session.flush()
             return user
 
     async def authenticate_user(self, username: str, password: str) -> Optional[User]:
@@ -868,19 +889,28 @@ class DatabaseService:
                 user.company_id = user_data.company_id
             if user_data.permissions is not None:
                 user.permissions = user_data.permissions
+            if user_data.is_driver is not None:
+                user.is_driver = user_data.is_driver
 
-            # Keep any linked driver in sync with the user's company and username
-            if user.is_admin or user.is_company_admin:
+            # Keep any linked driver in sync with the user's driver status, company and username
+            if not user.is_driver:
                 await session.execute(
                     delete(Driver).where(Driver.user_id == user_id)
                 )
             else:
-                driver_sync = {"company_id": user.company_id}
-                if getattr(user_data, "username", None):
-                    driver_sync["name"] = user.username
-                await session.execute(
-                    update(Driver).where(Driver.user_id == user_id).values(**driver_sync)
-                )
+                existing_driver = (await session.execute(
+                    select(Driver).where(Driver.user_id == user_id)
+                )).scalar_one_or_none()
+                if existing_driver:
+                    existing_driver.company_id = user.company_id
+                    existing_driver.name = user.username
+                else:
+                    new_driver = Driver(
+                        company_id=user.company_id,
+                        name=user.username,
+                        user_id=user.id,
+                    )
+                    session.add(new_driver)
 
             await session.flush()
             await session.refresh(user)

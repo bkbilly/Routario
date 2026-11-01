@@ -162,8 +162,10 @@ function renderUserChips(company) {
         const isAdmin = Boolean(u.is_company_admin);
         const iconClass = isAdmin ? 'mdi mdi-shield-account' : 'mdi mdi-account';
         const tooltip = `${_esc(u.username)}${u.email ? ' · ' + _esc(u.email) : ''}${isAdmin ? ' (Company Admin)' : ''}`;
-        return `<span class="cmp-chip${isAdmin ? ' user-admin' : ''}" title="${tooltip}">
-            <i class="${iconClass}"></i>
+        const uAvatar = u.avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar';
+        return `<span class="cmp-chip${isAdmin ? ' user-admin' : ''}" title="${tooltip}" style="display:inline-flex;align-items:center;gap:4px;">
+            <img src="${uAvatar}" alt="" style="width:14px;height:14px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display='none';if(this.nextElementSibling)this.nextElementSibling.style.display='inline-block';">
+            <i class="${iconClass}" style="display:none;"></i>
             <span class="cmp-chip-text">${_esc(u.username)}</span>
         </span>`;
     }).join('');
@@ -544,10 +546,14 @@ function renderUserTab() {
         const isCoAdmin  = companyAdminUserIds.has(u.id);
         const div = document.createElement('div');
         div.className = 'co-user-row';
+        const uAvatar = u.avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar';
         div.innerHTML = `
-            <div class="co-user-info">
-                <div class="co-user-name">${_esc(u.username)}</div>
-                <div class="co-user-email">${_esc(u.email || '')}</div>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <img src="${uAvatar}" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1px solid var(--border-color);" onerror="this.src='https://www.gravatar.com/avatar/?d=wavatar'">
+                <div class="co-user-info">
+                    <div class="co-user-name">${_esc(u.username)}</div>
+                    <div class="co-user-email">${_esc(u.email || '')}</div>
+                </div>
             </div>
             <div class="co-user-actions">
                 <button type="button"

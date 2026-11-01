@@ -11,10 +11,12 @@ Access rules:
   POST /api/users/{id}/devices     → company admin + manage_users
   POST /api/users/{id}/impersonate → company admin + manage_users
 """
+import time
+from pathlib import Path
 from typing import List
 
 import jwt
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy import select, delete, update, func
 from sqlalchemy.exc import IntegrityError
@@ -352,7 +354,7 @@ async def impersonate_user(user_id: int, admin: User = Depends(require_company_a
         "user_id":          target.id,
         "username":         target.username,
         "email":            target.email,
-        "avatar_url":       gravatar_url_for_email(target.email),
+        "avatar_url":       target.avatar_url,
         "is_admin":         target.is_admin,
         "is_company_admin": getattr(target, "is_company_admin", False) or False,
         "company_id":       getattr(target, "company_id", None),
@@ -396,3 +398,110 @@ async def assign_device(
                 )
             )
     return {"status": "success"}
+
+
+USER_AVATARS_DIR = Path("web/uploads/avatars/users")
+ALLOWED_AVATAR_TYPES = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+    "image/svg+xml": ".svg",
+}
+MAX_AVATAR_BYTES = 5 * 1024 * 1024
+
+
+@router.post("/{user_id}/avatar")
+async def upload_user_avatar(
+    user_id: int,
+    file: UploadFile = File(...),
+    caller: User = Depends(require_self_or_admin),
+):
+    if caller.id != user_id:
+        _check_manage_users(caller)
+
+    db = get_db()
+    async with db.get_session() as session:
+        user = await session.get(User, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if not caller.is_admin and user.company_id != caller.company_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        content_type = file.content_type or ""
+        suffix = ALLOWED_AVATAR_TYPES.get(content_type.lower())
+        if not suffix:
+            filename_lower = (file.filename or "").lower()
+            if filename_lower.endswith(".png"):
+                suffix = ".png"
+            elif filename_lower.endswith((".jpg", ".jpeg")):
+                suffix = ".jpg"
+            elif filename_lower.endswith(".webp"):
+                suffix = ".webp"
+            elif filename_lower.endswith(".gif"):
+                suffix = ".gif"
+            elif filename_lower.endswith(".svg"):
+                suffix = ".svg"
+            else:
+                raise HTTPException(status_code=400, detail="Unsupported image format. Allowed: PNG, JPEG, WEBP, GIF, SVG")
+
+        data = await file.read()
+        if not data:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
+        if len(data) > MAX_AVATAR_BYTES:
+            raise HTTPException(status_code=400, detail="Avatar must be 5MB or smaller")
+
+        USER_AVATARS_DIR.mkdir(parents=True, exist_ok=True)
+        if user.avatar_filename:
+            old_path = USER_AVATARS_DIR / user.avatar_filename
+            try:
+                if old_path.exists():
+                    old_path.unlink()
+            except OSError:
+                pass
+
+        filename = f"user_{user.id}_{int(time.time())}{suffix}"
+        (USER_AVATARS_DIR / filename).write_bytes(data)
+        user.avatar_filename = filename
+        await session.flush()
+        await session.refresh(user)
+
+        return {
+            "status": "ok",
+            "avatar_url": user.avatar_url,
+            "avatar_filename": user.avatar_filename,
+        }
+
+
+@router.delete("/{user_id}/avatar")
+async def delete_user_avatar(
+    user_id: int,
+    caller: User = Depends(require_self_or_admin),
+):
+    if caller.id != user_id:
+        _check_manage_users(caller)
+
+    db = get_db()
+    async with db.get_session() as session:
+        user = await session.get(User, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if not caller.is_admin and user.company_id != caller.company_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        if user.avatar_filename:
+            path = USER_AVATARS_DIR / user.avatar_filename
+            try:
+                if path.exists():
+                    path.unlink()
+            except OSError:
+                pass
+            user.avatar_filename = None
+            await session.flush()
+            await session.refresh(user)
+
+        return {
+            "status": "ok",
+            "avatar_url": user.avatar_url,
+            "avatar_filename": None,
+        }

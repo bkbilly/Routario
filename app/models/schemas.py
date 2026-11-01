@@ -202,6 +202,7 @@ class DeviceStateResponse(BaseModel):
     sensors: Optional[Dict[str, Any]] = None
     current_driver_id: Optional[int] = None
     current_driver_name: Optional[str] = None
+    current_driver_avatar_url: Optional[str] = None
 
 
 # ==================== User Schemas ====================
@@ -219,6 +220,7 @@ class UserCreate(BaseModel):
     is_admin: bool = False
     company_id: Optional[int] = None
     is_company_admin: bool = False
+    is_driver: Optional[bool] = None
     permissions: Optional[List[str]] = None
 
 
@@ -239,8 +241,10 @@ class UserUpdate(BaseModel):
     is_admin: Optional[bool] = None
     is_company_admin: Optional[bool] = None
     company_id: Optional[int] = None
+    is_driver: Optional[bool] = None
     webhook_urls: Optional[List[str]] = None
     permissions: Optional[List[str]] = None
+    avatar_filename: Optional[str] = None
 
 
 class UserLogin(BaseModel):
@@ -268,6 +272,7 @@ class Token(BaseModel):
     is_admin: bool
     mfa_required: bool = False
     is_company_admin: bool = False
+    is_driver: bool = True
     company_id: Optional[int] = None
     units: str = "metric"
     currency: str = "EUR"
@@ -301,6 +306,7 @@ class UserResponse(BaseModel):
     phone_number: Optional[str] = None
     is_admin: bool = False
     is_company_admin: bool = False
+    is_driver: bool = True
     company_id: Optional[int] = None
     language: Optional[str] = "en"
     units: Optional[str] = "metric"
@@ -315,10 +321,13 @@ class UserResponse(BaseModel):
     webhook_urls: List[str] = Field(default_factory=list)
     permissions: List[str] = Field(default_factory=list)
     mfa_enabled: bool = False
+    avatar_filename: Optional[str] = None
 
     @computed_field
     @property
     def avatar_url(self) -> str:
+        if self.avatar_filename:
+            return f"/uploads/avatars/users/{self.avatar_filename}"
         return gravatar_url_for_email(self.email)
 
     @field_validator('notification_channels', 'webhook_urls', mode='before')
@@ -373,6 +382,7 @@ class CompanyUserSummary(BaseModel):
     id: int
     username: str
     email: Optional[str] = None
+    avatar_url: Optional[str] = None
     is_company_admin: bool = False
 
 
@@ -457,6 +467,7 @@ class TripResponse(BaseModel):
     end_address: Optional[str]
     driver_id: Optional[int] = None
     driver_name: Optional[str] = None
+    driver_avatar_url: Optional[str] = None
     eco_score: Optional[float] = None
     harsh_accel_count: int = 0
     harsh_brake_count: int = 0
@@ -608,6 +619,7 @@ class DriverCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     phone: Optional[str] = None
     license_number: Optional[str] = None
+    icon_filename: Optional[str] = None
     company_id: Optional[int] = None
     notes: Optional[str] = None
     assignment_rule: Optional[str] = None
@@ -620,6 +632,7 @@ class DriverUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     phone: Optional[str] = None
     license_number: Optional[str] = None
+    icon_filename: Optional[str] = None
     notes: Optional[str] = None
     company_id: Optional[int] = None
     assignment_rule: Optional[str] = None
@@ -636,6 +649,8 @@ class DriverResponse(BaseModel):
     name: str
     phone: Optional[str]
     license_number: Optional[str]
+    icon_filename: Optional[str] = None
+    avatar_url: Optional[str] = None
     notes: Optional[str]
     created_at: datetime
     assignment_rule: Optional[str] = None

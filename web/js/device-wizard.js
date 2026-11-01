@@ -262,7 +262,11 @@
                         <div id="wzDriverExistingBox" class="wizard-choice-content">
                             <div class="form-group" style="margin-bottom:0;">
                                 <label class="form-label">Driver</label>
-                                <select id="wzDriverSelect" class="form-select"></select>
+                                <select id="wzDriverSelect" class="form-select" onchange="_updateWizardDriverPreview()"></select>
+                                <div id="wzDriverSelectPreview" style="display:none;align-items:center;gap:8px;margin-top:10px;">
+                                    <img id="wzDriverSelectAvatar" src="/icons/default-driver.svg" alt="" style="width:24px;height:24px;border-radius:50%;object-fit:cover;border:1px solid var(--border-color);" onerror="this.src='/icons/default-driver.svg'">
+                                    <span id="wzDriverSelectName" style="font-size:0.875rem;font-weight:600;color:var(--text-primary);"></span>
+                                </div>
                             </div>
                         </div>
 
@@ -1028,9 +1032,11 @@
                 drvSel.appendChild(opt);
             });
             wizardData.driver.driver_id = parseInt(availableDrivers[0].id, 10);
+            _updateWizardDriverPreview();
         } else {
             drvSel.innerHTML = '<option value="">No drivers found for this company</option>';
             wizardData.driver.driver_id = null;
+            _updateWizardDriverPreview();
         }
 
         // 3. Users: Filter to users in selected company
@@ -1129,6 +1135,24 @@
 
         document.getElementById('wzDriverExistingBox').style.display = (mode === 'existing') ? 'block' : 'none';
         document.getElementById('wzDriverNewBox').style.display = (mode === 'new') ? 'block' : 'none';
+        if (mode === 'existing') _updateWizardDriverPreview();
+    };
+
+    window._updateWizardDriverPreview = function() {
+        const sel = document.getElementById('wzDriverSelect');
+        const preview = document.getElementById('wzDriverSelectPreview');
+        const avatar = document.getElementById('wzDriverSelectAvatar');
+        const name = document.getElementById('wzDriverSelectName');
+        if (!sel || !preview || !avatar || !name) return;
+        const driverId = parseInt(sel.value, 10);
+        const d = cachedDrivers.find(x => x.id === driverId);
+        if (d) {
+            preview.style.display = 'flex';
+            avatar.src = d.avatar_url || '/icons/default-driver.svg';
+            name.textContent = d.name;
+        } else {
+            preview.style.display = 'none';
+        }
     };
 
     window._selectUserAccessMode = function(mode) {
@@ -1473,9 +1497,10 @@
         let drvLabel = 'Unassigned';
         if (wizardData.driver.mode === 'existing' && wizardData.driver.driver_id) {
             const d = cachedDrivers.find(x => x.id === wizardData.driver.driver_id);
-            drvLabel = d ? d.name : 'Assigned Driver';
+            const dAvatar = d?.avatar_url || '/icons/default-driver.svg';
+            drvLabel = `<span style="display:inline-flex;align-items:center;gap:6px;"><img src="${dAvatar}" alt="" style="width:16px;height:16px;border-radius:50%;object-fit:cover;vertical-align:middle;" onerror="this.src='/icons/default-driver.svg'"><span>${_esc(d ? d.name : 'Assigned Driver')}</span></span>`;
         } else if (wizardData.driver.mode === 'new') {
-            drvLabel = `${wizardData.driver.name} (New Driver)`;
+            drvLabel = `${_esc(wizardData.driver.name)} (New Driver)`;
         }
 
         // 5. Users

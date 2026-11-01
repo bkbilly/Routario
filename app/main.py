@@ -235,8 +235,9 @@ class WebSocketManager:
                 "trip_odometer":       device.state.trip_odometer,
                 "is_moving":           device.state.is_moving,
                 "is_online":           device.state.is_online,
-                "current_driver_id":   device.state.current_driver_id,
-                "current_driver_name": device.state.current_driver_name,
+                "current_driver_id":         device.state.current_driver_id,
+                "current_driver_name":       device.state.current_driver_name,
+                "current_driver_avatar_url": device.state.current_driver_avatar_url,
             }
         position.sensors = {**(position.sensors or {}), "last_gps_time": position.device_time.strftime("%Y-%m-%dT%H:%M:%S")}
         message = {

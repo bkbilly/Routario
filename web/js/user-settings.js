@@ -251,6 +251,11 @@ function renderProfile() {
     if (avatarImg) {
         avatarImg.src = profileUser.avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar';
     }
+    const resetBtn = document.getElementById('profileAvatarResetBtn');
+    if (resetBtn) {
+        const isCustom = Boolean(profileUser.avatar_filename) || (Boolean(profileUser.avatar_url) && profileUser.avatar_url.includes('/uploads/avatars/'));
+        resetBtn.style.display = isCustom ? 'inline-flex' : 'none';
+    }
     document.getElementById('profileUsername').value = profileUser.username || '';
     document.getElementById('profileEmail').value = profileUser.email || '';
     const phoneEl = document.getElementById('profilePhone');
@@ -291,6 +296,76 @@ function renderProfileCurrencyOptions(selected = 'EUR') {
     if (!select) return;
     const options = typeof CURRENCY_OPTIONS !== 'undefined' ? CURRENCY_OPTIONS : [['EUR', 'Euro (€)']];
     select.innerHTML = options.map(([code, label]) => `<option value="${settingsEsc(code)}" ${code === selected ? 'selected' : ''}>${settingsEsc(label)}</option>`).join('');
+}
+
+function triggerProfileAvatarUpload() {
+    const fileInput = document.getElementById('profileAvatarFileInput');
+    if (fileInput) fileInput.click();
+}
+
+async function handleProfileAvatarUpload(input) {
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await apiFetch(`${API_BASE}/users/${USER_ID}/avatar`, {
+            method: 'POST',
+            body: formData,
+        });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || 'Failed to upload avatar');
+        }
+        const data = await res.json();
+        showAlert('Avatar updated successfully', 'success');
+        if (profileUser) {
+            profileUser.avatar_url = data.avatar_url;
+            profileUser.avatar_filename = data.avatar_filename;
+        }
+        localStorage.setItem('avatar_url', data.avatar_url);
+        renderProfile();
+        const displayUrl = `${data.avatar_url}?v=${Date.now()}`;
+        const snImg = document.getElementById('snMenuAvatarImg');
+        if (snImg) {
+            snImg.src = displayUrl;
+            snImg.style.display = 'block';
+        }
+        const profileImg = document.getElementById('profileAvatarImg');
+        if (profileImg) {
+            profileImg.src = displayUrl;
+        }
+    } catch (err) {
+        showAlert(err.message || 'Failed to upload avatar', 'error');
+    } finally {
+        input.value = '';
+    }
+}
+
+async function resetProfileAvatar() {
+    try {
+        const res = await apiFetch(`${API_BASE}/users/${USER_ID}/avatar`, {
+            method: 'DELETE',
+        });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || 'Failed to reset avatar');
+        }
+        const data = await res.json();
+        showAlert('Reverted to Gravatar', 'success');
+        if (profileUser) {
+            profileUser.avatar_url = data.avatar_url;
+            profileUser.avatar_filename = null;
+        }
+        localStorage.setItem('avatar_url', data.avatar_url);
+        renderProfile();
+        const snImg = document.getElementById('snMenuAvatarImg');
+        if (snImg) {
+            snImg.src = data.avatar_url;
+        }
+    } catch (err) {
+        showAlert(err.message || 'Failed to reset avatar', 'error');
+    }
 }
 
 window.addEventListener('routario:currencyrateschange', () => {
@@ -1659,7 +1734,16 @@ function renderSystemSettings(restoreScrollPos = null) {
             if (item.readonly) badges += `<span class="system-setting-badge system-setting-badge-readonly">Read Only</span>`;
 
             let extraActions = '';
-            if (item.key === 'history_retention_days') {
+            if (item.key === 'default_driver_icon') {
+                extraActions = `
+                    <div style="margin-top:0.5rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                        <img id="sys_default_driver_preview" src="${settingsEsc(item.value || '/icons/default-driver.svg')}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:1px solid var(--border-color);background:var(--bg-tertiary);" onerror="this.src='/icons/default-driver.svg';">
+                        <button type="button" class="btn btn-secondary btn-small" onclick="document.getElementById('sys_default_driver_file').click()"><i class="mdi mdi-upload"></i> Upload Default Icon</button>
+                        <button type="button" class="btn btn-secondary btn-small" onclick="resetSysDefaultDriverIcon()"><i class="mdi mdi-restore"></i> Reset to Default</button>
+                        <input type="file" id="sys_default_driver_file" accept="image/*" style="display:none;" onchange="uploadSysDefaultDriverIcon(this)">
+                    </div>
+                `;
+            } else if (item.key === 'history_retention_days') {
                 extraActions = `
                     <div style="margin-top:0.5rem;">
                         <button type="button" class="btn btn-secondary" onclick="triggerManualHistoryPurge()" style="font-size:0.78rem; padding:0.35rem 0.75rem; border-color:rgba(239,68,68,0.4); color:var(--accent-danger);">
@@ -2129,6 +2213,53 @@ window.generateVapidKeys = async function() {
             btn.disabled = false;
             btn.innerHTML = '<i class="mdi mdi-key-plus"></i> Generate New VAPID Keypair';
         }
+    }
+};
+
+window.uploadSysDefaultDriverIcon = async function(input) {
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const res = await apiFetch(`${API_BASE}/drivers/default-icon`, {
+            method: 'POST',
+            body: formData,
+        });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || 'Failed to upload default driver icon');
+        }
+        const data = await res.json();
+        showAlert('Default driver icon updated successfully', 'success');
+        const inputEl = document.getElementById('sys_default_driver_icon');
+        if (inputEl) inputEl.value = data.default_driver_icon;
+        const prevEl = document.getElementById('sys_default_driver_preview');
+        if (prevEl) prevEl.src = `${data.default_driver_icon}?v=${Date.now()}`;
+    } catch (err) {
+        showAlert(err.message || 'Failed to upload default driver icon', 'error');
+    } finally {
+        input.value = '';
+    }
+};
+
+window.resetSysDefaultDriverIcon = async function() {
+    try {
+        const res = await apiFetch(`${API_BASE}/drivers/default-icon`, {
+            method: 'DELETE',
+        });
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || 'Failed to reset default driver icon');
+        }
+        const data = await res.json();
+        showAlert('Default driver icon reset to standard SVG', 'success');
+        const inputEl = document.getElementById('sys_default_driver_icon');
+        if (inputEl) inputEl.value = data.default_driver_icon;
+        const prevEl = document.getElementById('sys_default_driver_preview');
+        if (prevEl) prevEl.src = data.default_driver_icon;
+    } catch (err) {
+        showAlert(err.message || 'Failed to reset default driver icon', 'error');
     }
 };
 

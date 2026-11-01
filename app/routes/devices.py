@@ -509,6 +509,7 @@ async def get_trip_eco_scorecard(
             "device_name": device.name if device else f"Device {device_id}",
             "license_plate": device.license_plate if device else None,
             "driver_name": trip.driver_name,
+            "driver_avatar_url": trip.driver_avatar_url,
             "start_time": trip.start_time.isoformat() if trip.start_time else None,
             "end_time": trip.end_time.isoformat() if trip.end_time else None,
             "distance_km": round(trip.distance_km or 0.0, 2),

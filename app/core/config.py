@@ -139,6 +139,7 @@ class Settings(BaseSettings):
     # Fleet & Trip Rules
     trip_min_distance_km: float = 0.1
     trip_min_duration_seconds: int = 60
+    default_driver_icon: str = "/icons/default-driver.svg"
 
     class Config:
         env_file = ".env"
@@ -409,6 +410,7 @@ SYSTEM_SETTINGS_METADATA = {
     # Telematics & Trip Rules
     "trip_min_distance_km": {"type": "float", "category": "Telematics & Trip Rules", "label": "Trip Min Distance (km)", "description": "Minimum distance threshold to classify a movement as a valid trip (filters GPS drift)", "secret": False},
     "trip_min_duration_seconds": {"type": "int", "category": "Telematics & Trip Rules", "label": "Trip Min Duration (s)", "description": "Minimum duration in seconds required for a valid trip", "secret": False},
+    "default_driver_icon": {"type": "str", "category": "Telematics & Trip Rules", "label": "Default Driver Icon", "description": "Default icon URL for unlinked drivers (e.g. /icons/default-driver.svg)", "secret": False, "default": "/icons/default-driver.svg"},
 
     # Maps, Geocoding & Routing
     "geocoding_enabled": {"type": "bool", "category": "Maps, Geocoding & Routing", "label": "Geocoding Enabled", "description": "Enable reverse geocoding on incoming GPS coordinates (Nominatim)", "secret": False},

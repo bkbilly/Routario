@@ -286,7 +286,9 @@ async function _loadUsers() {
         _allUsers.forEach(u => {
             const label = document.createElement('label');
             label.className = 'veh-opt';
+            const uAvatar = u.avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar';
             label.innerHTML = `<input type="checkbox" data-id="${u.id}" onchange="onUserCheck(this)">
+                <img src="${uAvatar}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;margin:0 4px;vertical-align:middle;" onerror="this.src='https://www.gravatar.com/avatar/?d=wavatar'">
                 <span>${_esc(u.username)}${u.email ? ` <span style="color:var(--text-muted);font-size:0.8rem;">(${_esc(u.email)})</span>` : ''}</span>`;
             list.appendChild(label);
         });
@@ -425,7 +427,9 @@ function _renderDriverOptions() {
     _allDrivers.forEach(d => {
         const label = document.createElement('label');
         label.className = 'veh-opt';
+        const dAvatar = d.avatar_url || '/icons/default-driver.svg';
         label.innerHTML = `<input type="checkbox" data-id="${d.id}" onchange="onDriverCheck(this)" ${_selectedDriverIds.has(d.id) ? 'checked' : ''}>
+            <img src="${dAvatar}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;margin:0 4px;vertical-align:middle;" onerror="this.src='/icons/default-driver.svg'">
             <span>${_esc(d.name)}</span>`;
         list.appendChild(label);
     });
@@ -2035,6 +2039,11 @@ function _formatValue(value, col = {}, row = {}) {
         const empty = col.empty || '—';
         return col.empty_tone ? `<span style="color:var(--accent-${col.empty_tone},#eab308);">${_esc(empty)}</span>` : _esc(empty);
     }
+    if (col.key === 'driver_name' || col.key === 'current_driver_name') {
+        const driverObj = Array.isArray(_allDrivers) ? _allDrivers.find(d => (row.driver_id && d.id === row.driver_id) || d.name === value) : null;
+        const avatar = row.driver_avatar_url || driverObj?.avatar_url || '/icons/default-driver.svg';
+        return `<span style="display:inline-flex;align-items:center;gap:6px;"><img src="${avatar}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.src='/icons/default-driver.svg'"><span>${_esc(value)}</span></span>`;
+    }
     if (col.type === 'datetime' || col.type === 'datetime_split') return _fmtDatetimeSplit(value);
     if (col.type === 'date' || col.key === 'expiry_date') return _esc(formatDateValue(value));
     if (col.type === 'duration_minutes') return _fmtDuration(Number(value));
@@ -2634,7 +2643,9 @@ function showEcoDriverDetail(idx) {
 
     const driverName = row.driver_name || row.device_name || 'Driver';
     const plate = row.license_plate ? ` (${row.license_plate})` : '';
-    title.innerHTML = `<i class="mdi mdi-shield-car"></i> Safety Scorecard — ${_esc(driverName)}${_esc(plate)}`;
+    const driverObj = Array.isArray(_allDrivers) ? _allDrivers.find(d => (row.driver_id && d.id === row.driver_id) || (row.driver_name && d.name === row.driver_name)) : null;
+    const dAvatar = row.driver_avatar_url || driverObj?.avatar_url || '/icons/default-driver.svg';
+    title.innerHTML = `<img src="${dAvatar}" style="width:20px;height:20px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px;" onerror="this.src='/icons/default-driver.svg'"><i class="mdi mdi-shield-car"></i> Safety Scorecard — ${_esc(driverName)}${_esc(plate)}`;
 
     _renderEcoModalContent();
     modal.classList.add('active');

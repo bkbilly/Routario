@@ -203,6 +203,10 @@ h1 {
     background: var(--bg-secondary);
 }
 
+.profile-avatar-wrapper:hover .profile-avatar-overlay {
+    opacity: 1 !important;
+}
+
 .profile-settings-panel .form-input {
     min-width: 0;
     max-width: 100%;

@@ -648,6 +648,7 @@
             <table class="devices-table">
                 <thead>
                     <tr>
+                        <th style="width:48px;text-align:center;"></th>
                         <th data-sort="name" data-sort-dir="asc" onclick="sortDrivers('name')">Name</th>
                         <th id="driverCompanyHeader" data-sort="company" onclick="sortDrivers('company')" style="display:none;">Company</th>
                         <th data-sort="vehicle" onclick="sortDrivers('vehicle')">Vehicle</th>
@@ -656,7 +657,7 @@
                 </thead>
                 <tbody id="driversTableBody">
                     <tr>
-                        <td colspan="3" style="text-align:center;padding:3rem;color:var(--text-muted);">
+                        <td colspan="5" style="text-align:center;padding:3rem;color:var(--text-muted);">
                             <div class="loading" style="margin:0 auto 1rem;"></div>
                             Loading drivers&#8230;
                         </td>
@@ -1309,13 +1310,33 @@
 <div class="modal" id="driverModal">
     <div class="modal-content" style="max-width:820px;height:auto;">
         <div class="modal-header">
-            <h2 class="modal-title" id="driverModalTitle">Add Driver</h2>
+            <div style="display:flex;align-items:center;gap:0.65rem;">
+                <img id="driverModalAvatar" src="/icons/default-driver.svg" alt="Driver Icon" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:1.5px solid var(--border-color);background:var(--bg-tertiary);">
+                <h2 class="modal-title" id="driverModalTitle">Add Driver</h2>
+            </div>
             <button type="button" class="modal-close" onclick="closeDriverModal()"><i class="mdi mdi-close"></i></button>
         </div>
         <div class="modal-scrollable" style="padding:1.25rem;">
             <div class="driver-modal-columns">
                 <!-- LEFT: driver info -->
                 <div>
+                    <div class="form-group" id="driverAvatarGroup" style="display:none;">
+                        <label class="form-label">Driver Icon / Avatar</label>
+                        <div style="display:flex;align-items:center;gap:1rem;padding:0.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-secondary);">
+                            <img id="driverModalAvatarLarge" src="/icons/default-driver.svg" alt="Driver Icon" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:1.5px solid var(--border-color);background:var(--bg-tertiary);flex-shrink:0;">
+                            <div style="display:flex;flex-direction:column;gap:0.35rem;flex-grow:1;">
+                                <div id="driverAvatarHint" style="font-size:0.8rem;color:var(--text-secondary);">Default driver icon</div>
+                                <div id="driverAvatarControls" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+                                    <button type="button" class="btn btn-secondary btn-small" id="driverAvatarUploadBtn" onclick="drvClickAvatarUpload()"><i class="mdi mdi-upload"></i> Upload Icon</button>
+                                    <button type="button" class="btn btn-secondary btn-small" id="driverAvatarResetBtn" onclick="drvResetAvatar()" style="display:none;"><i class="mdi mdi-restore"></i> Reset to Default</button>
+                                    <input type="file" id="driverAvatarFileInput" accept="image/*" style="display:none;" onchange="drvHandleAvatarUpload(this)">
+                                </div>
+                                <div id="driverAvatarLinkedHint" style="display:none;font-size:0.8rem;color:#818cf8;">
+                                    <i class="mdi mdi-link-variant"></i> Synchronized from linked user profile
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="form-group">
                         <label class="form-label">Full Name *</label>
                         <input type="text" id="driverName" class="form-input" placeholder="John Smith">
@@ -1415,10 +1436,13 @@
             <button type="button" class="modal-close" onclick="closeDriverAssignModal()"><i class="mdi mdi-close"></i></button>
         </div>
         <div style="padding:1.25rem;">
-            <p style="color:var(--text-secondary);font-size:0.875rem;margin:0 0 1rem;">
-                Driver: <strong id="assignModalDriverName" style="color:var(--text-primary);"></strong>
-                <span id="assignModalCompanyName" style="display:block;font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem;"></span>
-            </p>
+            <div style="display:flex;align-items:center;gap:10px;margin:0 0 1rem;">
+                <img id="assignModalDriverAvatar" src="/icons/default-driver.svg" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--border-color);flex-shrink:0;" onerror="this.src='/icons/default-driver.svg'">
+                <div>
+                    <span style="color:var(--text-secondary);font-size:0.875rem;">Driver:</span> <strong id="assignModalDriverName" style="color:var(--text-primary);"></strong>
+                    <span id="assignModalCompanyName" style="display:block;font-size:0.75rem;color:var(--text-muted);margin-top:0.15rem;"></span>
+                </div>
+            </div>
             <div class="form-group">
                 <label class="form-label">Vehicle</label>
                 <select id="driverAssignVehicleSelect" class="form-input">
@@ -1669,6 +1693,20 @@
         <div class="modal-scrollable" style="padding:1.25rem 1.5rem;">
             <div id="userModalBody">
                 <div>
+                    <div class="form-group" id="userModalAvatarGroup" style="display:none;">
+                        <label class="form-label">User Avatar / Icon</label>
+                        <div style="display:flex;align-items:center;gap:1rem;padding:0.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-secondary);">
+                            <img id="userModalAvatarLarge" src="https://www.gravatar.com/avatar/?d=wavatar" alt="Avatar" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:1.5px solid var(--border-color);background:var(--bg-tertiary);flex-shrink:0;">
+                            <div style="display:flex;flex-direction:column;gap:0.35rem;flex-grow:1;">
+                                <div id="userModalAvatarHint" style="font-size:0.8rem;color:var(--text-secondary);">Using Gravatar based on email</div>
+                                <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+                                    <button type="button" class="btn btn-secondary btn-small" onclick="usrClickAvatarUpload()"><i class="mdi mdi-upload"></i> Upload Image</button>
+                                    <button type="button" class="btn btn-secondary btn-small" id="userModalAvatarResetBtn" onclick="usrResetAvatar()" style="display:none;"><i class="mdi mdi-restore"></i> Use Gravatar</button>
+                                    <input type="file" id="userModalAvatarFileInput" accept="image/*" style="display:none;" onchange="usrHandleAvatarUpload(this)">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="form-group">
                         <label class="form-label">Username *</label>
                         <input type="text" id="userModalUsername" class="form-input" placeholder="johndoe" autocomplete="off">
@@ -1694,6 +1732,16 @@
                         <select id="userModalCompany" class="form-input">
                             <option value="">— Select company —</option>
                         </select>
+                    </div>
+                    <div class="form-group" id="userModalDriverGroup">
+                        <label class="form-label">Driver Status</label>
+                        <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;padding:0.35rem 0;">
+                            <input type="checkbox" id="userModalIsDriver" style="cursor:pointer;width:16px;height:16px;">
+                            <span style="font-size:0.88rem;color:var(--text-primary);font-weight:500;">Show user as a driver</span>
+                        </label>
+                        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.15rem;">
+                            When enabled, this user appears in the Drivers management table and can be assigned to vehicles.
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Unit System</label>
