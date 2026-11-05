@@ -198,14 +198,18 @@ class Device(Base):
     @property
     def company_name(self) -> Optional[str]:
         try:
-            return self.company.name if self.company else None
+            if "company" in self.__dict__ and self.company:
+                return self.company.name
+            return None
         except Exception:
             return None
 
     @property
     def sim_card_id(self) -> Optional[int]:
         try:
-            return self.sim_card.id if self.sim_card else None
+            if "sim_card" in self.__dict__ and self.sim_card:
+                return self.sim_card.id
+            return None
         except Exception:
             return None
 
@@ -262,14 +266,18 @@ class DeviceState(Base):
     @property
     def current_driver_name(self) -> "Optional[str]":
         try:
-            return self.current_driver.name if self.current_driver else None
+            if "current_driver" in self.__dict__ and self.current_driver:
+                return self.current_driver.name
+            return None
         except Exception:
             return None
 
     @property
     def current_driver_avatar_url(self) -> "Optional[str]":
         try:
-            return self.current_driver.avatar_url if self.current_driver else None
+            if "current_driver" in self.__dict__ and self.current_driver:
+                return self.current_driver.avatar_url
+            return None
         except Exception:
             return None
 
@@ -335,7 +343,9 @@ class Trip(Base):
         if self._driver_name:
             return self._driver_name
         try:
-            return self.driver.name if self.driver else None
+            if "driver" in self.__dict__ and self.driver:
+                return self.driver.name
+            return None
         except Exception:
             return None
 
@@ -348,7 +358,9 @@ class Trip(Base):
         if self._driver_avatar_url:
             return self._driver_avatar_url
         try:
-            return self.driver.avatar_url if self.driver else None
+            if "driver" in self.__dict__ and self.driver:
+                return self.driver.avatar_url
+            return None
         except Exception:
             return None
 

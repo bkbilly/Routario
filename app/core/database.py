@@ -1300,8 +1300,15 @@ class DatabaseService:
                 trip = await session.get(Trip, state.active_trip_id)
                 if trip and state.current_driver_id and trip.driver_id != state.current_driver_id:
                     trip.driver_id = state.current_driver_id
-                    trip.driver_name = state.current_driver_name
-                    trip.driver_avatar_url = state.current_driver_avatar_url
+                    d_name = state.current_driver_name
+                    d_avatar = state.current_driver_avatar_url
+                    if not d_name:
+                        driver_obj = await session.get(Driver, state.current_driver_id)
+                        if driver_obj:
+                            d_name = driver_obj.name
+                            d_avatar = driver_obj.avatar_url
+                    trip.driver_name = d_name
+                    trip.driver_avatar_url = d_avatar
 
             rec = PositionRecord(
                 device_id=device.id,
@@ -1413,6 +1420,11 @@ class DatabaseService:
 
             driver_name = state.current_driver_name
             driver_avatar = state.current_driver_avatar_url
+            if not driver_name and state.current_driver_id:
+                driver_obj = await session.get(Driver, state.current_driver_id)
+                if driver_obj:
+                    driver_name = driver_obj.name
+                    driver_avatar = driver_obj.avatar_url
             trip = Trip(
                 device_id=device.id,
                 start_time=device_time,
@@ -1431,7 +1443,7 @@ class DatabaseService:
             state.trip_odometer    = 0.0
 
         elif not position.ignition and state.active_trip_id:
-            trip = await session.get(Trip, state.active_trip_id)
+            trip = await session.get(Trip, state.active_trip_id, options=[selectinload(Trip.driver)])
             if trip:
                 trip.end_time        = device_time
                 trip.end_latitude    = position.latitude
@@ -1484,7 +1496,12 @@ class DatabaseService:
                 if not trip.driver_name and state.current_driver_name:
                     trip.driver_name = state.current_driver_name
                     trip.driver_avatar_url = state.current_driver_avatar_url
-                elif not trip.driver_name and trip.driver:
+                elif not trip.driver_name and trip.driver_id:
+                    driver = await session.get(Driver, trip.driver_id)
+                    if driver:
+                        trip.driver_name = driver.name
+                        trip.driver_avatar_url = driver.avatar_url
+                elif not trip.driver_name and "driver" in trip.__dict__ and trip.driver:
                     trip.driver_name = trip.driver.name
                     trip.driver_avatar_url = trip.driver.avatar_url
 
