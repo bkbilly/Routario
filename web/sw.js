@@ -4,7 +4,7 @@
  * Place this file at: /web/sw.js  (root of your web directory)
  */
 
-const CACHE_NAME = 'gps-dashboard-v149';
+const CACHE_NAME = 'gps-dashboard-v150';
 const TILE_CACHE_NAME = 'routario-map-tiles-v1';
 const MAX_CACHED_TILES = 1500;
 let tileInsertCount = 0;
@@ -236,9 +236,23 @@ self.addEventListener('push', (event) => {
     actions: actions
   };
 
-  event.waitUntil(
-    self.registration.showNotification(data.title, options)
-  );
+  event.waitUntil((async () => {
+    // If the app is currently open and focused in a window/tab, suppress the OS notification
+    // to avoid duplicating the live in-app toast/chime (unless it's a critical emergency alert).
+    if (!isCritical && self.clients) {
+      try {
+        const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        const isAppFocused = clientList.some(c => c.focused);
+        if (isAppFocused) {
+          return;
+        }
+      } catch (err) {
+        // Fallback to displaying notification if client matching fails
+      }
+    }
+
+    await self.registration.showNotification(data.title, options);
+  })());
 });
 
 // ── Notification click handler ────────────────────────────────────

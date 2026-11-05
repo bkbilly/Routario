@@ -7,7 +7,7 @@ import math
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import Integer, DateTime, ForeignKey, delete, select
+from sqlalchemy import Integer, DateTime, ForeignKey, Text, delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Mapped, mapped_column
@@ -22,13 +22,14 @@ logger = logging.getLogger(__name__)
 class PushSubscription(Base):
     __tablename__ = "push_subscriptions"
 
-    id:           Mapped[int]      = mapped_column(Integer, primary_key=True)
-    user_id:      Mapped[int]      = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+    id:           Mapped[int]           = mapped_column(Integer, primary_key=True)
+    user_id:      Mapped[int]           = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
-    subscription: Mapped[dict]     = mapped_column(JsonType, nullable=False)
-    created_at:   Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at:   Mapped[datetime] = mapped_column(
+    endpoint:     Mapped[Optional[str]] = mapped_column(Text, nullable=True, index=True)
+    subscription: Mapped[dict]          = mapped_column(JsonType, nullable=False)
+    created_at:   Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at:   Mapped[datetime]      = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
@@ -94,26 +95,31 @@ class PushNotificationService:
     ) -> bool:
         if not self._enabled:
             return False
-        subscription = await self._get_subscription(db_service, user_id)
-        if not subscription:
+        subs = await self._get_subscriptions(db_service, user_id)
+        if not subs:
             return False
         icon, badge = await self._get_branding_urls(db_service, user_id)
-        ok, _ = await self._send(
-            subscription=subscription,
-            alert_type="notification",
-            message=message,
-            severity="info",
-            device_name=None,
-            alert_id=alert_id,
-            icon=icon,
-            badge=badge,
-            user_id=user_id,
-            db_service=db_service,
-            title_override=title,
-            latitude=latitude,
-            longitude=longitude,
-        )
-        return ok
+        any_success = False
+        for sub_id, subscription in subs:
+            ok, _ = await self._send(
+                subscription=subscription,
+                alert_type="notification",
+                message=message,
+                severity="info",
+                device_name=None,
+                alert_id=alert_id,
+                icon=icon,
+                badge=badge,
+                user_id=user_id,
+                db_service=db_service,
+                title_override=title,
+                latitude=latitude,
+                longitude=longitude,
+                sub_id=sub_id,
+            )
+            if ok:
+                any_success = True
+        return any_success
 
     async def notify_user(
         self,
@@ -129,81 +135,91 @@ class PushNotificationService:
     ) -> tuple[bool, Optional[str]]:
         if not self._enabled:
             return False, "Push notifications disabled: VAPID keys not configured on server"
-        subscription = await self._get_subscription(db_service, user_id)
-        if not subscription:
+        subs = await self._get_subscriptions(db_service, user_id)
+        if not subs:
             return False, f"No active browser subscription found for user {user_id}"
         icon, badge = await self._get_branding_urls(db_service, user_id)
-        return await self._send(
-            subscription=subscription,
-            alert_type=alert_type,
-            message=message,
-            severity=severity,
-            device_name=device_name,
-            alert_id=alert_id,
-            icon=icon,
-            badge=badge,
-            user_id=user_id,
-            db_service=db_service,
-            latitude=latitude,
-            longitude=longitude,
-        )
+        any_success = False
+        last_error = None
+        for sub_id, subscription in subs:
+            ok, err = await self._send(
+                subscription=subscription,
+                alert_type=alert_type,
+                message=message,
+                severity=severity,
+                device_name=device_name,
+                alert_id=alert_id,
+                icon=icon,
+                badge=badge,
+                user_id=user_id,
+                db_service=db_service,
+                latitude=latitude,
+                longitude=longitude,
+                sub_id=sub_id,
+            )
+            if ok:
+                any_success = True
+            else:
+                last_error = err
+
+        if any_success:
+            return True, None
+        return False, last_error or "Push delivery failed to all devices"
 
     async def save_subscription(self, db_service, user_id: int, subscription: dict):
         """
-        Upsert a push subscription.  Uses dialect-specific INSERT … ON CONFLICT
-        for PostgreSQL and SQLite; falls back to delete-then-insert for others
-        (e.g. MySQL which uses INSERT … ON DUPLICATE KEY UPDATE via its own
-        dialect but that requires importing aiomysql dialect explicitly).
+        Upsert a push subscription per (user_id, endpoint).
+        Allows a user to have active push subscriptions across multiple devices
+        (e.g., mobile phone PWA and desktop browser).
         """
-        from core.database import _is_postgres, _is_sqlite
-
-        db_url = db_service._db_url
+        endpoint = str(subscription.get("endpoint") or "").strip()
+        now = datetime.utcnow()
 
         async with db_service.get_session() as session:
-            if _is_postgres(db_url):
-                stmt = (
-                    pg_insert(PushSubscription)
-                    .values(user_id=user_id, subscription=subscription, updated_at=datetime.utcnow())
-                    .on_conflict_do_update(
-                        index_elements=["user_id"],
-                        set_={"subscription": subscription, "updated_at": datetime.utcnow()},
-                    )
-                )
-                await session.execute(stmt)
-            elif _is_sqlite(db_url):
-                stmt = (
-                    sqlite_insert(PushSubscription)
-                    .values(user_id=user_id, subscription=subscription, updated_at=datetime.utcnow())
-                    .on_conflict_do_update(
-                        index_elements=["user_id"],
-                        set_={"subscription": subscription, "updated_at": datetime.utcnow()},
-                    )
-                )
-                await session.execute(stmt)
+            # Check for existing subscription matching user_id and endpoint
+            query = select(PushSubscription).where(PushSubscription.user_id == user_id)
+            if endpoint:
+                query = query.where(PushSubscription.endpoint == endpoint)
+            res = await session.execute(query)
+            existing = res.scalars().first()
+
+            if existing:
+                existing.subscription = subscription
+                existing.endpoint = endpoint or existing.endpoint
+                existing.updated_at = now
             else:
-                # Generic fallback
-                await session.execute(
-                    delete(PushSubscription).where(PushSubscription.user_id == user_id)
-                )
                 session.add(PushSubscription(
                     user_id=user_id,
+                    endpoint=endpoint or None,
                     subscription=subscription,
-                    updated_at=datetime.utcnow(),
+                    created_at=now,
+                    updated_at=now,
                 ))
 
-    async def remove_subscription(self, db_service, user_id: int):
+    async def remove_subscription(self, db_service, user_id: int, endpoint: Optional[str] = None):
+        async with db_service.get_session() as session:
+            stmt = delete(PushSubscription).where(PushSubscription.user_id == user_id)
+            if endpoint:
+                stmt = stmt.where(PushSubscription.endpoint == endpoint)
+            await session.execute(stmt)
+
+    async def remove_subscription_by_id(self, db_service, sub_id: int):
         async with db_service.get_session() as session:
             await session.execute(
-                delete(PushSubscription).where(PushSubscription.user_id == user_id)
+                delete(PushSubscription).where(PushSubscription.id == sub_id)
             )
 
-    async def _get_subscription(self, db_service, user_id: int) -> Optional[dict]:
+    async def _get_subscriptions(self, db_service, user_id: int) -> list[tuple[int, dict]]:
         async with db_service.get_session() as session:
             result = await session.execute(
                 select(PushSubscription).where(PushSubscription.user_id == user_id)
             )
-            row = result.scalar_one_or_none()
-            return row.subscription if row else None
+            rows = result.scalars().all()
+            return [(r.id, r.subscription) for r in rows if r.subscription]
+
+    async def _get_subscription(self, db_service, user_id: int) -> Optional[dict]:
+        subs = await self._get_subscriptions(db_service, user_id)
+        return subs[0][1] if subs else None
 
     async def _get_branding_urls(self, db_service, user_id: int) -> tuple[str, str]:
         icon = "/icons/icon-192.png"
@@ -237,6 +253,8 @@ class PushNotificationService:
         title_override: Optional[str] = None,
         latitude: Optional[float] = None,
         longitude: Optional[float] = None,
+        sub_id: Optional[int] = None,
+        ttl_seconds: int = 86400,
     ) -> tuple[bool, Optional[str]]:
         try:
             from pywebpush import webpush, WebPushException
@@ -292,7 +310,11 @@ class PushNotificationService:
                 data=payload,
                 vapid_private_key=self._private_key,
                 vapid_claims={"sub": self._mailto},
-                headers={"Urgency": urgency},
+                ttl=ttl_seconds,
+                headers={
+                    "Urgency": urgency,
+                    "TTL": str(ttl_seconds),
+                },
             )
             return True, None
         except Exception as ex:
@@ -305,10 +327,14 @@ class PushNotificationService:
                 or ("unsubscribed or expired" in str(ex).lower())
             )
             if is_expired:
-                logger.info("[Push] Subscription for %s expired (%s)", user_str, status_code or 410)
-                if db_service and user_id:
+                logger.info("[Push] Subscription for %s (sub_id=%s) expired (%s)", user_str, sub_id, status_code or 410)
+                if db_service:
                     try:
-                        await self.remove_subscription(db_service, user_id)
+                        if sub_id:
+                            await self.remove_subscription_by_id(db_service, sub_id)
+                        elif user_id:
+                            endpoint = subscription.get("endpoint")
+                            await self.remove_subscription(db_service, user_id, endpoint=endpoint)
                     except Exception as clean_ex:
                         logger.warning("[Push] Failed to auto-remove expired subscription for %s: %s", user_str, clean_ex)
                 return False, "Browser subscription expired or unsubscribed"

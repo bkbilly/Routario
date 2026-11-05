@@ -549,6 +549,8 @@ class AlertEngine:
 
             # 4. Push notification (browser/PWA)
             if send_push:
+                # Live Web delivery (WebSockets) is already active for this alert
+                channel_status.append({"name": "Live Web", "status": "sent"})
                 try:
                     push = get_push_service()
                     type_str = alert_data['type'].value if hasattr(alert_data['type'], 'value') else str(alert_data['type'])

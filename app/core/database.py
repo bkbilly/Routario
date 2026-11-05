@@ -445,6 +445,9 @@ class DatabaseService:
             ])
             migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP")
             migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(50)")
+            migrations.append("ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS endpoint TEXT")
+            migrations.append("ALTER TABLE push_subscriptions DROP CONSTRAINT IF EXISTS push_subscriptions_user_id_key")
+            migrations.append("CREATE INDEX IF NOT EXISTS ix_push_subscriptions_endpoint ON push_subscriptions (endpoint)")
             migrations.append("ALTER TABLE devices ALTER COLUMN imei TYPE VARCHAR(64)")
             migrations.append("ALTER TABLE alert_history ALTER COLUMN device_id DROP NOT NULL")
             migrations.append("ALTER TABLE sim_cards ALTER COLUMN provider_id DROP NOT NULL")
@@ -470,6 +473,7 @@ class DatabaseService:
             ])
             migrations.append("ALTER TABLE users ADD COLUMN last_activity DATETIME")
             migrations.append("ALTER TABLE users ADD COLUMN phone_number VARCHAR(50)")
+            migrations.append("ALTER TABLE push_subscriptions ADD COLUMN endpoint TEXT")
 
         for stmt in migrations:
             try:
