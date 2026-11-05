@@ -27,6 +27,11 @@ async def get_runtime_logs(
     return await runtime_log_buffer.snapshot(limit=limit)
 
 
+@router.delete("")
+async def clear_runtime_logs(current_user: User = Depends(require_admin)):
+    return await runtime_log_buffer.clear()
+
+
 @router.get("/debug-mode")
 async def get_debug_mode(current_user: User = Depends(require_admin)):
     return {"enabled": is_debug_mode()}

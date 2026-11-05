@@ -41,6 +41,25 @@ class RuntimeLogBuffer:
                 pass
         return record
 
+    async def clear(self) -> dict[str, Any]:
+        async with self._lock:
+            self._records.clear()
+            self._counts.clear()
+            payload = {
+                "type": "runtime_log_snapshot",
+                "records": [],
+                "counts": self.counts_unlocked(),
+                "max_records": self.max_records,
+            }
+            subscribers = list(self._subscribers)
+
+        for queue in subscribers:
+            try:
+                queue.put_nowait(payload)
+            except asyncio.QueueFull:
+                pass
+        return payload
+
     async def snapshot(self, limit: int = MAX_LOG_RECORDS) -> dict[str, Any]:
         async with self._lock:
             records = list(self._records)[-limit:]

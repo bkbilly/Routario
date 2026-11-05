@@ -28,6 +28,8 @@ let _healthSort          = { col: 'name', dir: 'asc' };
 let _runtimeLogRows      = [];
 let _runtimeLogCounts    = {};
 let _runtimeLogLevelFilter = '';
+let _runtimeLogGroupDuplicates = true;
+let _expandedLogGroups   = new Set();
 let _runtimeLogWs        = null;
 let _runtimeLogReconnect = null;
 let _billingDetail       = null;
@@ -3761,6 +3763,10 @@ function _injectNavScheduleAction() {
                 <span class="header-menu-item-icon"><i class="mdi ${debugIcon}" style="font-size:15px;"></i></span>
                 <span>${debugLabel}</span>
             </button>
+            <button class="header-menu-item" onclick="clearRuntimeLogs();${closeMenu}" style="color:var(--accent-danger,#ef4444);">
+                <span class="header-menu-item-icon"><i class="mdi mdi-delete-sweep-outline" style="font-size:15px;"></i></span>
+                <span>Clear Current Logs</span>
+            </button>
         `;
         return;
     }
@@ -3825,40 +3831,199 @@ function connectRuntimeLogWebSocket() {
     };
 }
 
+function _logGroupKey(row) {
+    const raw = `${row.level || ''}:::${row.logger || ''}:::${row.module || ''}:::${row.function || ''}:::${row.line || ''}:::${row.message || ''}:::${row.exception || ''}`;
+    let h = 0x811c9dc5;
+    for (let i = 0; i < raw.length; i++) {
+        h ^= raw.charCodeAt(i);
+        h = (h * 0x01000193) >>> 0;
+    }
+    return 'grp_' + h.toString(36);
+}
+
+function _logTimeAgo(value) {
+    if (!value) return '';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    const diffSec = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
+    if (diffSec < 5) return 'just now';
+    if (diffSec < 60) return `${diffSec}s ago`;
+    const diffMin = Math.round(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.round(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+    const diffDays = Math.round(diffHr / 24);
+    return `${diffDays}d ago`;
+}
+
+function toggleRuntimeLogGrouping(enabled) {
+    _runtimeLogGroupDuplicates = !!enabled;
+    renderRuntimeLogs();
+}
+
+function toggleLogGroupExpansion(groupKey) {
+    if (_expandedLogGroups.has(groupKey)) {
+        _expandedLogGroups.delete(groupKey);
+    } else {
+        _expandedLogGroups.add(groupKey);
+    }
+    renderRuntimeLogs();
+}
+
+async function clearRuntimeLogs() {
+    if (!confirm('Are you sure you want to clear current runtime logs?')) return;
+    try {
+        const res = await apiFetch(`${API_BASE}/runtime-logs`, { method: 'DELETE' });
+        if (res.ok) {
+            _runtimeLogRows = [];
+            _runtimeLogCounts = { total: 0, debug: 0, info: 0, warning: 0, error: 0, critical: 0 };
+            _expandedLogGroups.clear();
+            renderRuntimeLogs();
+            showAlert('Runtime logs cleared', 'info');
+        } else {
+            const err = await res.json().catch(() => ({}));
+            showAlert(err.detail || 'Failed to clear runtime logs', 'error');
+        }
+    } catch (e) {
+        showAlert('Failed to clear runtime logs', 'error');
+    }
+}
+
 function renderRuntimeLogs() {
     renderRuntimeLogSummary();
     const body = document.getElementById('runtimeLogTableBody');
     if (!body) return;
     const q = (document.getElementById('runtimeLogSearch')?.value || '').toLowerCase().trim();
     const level = _runtimeLogLevelFilter;
-    const rows = _runtimeLogRows
+    const filtered = _runtimeLogRows
         .filter(row => !level || row.level === level)
         .filter(row => {
             if (!q) return true;
             return [row.timestamp, row.level, row.logger, row.module, row.function, row.message, row.exception]
                 .some(value => String(value || '').toLowerCase().includes(q));
-        })
-        .slice()
-        .reverse();
-    const count = document.getElementById('runtimeLogCount');
-    if (count) {
-        const levelLabel = _runtimeLogLevelLabel(level);
-        count.textContent = `${rows.length} ${levelLabel ? `${levelLabel} ` : ''}log${rows.length === 1 ? '' : 's'}`;
+        });
+
+    const countEl = document.getElementById('runtimeLogCount');
+    const groupCheckbox = document.getElementById('runtimeLogGroupDuplicates');
+    if (groupCheckbox && groupCheckbox.checked !== _runtimeLogGroupDuplicates) {
+        groupCheckbox.checked = _runtimeLogGroupDuplicates;
     }
-    body.innerHTML = rows.length ? rows.map(row => `
-        <tr>
-            <td style="white-space:nowrap;">${_logTime(row.timestamp)}</td>
-            <td><span class="proto-badge health-status ${_logLevelClass(row.level)}">${_esc(row.level || '-')}</span></td>
-            <td>
-                <div style="font-weight:700;color:var(--text-primary);">${_esc(row.logger || '-')}</div>
-                <div style="color:var(--text-muted);font-size:0.75rem;">${_esc([row.module, row.function, row.line].filter(Boolean).join(':'))}</div>
-            </td>
-            <td>
-                <div class="runtime-log-message">${_esc(row.message || '')}</div>
-                ${row.exception ? `<div class="runtime-log-exception">${_esc(row.exception)}</div>` : ''}
-            </td>
-        </tr>
-    `).join('') : RoutarioTables.stateRow('No runtime logs match.', 4);
+
+    if (!_runtimeLogGroupDuplicates) {
+        const rows = filtered.slice().reverse();
+        if (countEl) {
+            const levelLabel = _runtimeLogLevelLabel(level);
+            countEl.textContent = `${rows.length} ${levelLabel ? `${levelLabel} ` : ''}log${rows.length === 1 ? '' : 's'}`;
+        }
+        body.innerHTML = rows.length ? rows.map(row => `
+            <tr>
+                <td style="white-space:nowrap;">${_logTime(row.timestamp)}</td>
+                <td><span class="proto-badge health-status ${_logLevelClass(row.level)}">${_esc(row.level || '-')}</span></td>
+                <td>
+                    <div style="font-weight:700;color:var(--text-primary);">${_esc(row.logger || '-')}</div>
+                    <div style="color:var(--text-muted);font-size:0.75rem;">${_esc([row.module, row.function, row.line].filter(Boolean).join(':'))}</div>
+                </td>
+                <td>
+                    <div class="runtime-log-message">${_esc(row.message || '')}</div>
+                    ${row.exception ? `<div class="runtime-log-exception">${_esc(row.exception)}</div>` : ''}
+                </td>
+            </tr>
+        `).join('') : RoutarioTables.stateRow('No runtime logs match.', 4);
+        return;
+    }
+
+    // Grouping mode:
+    const groupsMap = new Map();
+    for (const row of filtered) {
+        const key = _logGroupKey(row);
+        let g = groupsMap.get(key);
+        if (!g) {
+            g = {
+                key,
+                latestRecord: row,
+                count: 0,
+                timestamps: [],
+            };
+            groupsMap.set(key, g);
+        }
+        g.count++;
+        g.latestRecord = row;
+        g.timestamps.push(row.timestamp);
+    }
+
+    const groups = Array.from(groupsMap.values()).sort((a, b) => {
+        const ta = new Date(a.latestRecord.timestamp).getTime() || 0;
+        const tb = new Date(b.latestRecord.timestamp).getTime() || 0;
+        return tb - ta;
+    });
+
+    if (countEl) {
+        const levelLabel = _runtimeLogLevelLabel(level);
+        countEl.textContent = `${groups.length} unique (${filtered.length} total) ${levelLabel ? `${levelLabel} ` : ''}log${filtered.length === 1 ? '' : 's'}`;
+    }
+
+    if (!groups.length) {
+        body.innerHTML = RoutarioTables.stateRow('No runtime logs match.', 4);
+        return;
+    }
+
+    body.innerHTML = groups.map(g => {
+        const row = g.latestRecord;
+        const isExpanded = _expandedLogGroups.has(g.key);
+        const countBadge = g.count > 1 ? `
+            <span class="log-count-badge" onclick="event.stopPropagation(); toggleLogGroupExpansion('${g.key}')" title="Repeated ${g.count} times. Click to view all timestamps.">
+                <i class="mdi mdi-history"></i> ×${g.count}
+            </span>
+        ` : '';
+
+        const expandIcon = g.count > 1 ? `
+            <i class="mdi mdi-chevron-right log-expand-icon ${isExpanded ? 'expanded' : ''}"></i>
+        ` : '';
+
+        const historyTray = (g.count > 1 && isExpanded) ? `
+            <tr class="log-history-row">
+                <td colspan="4" style="padding:0;background:rgba(0,0,0,0.15);border-bottom:1px solid var(--border-color);">
+                    <div class="log-history-tray">
+                        <div class="log-history-header">
+                            <span><i class="mdi mdi-history"></i> Occurrence History (${g.count} instances)</span>
+                            <button type="button" class="btn btn-secondary btn-sm" style="height:24px;padding:0 8px;font-size:0.75rem;" onclick="event.stopPropagation(); toggleLogGroupExpansion('${g.key}')">Collapse</button>
+                        </div>
+                        <div class="log-history-list">
+                            ${g.timestamps.slice().reverse().map(ts => `
+                                <div class="log-history-item" title="${_esc(ts)}">
+                                    <span class="log-history-dot"></span>
+                                    <span>${_logTime(ts)}</span>
+                                    <span class="log-history-rel">(${_logTimeAgo(ts)})</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        ` : '';
+
+        return `
+            <tr class="${g.count > 1 ? 'log-group-row' : ''}" ${g.count > 1 ? `onclick="toggleLogGroupExpansion('${g.key}')"` : ''}>
+                <td style="white-space:nowrap;">
+                    ${expandIcon}
+                    <span style="display:inline-block;vertical-align:middle;">${_logTime(row.timestamp)}</span>
+                </td>
+                <td><span class="proto-badge health-status ${_logLevelClass(row.level)}">${_esc(row.level || '-')}</span></td>
+                <td>
+                    <div style="font-weight:700;color:var(--text-primary);">${_esc(row.logger || '-')}</div>
+                    <div style="color:var(--text-muted);font-size:0.75rem;">${_esc([row.module, row.function, row.line].filter(Boolean).join(':'))}</div>
+                </td>
+                <td>
+                    <div class="runtime-log-message">
+                        <span>${_esc(row.message || '')}</span>
+                        ${countBadge}
+                    </div>
+                    ${row.exception ? `<div class="runtime-log-exception">${_esc(row.exception)}</div>` : ''}
+                </td>
+            </tr>
+            ${historyTray}
+        `;
+    }).join('');
 }
 
 function setRuntimeLogLevelFilter(level) {
