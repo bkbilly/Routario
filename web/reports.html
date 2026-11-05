@@ -1648,19 +1648,10 @@
 
     <div id="panelLogs" style="display:none;">
         <div class="log-summary" id="runtimeLogSummary"></div>
-        <div class="devices-search-bar" style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
-            <div class="search-input-wrap" style="flex:1;min-width:220px;">
+        <div class="devices-search-bar">
+            <div class="search-input-wrap">
                 <span class="search-icon"><i class="mdi mdi-magnify"></i></span>
                 <input type="text" id="runtimeLogSearch" class="search-input" placeholder="Search runtime logs..." oninput="renderRuntimeLogs()">
-            </div>
-            <div style="display:flex;align-items:center;gap:0.5rem;flex-shrink:0;">
-                <label class="veh-opt" style="margin:0;cursor:pointer;display:inline-flex;align-items:center;gap:0.35rem;font-size:0.82rem;user-select:none;color:var(--text-secondary);">
-                    <input type="checkbox" id="runtimeLogGroupDuplicates" onchange="toggleRuntimeLogGrouping(this.checked)" checked style="cursor:pointer;">
-                    <span><i class="mdi mdi-format-list-group"></i> Group duplicates</span>
-                </label>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="clearRuntimeLogs()" title="Clear logs from memory" style="height:32px;display:inline-flex;align-items:center;gap:4px;padding:0 10px;font-size:0.8rem;">
-                    <i class="mdi mdi-delete-sweep-outline"></i> Clear
-                </button>
             </div>
             <span class="devices-count" id="runtimeLogCount"></span>
         </div>

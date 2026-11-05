@@ -28,7 +28,9 @@ let _healthSort          = { col: 'name', dir: 'asc' };
 let _runtimeLogRows      = [];
 let _runtimeLogCounts    = {};
 let _runtimeLogLevelFilter = '';
-let _runtimeLogGroupDuplicates = true;
+let _runtimeLogGroupDuplicates = localStorage.getItem('runtime_log_group_duplicates') !== null
+    ? localStorage.getItem('runtime_log_group_duplicates') === 'true'
+    : true;
 let _expandedLogGroups   = new Set();
 let _runtimeLogWs        = null;
 let _runtimeLogReconnect = null;
@@ -3758,7 +3760,12 @@ function _injectNavScheduleAction() {
     if (_activeTab === 'logs') {
         const debugLabel = _runtimeLogDebugMode ? 'Disable Debug Mode' : 'Enable Debug Mode';
         const debugIcon = _runtimeLogDebugMode ? 'mdi-bug' : 'mdi-bug-outline';
+        const groupIcon = _runtimeLogGroupDuplicates ? 'mdi-checkbox-marked-outline' : 'mdi-checkbox-blank-outline';
         el.innerHTML = `
+            <button class="header-menu-item" onclick="toggleRuntimeLogGrouping();${closeMenu}">
+                <span class="header-menu-item-icon"><i class="mdi ${groupIcon}" style="font-size:15px;"></i></span>
+                <span>Group Duplicates</span>
+            </button>
             <button class="header-menu-item" onclick="toggleRuntimeLogDebugMode();${closeMenu}">
                 <span class="header-menu-item-icon"><i class="mdi ${debugIcon}" style="font-size:15px;"></i></span>
                 <span>${debugLabel}</span>
@@ -3857,7 +3864,13 @@ function _logTimeAgo(value) {
 }
 
 function toggleRuntimeLogGrouping(enabled) {
-    _runtimeLogGroupDuplicates = !!enabled;
+    if (enabled === undefined) {
+        _runtimeLogGroupDuplicates = !_runtimeLogGroupDuplicates;
+    } else {
+        _runtimeLogGroupDuplicates = !!enabled;
+    }
+    localStorage.setItem('runtime_log_group_duplicates', _runtimeLogGroupDuplicates ? 'true' : 'false');
+    _injectNavScheduleAction();
     renderRuntimeLogs();
 }
 
@@ -3904,10 +3917,6 @@ function renderRuntimeLogs() {
         });
 
     const countEl = document.getElementById('runtimeLogCount');
-    const groupCheckbox = document.getElementById('runtimeLogGroupDuplicates');
-    if (groupCheckbox && groupCheckbox.checked !== _runtimeLogGroupDuplicates) {
-        groupCheckbox.checked = _runtimeLogGroupDuplicates;
-    }
 
     if (!_runtimeLogGroupDuplicates) {
         const rows = filtered.slice().reverse();
@@ -3970,15 +3979,8 @@ function renderRuntimeLogs() {
     body.innerHTML = groups.map(g => {
         const row = g.latestRecord;
         const isExpanded = _expandedLogGroups.has(g.key);
-        const countBadge = g.count > 1 ? `
-            <span class="log-count-badge" onclick="event.stopPropagation(); toggleLogGroupExpansion('${g.key}')" title="Repeated ${g.count} times. Click to view all timestamps.">
-                <i class="mdi mdi-history"></i> ×${g.count}
-            </span>
-        ` : '';
-
-        const expandIcon = g.count > 1 ? `
-            <i class="mdi mdi-chevron-right log-expand-icon ${isExpanded ? 'expanded' : ''}"></i>
-        ` : '';
+        const countBadge = g.count > 1 ? `<span class="log-count-badge" onclick="event.stopPropagation(); toggleLogGroupExpansion('${g.key}')" title="Repeated ${g.count} times. Click to view all timestamps."><i class="mdi mdi-history"></i> ×${g.count}</span>` : '';
+        const expandIcon = g.count > 1 ? `<i class="mdi mdi-chevron-right log-expand-icon ${isExpanded ? 'expanded' : ''}"></i>` : '';
 
         const historyTray = (g.count > 1 && isExpanded) ? `
             <tr class="log-history-row">
@@ -4004,20 +4006,14 @@ function renderRuntimeLogs() {
 
         return `
             <tr class="${g.count > 1 ? 'log-group-row' : ''}" ${g.count > 1 ? `onclick="toggleLogGroupExpansion('${g.key}')"` : ''}>
-                <td style="white-space:nowrap;">
-                    ${expandIcon}
-                    <span style="display:inline-block;vertical-align:middle;">${_logTime(row.timestamp)}</span>
-                </td>
+                <td style="white-space:nowrap;">${expandIcon}<span style="display:inline-block;vertical-align:middle;">${_logTime(row.timestamp)}</span></td>
                 <td><span class="proto-badge health-status ${_logLevelClass(row.level)}">${_esc(row.level || '-')}</span></td>
                 <td>
                     <div style="font-weight:700;color:var(--text-primary);">${_esc(row.logger || '-')}</div>
                     <div style="color:var(--text-muted);font-size:0.75rem;">${_esc([row.module, row.function, row.line].filter(Boolean).join(':'))}</div>
                 </td>
                 <td>
-                    <div class="runtime-log-message">
-                        <span>${_esc(row.message || '')}</span>
-                        ${countBadge}
-                    </div>
+                    <div class="runtime-log-message">${_esc(row.message || '')}${countBadge}</div>
                     ${row.exception ? `<div class="runtime-log-exception">${_esc(row.exception)}</div>` : ''}
                 </td>
             </tr>
