@@ -1,0 +1,1213 @@
+/* Shared table and table-search styling. */
+
+.devices-table-wrap {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.table-wrapper,
+div[style*="overflow-x:auto"],
+div[style*="overflow-x: auto"] {
+    overflow-x: auto;
+    margin-bottom: 1.5rem;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.25) rgba(0, 0, 0, 0.15);
+}
+
+.modal div[style*="overflow-x:auto"],
+.modal div[style*="overflow-x: auto"] {
+    margin-bottom: 0;
+}
+
+.lb-datetime-col .lb-date-val {
+    display: block;
+}
+.lb-datetime-col .lb-time-val {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+.table-wrapper::-webkit-scrollbar,
+div[style*="overflow-x:auto"]::-webkit-scrollbar {
+    height: 8px;
+    display: block !important;
+}
+
+.table-wrapper::-webkit-scrollbar-track,
+div[style*="overflow-x:auto"]::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb,
+div[style*="overflow-x:auto"]::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb:hover,
+div[style*="overflow-x:auto"]::-webkit-scrollbar-thumb:hover {
+    background: rgba(59, 130, 246, 0.6);
+}
+
+.devices-search-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.devices-search-bar .search-input-wrap,
+.modal-scrollable .search-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 0.6rem 1rem;
+    flex: 1;
+    max-width: 480px;
+    transition: border-color var(--transition-base);
+}
+.devices-search-bar .search-input-wrap:focus-within,
+.modal-scrollable .search-input-wrap:focus-within {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.devices-search-bar .search-icon,
+.modal-scrollable .search-icon { font-size: 1rem; flex-shrink: 0; }
+
+.devices-search-bar .search-input,
+.modal-scrollable .search-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-family: var(--font-display);
+    font-size: 0.9375rem;
+    width: 100%;
+}
+.devices-search-bar .search-input::placeholder,
+.modal-scrollable .search-input::placeholder { color: var(--text-muted); }
+
+.devices-count {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.devices-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+.devices-table th,
+.devices-table td {
+    padding: 0.875rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+.devices-table thead th {
+    background: var(--bg-tertiary);
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    white-space: nowrap;
+}
+.devices-table tbody tr:last-child td { border-bottom: none; }
+.devices-table tbody tr.device-row,
+.devices-table tbody tr.table-row,
+.devices-table tbody tr {
+    transition: background var(--transition-base, 0.15s ease);
+}
+.devices-table tbody tr.device-row,
+.devices-table tbody tr.table-row {
+    cursor: pointer;
+}
+.devices-table tbody tr.device-row:hover td,
+.devices-table tbody tr.table-row:hover td,
+.devices-table tbody tr:hover td {
+    background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+}
+.devices-table tbody tr.device-row-disabled {
+    opacity: 0.55;
+    filter: grayscale(85%);
+}
+.devices-table tbody tr.device-row-disabled:hover td {
+    background: var(--bg-hover, rgba(255, 255, 255, 0.03));
+}
+.device-disabled-badge {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+}
+
+.devices-table th[data-sort],
+.devices-table th[onclick] {
+    cursor: pointer;
+    user-select: none;
+}
+.devices-table th[data-sort]:hover,
+.devices-table th[onclick]:hover {
+    color: var(--text-primary);
+}
+.devices-table .sort-arrow {
+    font-size: 0.7rem;
+    margin-left: 0.2rem;
+}
+.devices-table th[data-sort-dir="asc"]::after {
+    content: ' ▼';
+    color: var(--accent-primary);
+    font-size: 0.75em;
+}
+.devices-table th[data-sort-dir="desc"]::after {
+    content: ' ▲';
+    color: var(--accent-primary);
+    font-size: 0.75em;
+}
+
+.devices-table .total-row td {
+    font-weight: 700;
+    border-top: 2px solid var(--border-color);
+    color: var(--accent-primary);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE CARDS (max-width: 768px)
+   Converts tables across management, reports, settings, and modals
+   into touch-friendly cards with clear visual hierarchy.
+   ══════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+    .devices-table-wrap {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        overflow: visible !important;
+    }
+
+    .devices-search-bar {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.85rem;
+        gap: 0.6rem;
+    }
+
+    .devices-search-bar .search-input-wrap {
+        max-width: 100%;
+        width: 100%;
+    }
+
+    .devices-count {
+        font-size: 0.8rem;
+        width: 100%;
+        text-align: right;
+    }
+
+    .table-wrapper,
+    .devices-table-wrap,
+    div[style*="overflow-x:auto"],
+    div[style*="overflow-x: auto"] {
+        overflow-x: visible !important;
+        min-width: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    /* Table element to block */
+    .devices-table,
+    .alerts-table,
+    .routes-table,
+    .command-history-table,
+    .schedules-table,
+    .health-table,
+    .runtime-log-table,
+    .settings-table,
+    .tickets-table,
+    .company-table,
+    .report-table,
+    .billing-detail-table,
+    .eco-scorecard-table,
+    .audit-table {
+        display: block !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        min-width: unset !important;
+        max-width: 100% !important;
+        border: none !important;
+        background: transparent !important;
+    }
+
+    /* Hide table header row on mobile */
+    .devices-table thead,
+    .alerts-table thead,
+    .routes-table thead,
+    .command-history-table thead,
+    .schedules-table thead,
+    .health-table thead,
+    .runtime-log-table thead,
+    .settings-table thead,
+    .tickets-table thead,
+    .company-table thead,
+    .report-table thead,
+    .billing-detail-table thead,
+    .eco-scorecard-table thead,
+    .audit-table thead {
+        display: none !important;
+    }
+
+    /* Tbody container flex stack */
+    .devices-table tbody,
+    .alerts-table tbody,
+    .routes-table tbody,
+    .command-history-table tbody,
+    .schedules-table tbody,
+    .health-table tbody,
+    .runtime-log-table tbody,
+    .settings-table tbody,
+    .tickets-table tbody,
+    .company-table tbody,
+    .report-table tbody,
+    .billing-detail-table tbody,
+    .eco-scorecard-table tbody,
+    .audit-table tbody {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.85rem !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    /* Explicitly respect display:none on any table, row or empty placeholder */
+    table[style*="display: none"],
+    table[style*="display:none"],
+    .devices-table[style*="display: none"],
+    .devices-table[style*="display:none"],
+    .lb-table[style*="display: none"],
+    .lb-table[style*="display:none"],
+    .devices-table tbody tr[style*="display: none"],
+    .devices-table tbody tr[style*="display:none"],
+    .alerts-table tbody tr[style*="display: none"],
+    .alerts-table tbody tr[style*="display:none"],
+    #alertsEmptyRow[style*="display: none"],
+    #alertsEmptyRow[style*="display:none"],
+    tr[style*="display: none"],
+    tr[style*="display:none"] {
+        display: none !important;
+    }
+
+    /* Standard Card Row */
+    .devices-table tbody tr,
+    .alerts-table tbody tr,
+    .routes-table tbody tr,
+    .command-history-table tbody tr,
+    .schedules-table tbody tr,
+    .health-table tbody tr,
+    .runtime-log-table tbody tr,
+    .settings-table tbody tr,
+    .tickets-table tbody tr,
+    .company-table tbody tr,
+    .report-table tbody tr,
+    .billing-detail-table tbody tr,
+    .eco-scorecard-table tbody tr,
+    .audit-table tbody tr {
+        display: flex !important;
+        flex-direction: column !important;
+        background: var(--bg-secondary) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 14px !important;
+        padding: 0.85rem 1rem !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
+        box-sizing: border-box !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        position: relative !important;
+        transition: background var(--transition-base, 0.15s ease), border-color var(--transition-base, 0.15s ease), box-shadow var(--transition-base, 0.15s ease) !important;
+    }
+
+    /* Hover state: highlight the WHOLE CARD (tr), never individual cell divs (td) */
+    .devices-table tbody tr:hover td,
+    .devices-table tbody tr.device-row:hover td,
+    .devices-table tbody tr.table-row:hover td,
+    .alerts-table tbody tr:hover td,
+    .routes-table tbody tr:hover td,
+    .command-history-table tbody tr:hover td,
+    .schedules-table tbody tr:hover td,
+    .health-table tbody tr:hover td,
+    .runtime-log-table tbody tr:hover td,
+    .settings-table tbody tr:hover td,
+    .tickets-table tbody tr:hover td,
+    .company-table tbody tr:hover td,
+    .report-table tbody tr:hover td {
+        background: transparent !important;
+    }
+
+    .devices-table tbody tr:hover,
+    .devices-table tbody tr.device-row:hover,
+    .devices-table tbody tr.table-row:hover,
+    .alerts-table tbody tr:hover,
+    .routes-table tbody tr:hover,
+    .command-history-table tbody tr:hover,
+    .schedules-table tbody tr:hover,
+    .health-table tbody tr:hover,
+    .runtime-log-table tbody tr:hover,
+    .settings-table tbody tr:hover,
+    .tickets-table tbody tr:hover,
+    .company-table tbody tr:hover,
+    .report-table tbody tr:hover {
+        background: var(--bg-hover, rgba(255, 255, 255, 0.04)) !important;
+        border-color: rgba(59, 130, 246, 0.4) !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16) !important;
+    }
+
+    /* Loading / Empty State Rows (colspan) - ONLY when visible, never for collapsible history tray */
+    .devices-table tbody tr.table-state-row:not([style*="display: none"]):not([style*="display:none"]),
+    .devices-table tbody tr:has(td[colspan]):not(.log-history-row):not(.run-history-row):not([style*="display: none"]):not([style*="display:none"]),
+    .alerts-table tbody tr:has(td[colspan]):not([style*="display: none"]):not([style*="display:none"]),
+    .routes-table tbody tr:has(td[colspan]):not([style*="display: none"]):not([style*="display:none"]),
+    .schedules-table tbody tr:has(td[colspan]):not(.run-history-row):not([style*="display: none"]):not([style*="display:none"]) {
+        display: block !important;
+        background: var(--bg-secondary) !important;
+        border: 1px dashed var(--border-color) !important;
+        border-radius: 14px !important;
+        text-align: center !important;
+        padding: 2.5rem 1rem !important;
+    }
+
+    .devices-table tbody tr:not(.log-history-row):not(.run-history-row) td[colspan],
+    .alerts-table tbody tr td[colspan],
+    .routes-table tbody tr td[colspan],
+    .schedules-table tbody tr:not(.run-history-row) td[colspan] {
+        display: block !important;
+        width: 100% !important;
+        text-align: center !important;
+        border: none !important;
+        padding: 0 !important;
+    }
+
+    .devices-table tbody tr:not(.log-history-row):not(.run-history-row) td[colspan]::before,
+    .alerts-table tbody tr td[colspan]::before,
+    .schedules-table tbody tr:not(.run-history-row) td[colspan]::before {
+        display: none !important;
+    }
+
+    /* Rows with Avatar/Icon Column (Devices, Users, Drivers, Plugins) */
+    .devices-table tbody tr.has-avatar-col {
+        display: grid !important;
+        grid-template-columns: auto 1fr !important;
+        column-gap: 0 !important;
+        row-gap: 0 !important;
+        align-items: center !important;
+    }
+
+    /* Card Header: Avatar / Icon cell - seamlessly touches Title cell with zero gap */
+    .devices-table tbody tr.has-avatar-col > td:nth-child(1) {
+        grid-column: 1 !important;
+        grid-row: 1 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0 0.75rem 0.65rem 0 !important;
+        margin-bottom: 0.25rem !important;
+        border-bottom: 1px solid var(--border-color) !important;
+        width: auto !important;
+        min-width: 38px !important;
+        font-size: 1.4rem !important;
+    }
+
+    .devices-table tbody tr.has-avatar-col > td:nth-child(1)::before {
+        display: none !important;
+    }
+
+    /* Card Header: Title / Name cell - bottom border forms ONE continuous line with Icon */
+    .devices-table tbody tr.has-avatar-col > td:nth-child(2) {
+        grid-column: 2 !important;
+        grid-row: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: flex-start !important;
+        text-align: left !important;
+        padding: 0 0 0.65rem 0 !important;
+        margin-bottom: 0.25rem !important;
+        border-bottom: 1px solid var(--border-color) !important;
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .devices-table tbody tr.has-avatar-col > td:nth-child(2)::before {
+        display: none !important;
+    }
+
+    .devices-table tbody tr.has-avatar-col > td:nth-child(2) .device-row-name {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    /* Subsequent Data Cells in Avatar Rows */
+    .devices-table tbody tr.has-avatar-col > td:nth-child(n+3) {
+        grid-column: 1 / -1 !important;
+    }
+
+    /* Card Rows WITHOUT Avatar (Companies, Routes, SIM Cards, Billing, Notifications, Schedules, etc.) */
+    .devices-table tbody tr:not(.has-avatar-col):not(.table-state-row):not(.run-history-row):not(.log-history-row) > td:first-child,
+    .routes-table tbody tr:not(.table-state-row) > td:first-child,
+    .schedules-table tbody tr:not(.table-state-row):not(.run-history-row) > td:first-child {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        color: var(--text-primary) !important;
+        padding: 0 0 0.65rem 0 !important;
+        margin-bottom: 0.25rem !important;
+        border-bottom: 1px solid var(--border-color) !important;
+    }
+
+    .devices-table tbody tr:not(.has-avatar-col):not(.table-state-row):not(.run-history-row):not(.log-history-row) > td:first-child::before,
+    .routes-table tbody tr:not(.table-state-row) > td:first-child::before,
+    .schedules-table tbody tr:not(.table-state-row):not(.run-history-row) > td:first-child::before {
+        display: none !important;
+    }
+
+    /* General Cell Styling in Card */
+    .devices-table tbody td,
+    .alerts-table tbody td,
+    .routes-table tbody td,
+    .command-history-table tbody td,
+    .schedules-table tbody td,
+    .health-table tbody td,
+    .runtime-log-table tbody td,
+    .settings-table tbody td,
+    .tickets-table tbody td,
+    .company-table tbody td,
+    .report-table tbody td {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 0.5rem 0 !important;
+        border-bottom: 1px solid var(--border-color-subtle, rgba(255, 255, 255, 0.05)) !important;
+        border-top: none !important;
+        font-size: 0.875rem !important;
+        text-align: right !important;
+        box-sizing: border-box !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        word-break: break-word !important;
+    }
+
+    /* Hidden cells stay hidden */
+    .devices-table tbody td[style*="display: none"],
+    .devices-table tbody td[style*="display:none"] {
+        display: none !important;
+    }
+
+    /* Show company cell on card if table is marked show-company-col */
+    .devices-table.show-company-col tbody td.company-col {
+        display: flex !important;
+    }
+
+    /* Ensure Created column is visible on mobile user cards */
+    #usersTable tbody td:nth-last-child(2) {
+        display: flex !important;
+    }
+
+    /* Data Label on the Left */
+    .devices-table tbody td::before,
+    .alerts-table tbody td::before,
+    .routes-table tbody td::before,
+    .command-history-table tbody td::before,
+    .schedules-table tbody td::before,
+    .health-table tbody td::before,
+    .runtime-log-table tbody td::before,
+    .settings-table tbody td::before,
+    .tickets-table tbody td::before,
+    .company-table tbody td::before,
+    .report-table tbody td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+        text-align: left;
+        margin-right: 0.75rem;
+        flex-shrink: 0;
+    }
+
+    /* Hide label if empty or for Actions */
+    .devices-table tbody td:not([data-label])::before,
+    .devices-table tbody td[data-label=""]::before,
+    .devices-table tbody td[data-label="Actions"]::before,
+    .devices-table tbody td[data-label="Action"]::before {
+        display: none !important;
+    }
+
+    /* Webhooks & Settings: allow long URLs to wrap nicely */
+    .settings-table tbody tr > td:first-child {
+        word-break: break-all !important;
+        overflow-wrap: anywhere !important;
+    }
+
+    /* Tickets table card header: promote Ticket (col 2) as header */
+    .tickets-table tbody tr:not(.table-state-row) > td:nth-child(2) {
+        order: -1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        text-align: left !important;
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        padding: 0 0 0.65rem 0 !important;
+        margin-bottom: 0.25rem !important;
+        border-bottom: 1px solid var(--border-color) !important;
+        width: 100% !important;
+    }
+    .tickets-table tbody tr:not(.table-state-row) > td:nth-child(2)::before {
+        display: none !important;
+    }
+    .tickets-table tbody tr:not(.table-state-row) > td:first-child {
+        font-size: 0.875rem !important;
+        font-weight: normal !important;
+        color: var(--text-secondary) !important;
+        border-bottom: 1px solid var(--border-color-subtle, rgba(255, 255, 255, 0.05)) !important;
+        margin-bottom: 0 !important;
+    }
+    .tickets-table tbody tr:not(.table-state-row) > td:first-child::before {
+        display: inline-block !important;
+        content: attr(data-label) !important;
+    }
+
+    /* Modal adjustments for Logbook on mobile */
+    #logbookModal .modal-content {
+        width: 96vw !important;
+        max-height: 94vh !important;
+        border-radius: 16px !important;
+    }
+    #logbookBody {
+        padding: 0.75rem 0.85rem 1rem !important;
+    }
+    .lb-tab-bar {
+        padding: 0 0.85rem !important;
+    }
+
+    /* Logbook entries card header: promote Description (col 2) as header */
+    .lb-entries-table tbody tr:not(.table-state-row) > td:nth-child(2) {
+        order: -1 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        text-align: left !important;
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        padding: 0 0 0.65rem 0 !important;
+        margin-bottom: 0.25rem !important;
+        border-bottom: 1px solid var(--border-color) !important;
+        width: 100% !important;
+    }
+    .lb-entries-table tbody tr:not(.table-state-row) > td:nth-child(2)::before {
+        display: none !important;
+    }
+    .lb-entries-table tbody tr:not(.table-state-row) > td:nth-child(2) .lb-row-name {
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        color: var(--text-primary) !important;
+    }
+
+    /* Date (col 1) formatted as normal row in card for entries */
+    .lb-entries-table tbody tr:not(.table-state-row) > td:first-child {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        font-size: 0.875rem !important;
+        font-weight: normal !important;
+        color: var(--text-secondary) !important;
+        border-bottom: 1px solid var(--border-color-subtle, rgba(255, 255, 255, 0.05)) !important;
+        margin-bottom: 0 !important;
+        padding: 0.5rem 0 !important;
+    }
+    .lb-entries-table tbody tr:not(.table-state-row) > td:first-child::before {
+        display: inline-block !important;
+        content: attr(data-label) !important;
+    }
+    .lb-entries-table tbody tr:not(.table-state-row) > td:first-child .lb-date-val,
+    .lb-entries-table tbody tr:not(.table-state-row) > td:first-child .lb-time-val {
+        display: inline !important;
+    }
+    .lb-entries-table tbody tr:not(.table-state-row) > td:first-child .lb-time-val {
+        margin-left: 0.4rem !important;
+        font-size: 0.8rem !important;
+        color: var(--text-muted) !important;
+    }
+
+    /* Docs cell in card */
+    .lb-entries-table tbody td.lb-docs-cell {
+        max-width: 100% !important;
+    }
+    .lb-entries-table .lb-docs-wrap {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        justify-content: flex-end !important;
+        gap: 0.25rem !important;
+        max-width: 75% !important;
+    }
+
+    /* Fuel fill-up card header: Date & Time (col 1) */
+    .lb-fuel-table tbody tr:not(.table-state-row) > td:first-child {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        color: var(--text-primary) !important;
+        padding: 0 0 0.65rem 0 !important;
+        margin-bottom: 0.25rem !important;
+        border-bottom: 1px solid var(--border-color) !important;
+        width: 100% !important;
+    }
+    .lb-fuel-table tbody tr:not(.table-state-row) > td:first-child::before {
+        display: none !important;
+    }
+    .lb-fuel-table tbody tr:not(.table-state-row) > td:first-child .lb-date-val {
+        display: inline !important;
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        color: var(--text-primary) !important;
+    }
+    .lb-fuel-table tbody tr:not(.table-state-row) > td:first-child .lb-time-val {
+        display: inline !important;
+        font-size: 0.85rem !important;
+        font-weight: normal !important;
+        color: var(--text-muted) !important;
+        margin-left: auto !important;
+    }
+
+    /* Runtime logs table card styling: message column full width */
+    .runtime-log-table tbody tr > td:last-child {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        text-align: left !important;
+        border-bottom: none !important;
+        padding-top: 0.5rem !important;
+    }
+    .runtime-log-table tbody tr > td:last-child::before {
+        margin-bottom: 0.35rem !important;
+        margin-right: 0 !important;
+    }
+    .runtime-log-table .runtime-log-message {
+        width: 100% !important;
+        text-align: left !important;
+        font-family: var(--font-mono, monospace) !important;
+        font-size: 0.8rem !important;
+    }
+    .runtime-log-table .runtime-log-exception {
+        width: 100% !important;
+        text-align: left !important;
+    }
+
+    /* Runtime log card: date strictly on the left, expand controls on the right */
+    .runtime-log-table tbody tr > td:first-child {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        color: var(--text-primary) !important;
+        padding: 0 0 0.65rem 0 !important;
+        margin-bottom: 0.25rem !important;
+        border-bottom: 1px solid var(--border-color) !important;
+        width: 100% !important;
+    }
+
+    .runtime-log-table tbody tr > td:first-child .log-time-wrap {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        width: 100% !important;
+    }
+
+    .runtime-log-table tbody tr > td:first-child .log-time-val {
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        color: var(--text-primary) !important;
+        text-align: left !important;
+    }
+
+    .runtime-log-table tbody tr > td:first-child .log-group-meta {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0.4rem !important;
+        margin-left: auto !important;
+    }
+
+    /* Runtime log card when opened: seamlessly connects to occurrence history tray */
+    .runtime-log-table tbody tr.log-group-row.is-expanded {
+        border-bottom-left-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+        border-bottom: 1px solid rgba(59, 130, 246, 0.25) !important;
+        margin-bottom: 0 !important;
+        padding-bottom: 0.35rem !important;
+        box-shadow: none !important;
+        background: var(--bg-hover, rgba(255, 255, 255, 0.03)) !important;
+    }
+
+    /* Opened history tray row on mobile: connects directly below parent card forming one seamless card */
+    .runtime-log-table tbody tr.log-history-row {
+        display: block !important;
+        background: var(--bg-secondary) !important;
+        border: 1px solid var(--border-color) !important;
+        border-top: none !important;
+        border-top-left-radius: 0 !important;
+        border-top-right-radius: 0 !important;
+        border-bottom-left-radius: 14px !important;
+        border-bottom-right-radius: 14px !important;
+        border-radius: 0 0 14px 14px !important;
+        margin-top: -0.85rem !important; /* cancel tbody gap */
+        margin-bottom: 0.85rem !important;
+        padding: 0.25rem 0.85rem 0.45rem 0.85rem !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .runtime-log-table tbody tr.log-history-row td {
+        display: block !important;
+        padding: 0 !important;
+        border: none !important;
+        width: 100% !important;
+        text-align: left !important;
+        border-radius: 0 !important;
+        border-top-left-radius: 0 !important;
+        border-top-right-radius: 0 !important;
+    }
+
+    .runtime-log-table tbody tr.log-history-row td::before {
+        display: none !important;
+    }
+
+    .runtime-log-table .log-history-tray {
+        padding: 0 !important;
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        border-top-left-radius: 0 !important;
+        border-top-right-radius: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+    }
+
+    .runtime-log-table .log-history-header {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 0.15rem 0 !important;
+        margin-bottom: 0.2rem !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+        font-size: 0.68rem !important;
+        font-weight: 600 !important;
+        color: var(--text-muted) !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.04em !important;
+    }
+
+    .runtime-log-table .log-history-list {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0 !important;
+        max-height: 180px !important;
+        overflow-y: auto !important;
+        padding: 0 !important;
+    }
+
+    .runtime-log-table .log-history-item {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 0.2rem 0 !important;
+        background: transparent !important;
+        border: none !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+        border-radius: 0 !important;
+        font-size: 0.78rem !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .runtime-log-table .log-history-item:last-child {
+        border-bottom: none !important;
+    }
+
+    /* Schedules row when opened: seamlessly connects to run history tray */
+    .schedules-table tbody tr.sched-row.is-expanded,
+    .schedules-table tbody tr.table-row.is-expanded,
+    .schedules-table tbody tr.table-row.expanded {
+        border-bottom-left-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+        border-bottom: 1px solid rgba(59, 130, 246, 0.25) !important;
+        margin-bottom: 0 !important;
+        padding-bottom: 0.35rem !important;
+        box-shadow: none !important;
+        background: var(--bg-hover, rgba(255, 255, 255, 0.03)) !important;
+    }
+
+    /* Hidden run history rows are ALWAYS hidden on mobile */
+    .schedules-table tbody tr.run-history-row.is-hidden,
+    .schedules-table tbody tr.run-history-row[style*="display: none"],
+    .schedules-table tbody tr.run-history-row[style*="display:none"] {
+        display: none !important;
+    }
+
+    /* Opened run history tray row on mobile */
+    .schedules-table tbody tr.run-history-row:not(.is-hidden):not([style*="display: none"]):not([style*="display:none"]) {
+        display: block !important;
+        background: var(--bg-secondary) !important;
+        border: 1px solid var(--border-color) !important;
+        border-top: none !important;
+        border-top-left-radius: 0 !important;
+        border-top-right-radius: 0 !important;
+        border-bottom-left-radius: 14px !important;
+        border-bottom-right-radius: 14px !important;
+        border-radius: 0 0 14px 14px !important;
+        margin-top: -0.85rem !important; /* cancel tbody gap */
+        margin-bottom: 0.85rem !important;
+        padding: 0.25rem 0.85rem 0.45rem 0.85rem !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .schedules-table tbody tr.run-history-row td {
+        display: block !important;
+        padding: 0 !important;
+        border: none !important;
+        width: 100% !important;
+        text-align: left !important;
+        border-radius: 0 !important;
+        border-top-left-radius: 0 !important;
+        border-top-right-radius: 0 !important;
+        box-sizing: border-box !important;
+    }
+
+    .schedules-table tbody tr.run-history-row td::before {
+        display: none !important;
+    }
+
+    .schedules-table .run-history-inner {
+        padding: 0 !important;
+        border: none !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .schedules-table .run-history-mobile {
+        display: block !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .schedules-table .run-history-tray {
+        display: flex !important;
+        flex-direction: column !important;
+        width: 100% !important;
+        padding: 0 !important;
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        border-top-left-radius: 0 !important;
+        border-top-right-radius: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        box-sizing: border-box !important;
+    }
+
+    .schedules-table .run-history-header {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        padding: 0.15rem 0 0.35rem 0 !important;
+        margin-bottom: 0.25rem !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+        font-size: 0.68rem !important;
+        font-weight: 600 !important;
+        color: var(--text-muted) !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.04em !important;
+        box-sizing: border-box !important;
+    }
+
+    .schedules-table .run-history-title {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0.35rem !important;
+        font-size: 0.68rem !important;
+        font-weight: 600 !important;
+        color: var(--text-muted) !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.04em !important;
+    }
+
+    .schedules-table .run-history-list {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0 !important;
+        width: 100% !important;
+        max-height: 220px !important;
+        overflow-y: auto !important;
+        padding: 0 !important;
+        box-sizing: border-box !important;
+    }
+
+    .schedules-table .run-history-item {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        padding: 0.35rem 0 !important;
+        background: transparent !important;
+        border: none !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+        border-radius: 0 !important;
+        font-size: 0.78rem !important;
+    }
+
+    .schedules-table .run-history-item:last-child {
+        border-bottom: none !important;
+    }
+
+    .schedules-table .run-history-item-left {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0.45rem !important;
+        flex: 1 1 auto !important;
+        text-align: left !important;
+    }
+
+    .schedules-table .run-history-item-right {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0.55rem !important;
+        flex: 0 0 auto !important;
+        margin-left: auto !important;
+    }
+
+    .schedules-table .run-history-dot {
+        width: 7px !important;
+        height: 7px !important;
+        border-radius: 50% !important;
+        flex-shrink: 0 !important;
+    }
+    .schedules-table .run-history-dot.ok {
+        background: #22c55e !important;
+        box-shadow: 0 0 6px rgba(34, 197, 94, 0.5) !important;
+    }
+    .schedules-table .run-history-dot.err {
+        background: #ef4444 !important;
+        box-shadow: 0 0 6px rgba(239, 68, 68, 0.5) !important;
+    }
+
+    .schedules-table .run-history-ts {
+        font-family: var(--font-mono, monospace) !important;
+        font-size: 0.8rem !important;
+        font-weight: 500 !important;
+        color: var(--text-primary) !important;
+    }
+
+    .schedules-table .run-history-tag {
+        font-size: 0.62rem !important;
+        font-weight: 700 !important;
+        padding: 0.05rem 0.35rem !important;
+        border-radius: 3px !important;
+        background: rgba(59, 130, 246, 0.16) !important;
+        color: #60a5fa !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.03em !important;
+    }
+
+    .schedules-table .run-status-ok {
+        color: #22c55e !important;
+        font-weight: 600 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0.25rem !important;
+    }
+    .schedules-table .run-status-err {
+        color: #ef4444 !important;
+        font-weight: 600 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 0.25rem !important;
+    }
+
+    .schedules-table .run-view-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0.2rem 0.55rem !important;
+        font-size: 0.75rem !important;
+        min-height: 26px !important;
+        border-radius: 6px !important;
+    }
+
+    /* Schedules card header on mobile: Name on left, chevron on right */
+    .schedules-table .sched-name-wrap {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+    }
+
+    .schedules-table .sched-name-val {
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        color: var(--text-primary) !important;
+        text-align: left !important;
+    }
+
+    .schedules-table .sched-expand-icon {
+        display: inline-block !important;
+        font-size: 1.15rem !important;
+        margin-left: auto !important;
+    }
+
+    /* Card Footer: Action Cell - ONLY when cell contains action buttons or is explicitly actions */
+    .devices-table tbody tr:not(.run-history-row):not(.log-history-row) > td.card-actions-cell,
+    .devices-table tbody tr:not(.run-history-row):not(.log-history-row) > td[data-label="Actions"],
+    .devices-table tbody tr:not(.run-history-row):not(.log-history-row) > td[data-label="Action"],
+    .devices-table tbody tr:not(.run-history-row):not(.log-history-row) > td:last-child:has(button, .btn, .tbl-btn, .lb-tbl-btn),
+    .alerts-table tbody tr > td:last-child:has(button, .btn, .tbl-btn),
+    .routes-table tbody tr > td:last-child:has(button, .btn, .tbl-btn),
+    .command-history-table tbody tr > td:last-child:has(button, .btn, .tbl-btn),
+    .settings-table tbody tr > td:last-child:has(button, .btn, .tbl-btn),
+    .tickets-table tbody tr > td:last-child:has(button, .btn, .tbl-btn),
+    .schedules-table tbody tr:not(.run-history-row) > td:last-child:has(button, .btn, .tbl-btn),
+    .lb-table tbody tr > td:last-child:has(button, .btn, .tbl-btn, .lb-tbl-btn) {
+        display: flex !important;
+        justify-content: flex-end !important;
+        align-items: center !important;
+        gap: 0.5rem !important;
+        padding: 0.65rem 0 0.15rem 0 !important;
+        margin-top: 0.25rem !important;
+        border-bottom: none !important;
+        width: 100% !important;
+        flex-wrap: wrap !important;
+    }
+
+    .devices-table tbody tr:not(.run-history-row):not(.log-history-row) > td.card-actions-cell::before,
+    .devices-table tbody tr:not(.run-history-row):not(.log-history-row) > td[data-label="Actions"]::before,
+    .devices-table tbody tr:not(.run-history-row):not(.log-history-row) > td[data-label="Action"]::before,
+    .devices-table tbody tr:not(.run-history-row):not(.log-history-row) > td:last-child:has(button, .btn, .tbl-btn, .lb-tbl-btn)::before,
+    .alerts-table tbody tr > td:last-child:has(button, .btn, .tbl-btn)::before,
+    .routes-table tbody tr > td:last-child:has(button, .btn, .tbl-btn)::before,
+    .settings-table tbody tr > td:last-child:has(button, .btn, .tbl-btn)::before,
+    .tickets-table tbody tr > td:last-child:has(button, .btn, .tbl-btn)::before,
+    .schedules-table tbody tr:not(.run-history-row) > td:last-child:has(button, .btn, .tbl-btn)::before,
+    .lb-table tbody tr > td:last-child:has(button, .btn, .tbl-btn, .lb-tbl-btn)::before {
+        display: none !important;
+    }
+
+    /* Last data cell in card (when it does NOT have buttons): no bottom border */
+    .devices-table tbody tr:not(.run-history-row):not(.log-history-row) > td:last-child:not(.card-actions-cell):not(:has(button, .btn, .tbl-btn, .lb-tbl-btn)),
+    .alerts-table tbody tr > td:last-child:not(.card-actions-cell):not(:has(button, .btn, .tbl-btn)),
+    .routes-table tbody tr > td:last-child:not(.card-actions-cell):not(:has(button, .btn, .tbl-btn)),
+    .settings-table tbody tr > td:last-child:not(.card-actions-cell):not(:has(button, .btn, .tbl-btn)),
+    .tickets-table tbody tr > td:last-child:not(.card-actions-cell):not(:has(button, .btn, .tbl-btn)),
+    .schedules-table tbody tr:not(.run-history-row) > td:last-child:not(.card-actions-cell):not(:has(button, .btn, .tbl-btn)),
+    .lb-table tbody tr > td:last-child:not(.card-actions-cell):not(:has(button, .btn, .tbl-btn, .lb-tbl-btn)) {
+        border-bottom: none !important;
+    }
+
+    /* Fleet Reports Total Row Styling */
+    .report-table tbody tr.total-row,
+    .devices-table tbody tr.total-row {
+        border: 2px solid var(--accent-primary) !important;
+        background: rgba(59, 130, 246, 0.08) !important;
+        margin-top: 1rem !important;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15) !important;
+    }
+
+    .report-table tbody tr.total-row > td:first-child,
+    .devices-table tbody tr.total-row > td:first-child {
+        color: var(--accent-primary) !important;
+        font-size: 1.05rem !important;
+        font-weight: 800 !important;
+        text-transform: uppercase !important;
+        border-bottom: 1px solid rgba(59, 130, 246, 0.25) !important;
+    }
+
+    .report-table tbody tr.total-row td,
+    .devices-table tbody tr.total-row td {
+        font-weight: 700 !important;
+    }
+
+    /* Action buttons: compact, consistent size, right-aligned */
+    .devices-table tbody tr > td:last-child .btn,
+    .devices-table tbody tr > td:last-child .tbl-btn,
+    .devices-table tbody tr > td:last-child .lb-tbl-btn,
+    .lb-table tbody tr > td:last-child .btn,
+    .lb-table tbody tr > td:last-child .tbl-btn,
+    .lb-table tbody tr > td:last-child .lb-tbl-btn,
+    .alerts-table tbody tr > td:last-child .btn,
+    .alerts-table tbody tr > td:last-child .tbl-btn,
+    .routes-table tbody tr > td:last-child .btn,
+    .routes-table tbody tr > td:last-child .tbl-btn,
+    .settings-table tbody tr > td:last-child .btn,
+    .settings-table tbody tr > td:last-child .tbl-btn,
+    .tickets-table tbody tr > td:last-child .btn,
+    .tickets-table tbody tr > td:last-child .tbl-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 0.35rem !important;
+        padding: 0.4rem 0.75rem !important;
+        font-size: 0.8rem !important;
+        min-height: 34px !important;
+        border-radius: 8px !important;
+        flex: 0 0 auto !important;
+        width: auto !important;
+        white-space: nowrap !important;
+    }
+
+    .devices-table tbody tr > td:last-child .btn i,
+    .devices-table tbody tr > td:last-child .tbl-btn i,
+    .devices-table tbody tr > td:last-child .lb-tbl-btn i,
+    .lb-table tbody tr > td:last-child .btn i,
+    .lb-table tbody tr > td:last-child .tbl-btn i,
+    .lb-table tbody tr > td:last-child .lb-tbl-btn i,
+    .alerts-table tbody tr > td:last-child .btn i,
+    .alerts-table tbody tr > td:last-child .tbl-btn i,
+    .settings-table tbody tr > td:last-child .btn i,
+    .settings-table tbody tr > td:last-child .tbl-btn i,
+    .tickets-table tbody tr > td:last-child .btn i,
+    .tickets-table tbody tr > td:last-child .tbl-btn i {
+        font-size: 0.95rem !important;
+    }
+}
