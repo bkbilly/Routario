@@ -258,22 +258,17 @@
             background: var(--accent-primary);
         }
         @media (max-width: 768px) {
-            .audit-table th,
-            .audit-table td,
-            .health-table th,
-            .health-table td {
-                display: table-cell !important;
-            }
-            .routes-table th,
-            .routes-table td {
-                display: table-cell !important;
+            .audit-table,
+            .health-table,
+            .routes-table {
+                min-width: 0 !important;
+                min-width: unset !important;
+                width: 100% !important;
+                max-width: 100% !important;
             }
             .routes-table .route-distance-col,
             .routes-table .route-duration-col {
                 display: none !important;
-            }
-            .health-table {
-                min-width: 560px;
             }
         }
         @media (max-width: 640px) {

@@ -2621,6 +2621,7 @@ body.light-theme .toast-close:hover {
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: 8px;
+    padding: 0;
     transition: border-color var(--transition-base), box-shadow var(--transition-base);
 }
 
@@ -4530,6 +4531,10 @@ path.leaflet-interactive:focus-visible,
     .search-bar-row {
         gap: 0.35rem;
         padding: 0.25rem 0 0.35rem 0;
+    }
+    .search-bar-row .search-input-wrap {
+        padding: 0 !important;
+        max-width: none !important;
     }
     .search-input {
         padding: 0.45rem 0.6rem;

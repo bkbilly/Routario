@@ -316,7 +316,7 @@ class OsmAndDecoder(BaseProtocolDecoder):
                     continue
                 sensors[key] = value
 
-            logger.info(
+            logger.debug(
                 "OsmAnd decoded: %s @ %.5f, %.5f  speed=%.1f km/h  sensors=%s",
                 device_id, latitude, longitude, speed_kph, sensors,
             )

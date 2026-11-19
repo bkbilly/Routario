@@ -337,7 +337,7 @@ class TeltonikaDecoder(BaseProtocolDecoder):
                 if len(data) >= imei_len + 2:
                     try:
                         imei = data[2:2 + imei_len].decode('ascii')
-                        logger.info(f"Teltonika login: IMEI={imei}")
+                        logger.debug(f"Teltonika login: IMEI={imei}")
                         return {'event': 'login', 'imei': imei, 'response': b'\x01'}, imei_len + 2
                     except UnicodeDecodeError:
                         return None, 1

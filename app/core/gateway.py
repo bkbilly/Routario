@@ -27,12 +27,12 @@ class DeviceConnectionManager:
     def register_connection(self, imei: str, protocol: str, writer: asyncio.StreamWriter):
         self.connections[imei] = writer
         self.imei_to_protocol[imei] = protocol
-        logger.info(f"Device connected: {imei} ({protocol})")
+        logger.debug(f"Device connected: {imei} ({protocol})")
 
     def unregister_connection(self, imei: str):
         if imei in self.connections:
             del self.connections[imei]
-            logger.info(f"Device disconnected: {imei}")
+            logger.debug(f"Device disconnected: {imei}")
 
     def get_connection(self, imei: str) -> Optional[asyncio.StreamWriter]:
         return self.connections.get(imei)
@@ -77,7 +77,7 @@ class TCPDeviceHandler:
         if not self.decoder:
             logger.error(f"No decoder found for protocol: {self.protocol}")
 
-        logger.info(f"New {self.protocol.upper()} connection from {self.client_ip}:{self.client_port}")
+        logger.debug(f"New {self.protocol.upper()} connection from {self.client_ip}:{self.client_port}")
 
     async def handle(self):
         if not self.decoder:

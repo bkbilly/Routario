@@ -129,7 +129,7 @@ class GeocodingService:
                     # Cache result
                     await self._set_cache(latitude, longitude, address)
                     
-                    logger.info(f"Geocoded ({latitude}, {longitude}) -> {address}")
+                    logger.debug(f"Geocoded ({latitude}, {longitude}) -> {address}")
                     return address
                 
                 return None

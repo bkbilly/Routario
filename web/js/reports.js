@@ -1793,6 +1793,9 @@ async function _renderReport() {
     if (payload.total_row) body.insertAdjacentHTML('beforeend', _renderTotalRow(payload.total_row, columns));
 
     _renderPaginationControls(totalRows);
+    if (typeof RoutarioTables !== 'undefined' && RoutarioTables.syncCardLabels) {
+        RoutarioTables.syncCardLabels(table);
+    }
 }
 
 function _renderPaginationControls(totalRows) {
@@ -3600,9 +3603,16 @@ function _renderScheduleList(list = _schedules) {
         const typeStr = _reportLabel(s.report_type);
         const next    = s.next_run ? _fmtDatetimeSplit(s.next_run) : '—';
         const runs    = `${s.run_count} / ${s.keep_runs}`;
+        const isExpanded = _expandedScheduleId === s.id;
+        const expandIcon = `<i class="mdi mdi-chevron-right sched-expand-icon ${isExpanded ? 'expanded' : ''}"></i>`;
 
-        return `<tr class="table-row${_expandedScheduleId === s.id ? ' expanded' : ''}" onclick="toggleRunHistory(${s.id}, this)" id="sr-${s.id}">
-            <td><strong>${_esc(s.name)}</strong></td>
+        return `<tr class="table-row${isExpanded ? ' expanded' : ''}" onclick="toggleRunHistory(${s.id}, this)" id="sr-${s.id}">
+            <td>
+                <div class="sched-name-wrap">
+                    <span class="sched-name-val"><strong>${_esc(s.name)}</strong></span>
+                    ${expandIcon}
+                </div>
+            </td>
             <td>${_esc(typeStr)}</td>
             <td style="white-space:nowrap;font-size:0.82rem;">${_esc(_freqLabel(s))}</td>
             <td style="font-size:0.82rem;font-family:var(--font-mono);">${next}</td>
@@ -3614,7 +3624,7 @@ function _renderScheduleList(list = _schedules) {
                 </button>
             </td>
         </tr>
-        <tr id="rh-${s.id}" class="run-history-row" style="display:${_expandedScheduleId === s.id ? '' : 'none'};">
+        <tr id="rh-${s.id}" class="run-history-row${isExpanded ? '' : ' is-hidden'}" style="display:${isExpanded ? '' : 'none'};">
             <td colspan="7"><div class="run-history-inner" id="rhi-${s.id}">
                 <div style="text-align:center;color:var(--text-muted);padding:0.5rem;">Loading…</div>
             </div></td>
@@ -3622,20 +3632,41 @@ function _renderScheduleList(list = _schedules) {
     }).join('');
 
     if (_expandedScheduleId) _fetchAndShowRuns(_expandedScheduleId);
+    if (typeof RoutarioTables !== 'undefined' && RoutarioTables.syncCardLabels) {
+        RoutarioTables.syncCardLabels(document.getElementById('schedTable'));
+    }
 }
 
 async function toggleRunHistory(schedId, rowEl) {
+    const row = rowEl || document.getElementById(`sr-${schedId}`);
+    const icon = row?.querySelector('.sched-expand-icon');
     if (_expandedScheduleId === schedId) {
         _expandedScheduleId = null;
-        document.getElementById(`rh-${schedId}`).style.display = 'none';
-        rowEl.classList.remove('expanded');
+        const tray = document.getElementById(`rh-${schedId}`);
+        if (tray) {
+            tray.style.display = 'none';
+            tray.classList.add('is-hidden');
+        }
+        if (row) row.classList.remove('expanded');
+        if (icon) icon.classList.remove('expanded');
         return;
     }
     _expandedScheduleId = schedId;
-    document.querySelectorAll('.run-history-row').forEach(r => r.style.display = 'none');
-    document.querySelectorAll('.schedules-table tbody tr:not(.run-history-row)').forEach(r => r.classList.remove('expanded'));
-    rowEl.classList.add('expanded');
-    document.getElementById(`rh-${schedId}`).style.display = '';
+    document.querySelectorAll('.run-history-row').forEach(r => {
+        r.style.display = 'none';
+        r.classList.add('is-hidden');
+    });
+    document.querySelectorAll('.schedules-table tbody tr:not(.run-history-row)').forEach(r => {
+        r.classList.remove('expanded');
+        r.querySelector('.sched-expand-icon')?.classList.remove('expanded');
+    });
+    if (row) row.classList.add('expanded');
+    if (icon) icon.classList.add('expanded');
+    const tray = document.getElementById(`rh-${schedId}`);
+    if (tray) {
+        tray.style.display = '';
+        tray.classList.remove('is-hidden');
+    }
     await _fetchAndShowRuns(schedId);
 }
 
@@ -3655,27 +3686,65 @@ async function _fetchAndShowRuns(schedId) {
         }
 
         container.innerHTML = `
-            <table class="devices-table run-table">
-                <thead><tr><th>Date / Time</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody>
-                ${runs.map(r => {
-                    const statusHtml = r.status === 'success'
-                        ? '<span class="run-status-ok"><i class="mdi mdi-check-circle"></i> Success</span>'
-                        : `<span class="run-status-err" title="${_esc(r.error_message || '')}"><i class="mdi mdi-alert-circle"></i> Failed</span>`;
-                    const actions = r.has_data
-                        ? `<button class="btn btn-secondary" style="padding:0.25rem 0.6rem;font-size:0.75rem;" onclick="viewRun(${schedId},${r.id},'${_esc(sched?.name || '')}','${sched?.report_type || ''}','${r.run_at}')">
-                               <i class="mdi mdi-eye"></i> View
-                           </button>`
-                        : '—';
-                    return `<tr>
-                        <td style="white-space:nowrap;">${_fmtDatetimeSplit(r.run_at)}</td>
-                        <td>${statusHtml}</td>
-                        <td>${actions}</td>
-                    </tr>`;
-                }).join('')}
-                </tbody>
-            </table>`;
-    } catch (e) { console.error(e); container.innerHTML = '<div style="color:var(--accent-danger);padding:0.5rem;">Error loading runs.</div>'; }
+            <div class="run-history-desktop">
+                <table class="devices-table run-table">
+                    <thead><tr><th>Date / Time</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody>
+                    ${runs.map(r => {
+                        const statusHtml = r.status === 'success'
+                            ? '<span class="run-status-ok"><i class="mdi mdi-check-circle"></i> Success</span>'
+                            : `<span class="run-status-err" title="${_esc(r.error_message || '')}"><i class="mdi mdi-alert-circle"></i> Failed</span>`;
+                        const actions = (r.has_data || r.row_count > 0 || (r.has_data === undefined && r.status === 'success'))
+                            ? `<button class="btn btn-secondary" style="padding:0.25rem 0.6rem;font-size:0.75rem;" onclick="viewRun(${schedId},${r.id},'${_esc(sched?.name || '')}','${sched?.report_type || ''}','${r.run_at}')">
+                                   <i class="mdi mdi-eye"></i> View
+                               </button>`
+                            : '—';
+                        return `<tr>
+                            <td style="white-space:nowrap;">${_fmtDatetimeSplit(r.run_at)}</td>
+                            <td>${statusHtml}</td>
+                            <td>${actions}</td>
+                        </tr>`;
+                    }).join('')}
+                    </tbody>
+                </table>
+            </div>
+            <div class="run-history-mobile">
+                <div class="run-history-tray">
+                    <div class="run-history-header">
+                        <span class="run-history-title"><i class="mdi mdi-history"></i> Run History (${runs.length})</span>
+                    </div>
+                    <div class="run-history-list">
+                        ${runs.map((r, idx) => {
+                            const isSuccess = r.status === 'success';
+                            const statusHtml = isSuccess
+                                ? '<span class="run-status-ok"><i class="mdi mdi-check-circle"></i> Success</span>'
+                                : `<span class="run-status-err" title="${_esc(r.error_message || '')}"><i class="mdi mdi-alert-circle"></i> Failed</span>`;
+                            const actions = (r.has_data || r.row_count > 0 || (r.has_data === undefined && r.status === 'success'))
+                                ? `<button class="btn btn-secondary run-view-btn" onclick="viewRun(${schedId},${r.id},'${_esc(sched?.name || '')}','${sched?.report_type || ''}','${r.run_at}')">
+                                       <i class="mdi mdi-eye"></i> View
+                                   </button>`
+                                : '<span style="color:var(--text-muted);font-size:0.75rem;">No data</span>';
+                            return `
+                                <div class="run-history-item">
+                                    <div class="run-history-item-left">
+                                        <span class="run-history-dot ${isSuccess ? 'ok' : 'err'}"></span>
+                                        <span class="run-history-ts">${_fmtDatetimeSplit(r.run_at)}</span>
+                                        ${idx === 0 ? '<span class="run-history-tag">Latest</span>' : ''}
+                                    </div>
+                                    <div class="run-history-item-right">
+                                        ${statusHtml}
+                                        ${actions}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            </div>`;
+    } catch (e) {
+        console.error(e);
+        container.innerHTML = '<div style="color:var(--accent-danger);padding:0.5rem;">Error loading runs.</div>';
+    }
 }
 
 async function deleteSchedule(id, name) {
@@ -3926,7 +3995,7 @@ function renderRuntimeLogs() {
         }
         body.innerHTML = rows.length ? rows.map(row => `
             <tr>
-                <td style="white-space:nowrap;">${_logTime(row.timestamp)}</td>
+                <td style="white-space:nowrap;"><div class="log-time-wrap"><span class="log-time-val">${_logTime(row.timestamp)}</span></div></td>
                 <td><span class="proto-badge health-status ${_logLevelClass(row.level)}">${_esc(row.level || '-')}</span></td>
                 <td>
                     <div style="font-weight:700;color:var(--text-primary);">${_esc(row.logger || '-')}</div>
@@ -3984,18 +4053,20 @@ function renderRuntimeLogs() {
 
         const historyTray = (g.count > 1 && isExpanded) ? `
             <tr class="log-history-row">
-                <td colspan="4" style="padding:0;background:rgba(0,0,0,0.15);border-bottom:1px solid var(--border-color);">
-                    <div class="log-history-tray">
+                <td colspan="4">
+                    <div class="log-history-tray" onclick="event.stopPropagation()">
                         <div class="log-history-header">
-                            <span><i class="mdi mdi-history"></i> Occurrence History (${g.count} instances)</span>
-                            <button type="button" class="btn btn-secondary btn-sm" style="height:24px;padding:0 8px;font-size:0.75rem;" onclick="event.stopPropagation(); toggleLogGroupExpansion('${g.key}')">Collapse</button>
+                            <span class="log-history-title"><i class="mdi mdi-history"></i> Occurrence History (${g.count})</span>
                         </div>
                         <div class="log-history-list">
-                            ${g.timestamps.slice().reverse().map(ts => `
+                            ${g.timestamps.slice().reverse().map((ts, idx) => `
                                 <div class="log-history-item" title="${_esc(ts)}">
-                                    <span class="log-history-dot"></span>
-                                    <span>${_logTime(ts)}</span>
-                                    <span class="log-history-rel">(${_logTimeAgo(ts)})</span>
+                                    <div class="log-history-item-left">
+                                        <span class="log-history-dot ${idx === 0 ? 'latest' : ''}"></span>
+                                        <span class="log-history-ts">${_logTime(ts)}</span>
+                                        ${idx === 0 ? '<span class="log-history-tag">Latest</span>' : ''}
+                                    </div>
+                                    <span class="log-history-rel">${_logTimeAgo(ts)}</span>
                                 </div>
                             `).join('')}
                         </div>
@@ -4005,15 +4076,20 @@ function renderRuntimeLogs() {
         ` : '';
 
         return `
-            <tr class="${g.count > 1 ? 'log-group-row' : ''}" ${g.count > 1 ? `onclick="toggleLogGroupExpansion('${g.key}')"` : ''}>
-                <td style="white-space:nowrap;">${expandIcon}<span style="display:inline-block;vertical-align:middle;">${_logTime(row.timestamp)}</span></td>
+            <tr class="${g.count > 1 ? 'log-group-row' : ''} ${isExpanded ? 'is-expanded' : ''}" ${g.count > 1 ? `onclick="toggleLogGroupExpansion('${g.key}')"` : ''}>
+                <td style="white-space:nowrap;">
+                    <div class="log-time-wrap">
+                        <span class="log-time-val">${_logTime(row.timestamp)}</span>
+                        ${g.count > 1 ? `<span class="log-group-meta">${countBadge}${expandIcon}</span>` : ''}
+                    </div>
+                </td>
                 <td><span class="proto-badge health-status ${_logLevelClass(row.level)}">${_esc(row.level || '-')}</span></td>
                 <td>
                     <div style="font-weight:700;color:var(--text-primary);">${_esc(row.logger || '-')}</div>
                     <div style="color:var(--text-muted);font-size:0.75rem;">${_esc([row.module, row.function, row.line].filter(Boolean).join(':'))}</div>
                 </td>
                 <td>
-                    <div class="runtime-log-message">${_esc(row.message || '')}${countBadge}</div>
+                    <div class="runtime-log-message">${_esc(row.message || '')}</div>
                     ${row.exception ? `<div class="runtime-log-exception">${_esc(row.exception)}</div>` : ''}
                 </td>
             </tr>

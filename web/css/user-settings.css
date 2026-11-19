@@ -291,6 +291,23 @@ h1 {
     min-width: 620px;
 }
 
+@media (max-width: 768px) {
+    .settings-table,
+    .tickets-table,
+    .devices-table {
+        min-width: 0 !important;
+        min-width: unset !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    .table-wrapper {
+        min-width: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: visible !important;
+    }
+}
+
 .settings-table .btn-danger {
     background: var(--accent-danger);
     color: white;

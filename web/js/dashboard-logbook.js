@@ -131,11 +131,11 @@ function switchLbTab(tabId, btn) {
     document.querySelectorAll('.lb-tab').forEach(el => el.classList.remove('active'));
     (btn || document.getElementById(`lbTab${tabId.charAt(0).toUpperCase() + tabId.slice(1)}`))?.classList.add('active');
 
-    const entriesTable = document.getElementById('lbEntriesTable');
+    const entriesPanel = document.getElementById('lbPanelEntries') || document.getElementById('lbEntriesTable');
     const fuelPanel    = document.getElementById('lbPanelFuel');
     const maintPanel   = document.getElementById('lbPanelMaintenance');
 
-    if (entriesTable) entriesTable.style.display = tabId === 'entries' ? '' : 'none';
+    if (entriesPanel) entriesPanel.style.display = tabId === 'entries' ? '' : 'none';
     if (fuelPanel)    fuelPanel.style.display    = tabId === 'fuel' ? '' : 'none';
     if (maintPanel)   maintPanel.style.display   = tabId === 'maintenance' ? '' : 'none';
 
@@ -238,7 +238,7 @@ function _renderLogbookTable() {
     const tbody = document.getElementById('logbookTableBody');
 
     if (!_logbookEntries.length) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2.5rem;color:var(--text-muted);">
+        tbody.innerHTML = `<tr class="table-state-row"><td colspan="6" style="text-align:center;padding:2.5rem;color:var(--text-muted);">
             <div style="font-size:2.5rem;margin-bottom:0.5rem;"><i class="mdi mdi-clipboard-list"></i></div>
             No logbook entries yet. Click <strong>New Entry</strong> to add one.
         </td></tr>`;
@@ -263,16 +263,20 @@ function _renderLogbookTable() {
             : '—';
 
         return `<tr class="lb-row" ondblclick="openEntryModal(${e.id})">
-            <td style="white-space:nowrap;">${date}<br><span style="color:var(--text-muted);font-size:0.8rem;">${time}</span></td>
+            <td class="lb-datetime-col"><span class="lb-date-val">${date}</span><span class="lb-time-val">${time}</span></td>
             <td><span class="lb-row-name">${_esc(e.description)}</span></td>
             <td style="font-family:var(--font-mono);white-space:nowrap;color:var(--text-secondary);">${odo}</td>
             <td style="white-space:nowrap;color:var(--text-secondary);">${price}</td>
-            <td class="lb-docs-cell">${docHtml}</td>
-            <td style="white-space:nowrap;text-align:right;">
+            <td class="lb-docs-cell"><span class="lb-docs-wrap">${docHtml}</span></td>
+            <td class="card-actions-cell" style="white-space:nowrap;text-align:right;">
                 <button class="btn btn-secondary lb-tbl-btn" onclick="openEntryModal(${e.id})"><i class="mdi mdi-pencil"></i> Edit</button>
             </td>
         </tr>`;
     }).join('');
+
+    if (typeof RoutarioTables !== 'undefined' && RoutarioTables.syncCardLabels) {
+        RoutarioTables.syncCardLabels(document.getElementById('lbEntriesTable'));
+    }
 }
 
 async function submitLogbookEntry() {
@@ -347,7 +351,7 @@ async function deleteLogbookEntry(entryId) {
 
 async function _loadFuelLogs() {
     const tbody = document.getElementById('lbFuelBody');
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading…</td></tr>`;
+    tbody.innerHTML = `<tr class="table-state-row"><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading…</td></tr>`;
     try {
         const res = await apiFetch(`${API_BASE}/devices/${_logbookDeviceId}/fuel`);
         _fuelLogs = res.ok ? await res.json() : [];
@@ -363,7 +367,7 @@ function _renderFuelTable() {
     if (!tbody) return;
 
     if (_fuelLogs.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="padding:2rem;text-align:center;color:var(--text-muted);">No fill-ups recorded. Click <strong>Add Fill-up</strong> to start.</td></tr>`;
+        tbody.innerHTML = `<tr class="table-state-row"><td colspan="7" style="padding:2rem;text-align:center;color:var(--text-muted);">No fill-ups recorded. Click <strong>Add Fill-up</strong> to start.</td></tr>`;
         if (summary) summary.textContent = '';
         return;
     }
@@ -412,17 +416,21 @@ function _renderFuelTable() {
             const distStr  = distances[log.id] ? `+${Math.round(distances[log.id]).toLocaleString()} km` : '—';
             const total    = log.price_per_liter ? _lbMoneySnapshot(log.liters * log.price_per_liter, log) : '—';
             return `<tr class="lb-row" ondblclick="openFuelLogModal(${log.id})">
-                <td style="white-space:nowrap;">${date}<br><span style="color:var(--text-muted);font-size:0.8rem;">${time}</span></td>
+                <td class="lb-datetime-col"><span class="lb-date-val">${date}</span><span class="lb-time-val">${time}</span></td>
                 <td style="text-align:right;font-family:var(--font-mono);">${log.liters.toFixed(2)}</td>
                 <td style="text-align:right;font-family:var(--font-mono);color:var(--accent-primary);">${distStr}</td>
                 <td style="text-align:right;color:var(--text-secondary);">${log.price_per_liter != null ? _lbMoneySnapshot(log.price_per_liter, log, 2) : '—'}</td>
                 <td style="text-align:right;color:var(--text-secondary);">${total}</td>
                 <td style="text-align:right;font-family:var(--font-mono);">${cons}</td>
-                <td style="text-align:right;">
+                <td class="card-actions-cell" style="text-align:right;">
                     <button class="btn btn-secondary lb-tbl-btn" onclick="openFuelLogModal(${log.id})"><i class="mdi mdi-pencil"></i> Edit</button>
                 </td>
             </tr>`;
         }).join('');
+
+    if (typeof RoutarioTables !== 'undefined' && RoutarioTables.syncCardLabels) {
+        RoutarioTables.syncCardLabels(document.getElementById('lbFuelTable') || tbody.closest('table'));
+    }
 }
 
 function openFuelLogModal(logId = null) {

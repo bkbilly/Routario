@@ -320,7 +320,7 @@ class FlespiDecoder(BaseProtocolDecoder):
                 ident = message.get('ident') or message.get('device.ident')
                 pos = self._parse_message(message, known_imei)
                 if ident and not known_imei:
-                    logger.info(f"Flespi login: {ident}")
+                    logger.debug(f"Flespi login: {ident}")
                     res: Dict[str, Any] = {
                         'event': 'login',
                         'imei': str(ident),

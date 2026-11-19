@@ -1943,7 +1943,14 @@ function renderAlertsTable() {
     const emptyCell = emptyRow?.querySelector('td');
     if (emptyCell) emptyCell.colSpan = hasAdminAccess ? 8 : 7;
     tbody.querySelectorAll('tr.alert-data-row').forEach(r => r.remove());
-    if (!alertRows.length) { if (emptyRow) emptyRow.style.display = ''; return; }
+    if (!alertRows.length) {
+        if (emptyRow) {
+            emptyRow.style.display = '';
+            emptyRow.classList.remove('hidden');
+            emptyRow.hidden = false;
+        }
+        return;
+    }
 
     const _uid = parseInt(localStorage.getItem('user_id'), 10);
     let visibleRows;
@@ -1955,8 +1962,19 @@ function renderAlertsTable() {
         visibleRows = alertRows.filter(r => !r.notify_user_ids || _idSet(r.notify_user_ids).has(_uid));
     }
 
-    if (!visibleRows.length) { if (emptyRow) emptyRow.style.display = ''; return; }
-    if (emptyRow) emptyRow.style.display = 'none';
+    if (!visibleRows.length) {
+        if (emptyRow) {
+            emptyRow.style.display = '';
+            emptyRow.classList.remove('hidden');
+            emptyRow.hidden = false;
+        }
+        return;
+    }
+    if (emptyRow) {
+        emptyRow.style.display = 'none';
+        emptyRow.classList.add('hidden');
+        emptyRow.hidden = true;
+    }
 
     visibleRows.forEach((row, idx) => {
         const isCustom = row.alertKey === '__custom__';

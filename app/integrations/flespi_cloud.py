@@ -436,7 +436,7 @@ class FlespiIntegration(BaseIntegration):
                     f"{_BASE_URL}/gw/devices/{remote_id}/settings",
                 ]:
                     resp = await client.get(settings_endpoint, headers=headers)
-                    logger.info(f"Flespi Cloud: GET {settings_endpoint} for device {remote_id} status={resp.status_code}")
+                    logger.debug(f"Flespi Cloud: GET {settings_endpoint} for device {remote_id} status={resp.status_code}")
                     if resp.status_code == 403:
                         logger.warning(
                             f"Flespi Cloud: Token rejected access to device {remote_id} settings (HTTP 403 Forbidden). "
@@ -459,7 +459,7 @@ class FlespiIntegration(BaseIntegration):
                         else:
                             settings_list = []
 
-                        logger.info(
+                        logger.debug(
                             f"Flespi Cloud: Loaded {len(settings_list)} settings from {settings_endpoint} for device {remote_id}: "
                             f"{[s.get('name') for s in settings_list if isinstance(s, dict)][:10]}"
                         )
@@ -472,7 +472,7 @@ class FlespiIntegration(BaseIntegration):
                                 continue
 
                             if sname == "sleep_mode":
-                                logger.info(f"Flespi Cloud DEBUG sleep_mode raw setting: {json.dumps(setting)}")
+                                logger.debug(f"Flespi Cloud sleep_mode raw setting: {json.dumps(setting)}")
 
                             stitle = setting.get("title") or str(sname).replace("_", " ").title()
                             sdesc = setting.get("description") or f"Flespi setting: {stitle}"

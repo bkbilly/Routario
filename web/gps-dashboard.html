@@ -36,6 +36,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
     <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/tables.css">
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/app-lock.css">
 
@@ -829,29 +830,31 @@
             <div id="logbookBody" style="flex:1; overflow-y:auto; padding:0.75rem 1.25rem 1.25rem; min-height:0;">
 
                 <!-- Entries table -->
-                <div style="overflow-x:auto;">
-                    <table id="lbEntriesTable" class="lb-table">
-                        <thead>
-                            <tr>
-                                <th style="white-space:nowrap;">Date</th>
-                                <th>Description</th>
-                                <th style="white-space:nowrap;">Odometer</th>
-                                <th style="white-space:nowrap;">Price</th>
-                                <th>Docs</th>
-                                <th style="width:90px;"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="logbookTableBody">
-                            <tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading&#8230;</td></tr>
-                        </tbody>
-                    </table>
+                <div id="lbPanelEntries">
+                    <div style="overflow-x:auto;">
+                        <table id="lbEntriesTable" class="devices-table lb-table lb-entries-table">
+                            <thead>
+                                <tr>
+                                    <th style="white-space:nowrap;">Date</th>
+                                    <th>Description</th>
+                                    <th style="white-space:nowrap;">Odometer</th>
+                                    <th style="white-space:nowrap;">Price</th>
+                                    <th>Docs</th>
+                                    <th style="width:90px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="logbookTableBody">
+                                <tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading&#8230;</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <!-- Fuel tab -->
                 <div id="lbPanelFuel" style="display:none;">
                     <div id="lbFuelSummary" style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem;"></div>
                     <div style="overflow-x:auto;">
-                        <table class="lb-table">
+                        <table id="lbFuelTable" class="devices-table lb-table lb-fuel-table">
                             <thead>
                                 <tr>
                                     <th style="white-space:nowrap;">Date</th>
@@ -988,6 +991,7 @@
     <script src="js/config.js"></script>
     <script src="js/app-lock.js"></script>
     <script src="js/units.js"></script>
+    <script src="js/ui-utils.js"></script>
     <script src="js/impersonation.js"></script>
     <script src="js/pwa.js"></script>
     <script src="js/vehicle-icons.js"></script>
