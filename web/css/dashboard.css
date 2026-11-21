@@ -327,6 +327,20 @@ body.light-theme::before {
     border-bottom: 1px solid var(--border-color);
 }
 
+/* Sidebar mutual exclusivity: history mode hides device list; geofence edit hides device list */
+.sidebar.history-active #sidebarDeviceList {
+    display: none !important;
+}
+.sidebar.history-active #sidebarHistoryDetails {
+    display: block !important;
+}
+.sidebar.geofence-edit-active #sidebarDeviceList {
+    display: none !important;
+}
+.sidebar.geofence-edit-active #sidebarGeofenceDetails {
+    display: block !important;
+}
+
 .section-title {
     font-size: 0.75rem;
     font-weight: 700;
@@ -3694,6 +3708,85 @@ path.leaflet-interactive:focus-visible,
     color: white;
 }
 
+/* Contextual Geofence Edit Toolbar (shown when editing geofence on desktop) */
+.geofence-edit-toolbar {
+    position: absolute;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background: rgba(19, 24, 37, 0.97);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 0.65rem 1.15rem;
+    box-shadow: var(--shadow-lg, 0 8px 32px rgba(0, 0, 0, 0.5));
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    white-space: nowrap;
+    animation: slideUp 0.3s ease-out;
+}
+
+.geofence-edit-info {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.geofence-edit-pill {
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    color: var(--accent-primary);
+    border-radius: 5px;
+    padding: 0.15rem 0.45rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.geofence-edit-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.geofence-edit-owner {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.geofence-edit-divider {
+    width: 1px;
+    height: 22px;
+    background: var(--border-color);
+}
+
+.geofence-edit-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.geofence-edit-actions .btn {
+    padding: 0.4rem 0.85rem;
+    font-size: 0.82rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
 
 /* ── Map Control Buttons (top-right) ──────────────────────────── */
 .map-ctrl-group {
@@ -4316,6 +4409,62 @@ path.leaflet-interactive:focus-visible,
     gap: 0.5rem;
 }
 
+/* ── Merged Geofence Edit Toolbar in Bottom Bar Mode ── */
+.dashboard.sidebar-bottom-mode .sidebar .geofence-edit-toolbar,
+#geofenceEditMergedSlot .geofence-edit-toolbar {
+    position: static !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    top: auto !important;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 0.65rem 0.75rem;
+    margin-bottom: 0.65rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    white-space: normal;
+}
+
+.dashboard.sidebar-bottom-mode .sidebar .geofence-edit-toolbar .geofence-edit-info,
+#geofenceEditMergedSlot .geofence-edit-toolbar .geofence-edit-info {
+    width: 100%;
+    justify-content: space-between;
+}
+
+.dashboard.sidebar-bottom-mode .sidebar .geofence-edit-toolbar .geofence-edit-divider,
+#geofenceEditMergedSlot .geofence-edit-toolbar .geofence-edit-divider {
+    display: none !important;
+}
+
+.dashboard.sidebar-bottom-mode .sidebar .geofence-edit-toolbar .geofence-edit-actions,
+#geofenceEditMergedSlot .geofence-edit-toolbar .geofence-edit-actions {
+    width: 100%;
+    display: flex;
+    gap: 0.5rem;
+}
+
+.dashboard.sidebar-bottom-mode .sidebar .geofence-edit-toolbar .geofence-edit-actions .btn,
+#geofenceEditMergedSlot .geofence-edit-toolbar .geofence-edit-actions .btn {
+    flex: 1;
+    justify-content: center;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.82rem;
+}
+
+.dashboard.sidebar-bottom-mode .sidebar .geofence-edit-toolbar .geofence-edit-cancel-btn,
+#geofenceEditMergedSlot .geofence-edit-toolbar .geofence-edit-cancel-btn {
+    display: none !important;
+}
+
 /* In bottom bar mode with sufficient width, keep buttons in one line (icon beside text) */
 .dashboard.sidebar-bottom-mode .device-actions {
     display: flex;
@@ -4403,12 +4552,14 @@ path.leaflet-interactive:focus-visible,
         padding: 0.5rem 0.35rem;
     }
     .sidebar.history-active .sidebar-section,
-    #sidebarHistoryDetails {
+    #sidebarHistoryDetails,
+    #sidebarGeofenceDetails {
         padding: 0.5rem 0.35rem 0 0.35rem;
     }
 
     /* ── History mode compact styles ── */
-    #sidebarHistoryDetails > div:first-child {
+    #sidebarHistoryDetails > div:first-child,
+    #sidebarGeofenceDetails > div:first-child {
         margin-bottom: 0.5rem !important;
     }
     .history-tab-bar {
@@ -4922,6 +5073,32 @@ body.light-theme .dashboard.sidebar-bottom-mode .sidebar .history-controls {
     border: 1px solid #d0dff0;
     box-shadow: 0 2px 8px rgba(30, 64, 175, 0.08);
 }
+[data-theme="light"] .geofence-edit-toolbar,
+body.light-theme .geofence-edit-toolbar {
+    background: rgba(240, 246, 255, 0.97);
+    border: 1px solid #bfdbfe;
+    box-shadow: 0 10px 30px rgba(30, 64, 175, 0.12), 0 2px 6px rgba(30, 64, 175, 0.06);
+}
+[data-theme="light"] #geofenceEditMergedSlot .geofence-edit-toolbar,
+body.light-theme #geofenceEditMergedSlot .geofence-edit-toolbar,
+[data-theme="light"] .dashboard.sidebar-bottom-mode .sidebar .geofence-edit-toolbar,
+body.light-theme .dashboard.sidebar-bottom-mode .sidebar .geofence-edit-toolbar {
+    background: #ffffff;
+    border: 1px solid #d0dff0;
+    box-shadow: 0 2px 8px rgba(30, 64, 175, 0.08);
+}
+[data-theme="light"] .geofence-edit-pill,
+body.light-theme .geofence-edit-pill {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #2563eb;
+}
+[data-theme="light"] #sidebarGeofenceDetails .geofence-edit-hint,
+body.light-theme #sidebarGeofenceDetails .geofence-edit-hint {
+    background: #f8fafc;
+    border-color: #d0dff0;
+    color: #475569;
+}
 [data-theme="light"] .history-controls-sidebar,
 body.light-theme .history-controls-sidebar {
     background: color-mix(in srgb, var(--bg-secondary) 75%, transparent);
@@ -5182,6 +5359,7 @@ body.light-theme .cluster-pie-inner {
     gap: 0.75rem;
     width: 100%;
     box-sizing: border-box;
+    flex-shrink: 0;
 }
 
 .eco-detail-card {
@@ -5248,6 +5426,7 @@ body.light-theme .cluster-pie-inner {
     line-height: 1.45;
     width: 100%;
     box-sizing: border-box;
+    flex-shrink: 0;
 }
 
 .eco-filter-bar {
@@ -5256,6 +5435,7 @@ body.light-theme .cluster-pie-inner {
     gap: 0.45rem;
     flex-wrap: wrap;
     margin-top: 0.15rem;
+    flex-shrink: 0;
 }
 
 .eco-filter-chip {
@@ -5287,9 +5467,14 @@ body.light-theme .cluster-pie-inner {
 .eco-table-wrap {
     width: 100%;
     overflow-x: auto;
+    overflow-y: auto;
     border: 1px solid var(--border-color);
     border-radius: 10px;
     background: var(--bg-secondary);
+    flex: 1 1 auto;
+    min-height: 140px;
+    box-sizing: border-box;
+    -webkit-overflow-scrolling: touch;
 }
 
 .eco-scorecard-table {
@@ -5308,6 +5493,9 @@ body.light-theme .cluster-pie-inner {
     text-transform: uppercase;
     letter-spacing: 0.04em;
     white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 2;
 }
 .eco-scorecard-table td {
     padding: 0.65rem 1rem;
@@ -5320,6 +5508,30 @@ body.light-theme .cluster-pie-inner {
 }
 .eco-scorecard-table tr:hover td {
     background: var(--bg-hover);
+}
+
+/* Ensure scorecard in trip modal retains table structure and does not collapse */
+.trip-eco-modal .eco-scorecard-table {
+    display: table !important;
+    width: 100% !important;
+    min-width: 520px;
+}
+.trip-eco-modal .eco-scorecard-table thead {
+    display: table-header-group !important;
+}
+.trip-eco-modal .eco-scorecard-table tbody {
+    display: table-row-group !important;
+}
+.trip-eco-modal .eco-scorecard-table tr {
+    display: table-row !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+}
+.trip-eco-modal .eco-scorecard-table th,
+.trip-eco-modal .eco-scorecard-table td {
+    display: table-cell !important;
 }
 
 @media (max-width: 600px) {
@@ -5340,6 +5552,196 @@ body.light-theme .cluster-pie-inner {
     .eco-scorecard-table th,
     .eco-scorecard-table td {
         padding: 0.5rem 0.75rem;
+    }
+}
+
+/* ── Small Window Height Adjustments for Trip Eco Scorecard ──────────── */
+@media (max-height: 800px) {
+    .trip-eco-modal {
+        max-height: 92vh !important;
+    }
+    .trip-eco-modal .modal-header {
+        padding: 0.85rem 1.4rem 0.65rem !important;
+    }
+    .trip-eco-body {
+        padding: 1rem 1.4rem 1.15rem !important;
+        gap: 0.85rem;
+    }
+    .eco-detail-card {
+        padding: 0.55rem 0.75rem;
+    }
+    .eco-coach-box {
+        padding: 0.6rem 0.9rem;
+    }
+}
+
+@media (max-height: 700px) {
+    .trip-eco-modal {
+        max-height: 94vh !important;
+    }
+    .trip-eco-modal .modal-header {
+        padding: 0.65rem 1.2rem 0.5rem !important;
+    }
+    .trip-eco-subtitle {
+        margin-top: 0.2rem;
+        font-size: 0.78rem;
+        gap: 0.5rem;
+    }
+    .trip-eco-body {
+        padding: 0.75rem 1.2rem 0.95rem !important;
+        gap: 0.6rem;
+    }
+    .eco-detail-grid {
+        gap: 0.45rem;
+    }
+    .eco-detail-card {
+        padding: 0.4rem 0.6rem;
+    }
+    .eco-detail-card .k {
+        font-size: 0.65rem;
+    }
+    .eco-detail-card .v {
+        font-size: 1rem;
+        margin-top: 0.15rem;
+    }
+    .eco-detail-card .sub {
+        font-size: 0.68rem;
+        margin-top: 0.15rem;
+    }
+    .eco-coach-box {
+        padding: 0.45rem 0.75rem;
+        font-size: 0.8rem;
+        line-height: 1.35;
+        gap: 0.6rem;
+    }
+    .eco-filter-bar {
+        margin-top: 0;
+        gap: 0.35rem;
+    }
+    .eco-filter-chip {
+        padding: 0.25rem 0.65rem;
+        font-size: 0.72rem;
+    }
+    .eco-table-wrap {
+        min-height: 140px;
+    }
+    .eco-scorecard-table th,
+    .eco-scorecard-table td {
+        padding: 0.45rem 0.75rem;
+    }
+}
+
+@media (max-height: 600px) {
+    .trip-eco-modal {
+        max-height: 96vh !important;
+        width: 95vw !important;
+    }
+    .trip-eco-modal .modal-header {
+        padding: 0.5rem 1rem 0.35rem !important;
+    }
+    .trip-eco-modal .modal-header h2 {
+        font-size: 1.05rem !important;
+    }
+    .trip-eco-subtitle {
+        font-size: 0.74rem;
+        margin-top: 0.15rem;
+        gap: 0.4rem;
+    }
+    .trip-eco-body {
+        padding: 0.5rem 1rem 0.65rem !important;
+        gap: 0.45rem;
+    }
+    /* Compact horizontal scrollable row prevents cards from wrapping and pushing the events table away */
+    .eco-detail-grid {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        gap: 0.4rem !important;
+        padding-bottom: 2px !important;
+        flex-shrink: 0 !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+    .eco-detail-card {
+        flex: 0 0 auto !important;
+        min-width: 105px !important;
+        padding: 0.3rem 0.5rem !important;
+    }
+    .eco-coach-box {
+        padding: 0.35rem 0.65rem;
+        font-size: 0.75rem;
+        gap: 0.4rem;
+        flex-shrink: 0;
+    }
+    .eco-filter-bar {
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        gap: 0.3rem !important;
+        padding-bottom: 2px !important;
+        flex-shrink: 0 !important;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+    }
+    .eco-table-wrap {
+        min-height: 120px;
+        flex: 1 1 auto;
+    }
+    .eco-scorecard-table th,
+    .eco-scorecard-table td {
+        padding: 0.35rem 0.6rem;
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-height: 480px) {
+    .trip-eco-modal {
+        max-height: 98vh !important;
+        width: 98vw !important;
+    }
+    .trip-eco-modal .modal-header {
+        padding: 0.35rem 0.75rem 0.25rem !important;
+    }
+    .trip-eco-modal .modal-header h2 {
+        font-size: 0.92rem !important;
+    }
+    .trip-eco-subtitle {
+        display: none !important;
+    }
+    .trip-eco-body {
+        padding: 0.35rem 0.75rem 0.5rem !important;
+        gap: 0.35rem;
+    }
+    .eco-coach-box {
+        display: none !important; /* Hiding coaching text frees room for the driving events table */
+    }
+    .eco-detail-grid {
+        padding-bottom: 1px !important;
+    }
+    .eco-detail-card {
+        padding: 0.22rem 0.4rem !important;
+        min-width: 90px !important;
+    }
+    .eco-detail-card .v {
+        font-size: 0.85rem !important;
+    }
+    .eco-detail-card .k {
+        font-size: 0.6rem !important;
+    }
+    .eco-detail-card .sub {
+        font-size: 0.62rem !important;
+    }
+    .eco-filter-chip {
+        padding: 0.18rem 0.5rem !important;
+        font-size: 0.7rem !important;
+    }
+    .eco-table-wrap {
+        min-height: 100px;
+        flex: 1 1 auto;
+    }
+    .eco-scorecard-table th,
+    .eco-scorecard-table td {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.72rem;
     }
 }
 

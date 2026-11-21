@@ -219,6 +219,40 @@
                 <div class="device-list" id="deviceList"></div>
             </div>
 
+            <!-- Geofence Details Section (Active in Bottom Bar Mode when editing) -->
+            <div class="sidebar-section" id="sidebarGeofenceDetails" style="display: none; flex: 1; overflow-y: auto; padding-bottom: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding: 0;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; min-width: 0;">
+                        <span class="geofence-header-icon" id="geofenceEditTypeIcon" style="font-size: 1.15rem; color: var(--accent-primary); flex-shrink: 0;"><i class="mdi mdi-map-marker-radius"></i></span>
+                        <div style="min-width: 0;">
+                            <h3 class="section-title" id="geofenceEditSectionTitle" style="margin-bottom: 0; color: var(--text-primary); font-weight: 700; text-transform: none; letter-spacing: normal; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Geofence Details</h3>
+                            <div id="geofenceEditOwnerHeader" style="display: none; font-size: 0.72rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></div>
+                        </div>
+                    </div>
+                    <button class="sidebar-close-btn" onclick="cancelGeofenceEdit()" title="Cancel Geofence Edit"><i class="mdi mdi-close"></i></button>
+                </div>
+
+                <!-- Merged Geofence Edit Controls Container (Active in Bottom Bar Mode) -->
+                <div id="geofenceEditMergedSlot"></div>
+
+                <!-- Details Grid matching history mode .detail-grid -->
+                <div class="detail-grid" id="geofenceEditDetailsGrid" style="margin-bottom: 0.75rem;">
+                    <div class="detail-item">
+                        <span class="detail-key">Type</span>
+                        <div class="detail-val" id="geofenceDetailType">Polygon</div>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-key">Vertices</span>
+                        <div class="detail-val" id="geofenceDetailVertices">0</div>
+                    </div>
+                </div>
+
+                <div class="geofence-edit-hint" style="font-size: 0.76rem; color: var(--text-muted); line-height: 1.45; padding: 0.55rem 0.75rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 0.75rem;">
+                    <i class="mdi mdi-gesture-tap" style="color: var(--accent-primary); margin-right: 4px; font-size: 0.9rem;"></i>
+                    Drag vertex markers on the map to reshape. Tap <strong>Save</strong> to commit changes.
+                </div>
+            </div>
+
             <div class="sidebar-section" id="sidebarHistoryDetails" style="display: none; flex: 1; overflow-y: auto; padding-bottom: 0;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding: 0 0 0 0;">
                     <h3 class="section-title" id="historyDeviceName" style="margin-bottom: 0;">History Details</h3>
@@ -330,37 +364,27 @@
                 </div>
             </div>
 
-            <!-- Geofence Edit Toolbar (shown when a geofence is selected) -->
-            <div id="geofenceEditToolbar"
-                style="display: none; position: absolute; bottom: 2rem; left: 50%; transform: translateX(-50%);
-                       z-index: 1000; background: var(--bg-card); border: 1px solid var(--border-color);
-                       border-radius: 12px; padding: 0.75rem 1.25rem; box-shadow: 0 4px 24px rgba(0,0,0,0.4);
-                       align-items: center; gap: 1rem; white-space: nowrap;">
-                <div style="display: flex; flex-direction: column; gap: 0.1rem; max-width: 180px;">
-                    <span id="geofenceEditName"
-                        style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;
-                               overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Geofence</span>
-                    <span id="geofenceEditOwner"
-                        style="display: none; font-size: 0.75rem; color: var(--text-muted);
-                               overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+            <!-- Floating Geofence Edit Controls Slot (Default desktop / non-bottom-bar mode) -->
+            <div id="geofenceEditDefaultSlot">
+                <div id="geofenceEditToolbar" class="geofence-edit-toolbar" style="display: none;">
+                    <div class="geofence-edit-info">
+                        <span class="geofence-edit-pill"><i class="mdi mdi-map-marker-radius"></i> <span id="geofenceEditTypeBadge">Zone</span></span>
+                        <span id="geofenceEditName" class="geofence-edit-name">Geofence</span>
+                        <span id="geofenceEditOwner" class="geofence-edit-owner" style="display: none;"></span>
+                    </div>
+                    <div class="geofence-edit-divider"></div>
+                    <div class="geofence-edit-actions">
+                        <button type="button" class="btn btn-sm btn-primary" onclick="saveEditedGeofence()">
+                            <i class="mdi mdi-content-save"></i> Save
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger" onclick="deleteGeofence()">
+                            <i class="mdi mdi-delete"></i> Delete
+                        </button>
+                        <button type="button" class="btn btn-sm btn-secondary geofence-edit-cancel-btn" onclick="cancelGeofenceEdit()">
+                            <i class="mdi mdi-close"></i> Cancel
+                        </button>
+                    </div>
                 </div>
-                <div style="width: 1px; height: 24px; background: var(--border-color);"></div>
-                <button onclick="saveEditedGeofence()"
-                    style="background: var(--accent-primary); border: none; color: #fff; padding: 0.45rem 1rem;
-                           border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
-                    <i class="mdi mdi-content-save"></i> Save
-                </button>
-                <button onclick="deleteGeofence()"
-                    style="background: rgba(239,68,68,0.15); border: 1px solid var(--accent-danger);
-                           color: var(--accent-danger); padding: 0.45rem 1rem; border-radius: 8px;
-                           cursor: pointer; font-size: 0.85rem; font-weight: 600;">
-                    <i class="mdi mdi-delete"></i> Delete
-                </button>
-                <button onclick="cancelGeofenceEdit()"
-                    style="background: transparent; border: 1px solid var(--border-color); color: var(--text-muted);
-                           padding: 0.45rem 0.85rem; border-radius: 8px; cursor: pointer; font-size: 0.85rem;">
-                    <i class="mdi mdi-close"></i> Cancel
-                </button>
             </div>
 
             <!-- Floating History Controls Slot (Default desktop / non-bottom-bar mode) -->

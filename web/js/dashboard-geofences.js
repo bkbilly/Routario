@@ -63,7 +63,8 @@ function _polylineBufferPolygon(latlngs, bufferMeters) {
 const _isAdmin        = () => localStorage.getItem('is_admin') === 'true';
 const _isCompanyAdmin = () => localStorage.getItem('is_company_admin') === 'true';
 const _canAssignOwner = () => _isAdmin() || _isCompanyAdmin();
-const _isHistoryActive = () => (typeof isHistoryMode === 'function' ? isHistoryMode() : (typeof historyDeviceId !== 'undefined' && historyDeviceId != null));
+const _isHistoryActive = () => (typeof window.isHistoryActive === 'function' ? window.isHistoryActive() : (typeof isHistoryMode === 'function' ? isHistoryMode() : (typeof historyDeviceId !== 'undefined' && historyDeviceId != null)));
+window._isHistoryActive = _isHistoryActive;
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let _map = null;
@@ -448,6 +449,12 @@ function _enterEditMode(layer, geofenceId) {
 
     const markDirty = () => {
         _isEditingGeofenceDirty = true;
+        const detailVertices = document.getElementById('geofenceDetailVertices');
+        if (detailVertices && _editingLayer) {
+            const coords = _getEditedCoords();
+            const isLine = _editingLayer instanceof L.Polyline && !(_editingLayer instanceof L.Polygon);
+            detailVertices.textContent = coords ? (isLine ? coords.length : Math.max(0, coords.length - 1)) : '--';
+        }
     };
     layer.on('edit', markDirty);
     layer.on('editvertex', markDirty);
@@ -498,31 +505,89 @@ function _getEditedCoords() {
     }
 }
 
-// ── Edit Toolbar (floating over map) ─────────────────────────────────────────
+// ── Edit Toolbar (floating over map / mobile bottom bar) ─────────────────────
 function _showEditToolbar(geofenceId) {
     const gf = _geofences.find(g => g.id === geofenceId);
     const toolbar = document.getElementById('geofenceEditToolbar');
     const nameEl = document.getElementById('geofenceEditName');
     const ownerEl = document.getElementById('geofenceEditOwner');
+    const typeBadge = document.getElementById('geofenceEditTypeBadge');
+    const sectionTitle = document.getElementById('geofenceEditSectionTitle');
+    const ownerHeader = document.getElementById('geofenceEditOwnerHeader');
+    const detailType = document.getElementById('geofenceDetailType');
+    const detailVertices = document.getElementById('geofenceDetailVertices');
+    const typeIcon = document.getElementById('geofenceEditTypeIcon');
+
+    const isLine = gf?.geometry_type === 'polyline' || (_editingLayer instanceof L.Polyline && !(_editingLayer instanceof L.Polygon));
+    const typeLabel = isLine ? 'Path' : 'Zone';
+
     if (nameEl && gf) nameEl.textContent = gf.name;
+    if (sectionTitle && gf) sectionTitle.textContent = gf.name;
+    if (typeBadge) typeBadge.textContent = typeLabel;
+    if (detailType) detailType.textContent = typeLabel;
+    if (typeIcon) {
+        typeIcon.innerHTML = isLine ? '<i class="mdi mdi-vector-polyline"></i>' : '<i class="mdi mdi-vector-polygon"></i>';
+    }
+
+    if (detailVertices) {
+        const coords = _getEditedCoords();
+        detailVertices.textContent = coords ? (isLine ? coords.length : Math.max(0, coords.length - 1)) : '--';
+    }
+
     if (ownerEl) {
         if (_canAssignOwner() && gf?.owner_username) {
             const ownerAvatar = gf.owner_avatar_url || 'https://www.gravatar.com/avatar/?d=wavatar';
-            ownerEl.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px;"><img src="${ownerAvatar}" alt="" style="width:14px;height:14px;border-radius:50%;object-fit:cover;vertical-align:middle;" onerror="this.src='https://www.gravatar.com/avatar/?d=wavatar'"><span>${_esc(gf.owner_username)}</span></span>`;
+            const ownerHtml = `<span style="display:inline-flex;align-items:center;gap:5px;"><img src="${ownerAvatar}" alt="" style="width:14px;height:14px;border-radius:50%;object-fit:cover;vertical-align:middle;" onerror="this.src='https://www.gravatar.com/avatar/?d=wavatar'"><span>${_esc(gf.owner_username)}</span></span>`;
+            ownerEl.innerHTML = ownerHtml;
             ownerEl.style.display = '';
+            if (ownerHeader) {
+                ownerHeader.innerHTML = ownerHtml;
+                ownerHeader.style.display = '';
+            }
         } else {
             ownerEl.style.display = 'none';
+            if (ownerHeader) ownerHeader.style.display = 'none';
         }
+    }
+
+    if (typeof syncGeofenceEditPlacement === 'function') {
+        syncGeofenceEditPlacement();
     }
     if (toolbar) {
         L.DomEvent.disableClickPropagation(toolbar);
         toolbar.style.display = 'flex';
+    }
+
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) sidebar.classList.add('geofence-edit-active');
+
+    // On mobile bottom-bar mode: display dedicated geofence edit section, hide device list
+    if (typeof isSidebarBottomBar === 'function' && isSidebarBottomBar()) {
+        const devList = document.getElementById('sidebarDeviceList');
+        if (devList) devList.style.display = 'none';
+        const gfSection = document.getElementById('sidebarGeofenceDetails');
+        if (gfSection) {
+            gfSection.style.display = 'block';
+            gfSection.scrollTop = 0;
+        }
     }
 }
 
 function _hideEditToolbar() {
     const toolbar = document.getElementById('geofenceEditToolbar');
     if (toolbar) toolbar.style.display = 'none';
+
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) sidebar.classList.remove('geofence-edit-active');
+
+    const gfSection = document.getElementById('sidebarGeofenceDetails');
+    if (gfSection) gfSection.style.display = 'none';
+
+    const devList = document.getElementById('sidebarDeviceList');
+    const isHist = typeof _isHistoryActive === 'function' && _isHistoryActive();
+    if (devList && !isHist) {
+        devList.style.display = '';
+    }
 }
 
 // Called by the "Save" button in the edit toolbar

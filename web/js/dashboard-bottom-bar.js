@@ -76,11 +76,25 @@
         return Math.max(MIN_HEIGHT, Math.min(window.innerHeight - 60, Math.round(window.innerHeight * 0.88)));
     }
 
+    function isHistoryActive() {
+        if (typeof isHistoryMode === 'function' && isHistoryMode()) return true;
+        if (typeof historyDeviceId !== 'undefined' && historyDeviceId != null) return true;
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar && sidebar.classList.contains('history-active')) return true;
+        const histDetails = document.getElementById('sidebarHistoryDetails');
+        if (histDetails && histDetails.style.display !== 'none' && histDetails.style.display !== '') return true;
+        return false;
+    }
+
     function syncHistoryControlsPlacement() {
         const controls = document.getElementById('historyControls');
         const defaultSlot = document.getElementById('historyControlsDefaultSlot');
         const mergedSlot = document.getElementById('historyControlsMergedSlot');
+        const devList = document.getElementById('sidebarDeviceList');
+        const histDetails = document.getElementById('sidebarHistoryDetails');
         if (!controls || !defaultSlot || !mergedSlot) return;
+
+        const histActive = isHistoryActive();
 
         if (isBottomBarActive()) {
             if (controls.parentElement !== mergedSlot) {
@@ -89,6 +103,41 @@
         } else {
             if (controls.parentElement !== defaultSlot) {
                 defaultSlot.appendChild(controls);
+            }
+        }
+
+        if (histActive) {
+            if (devList) devList.style.display = 'none';
+            if (histDetails) histDetails.style.display = 'block';
+        }
+    }
+
+    function syncGeofenceEditPlacement() {
+        const toolbar = document.getElementById('geofenceEditToolbar');
+        const defaultSlot = document.getElementById('geofenceEditDefaultSlot');
+        const mergedSlot = document.getElementById('geofenceEditMergedSlot');
+        const gfSection = document.getElementById('sidebarGeofenceDetails');
+        const devList = document.getElementById('sidebarDeviceList');
+        if (!toolbar || !defaultSlot || !mergedSlot) return;
+
+        const isEditing = toolbar.style.display !== 'none';
+        const histActive = isHistoryActive();
+
+        if (isBottomBarActive()) {
+            if (toolbar.parentElement !== mergedSlot) {
+                mergedSlot.appendChild(toolbar);
+            }
+            if (isEditing) {
+                if (devList) devList.style.display = 'none';
+                if (gfSection) gfSection.style.display = 'block';
+            }
+        } else {
+            if (toolbar.parentElement !== defaultSlot) {
+                defaultSlot.appendChild(toolbar);
+            }
+            if (gfSection) gfSection.style.display = 'none';
+            if (devList && !histActive && !isEditing) {
+                devList.style.display = '';
             }
         }
     }
@@ -146,12 +195,14 @@
             dashboard.classList.add('sidebar-bottom-mode');
             dashboard.classList.remove('sidebar-hidden');
             syncHistoryControlsPlacement();
+            syncGeofenceEditPlacement();
             updateBottomBarMaxHeight();
         } else {
             dashboard.classList.remove('sidebar-bottom-mode');
             sidebar.style.removeProperty('--bottom-bar-height');
             sidebar.style.removeProperty('--bottom-bar-max-height');
             syncHistoryControlsPlacement();
+            syncGeofenceEditPlacement();
         }
 
         if (typeof map !== 'undefined' && map && typeof map.invalidateSize === 'function') {
@@ -279,6 +330,9 @@
     window.setBottomBarHeight = setBottomBarHeight;
     window.toggleBottomBarCompact = toggleBottomBarCompact;
     window.syncHistoryControlsPlacement = syncHistoryControlsPlacement;
+    window.syncGeofenceEditPlacement = syncGeofenceEditPlacement;
+    window.isHistoryActive = isHistoryActive;
+    window._isHistoryActive = isHistoryActive;
 
     window.addEventListener('resize', updateBottomBarMode);
     window.addEventListener('orientationchange', () => setTimeout(updateBottomBarMode, 100));
