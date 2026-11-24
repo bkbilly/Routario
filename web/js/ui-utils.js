@@ -335,8 +335,8 @@
                 justify-content: space-between;
                 flex-wrap: nowrap;
                 gap: 0.5rem;
+                padding: 0 0 0.85rem 0;
                 margin-bottom: 0.85rem;
-                padding-bottom: 0.85rem;
                 border-bottom: 1px solid var(--border-color);
                 flex-shrink: 0;
             }
@@ -1029,15 +1029,7 @@
             });
         });
 
-        let backdropDown = false;
-        drawer.addEventListener('mousedown', (e) => { backdropDown = (e.target === drawer); });
-        drawer.addEventListener('click', (e) => {
-            if (backdropDown && e.target === drawer) closeAlertsModal();
-            backdropDown = false;
-        });
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && drawer.classList.contains('active')) closeAlertsModal();
-        });
+        bindModalDismiss(drawer, closeAlertsModal);
 
         window.loadAlerts = loadAlerts;
         window.openAlertsModal = openAlertsModal;
@@ -1061,8 +1053,29 @@
         planChip,
     };
 
+    function bindModalDismiss(modalOrId, onClose) {
+        const modal = typeof modalOrId === 'string' ? document.getElementById(modalOrId) : modalOrId;
+        if (!modal || modal.dataset.dismissBound === 'true') return;
+        modal.dataset.dismissBound = 'true';
+        const closeFn = typeof onClose === 'function' ? onClose : () => modal.classList.remove('active');
+
+        let backdropDown = false;
+        modal.addEventListener('mousedown', (e) => { backdropDown = (e.target === modal); });
+        modal.addEventListener('click', (e) => {
+            if (backdropDown && e.target === modal) closeFn();
+            backdropDown = false;
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.classList.contains('active')) closeFn();
+        });
+    }
+
     window.RoutarioAlertsDrawer = {
         mount: mountAlertsDrawer,
+    };
+
+    window.RoutarioModals = {
+        bindDismiss: bindModalDismiss,
     };
 
     window.RoutarioTables = {
