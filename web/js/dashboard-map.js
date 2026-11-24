@@ -311,6 +311,59 @@ function togglePopupSensors(btn, deviceId) {
 }
 window.togglePopupSensors = togglePopupSensors;
 
+function _getSensorIcon(key) {
+    const k = String(key || '').toLowerCase();
+    if (k.includes('batt') || k === 'soc') return 'mdi-battery-charging';
+    if (k.includes('fuel')) return 'mdi-gas-station';
+    if (k.includes('volt') || k === 'power' || k.includes('ext_v')) return 'mdi-car-battery';
+    if (k.includes('temp')) return 'mdi-thermometer';
+    if (k.includes('rpm')) return 'mdi-gauge';
+    if (k.includes('signal') || k.includes('gsm') || k.includes('rssi') || k.includes('csq')) return 'mdi-signal';
+    if (k.includes('door')) return 'mdi-car-door';
+    if (k.includes('lock')) return 'mdi-lock-outline';
+    if (k.includes('motion') || k.includes('move')) return 'mdi-run-fast';
+    if (k.includes('charge')) return 'mdi-ev-station';
+    if (k.includes('coolant')) return 'mdi-coolant-temperature';
+    return 'mdi-chip';
+}
+
+function _buildSpeedGaugeSvg(rawSpeedKmh, formattedSpeed, headingDeg = null) {
+    const speedNum = Math.max(0, Number(rawSpeedKmh) || 0);
+    const maxScale = 140;
+    const ratio = Math.min(1, speedNum / maxScale);
+    // Semi-circle arc from (12, 56) to (84, 56), radius 36, length ~113.1
+    const arcLen = Math.PI * 36;
+    const dashOffset = (arcLen * (1 - ratio)).toFixed(1);
+    const strokeColor = speedNum >= 110 ? '#ef4444' : speedNum >= 75 ? '#f59e0b' : 'var(--accent-primary, #3b82f6)';
+
+    const parts = String(formattedSpeed || '0').trim().split(/\s+/);
+    const valPart = parts[0] || '0';
+    const unitPart = parts.slice(1).join(' ') || '';
+
+    const hasHeading = headingDeg !== null && headingDeg !== undefined && !isNaN(Number(headingDeg));
+    const deg = hasHeading ? Math.round(Number(headingDeg)) : 0;
+    const headingPointer = hasHeading ? `
+        <g transform="rotate(${deg} 48 48)">
+            <polygon points="48,1 44.5,8 51.5,8" fill="#10b981"/>
+        </g>` : '';
+
+    return `
+        <svg class="vp-gauge-svg" viewBox="0 0 96 96" aria-hidden="true">
+            <!-- Outer compass ring -->
+            <circle cx="48" cy="48" r="44" fill="none" stroke="var(--border-color)" stroke-width="1.2" stroke-dasharray="2 4" opacity="0.75"/>
+            <text x="48" y="13" text-anchor="middle" class="vp-compass-n">N</text>
+            ${headingPointer}
+            <!-- Speed arc -->
+            <path d="M 12 56 A 36 36 0 0 1 84 56" fill="none" stroke="var(--border-color)" stroke-width="6.5" stroke-linecap="round"/>
+            <path d="M 12 56 A 36 36 0 0 1 84 56" fill="none" stroke="${strokeColor}" stroke-width="6.5" stroke-linecap="round"
+                  stroke-dasharray="${arcLen.toFixed(1)}" stroke-dashoffset="${dashOffset}"/>
+            <text x="48" y="50" text-anchor="middle" class="vp-gauge-val">${_esc(valPart)}</text>
+            <text x="48" y="63" text-anchor="middle" class="vp-gauge-unit">${_esc(unitPart)}</text>
+        </svg>`;
+}
+window._getSensorIcon = _getSensorIcon;
+window._buildSpeedGaugeSvg = _buildSpeedGaugeSvg;
+
 function updateDeviceMarker(deviceId, state) {
     const device = devices.find(d => d.id === deviceId);
     if ((device && device.is_active === false) || (state && state.is_active === false)) {
@@ -355,8 +408,9 @@ function updateDeviceMarker(deviceId, state) {
     const satellites = state.satellites ?? (state.sensors || {}).last_known_satellites ?? '—';
     const altitude   = state.last_altitude ?? 0;
 
-    // Format last_update to local time (2 lines: Date & Time)
-    let lastGpsTimeStr = '—';
+    // Format last_update to local time (compact 1-line relative + full datetime on hover)
+    let lastGpsShort = '';
+    let lastGpsFull = '';
     const rawGpsTime = (state.sensors || {}).last_gps_time;
     if (rawGpsTime) {
         const raw = rawGpsTime.endsWith('Z') ? rawGpsTime : rawGpsTime + 'Z';
@@ -368,13 +422,15 @@ function updateDeviceMarker(deviceId, state) {
             const timeStr = typeof formatTimeValue === 'function'
                 ? formatTimeValue(d, { withSeconds: true })
                 : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            lastGpsTimeStr = `<div style="text-align:right;"><div style="font-weight:600;color:var(--text-primary);">${dateStr}</div><div style="font-size:0.72rem;color:var(--text-muted);">${timeStr}</div></div>`;
+            lastGpsFull = `${dateStr} · ${timeStr}`;
+            lastGpsShort = typeof timeAgo === 'function' ? timeAgo(rawGpsTime) : timeStr;
         } else {
-            lastGpsTimeStr = rawGpsTime;
+            lastGpsFull = rawGpsTime;
+            lastGpsShort = rawGpsTime;
         }
     }
 
-    // Build sensors rows
+    // Build sensors rows with icons & mini bars for percentages
     const canViewHist = hasPermission('view_history');
     const skipKeys = new Set(['raw', 'event_code']);
     const sensorRows = Object.entries(sensors)
@@ -382,15 +438,23 @@ function updateDeviceMarker(deviceId, state) {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([k, v]) => {
             const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            const iconCls = _getSensorIcon(k);
             let display = Array.isArray(v) || (v !== null && typeof v === 'object')
                 ? JSON.stringify(v)
                 : String(v);
+            const numVal = typeof v === 'number' ? v : (typeof v === 'string' && /^\d+(\.\d+)?$/.test(v.trim()) ? Number(v) : null);
+            const isPct = numVal !== null && numVal >= 0 && numVal <= 100 && /(batt|fuel|soc|level|pct|percent)/i.test(k);
+            const barColor = numVal !== null && numVal <= 20 ? '#ef4444' : numVal !== null && numVal <= 45 ? '#f59e0b' : '#10b981';
+            const barHtml = isPct
+                ? `<div class="vp-sensor-bar-wrap"><div class="vp-sensor-bar" style="width:${Math.round(numVal)}%;background:${barColor};"></div></div>`
+                : '';
             const clickAttr = canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, '${_esc(k)}', '${_esc(label)}')" role="button" title="Click to view ${label} history"` : '';
-            return `<div class="vp-sensor-row ${canViewHist ? 'vp-sensor-row-clickable' : ''}" ${clickAttr} style="display:flex;justify-content:space-between;align-items:baseline;
-                                gap:0.5rem;padding:0.25rem 0.35rem;border-bottom:1px solid var(--border-color);flex-wrap:wrap;border-radius:4px;">
-                        <span style="color:var(--text-muted);font-size:0.75rem;flex-shrink:0;">${label}</span>
-                        <span style="font-family:JetBrains Mono,monospace;font-size:0.72rem;
-                                     color:var(--text-primary);word-break:break-all;text-align:right;">${display}</span>
+            return `<div class="vp-sensor-row ${canViewHist ? 'vp-sensor-row-clickable' : ''}" ${clickAttr}>
+                        <span class="vp-sensor-key"><i class="mdi ${iconCls}"></i> ${label}</span>
+                        <span class="vp-sensor-val-wrap">
+                            <span class="vp-sensor-val">${_esc(display)}${isPct && !String(display).includes('%') ? '%' : ''}</span>
+                            ${barHtml}
+                        </span>
                     </div>`;
         }).join('');
 
@@ -419,19 +483,57 @@ function updateDeviceMarker(deviceId, state) {
         }
     }
 
+    const speedDisplay = state.last_speed != null ? fmtSpeed(state.last_speed) : fmtSpeed(0);
+    const speedGaugeHtml = _buildSpeedGaugeSvg(state.last_speed || 0, speedDisplay, toHead);
+    const gaugeTitle = [
+        canViewHist ? 'Click to view Speed history' : '',
+        toHead != null ? `Heading: ${Math.round(toHead)}°` : ''
+    ].filter(Boolean).join(' · ');
+
+    const ignBadgeHtml = state.ignition_on != null
+        ? `<span class="vp-ign-pill ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'ignition', 'Ignition')" title="Click to view Ignition history"` : ''} style="color:${ignitionColor};border-color:${ignitionColor}40;background:${ignitionColor}18;">
+                <i class="mdi mdi-engine"></i> ${ignitionText}
+           </span>`
+        : '';
+
     const popupContent = `
         <div class="vp-popup">
             <div class="vp-header">
                 <span class="vp-icon">${vehicle.emoji}</span>
-                <span class="vp-name">${deviceName}</span>
+                <div class="vp-title-wrap">
+                    <span class="vp-name">${_esc(deviceName)}</span>
+                    ${lastGpsShort ? `<span class="vp-subtitle" title="Last GPS: ${_esc(lastGpsFull)}"><i class="mdi mdi-clock-outline"></i> ${_esc(lastGpsShort)}</span>` : ''}
+                </div>
+                ${ignBadgeHtml}
             </div>
-            <div class="vp-grid" onscroll="_popupGridScroll[${deviceId}] = this.scrollTop">
-                ${state.ignition_on != null ? `<span class="vp-label ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'ignition', 'Ignition')" title="Click to view Ignition history"` : ''}>Ignition</span>   <span class="vp-value ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'ignition', 'Ignition')" title="Click to view Ignition history"` : ''} style="color:${ignitionColor};font-weight:700;">${ignitionText}</span>` : ''}
-                ${lastGpsTimeStr !== '—'     ? `<span class="vp-label">Last GPS</span>   <span class="vp-value vp-mono" style="font-size:0.72rem;">${lastGpsTimeStr}</span>` : ''}
-                ${state.last_speed != null   ? `<span class="vp-label ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'speed', 'Speed')" title="Click to view Speed history"` : ''}>Speed</span>      <span class="vp-value ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'speed', 'Speed')" title="Click to view Speed history"` : ''}>${fmtSpeed(state.last_speed)}</span>` : ''}
-                ${satellites !== '—'         ? `<span class="vp-label ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'satellites', 'Satellites')" title="Click to view Satellites history"` : ''}>Satellites</span> <span class="vp-value ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'satellites', 'Satellites')" title="Click to view Satellites history"` : ''}>${satellites}</span>` : ''}
-                <span class="vp-label ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'altitude', 'Altitude')" title="Click to view Altitude history"` : ''}>Altitude</span>   <span class="vp-value ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'altitude', 'Altitude')" title="Click to view Altitude history"` : ''}>${fmtAlt(altitude)}</span>
-                <span class="vp-label ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'odometer', 'Odometer')" title="Click to view Odometer history"` : ''}>Odometer</span>   <span class="vp-value ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'odometer', 'Odometer')" title="Click to view Odometer history"` : ''}>${fmtOdometer(state.total_odometer || 0)}</span>
+            <div class="vp-telemetry-hero">
+                <div class="vp-gauge-card ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'speed', 'Speed')"` : ''} ${gaugeTitle ? `title="${_esc(gaugeTitle)}"` : ''}>
+                    ${speedGaugeHtml}
+                </div>
+                <div class="vp-stat-tiles">
+                    ${satellites !== '—' ? `
+                    <div class="vp-stat-tile ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'satellites', 'Satellites')" title="Click to view Satellites history"` : ''}>
+                        <i class="mdi mdi-satellite-variant vp-tile-icon"></i>
+                        <div class="vp-tile-body">
+                            <span class="vp-tile-label">Satellites</span>
+                            <span class="vp-tile-val">${_esc(satellites)}</span>
+                        </div>
+                    </div>` : ''}
+                    <div class="vp-stat-tile ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'altitude', 'Altitude')" title="Click to view Altitude history"` : ''}>
+                        <i class="mdi mdi-image-filter-hdr vp-tile-icon"></i>
+                        <div class="vp-tile-body">
+                            <span class="vp-tile-label">Altitude</span>
+                            <span class="vp-tile-val">${_esc(fmtAlt(altitude))}</span>
+                        </div>
+                    </div>
+                    <div class="vp-stat-tile ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'odometer', 'Odometer')" title="Click to view Odometer history"` : ''}>
+                        <i class="mdi mdi-counter vp-tile-icon"></i>
+                        <div class="vp-tile-body">
+                            <span class="vp-tile-label">Odometer</span>
+                            <span class="vp-tile-val">${_esc(fmtOdometer(state.total_odometer || 0))}</span>
+                        </div>
+                    </div>
+                </div>
             </div>
             ${sensorRows ? `
             <div style="border-top:1px solid var(--border-color);">
@@ -456,7 +558,8 @@ function updateDeviceMarker(deviceId, state) {
             icon: _makeMarkerIcon(device?.vehicle_type, state.ignition_on, toHead)
         })
             .bindPopup(popupContent, {
-                autoPan: false
+                autoPan: false,
+                maxWidth: 260
             });
         markers[deviceId].deviceId = deviceId;
         clusterGroup.addLayer(markers[deviceId]);

@@ -1176,27 +1176,75 @@ function updatePlaybackUI() {
                     tag = ' <span class="attr-badge-mini curr">Current</span>';
                 }
             }
-            return `<span class="vp-label" title="Pinned attribute: ${_esc(key)}">${_esc(key)}</span><span class="vp-value">${valStr}${tag}</span>`;
+            const iconCls = typeof _getSensorIcon === 'function' ? _getSensorIcon(key) : 'mdi-chip';
+            return `<span class="vp-label" title="Pinned attribute: ${_esc(key)}"><i class="mdi ${iconCls}" style="color:var(--accent-primary);margin-right:3px;"></i>${_esc(key)}</span><span class="vp-value">${valStr}${tag}</span>`;
         }).join('');
+    }
+
+    const ignText = p.ignition === true ? 'ON' : p.ignition === false ? 'OFF' : '—';
+    const ignBadgeHtml = p.ignition != null
+        ? `<span class="vp-ign-pill" title="Ignition: ${ignText}" style="color:${ignColor};border-color:${ignColor}40;background:${ignColor}18;"><i class="mdi mdi-engine"></i> ${ignText}</span>`
+        : '';
+    const speedDisplay = p.speed != null ? fmtSpeed(p.speed) : fmtSpeed(0);
+    const speedGaugeHtml = typeof _buildSpeedGaugeSvg === 'function'
+        ? _buildSpeedGaugeSvg(p.speed || 0, speedDisplay, p.course)
+        : `<div class="vp-tile-val">${_esc(speedDisplay)}</div>`;
+    const gaugeTitle = p.course != null ? `Heading: ${Number(p.course).toFixed(0)}°` : '';
+
+    let shortTime = time;
+    if (p.time) {
+        const rawT = p.time.endsWith('Z') ? p.time : p.time + 'Z';
+        const dt = new Date(rawT);
+        if (!isNaN(dt.getTime())) {
+            shortTime = typeof formatTimeValue === 'function'
+                ? formatTimeValue(dt, { withSeconds: true })
+                : dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
     }
 
     const historyPopup = `
         <div class="vp-popup">
             <div class="vp-header">
                 <span class="vp-icon">${vehicle.emoji}</span>
-                <span class="vp-name">${device?.name || 'History'}</span>
+                <div class="vp-title-wrap">
+                    <span class="vp-name">${_esc(device?.name || 'History')}</span>
+                    <span class="vp-subtitle" title="Recorded at: ${_esc(time)}"><i class="mdi mdi-clock-outline"></i> ${_esc(shortTime)}</span>
+                </div>
+                ${ignBadgeHtml}
             </div>
-            <div class="vp-grid" onscroll="_historyPopupGridScroll = this.scrollTop">
-                <span class="vp-label">Time</span>      <span class="vp-value vp-mono" style="font-size:0.72rem;">${_format2LineDatetime(p.time)}</span>
-                <span class="vp-label">Driver</span>    <span class="vp-value">${p.driver_name ? `<span style="display:inline-flex;align-items:center;gap:4px;"><img src="${p.driver_avatar_url || '/icons/default-driver.svg'}" style="width:14px;height:14px;border-radius:50%;object-fit:cover;vertical-align:middle;" onerror="this.src='/icons/default-driver.svg'"><span>${_esc(p.driver_name)}</span></span>` : '—'}</span>
-                <span class="vp-label">Speed</span>     <span class="vp-value">${p.speed != null ? fmtSpeed(p.speed) : '—'}</span>
-                <span class="vp-label">Heading</span>   <span class="vp-value">${p.course != null ? Number(p.course).toFixed(0) + '°' : '—'}</span>
-                <span class="vp-label">Ignition</span>  <span class="vp-value" style="color:${ignColor};font-weight:700;">${p.ignition === true ? 'ON' : p.ignition === false ? 'OFF' : '—'}</span>
-                <span class="vp-label">Satellites</span><span class="vp-value">${p.satellites != null ? p.satellites : '—'}</span>
-                <span class="vp-label">Altitude</span>  <span class="vp-value">${fmtAlt(p.altitude || 0)}</span>
-                <span class="vp-label">Lat/Lng</span>   <span class="vp-value">${position[0].toFixed(5)}, ${position[1].toFixed(5)}</span>
+            <div class="vp-telemetry-hero">
+                <div class="vp-gauge-card" ${gaugeTitle ? `title="${_esc(gaugeTitle)}"` : ''}>
+                    ${speedGaugeHtml}
+                </div>
+                <div class="vp-stat-tiles">
+                    <div class="vp-stat-tile">
+                        <i class="mdi mdi-satellite-variant vp-tile-icon"></i>
+                        <div class="vp-tile-body">
+                            <span class="vp-tile-label">Satellites</span>
+                            <span class="vp-tile-val">${p.satellites != null ? _esc(p.satellites) : '—'}</span>
+                        </div>
+                    </div>
+                    <div class="vp-stat-tile">
+                        <i class="mdi mdi-image-filter-hdr vp-tile-icon"></i>
+                        <div class="vp-tile-body">
+                            <span class="vp-tile-label">Altitude</span>
+                            <span class="vp-tile-val">${_esc(fmtAlt(p.altitude || 0))}</span>
+                        </div>
+                    </div>
+                    <div class="vp-stat-tile">
+                        <i class="mdi mdi-crosshairs-gps vp-tile-icon"></i>
+                        <div class="vp-tile-body">
+                            <span class="vp-tile-label">Coords</span>
+                            <span class="vp-tile-val" style="font-size:0.64rem;">${position[0].toFixed(4)}, ${position[1].toFixed(4)}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            ${(p.driver_name || pinnedPopupRows) ? `
+            <div class="vp-grid" onscroll="_historyPopupGridScroll = this.scrollTop" style="border-top:1px solid var(--border-color);padding-top:0.45rem;">
+                ${p.driver_name ? `<span class="vp-label"><i class="mdi mdi-account" style="color:var(--accent-primary);margin-right:3px;"></i>Driver</span><span class="vp-value"><span style="display:inline-flex;align-items:center;gap:4px;"><img src="${p.driver_avatar_url || '/icons/default-driver.svg'}" style="width:14px;height:14px;border-radius:50%;object-fit:cover;vertical-align:middle;" onerror="this.src='/icons/default-driver.svg'"><span>${_esc(p.driver_name)}</span></span></span>` : ''}
                 ${pinnedPopupRows}
-            </div>
+            </div>` : ''}
         </div>
     `;
     const isPopupOpen = markers['history_pos'] && typeof markers['history_pos'].isPopupOpen === 'function' && markers['history_pos'].isPopupOpen();

@@ -169,6 +169,21 @@
         }
     }
 
+    function _getLiveSensorValue(deviceId, sensorKey) {
+        const devState = (typeof deviceStates !== 'undefined' && deviceStates && deviceStates[deviceId])
+            || (typeof devices !== 'undefined' && Array.isArray(devices) ? devices.find(d => d.id === deviceId) : null);
+        if (!devState) return null;
+
+        switch (sensorKey) {
+            case 'ignition':   return devState.ignition_on ?? null;
+            case 'speed':      return devState.last_speed ?? null;
+            case 'satellites': return devState.satellites ?? devState.sensors?.last_known_satellites ?? null;
+            case 'altitude':   return devState.last_altitude ?? null;
+            case 'odometer':   return devState.total_odometer ?? null;
+            default:           return devState.sensors?.[sensorKey] ?? null;
+        }
+    }
+
     function _renderStats(data) {
         const statsBar = document.getElementById('sensorHistoryStatsBar');
         if (!statsBar) return;
@@ -195,10 +210,10 @@
 
         const cards = [];
 
-        // Latest reading
-        if (summary.latest !== null && summary.latest !== undefined) {
-            cards.push(card('Current Value', _formatSensorValue(summary.latest, unit, isNumeric), 'mdi-gauge'));
-        }
+        // Live current reading (falls back to summary.latest if live state isn't present)
+        const liveVal = _getLiveSensorValue(state.deviceId, state.sensorKey);
+        const currentVal = (liveVal !== null && liveVal !== undefined) ? liveVal : summary.latest;
+        cards.push(card('Current Value', _formatSensorValue(currentVal, unit, isNumeric), 'mdi-gauge'));
 
         if (isNumeric) {
             if (summary.min !== null) cards.push(card('Minimum', `${summary.min}${unit ? ' ' + unit : ''}`, 'mdi-arrow-down-bold'));
