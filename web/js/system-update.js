@@ -69,7 +69,7 @@ const SystemUpdateManager = {
         if (!container || !this.cachedInfo) return;
 
         const info = this.cachedInfo;
-        const cur = info.current_version || '2026.10.0';
+        const cur = info.current_version || 'Unknown';
         const lat = info.latest_version || cur;
         const hasUpdate = Boolean(info.update_available);
         const dep = info.deployment || {};
@@ -147,8 +147,8 @@ const SystemUpdateManager = {
         if (!body || !footer) return;
 
         const info = this.cachedInfo || {
-            current_version: '2026.10.0',
-            latest_version: '2026.10.0',
+            current_version: 'Unknown',
+            latest_version: 'Unknown',
             update_available: false,
             deployment: { mode: 'git', can_auto_update: true },
         };

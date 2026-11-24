@@ -100,7 +100,7 @@ def get_app_version() -> str:
     Resolve the running Routario version.
     1. Check ROUTARIO_VERSION or APP_VERSION env var.
     2. Try git describe --tags --abbrev=0 or --always.
-    3. Fallback to default base version.
+    3. Fallback to VERSION file at project root (or '0.0.0').
     """
     env_ver = os.getenv("ROUTARIO_VERSION") or os.getenv("APP_VERSION")
     if env_ver and env_ver.strip():
@@ -139,7 +139,16 @@ def get_app_version() -> str:
         except Exception:
             pass
 
-    return "2026.10.0"
+    version_file = _PROJECT_ROOT / "VERSION"
+    if version_file.exists():
+        try:
+            file_ver = version_file.read_text(encoding="utf-8").strip().lstrip("v")
+            if file_ver:
+                return file_ver
+        except Exception:
+            pass
+
+    return "0.0.0"
 
 
 def get_version_details() -> Dict[str, Any]:

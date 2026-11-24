@@ -647,6 +647,8 @@ async def lifespan(app: FastAPI):
 
 # ==================== App ====================
 
+from core.system_update import get_app_version
+
 app = FastAPI(
     title="Routario Platform API",
     description=(
@@ -655,7 +657,7 @@ app = FastAPI(
         "click Authorize in Swagger, and paste the `rt_...` key. "
         "Swagger adds the Bearer prefix automatically."
     ),
-    version="1.0.0",
+    version=get_app_version(),
     lifespan=lifespan,
     docs_url=None,
     redoc_url=None,
