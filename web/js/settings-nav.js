@@ -421,6 +421,10 @@
         </a>
         <span class="settings-nav-title"><span>${pageTitle}</span></span>
         <div class="settings-nav-right">
+        <button class="header-gear-btn header-alerts-btn" id="snAlertsBtn" type="button" title="Alerts" aria-label="Alerts">
+            <i class="mdi mdi-bell-outline" id="snAlertsBtnIcon" style="font-size:18px;"></i>
+            <span class="alerts-badge-pill" id="snAlertCount"></span>
+        </button>
         <div class="header-menu-wrap">
             <button class="header-gear-btn" id="snGearBtn" title="Settings">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
@@ -674,5 +678,14 @@
         window.addEventListener('scroll', () => {
             nav.classList.toggle('scrolled', window.scrollY > 0);
         }, { passive: true });
+
+        if (window.RoutarioAlertsDrawer) {
+            window.RoutarioAlertsDrawer.mount({
+                buttonId: 'snAlertsBtn',
+                iconId: 'snAlertsBtnIcon',
+                badgeId: 'snAlertCount',
+                pollIntervalMs: 60000,
+            });
+        }
     });
 })();

@@ -55,6 +55,11 @@
                     <span class="logo-text">Routario</span>
                 </div>
             </div>
+            <div class="header-actions" style="gap: 0.6rem;">
+            <button class="header-gear-btn header-alerts-btn" id="alertsBtn" title="Alerts" aria-label="Alerts">
+                <i class="mdi mdi-bell-outline" id="alertsBtnIcon" style="font-size:18px;"></i>
+                <span class="map-ctrl-badge" id="alertCount"></span>
+            </button>
             <div class="header-menu-wrap">
             <button class="header-gear-btn" onclick="toggleHeaderMenu(event)" title="Settings" id="headerGearBtn">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
@@ -190,6 +195,7 @@
                 </button>
             </div>
         </div>
+        </div>
         </header>
         
         <aside class="sidebar">
@@ -288,14 +294,6 @@
 
             <!-- Map Control Buttons -->
             <div class="map-ctrl-group">
-                <!-- Alerts button (at top) -->
-                <div class="map-ctrl-bar">
-                    <button class="map-ctrl-btn" id="alertsBtn" onclick="openAlertsModal()" title="Alerts">
-                        <i class="mdi mdi-bell-outline" id="alertsBtnIcon" style="font-size:16px;"></i>
-                        <span class="map-ctrl-badge" id="alertCount"></span>
-                    </button>
-                </div>
-
                 <!-- Layers button -->
                 <div class="map-ctrl-bar">
                     <button class="map-ctrl-btn" id="mapLayersBtn" onclick="toggleMapCtrlFlyout('mapLayersFlyout', event)" title="Map Layers">
@@ -507,29 +505,7 @@
         </div>
     </div>
 
-    <!-- Alerts Modal -->
-    <div class="modal" id="alertsModal">
-        <div class="modal-content">
-            <div class="modal-header alerts-modal-header">
-                <h2 class="modal-title">Recent Alerts</h2>
-                <div class="alerts-modal-actions">
-                    <button class="btn btn-secondary" id="alertHistoryToggleBtn" onclick="toggleAlertHistory()"><i class="mdi mdi-history"></i> History</button>
-                    <button class="btn btn-secondary" id="alertClearAllBtn" onclick="clearAllAlerts()"><i class="mdi mdi-broom"></i> Clear All</button>
-                </div>
-                <button class="modal-close" onclick="closeAlertsModal()"><i class="mdi mdi-close"></i></button>
-            </div>
-            <div class="alerts-list" id="alertsList"></div>
-            <div id="alertsHistorySection" style="display:none; border-top: 1px solid var(--border-color); margin-top: 0.75rem; padding-top: 0.75rem;">
-                <div style="font-size: 0.8rem; color: var(--text-muted); padding: 0 0 0.5rem 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">
-                    Cleared Alerts
-                </div>
-                <div class="alerts-list" id="alertsHistoryList"></div>
-                <div id="alertsHistoryLoadMore" style="display:none; text-align:center; padding-top: 0.75rem;">
-                    <button class="btn btn-secondary" onclick="loadMoreAlertHistory()" style="font-size: 0.82rem;">Load More</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- Alerts Drawer is mounted dynamically by RoutarioAlertsDrawer in ui-utils.js -->
 
     <!-- Geofence Save / Edit Modal -->
     <div class="modal" id="geofenceModal">

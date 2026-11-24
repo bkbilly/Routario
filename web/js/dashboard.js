@@ -59,7 +59,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     initMap();
     await loadDevices();
     connectWebSocket();
-    loadAlerts(); // Load alerts immediately on startup
+    await loadAlerts(); // Load alerts immediately on startup
+    if (typeof handlePendingAlertFromUrl === 'function') {
+        handlePendingAlertFromUrl();
+    }
     startPeriodicUpdate();
 
 
