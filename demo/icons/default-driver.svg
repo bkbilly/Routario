@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#334155" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+  </defs>
+  <!-- Background Circle -->
+  <circle cx="50" cy="50" r="48" fill="url(#bgGrad)" stroke="#475569" stroke-width="2.5" />
+  <!-- Driver Cap / Peak -->
+  <path d="M30 38 C30 26, 70 26, 70 38 Z" fill="#64748b" />
+  <path d="M26 38 C38 34, 62 34, 74 38 C75 40, 68 42, 50 42 C32 42, 25 40, 26 38 Z" fill="#94a3b8" />
+  <!-- Driver Head -->
+  <circle cx="50" cy="46" r="11" fill="#cbd5e1" />
+  <!-- Driver Shoulders / Uniform -->
+  <path d="M24 82 C24 64, 34 58, 50 58 C66 58, 76 64, 76 82 Z" fill="#475569" />
+  <!-- Steering Wheel overlay in front of driver -->
+  <circle cx="50" cy="74" r="18" fill="none" stroke="url(#accentGrad)" stroke-width="3.5" />
+  <circle cx="50" cy="74" r="4.5" fill="#38bdf8" />
+  <!-- Steering Wheel Spokes -->
+  <line x1="32" y1="74" x2="45.5" y2="74" stroke="url(#accentGrad)" stroke-width="3" stroke-linecap="round" />
+  <line x1="68" y1="74" x2="54.5" y2="74" stroke="url(#accentGrad)" stroke-width="3" stroke-linecap="round" />
+  <line x1="50" y1="78.5" x2="50" y2="92" stroke="url(#accentGrad)" stroke-width="3" stroke-linecap="round" />
+</svg>

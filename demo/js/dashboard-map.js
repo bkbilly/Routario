@@ -1,0 +1,1609 @@
+/**
+ * dashboard-map.js
+ * Map initialization, tile layers, device markers, and WebSocket connection.
+ */
+
+// markerState[deviceId] = { lat, lng, heading, animFrame }
+const markerState = {};
+
+// accuracyCircles[deviceId] = L.circle instance (or undefined)
+const accuracyCircles = {};
+
+// Live breadcrumb trails and polylines for live vehicles
+// liveBreadcrumbTrails[deviceId] = [ [lat, lng], ... ] (FIFO buffer of recent coordinates)
+const liveBreadcrumbTrails = {};
+// liveBreadcrumbLayers[deviceId] = L.polyline instance (or undefined)
+const liveBreadcrumbLayers = {};
+
+const MAP_TILES = {
+    openstreetmap_dark: {
+        label: '🌙 OpenStreetMap Dark',
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19,
+        cssFilter: 'invert(100%) hue-rotate(180deg)'
+    },
+    openstreetmap: {
+        label: '🗺️ OpenStreetMap',
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19,
+        light: true
+    },
+    stadia_dark: {
+        label: '🌒 Stadia Dark',
+        url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
+        attribution: '© <a href="https://stadiamaps.com/">Stadia Maps</a>',
+        maxZoom: 20
+    },
+    google_streets: {
+        label: '🛣️ Google Streets',
+        url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+        attribution: '© Google Maps',
+        maxZoom: 21,
+        light: true
+    },
+    google_satellite: {
+        label: '🛰️ Google Satellite',
+        url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        attribution: '© Google Maps',
+        maxZoom: 21
+    },
+    google_hybrid: {
+        label: '🌍 Google Hybrid',
+        url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+        attribution: '© Google Maps',
+        maxZoom: 21
+    },
+    carto_dark: {
+        label: '🌑 Carto Dark',
+        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        attribution: '© <a href="https://carto.com/">CARTO</a>',
+        maxZoom: 19
+    },
+    carto_light: {
+        label: '☀️ Carto Light',
+        url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+        attribution: '© <a href="https://carto.com/">CARTO</a>',
+        maxZoom: 19,
+        light: true
+    },
+    esri_satellite: {
+        label: '🌐 ESRI Satellite',
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attribution: '© Esri, Maxar, Earthstar Geographics',
+        maxZoom: 19
+    },
+};
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Write the correct rotation directly to the .marker-svg element during animation.
+ * heading = raw GPS course (degrees). The per-type offset is added here.
+ */
+function _applyMarkerRotation(marker, heading, vehicleType) {
+    const el = marker.getElement();
+    if (!el) return;
+    const svg = el.querySelector('.marker-svg');
+    if (!svg) return;
+    const cfg = VEHICLE_ICONS[vehicleType];
+    const offset = (cfg && !cfg.arrow) ? (cfg.offset || 0) : 0;
+    svg.style.transform = heading != null ? `rotate(${heading + offset}deg)` : '';
+}
+
+/**
+ * Build a L.divIcon with the heading already baked into the HTML string.
+ * Use this whenever creating or restoring a marker so there is no
+ * post-insertion DOM timing dependency.
+ */
+function _makeMarkerIcon(vehicleType, ignitionOn, heading) {
+    return L.divIcon({
+        html: getMarkerHtml(vehicleType, ignitionOn, heading),
+        className: 'custom-marker',
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
+    });
+}
+
+// ── Map initialisation ────────────────────────────────────────────────────────
+
+function initMap() {
+    map = L.map('map', {
+        center: [20, 0],
+        zoom: 2,
+        minZoom: 2,
+        zoomControl: false,
+        wheelPxPerZoomLevel: 120,
+        worldCopyJump: true,
+        preferCanvas: true,
+    });
+
+    // Seamlessly normalize map longitude across world copies so markers/overlays are always visible
+    map.on('moveend', () => {
+        const center = map.getCenter();
+        const wrapped = center.wrap();
+        if (Math.abs(center.lng - wrapped.lng) > 0.001) {
+            map.panTo(wrapped, { animate: false });
+        }
+    });
+
+    map.on('dragstart', () => {
+        if (typeof stopFollowingVehicle === 'function' && followedDeviceId != null) {
+            stopFollowingVehicle();
+        }
+    });
+
+    const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap_dark';
+    applyTileLayer(savedTile);
+    populateMapPicker();
+    loadOfflineMapLayers();
+
+    // Close flyouts on map click; also auto-close sidebar on mobile
+    let popupWasOpen = false;
+    map.on('popupopen',  (e) => {
+        popupWasOpen = true;
+        const devId = e.popup?._source?.deviceId || (e.popup?._source === markers['history_pos'] ? 'history_pos' : null);
+        if (devId && typeof _ensurePopupInVisibleMap === 'function') {
+            _ensurePopupInVisibleMap(devId, e.popup._source.getLatLng());
+        }
+        if (typeof syncSidebarActiveHighlight === 'function') syncSidebarActiveHighlight();
+    });
+    map.on('popupclose', (e) => {
+        popupWasOpen = true;
+        const devId = e.popup?._source?.deviceId || (e.popup?._source === markers['history_pos'] ? 'history_pos' : null);
+        if (devId) {
+            delete _popupGridScroll[devId];
+            delete _popupSensorsScroll[devId];
+        }
+        setTimeout(() => {
+            popupWasOpen = false;
+            if (typeof syncSidebarActiveHighlight === 'function') syncSidebarActiveHighlight();
+        }, 0);
+    });
+    map.on('click', () => {
+        closeAllMapFlyouts();
+        if (window.innerWidth <= 768) {
+            if (popupWasOpen) return;
+            if (typeof isSidebarBottomBar === 'function' && isSidebarBottomBar()) return;
+            const dashboard = document.querySelector('.dashboard');
+            if (!dashboard.classList.contains('sidebar-hidden')) {
+                dashboard.classList.add('sidebar-hidden');
+                setTimeout(() => map.invalidateSize(), 300);
+            }
+        }
+
+    });
+
+    clusterGroup = L.markerClusterGroup({
+        disableClusteringAtZoom: 14,
+        spiderfyOnMaxZoom: false,
+        showCoverageOnHover: false,
+        zoomToBoundsOnClick: false,
+        maxClusterRadius: 60,
+        iconCreateFunction: _createClusterPieIcon,
+    }).addTo(map);
+
+    clusterGroup.on('clusterclick', (e) => {
+        zoomToClusterWithSidebarOffset(e.layer);
+    });
+
+    clusterGroup.on('animationend', updateAllBreadcrumbsVisibility);
+    clusterGroup.on('spiderfied', updateAllBreadcrumbsVisibility);
+    clusterGroup.on('unspiderfied', updateAllBreadcrumbsVisibility);
+    map.on('zoomend', updateAllBreadcrumbsVisibility);
+    map.on('moveend', updateAllBreadcrumbsVisibility);
+
+    initGeofences(map);
+    if (typeof initHistoryZoomLineModeSwitch === 'function') {
+        initHistoryZoomLineModeSwitch();
+    }
+}
+
+// ── Tile layers ───────────────────────────────────────────────────────────────
+
+function applyTileLayer(tileKey) {
+    const tile = MAP_TILES[tileKey] || MAP_TILES['openstreetmap_dark'];
+
+    if (currentTileLayer) map.removeLayer(currentTileLayer);
+
+    currentTileLayer = L.tileLayer(tile.url, {
+        attribution: tile.attribution,
+        maxZoom: tile.maxZoom,
+        crossOrigin: true
+    }).addTo(map);
+
+    const tileContainer = currentTileLayer.getContainer();
+    if (tileContainer) tileContainer.style.filter = tile.cssFilter || '';
+
+    localStorage.setItem('mapTileLayer', tileKey);
+    document.body.classList.toggle('map-light', !!tile.light);
+
+    document.querySelectorAll('.map-tile-option').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tile === tileKey);
+    });
+}
+
+function populateMapPicker() {
+    const flyout = document.getElementById('mapLayersFlyout');
+    if (!flyout) return;
+    map.on('dragstart', () => {
+        if (typeof stopFollowingVehicle === 'function' && followedDeviceId != null) {
+            stopFollowingVehicle();
+        }
+    });
+
+    const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap_dark';
+    flyout.innerHTML = Object.entries(MAP_TILES).map(([key, tile]) => `
+        <label>
+            <input type="radio" name="map-tile-radio" value="${key}" ${key === savedTile ? 'checked' : ''}
+                onchange="applyTileLayer('${key}'); closeAllMapFlyouts();">
+            <span>${tile.label}</span>
+        </label>
+    `).join('');
+}
+
+async function loadOfflineMapLayers() {
+    try {
+        const fetchFn = typeof apiFetch === 'function' ? apiFetch : fetch;
+        const res = await fetchFn('/api/tiles/maps');
+        if (!res.ok) return;
+        const maps = await res.json();
+        let defaultMapKey = null;
+
+        maps.forEach(m => {
+            const key = `offline_${m.id}`;
+            MAP_TILES[key] = {
+                label: `💾 ${m.name} (Offline)`,
+                url: m.tile_url,
+                attribution: m.description ? `© ${m.description}` : '© Local Offline Map',
+                minZoom: m.min_zoom ?? 0,
+                maxZoom: m.max_zoom ?? 18,
+                bounds: m.bounds,
+                center: m.center,
+                light: true,
+                isOffline: true
+            };
+            if (m.is_default) {
+                defaultMapKey = key;
+            }
+        });
+
+        if (maps.length > 0) {
+            populateMapPicker();
+            const savedTile = localStorage.getItem('mapTileLayer');
+            if (savedTile && savedTile.startsWith('offline_') && MAP_TILES[savedTile]) {
+                applyTileLayer(savedTile);
+            } else if (!savedTile && defaultMapKey) {
+                applyTileLayer(defaultMapKey);
+            }
+        }
+    } catch (e) {
+        console.warn('[OfflineTiles] Failed to load offline map layers:', e);
+    }
+}
+
+// ── Map control flyouts ───────────────────────────────────────────────────────
+
+function toggleMapCtrlFlyout(id, e) {
+    if (e) e.stopPropagation();
+    const flyout = document.getElementById(id);
+    const isOpen = flyout.classList.contains('open');
+    closeAllMapFlyouts();
+    if (!isOpen) flyout.classList.add('open');
+}
+
+function closeAllMapFlyouts() {
+    document.querySelectorAll('.map-ctrl-flyout').forEach(f => f.classList.remove('open'));
+}
+
+function closePicker(e) {
+    const picker = document.getElementById('mapTilePicker');
+    const btn    = document.getElementById('mapPickerBtn');
+    if (picker && btn && !picker.contains(e.target) && !btn.contains(e.target)) {
+        picker.style.display = 'none';
+    }
+}
+
+// ── Device markers ────────────────────────────────────────────────────────────
+
+const _popupSensorsExpanded = new Set();
+const _popupGridScroll = window._popupGridScroll = {};
+const _popupSensorsScroll = window._popupSensorsScroll = {};
+
+function togglePopupSensors(btn, deviceId) {
+    const panel = btn.parentElement?.querySelector('.vp-sensor-panel');
+    if (!panel) return;
+    const isExpanded = panel.style.display !== 'none';
+    if (isExpanded) {
+        panel.style.display = 'none';
+        btn.textContent = '▼ More sensors';
+        _popupSensorsExpanded.delete(deviceId);
+    } else {
+        panel.style.display = 'grid';
+        btn.textContent = '▲ Less sensors';
+        _popupSensorsExpanded.add(deviceId);
+    }
+}
+window.togglePopupSensors = togglePopupSensors;
+
+function updateFollowPill() {
+    const pill = document.getElementById('mapFollowPill');
+    const text = document.getElementById('mapFollowText');
+    if (!pill || !text) return;
+
+    if (followedDeviceId == null || (typeof historyDeviceId !== 'undefined' && historyDeviceId)) {
+        pill.style.display = 'none';
+        return;
+    }
+
+    const dev = devices.find(d => d.id === followedDeviceId);
+    if (!dev) {
+        pill.style.display = 'none';
+        return;
+    }
+    const vehicle = (typeof VEHICLE_ICONS !== 'undefined' && (VEHICLE_ICONS[dev.vehicle_type] || VEHICLE_ICONS['other'])) || { emoji: '🚗' };
+    text.textContent = `Following: ${vehicle.emoji} ${dev.name}`;
+    pill.style.display = 'inline-flex';
+}
+
+function syncSidebarActiveHighlight() {
+    let activeId = null;
+    if (typeof followedDeviceId !== 'undefined' && followedDeviceId != null) {
+        activeId = followedDeviceId;
+    } else if (typeof markers !== 'undefined') {
+        for (const [id, m] of Object.entries(markers)) {
+            if (id !== 'history_pos' && m && typeof m.isPopupOpen === 'function' && m.isPopupOpen()) {
+                activeId = Number(id) || id;
+                break;
+            }
+        }
+    }
+    selectedDevice = activeId;
+    document.querySelectorAll('.device-card').forEach(card => {
+        const isMatch = activeId != null && card.id === `device-card-${activeId}`;
+        card.classList.toggle('active', isMatch);
+    });
+}
+window.syncSidebarActiveHighlight = syncSidebarActiveHighlight;
+
+function followVehicle(deviceId, { skipPan = false } = {}) {
+    followedDeviceId = deviceId;
+    updateFollowPill();
+    syncSidebarActiveHighlight();
+    if (!skipPan && map && markers[deviceId]) {
+        const ll = markers[deviceId].getLatLng();
+        map.panTo(applyLatLngOffset([ll.lat, ll.lng], map.getZoom()), { animate: true });
+    }
+}
+
+function stopFollowingVehicle() {
+    followedDeviceId = null;
+    updateFollowPill();
+    syncSidebarActiveHighlight();
+}
+window.followVehicle = followVehicle;
+window.stopFollowingVehicle = stopFollowingVehicle;
+window.updateFollowPill = updateFollowPill;
+
+function _getSensorIcon(key) {
+    const k = String(key || '').toLowerCase();
+    if (k.includes('batt') || k === 'soc') return 'mdi-battery-charging';
+    if (k.includes('fuel')) return 'mdi-gas-station';
+    if (k.includes('volt') || k === 'power' || k.includes('ext_v')) return 'mdi-car-battery';
+    if (k.includes('temp')) return 'mdi-thermometer';
+    if (k.includes('rpm')) return 'mdi-gauge';
+    if (k.includes('signal') || k.includes('gsm') || k.includes('rssi') || k.includes('csq')) return 'mdi-signal';
+    if (k.includes('door')) return 'mdi-car-door';
+    if (k.includes('lock')) return 'mdi-lock-outline';
+    if (k.includes('motion') || k.includes('move')) return 'mdi-run-fast';
+    if (k.includes('charge')) return 'mdi-ev-station';
+    if (k.includes('coolant')) return 'mdi-coolant-temperature';
+    return 'mdi-chip';
+}
+
+function _buildSpeedGaugeSvg(rawSpeedKmh, formattedSpeed, headingDeg = null) {
+    const speedNum = Math.max(0, Number(rawSpeedKmh) || 0);
+    const maxScale = 140;
+    const ratio = Math.min(1, speedNum / maxScale);
+    // Semi-circle arc from (12, 56) to (84, 56), radius 36, length ~113.1
+    const arcLen = Math.PI * 36;
+    const dashOffset = (arcLen * (1 - ratio)).toFixed(1);
+    const strokeColor = speedNum >= 110 ? '#ef4444' : speedNum >= 75 ? '#f59e0b' : 'var(--accent-primary, #3b82f6)';
+
+    const parts = String(formattedSpeed || '0').trim().split(/\s+/);
+    const valPart = parts[0] || '0';
+    const unitPart = parts.slice(1).join(' ') || '';
+
+    const hasHeading = headingDeg !== null && headingDeg !== undefined && !isNaN(Number(headingDeg));
+    const deg = hasHeading ? Math.round(Number(headingDeg)) : 0;
+    const headingPointer = hasHeading ? `
+        <g transform="rotate(${deg} 48 48)">
+            <polygon points="48,1 44.5,8 51.5,8" fill="#10b981"/>
+        </g>` : '';
+
+    return `
+        <svg class="vp-gauge-svg" viewBox="0 0 96 96" aria-hidden="true">
+            <!-- Outer compass ring -->
+            <circle cx="48" cy="48" r="44" fill="none" stroke="var(--border-color)" stroke-width="1.2" stroke-dasharray="2 4" opacity="0.75"/>
+            <text x="48" y="13" text-anchor="middle" class="vp-compass-n">N</text>
+            ${headingPointer}
+            <!-- Speed arc -->
+            <path d="M 12 56 A 36 36 0 0 1 84 56" fill="none" stroke="var(--border-color)" stroke-width="6.5" stroke-linecap="round"/>
+            <path d="M 12 56 A 36 36 0 0 1 84 56" fill="none" stroke="${strokeColor}" stroke-width="6.5" stroke-linecap="round"
+                  stroke-dasharray="${arcLen.toFixed(1)}" stroke-dashoffset="${dashOffset}"/>
+            <text x="48" y="50" text-anchor="middle" class="vp-gauge-val">${_esc(valPart)}</text>
+            <text x="48" y="63" text-anchor="middle" class="vp-gauge-unit">${_esc(unitPart)}</text>
+        </svg>`;
+}
+window._getSensorIcon = _getSensorIcon;
+window._buildSpeedGaugeSvg = _buildSpeedGaugeSvg;
+
+function updateDeviceMarker(deviceId, state) {
+    const device = devices.find(d => d.id === deviceId);
+    if ((device && device.is_active === false) || (state && state.is_active === false)) {
+        if (markers[deviceId]) {
+            if (typeof clusterGroup !== 'undefined' && clusterGroup && clusterGroup.hasLayer(markers[deviceId])) {
+                clusterGroup.removeLayer(markers[deviceId]);
+            }
+            if (typeof map !== 'undefined' && map && map.hasLayer(markers[deviceId])) {
+                map.removeLayer(markers[deviceId]);
+            }
+            delete markers[deviceId];
+        }
+        return;
+    }
+    if (!state || !state.last_latitude || !state.last_longitude) return;
+
+    const toLat  = state.last_latitude;
+    const toLng  = state.last_longitude;
+    const toHead = state.last_course ?? null;
+    const deviceName = device ? device.name : 'Unknown Device';
+
+    const ignitionColor = state.ignition_on === true  ? '#10b981'
+                        : state.ignition_on === false ? '#ef4444'
+                        : '#6b7280';
+    const ignitionText  = state.ignition_on === true  ? 'ON'
+                        : state.ignition_on === false ? 'OFF'
+                        : '—';
+
+    const vehicle = VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other'];
+
+    // ── Strip internal sensor keys that are shown in the main grid ───────────
+    const HIDDEN_SENSOR_KEYS = new Set([
+        'last_gps_time',
+        'last_known_satellites',
+        'accuracy',
+    ]);
+
+    const sensors = Object.fromEntries(
+        Object.entries(state.sensors || {}).filter(([k]) => !HIDDEN_SENSOR_KEYS.has(k))
+    );
+
+    const satellites = state.satellites ?? (state.sensors || {}).last_known_satellites ?? '—';
+    const altitude   = state.last_altitude ?? 0;
+
+    // Format last_update to local time (compact 1-line relative + full datetime on hover)
+    let lastGpsShort = '';
+    let lastGpsFull = '';
+    const rawGpsTime = (state.sensors || {}).last_gps_time;
+    if (rawGpsTime) {
+        const raw = rawGpsTime.endsWith('Z') ? rawGpsTime : rawGpsTime + 'Z';
+        const d = new Date(raw);
+        if (!isNaN(d.getTime())) {
+            const dateStr = typeof formatDateValue === 'function'
+                ? formatDateValue(d)
+                : d.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+            const timeStr = typeof formatTimeValue === 'function'
+                ? formatTimeValue(d, { withSeconds: true })
+                : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            lastGpsFull = `${dateStr} · ${timeStr}`;
+            lastGpsShort = typeof timeAgo === 'function' ? timeAgo(rawGpsTime) : timeStr;
+        } else {
+            lastGpsFull = rawGpsTime;
+            lastGpsShort = rawGpsTime;
+        }
+    }
+
+    // Build sensors rows with icons & mini bars for percentages
+    const canViewHist = hasPermission('view_history');
+    const skipKeys = new Set(['raw', 'event_code']);
+    const sensorRows = Object.entries(sensors)
+        .filter(([k, v]) => !skipKeys.has(k) && v !== null && v !== undefined)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => {
+            const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            const iconCls = _getSensorIcon(k);
+            let display = Array.isArray(v) || (v !== null && typeof v === 'object')
+                ? JSON.stringify(v)
+                : String(v);
+            const numVal = typeof v === 'number' ? v : (typeof v === 'string' && /^\d+(\.\d+)?$/.test(v.trim()) ? Number(v) : null);
+            const isPct = numVal !== null && numVal >= 0 && numVal <= 100 && /(batt|fuel|soc|level|pct|percent)/i.test(k);
+            const barColor = numVal !== null && numVal <= 20 ? '#ef4444' : numVal !== null && numVal <= 45 ? '#f59e0b' : '#10b981';
+            const barHtml = isPct
+                ? `<div class="vp-sensor-bar-wrap"><div class="vp-sensor-bar" style="width:${Math.round(numVal)}%;background:${barColor};"></div></div>`
+                : '';
+            const clickAttr = canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, '${_esc(k)}', '${_esc(label)}')" role="button" title="Click to view ${label} history"` : '';
+            return `<div class="vp-sensor-row ${canViewHist ? 'vp-sensor-row-clickable' : ''}" ${clickAttr}>
+                        <span class="vp-sensor-key"><i class="mdi ${iconCls}"></i> ${label}</span>
+                        <span class="vp-sensor-val-wrap">
+                            <span class="vp-sensor-val">${_esc(display)}${isPct && !String(display).includes('%') ? '%' : ''}</span>
+                            ${barHtml}
+                        </span>
+                    </div>`;
+        }).join('');
+
+    // ── Check if sensor panel should be expanded & save scroll positions ─────────
+    let sensorsExpanded = _popupSensorsExpanded.has(deviceId);
+    let prevSensorsScrollTop = _popupSensorsScroll[deviceId] || 0;
+    let prevGridScrollTop = _popupGridScroll[deviceId] || 0;
+    const existingPopup = markers[deviceId]?.getPopup();
+    if (existingPopup) {
+        const el = existingPopup.getElement();
+        if (el) {
+            const domPanel = el.querySelector('.vp-sensor-panel');
+            if (domPanel) {
+                if (domPanel.style.display !== 'none') {
+                    sensorsExpanded = true;
+                    _popupSensorsExpanded.add(deviceId);
+                }
+                prevSensorsScrollTop = domPanel.scrollTop || 0;
+                _popupSensorsScroll[deviceId] = prevSensorsScrollTop;
+            }
+            const domGrid = el.querySelector('.vp-grid');
+            if (domGrid) {
+                prevGridScrollTop = domGrid.scrollTop || 0;
+                _popupGridScroll[deviceId] = prevGridScrollTop;
+            }
+        }
+    }
+
+    const speedDisplay = state.last_speed != null ? fmtSpeed(state.last_speed) : fmtSpeed(0);
+    const speedGaugeHtml = _buildSpeedGaugeSvg(state.last_speed || 0, speedDisplay, toHead);
+    const gaugeTitle = [
+        canViewHist ? 'Click to view Speed history' : '',
+        toHead != null ? `Heading: ${Math.round(toHead)}°` : ''
+    ].filter(Boolean).join(' · ');
+
+    const ignBadgeHtml = state.ignition_on != null
+        ? `<span class="vp-ign-pill ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'ignition', 'Ignition')" title="Click to view Ignition history"` : ''} style="color:${ignitionColor};border-color:${ignitionColor}40;background:${ignitionColor}18;">
+                <i class="mdi mdi-engine"></i> ${ignitionText}
+           </span>`
+        : '';
+
+    const popupContent = `
+        <div class="vp-popup">
+            <div class="vp-header">
+                <span class="vp-icon">${vehicle.emoji}</span>
+                <div class="vp-title-wrap">
+                    <span class="vp-name">${_esc(deviceName)}</span>
+                    ${lastGpsShort ? `<span class="vp-subtitle" title="Last GPS: ${_esc(lastGpsFull)}"><i class="mdi mdi-clock-outline"></i> ${_esc(lastGpsShort)}</span>` : ''}
+                </div>
+                ${ignBadgeHtml}
+            </div>
+            <div class="vp-telemetry-hero">
+                <div class="vp-gauge-card ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'speed', 'Speed')"` : ''} ${gaugeTitle ? `title="${_esc(gaugeTitle)}"` : ''}>
+                    ${speedGaugeHtml}
+                </div>
+                <div class="vp-stat-tiles">
+                    ${satellites !== '—' ? `
+                    <div class="vp-stat-tile ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'satellites', 'Satellites')" title="Click to view Satellites history"` : ''}>
+                        <i class="mdi mdi-satellite-variant vp-tile-icon"></i>
+                        <div class="vp-tile-body">
+                            <span class="vp-tile-label">Satellites</span>
+                            <span class="vp-tile-val">${_esc(satellites)}</span>
+                        </div>
+                    </div>` : ''}
+                    <div class="vp-stat-tile ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'altitude', 'Altitude')" title="Click to view Altitude history"` : ''}>
+                        <i class="mdi mdi-image-filter-hdr vp-tile-icon"></i>
+                        <div class="vp-tile-body">
+                            <span class="vp-tile-label">Altitude</span>
+                            <span class="vp-tile-val">${_esc(fmtAlt(altitude))}</span>
+                        </div>
+                    </div>
+                    <div class="vp-stat-tile ${canViewHist ? 'vp-clickable' : ''}" ${canViewHist ? `onclick="openSensorHistoryModal(${deviceId}, 'odometer', 'Odometer')" title="Click to view Odometer history"` : ''}>
+                        <i class="mdi mdi-counter vp-tile-icon"></i>
+                        <div class="vp-tile-body">
+                            <span class="vp-tile-label">Odometer</span>
+                            <span class="vp-tile-val">${_esc(fmtOdometer(state.total_odometer || 0))}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            ${sensorRows ? `
+            <div style="border-top:1px solid var(--border-color);">
+                <button type="button" class="vp-sensor-btn" onclick="togglePopupSensors(this, ${deviceId})"
+                    style="width:100%;background:transparent;border:none;color:var(--text-muted);font-size:0.75rem;
+                           padding:0.4rem 0.75rem;cursor:pointer;text-align:left;font-family:Outfit,sans-serif;">
+                    ${sensorsExpanded ? '▲ Less sensors' : '▼ More sensors'}
+                </button>
+                <div class="vp-sensor-panel" onscroll="_popupSensorsScroll[${deviceId}] = this.scrollTop" style="display:${sensorsExpanded ? 'grid' : 'none'};padding:0.5rem 0.75rem;max-height:160px;overflow-y:auto;">
+                    ${sensorRows}
+                </div>
+            </div>` : ''}
+            <div class="vp-actions">
+                ${(hasPermission('manage_logbook') || hasPermission('manage_fuel') || hasPermission('manage_maintenance')) ? `<button class="vp-action-btn" onclick="openLogbookModal(${deviceId}); if(map) map.closePopup();"><i class="mdi mdi-clipboard-list"></i> Logbook</button>` : ''}
+                ${hasPermission('live_share')     ? `<button class="vp-action-btn" onclick="openShareModal(${deviceId}); if(map) map.closePopup();"><i class="mdi mdi-share"></i> Share</button>` : ''}
+                ${hasPermission('view_history')   ? `<button class="vp-action-btn" onclick="openHistoryModal(${deviceId}); if(map) map.closePopup();"><i class="mdi mdi-history"></i> History</button>` : ''}
+            </div>
+        </div>`;
+
+    if (!markers[deviceId]) {
+        markers[deviceId] = L.marker([toLat, toLng], {
+            icon: _makeMarkerIcon(device?.vehicle_type, state.ignition_on, toHead)
+        })
+            .bindPopup(popupContent, {
+                autoPan: false,
+                maxWidth: 260
+            });
+        markers[deviceId].deviceId = deviceId;
+        clusterGroup.addLayer(markers[deviceId]);
+
+        markers[deviceId].on('click', () => selectDevice(deviceId, { zoom: false }));
+
+        markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
+
+    } else {
+        if (markers[deviceId].isPopupOpen()) {
+            // Update in-place — avoids Leaflet's visibility:hidden flash that looks like close/reopen
+            existingPopup._content = popupContent;
+            const contentNode = existingPopup.getElement()?.querySelector('.leaflet-popup-content');
+            if (contentNode) {
+                contentNode.innerHTML = popupContent;
+                if (prevSensorsScrollTop) {
+                    const newPanel = contentNode.querySelector('.vp-sensor-panel');
+                    if (newPanel) newPanel.scrollTop = prevSensorsScrollTop;
+                }
+                if (prevGridScrollTop) {
+                    const newGrid = contentNode.querySelector('.vp-grid');
+                    if (newGrid) newGrid.scrollTop = prevGridScrollTop;
+                }
+            }
+            if (existingPopup.options) {
+                existingPopup.options.autoPan = false;
+            }
+            _ensurePopupInVisibleMap(deviceId, [toLat, toLng]);
+        } else {
+            markers[deviceId].setPopupContent(popupContent);
+        }
+
+        if (device && device.ignition_on !== state.ignition_on) {
+            markers[deviceId].setIcon(_makeMarkerIcon(device?.vehicle_type, state.ignition_on, toHead));
+        }
+
+        if (followedDeviceId === deviceId && map && !(typeof historyDeviceId !== 'undefined' && historyDeviceId)) {
+            const prevPos = markerState[deviceId];
+            if (!prevPos || prevPos.lat !== toLat || prevPos.lng !== toLng) {
+                map.panTo(applyLatLngOffset([toLat, toLng], map.getZoom()), { animate: true });
+            }
+            updateFollowPill();
+        }
+
+        const prev = markerState[deviceId] || { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
+
+        if (prev.animFrame) {
+            cancelAnimationFrame(prev.animFrame);
+            prev.animFrame = null;
+            if (markers[deviceId]) {
+                clusterGroup._ignoreMove = true;
+                markers[deviceId].setLatLng([prev.lat, prev.lng]);
+                clusterGroup._ignoreMove = false;
+            }
+        }
+
+        const fromLat  = prev.lat;
+        const fromLng  = prev.lng;
+        const fromHead = prev.heading;
+        const canAnimateHead = toHead != null && fromHead != null;
+        const dH = canAnimateHead ? ((toHead - fromHead + 540) % 360) - 180 : 0;
+        const duration  = 1000;
+        const startTime = performance.now();
+
+        function step(now) {
+            if (!markers[deviceId] || !clusterGroup.hasLayer(markers[deviceId]) || (map && !map.hasLayer(clusterGroup))) {
+                markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
+                return;
+            }
+
+            const t    = Math.min((now - startTime) / duration, 1);
+            const ease = 1 - Math.pow(1 - t, 3);
+
+            const lat  = fromLat  + (toLat  - fromLat)  * ease;
+            const lng  = fromLng  + (toLng  - fromLng)  * ease;
+            const head = canAnimateHead ? fromHead + dH * ease : toHead;
+
+            // Suppress markercluster's move handler so it doesn't remove/re-add the layer and flicker the popup
+            clusterGroup._ignoreMove = true;
+            if (t < 1) {
+                markers[deviceId].setLatLng([lat, lng]);
+                clusterGroup._ignoreMove = false;
+                _applyMarkerRotation(markers[deviceId], head, device?.vehicle_type);
+
+                markerState[deviceId] = {
+                    lat: toLat, lng: toLng,
+                    heading: head,
+                    animFrame: requestAnimationFrame(step)
+                };
+            } else {
+                markers[deviceId].setLatLng([toLat, toLng]);
+                clusterGroup._ignoreMove = false;
+                _applyMarkerRotation(markers[deviceId], toHead, device?.vehicle_type);
+                markerState[deviceId] = { lat: toLat, lng: toLng, heading: toHead, animFrame: null };
+                if (markers[deviceId].isPopupOpen()) {
+                    _ensurePopupInVisibleMap(deviceId, [toLat, toLng]);
+                }
+            }
+        }
+
+        markerState[deviceId] = {
+            lat: fromLat, lng: fromLng,
+            heading: fromHead,
+            animFrame: requestAnimationFrame(step)
+        };
+    }
+
+    // ── Accuracy circle ───────────────────────────────────────────────────────
+    const accuracyM = state.sensors?.accuracy ?? null;
+    if (accuracyM != null && accuracyM > 0) {
+        if (accuracyCircles[deviceId]) {
+            accuracyCircles[deviceId].setLatLng([toLat, toLng]);
+            accuracyCircles[deviceId].setRadius(accuracyM);
+        } else {
+            accuracyCircles[deviceId] = L.circle([toLat, toLng], {
+                radius:    accuracyM,
+                className: 'device-accuracy-circle',
+                interactive: false,
+            }).addTo(map);
+            // Keep circle below the marker
+            accuracyCircles[deviceId].bringToBack();
+        }
+    } else if (accuracyCircles[deviceId]) {
+        map.removeLayer(accuracyCircles[deviceId]);
+        delete accuracyCircles[deviceId];
+    }
+
+    // ── Live Breadcrumb / Directional Trail ────────────────────────────────────
+    _updateLiveBreadcrumbTrail(deviceId, toLat, toLng, state);
+
+    const deviceIndex = devices.findIndex(d => d.id === deviceId);
+    if (deviceIndex !== -1) {
+        if (!state.hasOwnProperty('is_online') && state.last_latitude) state.is_online = true;
+        devices[deviceIndex] = { ...devices[deviceIndex], ...state };
+    }
+    refreshClusterIcons();
+}
+
+/**
+ * Reads user preference for live breadcrumb trail length.
+ * Returns 0 if disabled, otherwise max number of points (default 10).
+ */
+function getBreadcrumbMaxPoints() {
+    const pref = localStorage.getItem('map_breadcrumb_points');
+    if (pref === 'disabled' || pref === '0') return 0;
+    const n = parseInt(pref, 10);
+    return Number.isFinite(n) && n > 0 ? n : 10;
+}
+
+/**
+ * Checks whether a marker is currently grouped with other markers inside a cluster.
+ */
+function _isDeviceClustered(deviceId) {
+    const marker = markers[deviceId];
+    if (!marker || !clusterGroup) return false;
+    try {
+        if (!clusterGroup.hasLayer(marker)) return true;
+        const parent = clusterGroup.getVisibleParent(marker);
+        // If parent is truthy and not the marker itself, it is grouped in an L.MarkerCluster
+        return Boolean(parent && parent !== marker);
+    } catch (_) {
+        return false;
+    }
+}
+
+/**
+ * Syncs visibility for all live breadcrumb layers depending on clustering and filter status.
+ */
+function updateAllBreadcrumbsVisibility() {
+    if (!map) return;
+    const maxPoints = getBreadcrumbMaxPoints();
+    if (maxPoints <= 0 || (typeof historyDeviceId !== 'undefined' && historyDeviceId)) {
+        for (const layer of Object.values(liveBreadcrumbLayers)) {
+            if (layer && map.hasLayer(layer)) map.removeLayer(layer);
+        }
+        return;
+    }
+
+    for (const [deviceIdStr, layer] of Object.entries(liveBreadcrumbLayers)) {
+        if (!layer) continue;
+        const devId = Number(deviceIdStr) || deviceIdStr;
+        const marker = markers[devId];
+        const trail = liveBreadcrumbTrails[devId];
+
+        if (!marker || !trail || trail.length < 2) {
+            if (map.hasLayer(layer)) map.removeLayer(layer);
+            continue;
+        }
+
+        const isClustered = _isDeviceClustered(devId);
+        const shouldBeVisible = !isClustered && clusterGroup && clusterGroup.hasLayer(marker);
+
+        if (shouldBeVisible) {
+            if (!map.hasLayer(layer)) {
+                layer.addTo(map);
+                if (layer.bringToBack) layer.bringToBack();
+            }
+        } else {
+            if (map.hasLayer(layer)) {
+                map.removeLayer(layer);
+            }
+        }
+    }
+}
+
+/**
+ * Updates the live breadcrumb polyline behind moving vehicles.
+ */
+function _updateLiveBreadcrumbTrail(deviceId, lat, lng, state) {
+    if (!map || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    if (typeof historyDeviceId !== 'undefined' && historyDeviceId) return;
+
+    const maxPoints = getBreadcrumbMaxPoints();
+    if (maxPoints <= 0) {
+        removeLiveBreadcrumb(deviceId);
+        return;
+    }
+
+    if (!liveBreadcrumbTrails[deviceId]) {
+        liveBreadcrumbTrails[deviceId] = [];
+    }
+
+    const trail = liveBreadcrumbTrails[deviceId];
+    const lastPoint = trail.length ? trail[trail.length - 1] : null;
+
+    if (lastPoint) {
+        const dLat = Math.abs(lastPoint[0] - lat);
+        const dLng = Math.abs(lastPoint[1] - lng);
+
+        // Ignore stationary GPS jitter (< 0.00003 deg ≈ ~3m)
+        if (dLat < 0.00003 && dLng < 0.00003) {
+            return;
+        }
+
+        // Reset trail on extreme telemetry jumps (> 0.5 deg ≈ ~55km) to avoid crossing maps
+        if (dLat > 0.5 || dLng > 0.5) {
+            trail.length = 0;
+        }
+    }
+
+    trail.push([lat, lng]);
+
+    // Keep the configured number of recent points
+    if (trail.length > maxPoints) {
+        trail.splice(0, trail.length - maxPoints);
+    }
+
+    if (trail.length >= 2) {
+        const isMoving = (state.last_speed || state.speed || 0) > 2 || state.ignition_on;
+        const trailColor = isMoving ? '#38bdf8' : '#94a3b8';
+        const isClustered = _isDeviceClustered(deviceId);
+
+        if (!liveBreadcrumbLayers[deviceId]) {
+            liveBreadcrumbLayers[deviceId] = L.polyline(trail, {
+                color: trailColor,
+                weight: 3.5,
+                opacity: 0.75,
+                dashArray: '4, 6',
+                lineCap: 'round',
+                lineJoin: 'round',
+                interactive: false,
+            });
+        } else {
+            const layer = liveBreadcrumbLayers[deviceId];
+            layer.setLatLngs(trail);
+            layer.setStyle({ color: trailColor });
+        }
+
+        const layer = liveBreadcrumbLayers[deviceId];
+        const isHistoryActive = Boolean(typeof historyDeviceId !== 'undefined' && historyDeviceId);
+        if (!isHistoryActive && !isClustered && clusterGroup && clusterGroup.hasLayer(markers[deviceId])) {
+            if (!map.hasLayer(layer)) {
+                layer.addTo(map);
+                if (layer.bringToBack) layer.bringToBack();
+            }
+        } else {
+            if (map.hasLayer(layer)) {
+                map.removeLayer(layer);
+            }
+        }
+    }
+}
+
+/**
+ * Clean up breadcrumbs when a device is hidden, deleted, or reset.
+ */
+function removeLiveBreadcrumb(deviceId) {
+    if (liveBreadcrumbLayers[deviceId]) {
+        if (map && map.hasLayer(liveBreadcrumbLayers[deviceId])) {
+            map.removeLayer(liveBreadcrumbLayers[deviceId]);
+        }
+        delete liveBreadcrumbLayers[deviceId];
+    }
+    if (liveBreadcrumbTrails[deviceId]) {
+        delete liveBreadcrumbTrails[deviceId];
+    }
+}
+
+// React to user breadcrumb preference changes in real-time
+window.addEventListener('storage', (e) => {
+    if (e.key === 'map_breadcrumb_points') {
+        updateAllBreadcrumbsVisibility();
+    }
+});
+window.addEventListener('routario:breadcrumbchange', () => {
+    updateAllBreadcrumbsVisibility();
+});
+
+/**
+ * Called in dashboard-devices.js immediately after marker.addTo(map) when a
+ * search-filtered marker is made visible again.
+ *
+ * Leaflet rebuilds the marker's DOM element on re-add, resetting any inline
+ * styles we wrote earlier.  We fix this by calling setIcon() with the correct
+ * heading baked into the HTML — exactly the same approach as first creation.
+ */
+function restoreMarkerRotation(deviceId) {
+    const saved  = markerState[deviceId];
+    const marker = markers[deviceId];
+    const device = devices.find(d => d.id === deviceId);
+    if (!saved || !marker) return;
+
+    marker.setIcon(_makeMarkerIcon(
+        device?.vehicle_type,
+        device?.ignition_on,
+        saved.heading
+    ));
+}
+
+// ── Map fit ───────────────────────────────────────────────────────────────────
+
+// Returns the width of the visible sidebar in pixels (0 when hidden or when in bottom-bar mode).
+function getSidebarOffset() {
+    const dashboard = document.querySelector('.dashboard');
+    if (!dashboard || dashboard.classList.contains('sidebar-hidden')) return 0;
+    if (typeof isSidebarBottomBar === 'function' && isSidebarBottomBar()) return 0;
+    const sidebar = document.querySelector('.sidebar');
+    return sidebar ? sidebar.offsetWidth : 0;
+}
+
+// Returns the height of the visible bottom bar in pixels (0 when hidden or not in bottom-bar mode).
+function getSidebarBottomOffset() {
+    const dashboard = document.querySelector('.dashboard');
+    if (!dashboard || dashboard.classList.contains('sidebar-hidden')) return 0;
+    if (typeof isSidebarBottomBar !== 'function' || !isSidebarBottomBar()) return 0;
+    const sidebar = document.querySelector('.sidebar');
+    return sidebar ? sidebar.offsetHeight : 0;
+}
+// Returns the height of the top header bar in pixels.
+function getHeaderOffset() {
+    const header = document.querySelector('.header');
+    return header ? header.offsetHeight : 70;
+}
+window.getHeaderOffset = getHeaderOffset;
+
+// Shifts a latlng left/up so it appears centred in the visible map area (right of sidebar / between header and bottom bar).
+function applyLatLngOffset(latlng, zoom) {
+    const offset = getSidebarOffset();
+    const bottomOffset = getSidebarBottomOffset();
+    const topOffset = getHeaderOffset();
+    const point = map.project(L.latLng(latlng), zoom);
+    return map.unproject(L.point(point.x - offset / 2, point.y + (bottomOffset - topOffset) / 2), zoom);
+}
+window.applyLatLngOffset = applyLatLngOffset;
+
+// Ensures an open vehicle popup stays completely visible within the open map area (not obscured by sidebar or off-screen).
+function _ensurePopupInVisibleMap(deviceId, targetLatLng = null) {
+    if (!map || !markers[deviceId] || !markers[deviceId].isPopupOpen()) return;
+    if (map.dragging && map.dragging.moving && map.dragging.moving()) return;
+
+    const headerOffset = getHeaderOffset();
+    const sidebarOffset = getSidebarOffset();
+    const sidebarBottomOffset = getSidebarBottomOffset();
+    const mapSize = map.getSize();
+    const destLatLng = targetLatLng || markers[deviceId].getLatLng();
+    const markerPt = map.latLngToContainerPoint(destLatLng);
+
+    const visibleWidth = mapSize.x - sidebarOffset;
+    const visibleHeight = mapSize.y - sidebarBottomOffset - headerOffset;
+    const visibleCenterX = sidebarOffset + visibleWidth / 2;
+    const visibleCenterY = headerOffset + visibleHeight / 2;
+
+    const popup = markers[deviceId].getPopup();
+    const popupEl = popup?.getElement();
+    const popupWidth = popupEl ? popupEl.offsetWidth : 260;
+    const popupHeight = popupEl ? popupEl.offsetHeight : 280;
+
+    // Check if there is enough room on the visible map to comfortably center the popup
+    const minRequiredWidth = popupWidth + 80;
+    const minRequiredHeight = popupHeight + 80;
+    const hasEnoughRoom = (visibleWidth >= minRequiredWidth) && (visibleHeight >= minRequiredHeight);
+
+    // Is the vehicle marker itself inside the visible viewport?
+    const isVehicleOnVisibleMap = (
+        markerPt.x >= sidebarOffset &&
+        markerPt.x <= mapSize.x &&
+        markerPt.y >= headerOffset &&
+        markerPt.y <= (mapSize.y - sidebarBottomOffset)
+    );
+
+    if (!hasEnoughRoom) {
+        // If there is not enough room on the map to go to the center,
+        // then it shouldn't try to go, except if it is too far away from it.
+        // If the vehicle is visible on that small part of the map, do not move the map.
+        if (isVehicleOnVisibleMap) {
+            return;
+        }
+        // Only if it is hidden behind the sidebar or off-screen, bring it into the visible strip
+        map.panTo(applyLatLngOffset(destLatLng, map.getZoom()), {
+            animate: true,
+            duration: 0.5,
+        });
+        return;
+    }
+
+    // When there IS enough room on the map:
+    // Only center if the vehicle is behind the sidebar, off-screen, or drifted too far from the visible center
+    const isBehindSidebar = markerPt.x < sidebarOffset;
+    const isOffscreen = markerPt.x > mapSize.x || markerPt.y < headerOffset || markerPt.y > (mapSize.y - sidebarBottomOffset);
+
+    // Check if the popup is significantly obscured by the sidebar, header, or screen edges
+    let popupObscured = false;
+    if (popupEl) {
+        const popupRect = popupEl.getBoundingClientRect();
+        const mapRect = map.getContainer().getBoundingClientRect();
+        const screenVisibleLeft = mapRect.left + sidebarOffset;
+        const screenVisibleBottom = mapRect.bottom - sidebarBottomOffset;
+        const screenVisibleTop = mapRect.top + headerOffset;
+        if (popupRect.left < screenVisibleLeft || popupRect.right > mapRect.right ||
+            popupRect.top < screenVisibleTop || popupRect.bottom > screenVisibleBottom) {
+            popupObscured = true;
+        }
+    }
+
+    const distFromCenterX = Math.abs(markerPt.x - visibleCenterX);
+    const distFromCenterY = Math.abs(markerPt.y - visibleCenterY);
+    const isTooFarAway = isBehindSidebar || isOffscreen ||
+        distFromCenterX > (visibleWidth * 0.40) || distFromCenterY > (visibleHeight * 0.40);
+
+    if (!isBehindSidebar && !popupObscured && !isTooFarAway) {
+        return;
+    }
+
+    // Calculate destination center:
+    // The popup sits above the marker, so offset slightly vertically so the popup is nicely framed
+    const verticalOffsetPx = Math.min(Math.floor(popupHeight / 3), 80);
+    const centerPoint = map.project(L.latLng(destLatLng), map.getZoom());
+    const adjustedPoint = L.point(
+        centerPoint.x - sidebarOffset / 2,
+        centerPoint.y - verticalOffsetPx + Math.floor((sidebarBottomOffset - headerOffset) / 2)
+    );
+    const targetCenterLatLng = map.unproject(adjustedPoint, map.getZoom());
+
+    map.panTo(targetCenterLatLng, {
+        animate: true,
+        duration: 0.6,
+    });
+}
+window._ensurePopupInVisibleMap = _ensurePopupInVisibleMap;
+
+function _createClusterPieIcon(cluster) {
+    const childMarkers = cluster.getAllChildMarkers();
+    const total = childMarkers.length;
+
+    const counts = { moving: 0, idle: 0, stopped: 0, offline: 0 };
+    const statusColors = {
+        moving:  '#10b981', // green for driving / moving
+        idle:    '#f59e0b', // amber for idling
+        stopped: '#ef4444', // red for stopped / engine off
+        offline: '#64748b'  // slate / grey for offline
+    };
+    const statusLabels = {
+        moving:  'Moving',
+        idle:    'Idling',
+        stopped: 'Stopped',
+        offline: 'Offline'
+    };
+
+    for (let i = 0; i < total; i++) {
+        const m = childMarkers[i];
+        const devId = m.deviceId || m.options?.deviceId;
+        const dev = devId ? devices.find(d => d.id === devId) : null;
+        const st = dev && typeof getVehicleStatus === 'function' ? getVehicleStatus(dev) : { cls: 'offline' };
+        const cls = (st && st.cls in counts) ? st.cls : 'offline';
+        counts[cls]++;
+    }
+
+    let currentAngle = 0;
+    const gradientParts = [];
+    const tooltipParts = [];
+
+    const order = ['moving', 'idle', 'stopped', 'offline'];
+    for (const key of order) {
+        const cnt = counts[key];
+        if (cnt > 0) {
+            const pct = (cnt / total) * 100;
+            const nextAngle = currentAngle + pct;
+            gradientParts.push(`${statusColors[key]} ${currentAngle.toFixed(1)}% ${nextAngle.toFixed(1)}%`);
+            tooltipParts.push(`${cnt} ${statusLabels[key]}`);
+            currentAngle = nextAngle;
+        }
+    }
+
+    let conicBg = '';
+    if (gradientParts.length > 1) {
+        conicBg = `background: conic-gradient(${gradientParts.join(', ')});`;
+    } else if (gradientParts.length === 1) {
+        const singleKey = order.find(k => counts[k] > 0) || 'stopped';
+        conicBg = `background: ${statusColors[singleKey]};`;
+    } else {
+        conicBg = `background: #ef4444;`;
+    }
+
+    const size = total < 10 ? 38 : (total < 50 ? 44 : 52);
+    const innerSize = total < 10 ? 24 : (total < 50 ? 28 : 34);
+    const fontSize = total < 10 ? '0.8rem' : (total < 50 ? '0.88rem' : '0.96rem');
+    const esc = typeof _esc === 'function' ? _esc : (s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'));
+    const tooltipText = tooltipParts.join(' · ');
+
+    const html = `
+        <div class="cluster-pie-container" style="width:${size}px; height:${size}px;" title="${esc(tooltipText)}">
+            <div class="cluster-pie-chart" style="${conicBg}">
+                <div class="cluster-pie-inner" style="width:${innerSize}px; height:${innerSize}px; font-size:${fontSize};">
+                    <span>${total}</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+    return L.divIcon({
+        html: html,
+        className: 'cluster-pie-wrapper',
+        iconSize: L.point(size, size),
+        iconAnchor: L.point(size / 2, size / 2)
+    });
+}
+
+let _refreshClusterTimer = null;
+function refreshClusterIcons() {
+    if (!clusterGroup || typeof clusterGroup.refreshClusters !== 'function') return;
+    if (_refreshClusterTimer) return;
+    _refreshClusterTimer = setTimeout(() => {
+        _refreshClusterTimer = null;
+        try {
+            clusterGroup.refreshClusters();
+            updateAllBreadcrumbsVisibility();
+        } catch (_) {}
+    }, 150);
+}
+
+function zoomToClusterWithSidebarOffset(cluster) {
+    if (!cluster || !map) return;
+
+    const sidebarOffset = getSidebarOffset();
+    const sidebarBottom = getSidebarBottomOffset();
+    const headerOffset = getHeaderOffset();
+    const bounds = cluster.getBounds?.();
+    const maxZoom = clusterGroup?.options?.disableClusteringAtZoom || map.getMaxZoom();
+
+    if (bounds?.isValid?.() && bounds.getNorthEast && !bounds.getNorthEast().equals(bounds.getSouthWest())) {
+        map.fitBounds(bounds.pad(0.2), {
+            paddingTopLeft: [sidebarOffset + 16, headerOffset + 16],
+            paddingBottomRight: [16, sidebarBottom > 0 ? sidebarBottom + 16 : 16],
+            maxZoom,
+        });
+        return;
+    }
+
+    const targetZoom = Math.min(maxZoom, map.getZoom() + 2);
+    map.setView(applyLatLngOffset(cluster.getLatLng(), targetZoom), targetZoom);
+}
+
+function fitMapToMarkers() {
+    const validMarkers = Object.values(markers).filter(m => m && m.getLatLng);
+    if (validMarkers.length === 0) return;
+
+    const sidebarOffset = getSidebarOffset();
+    const sidebarBottom = getSidebarBottomOffset();
+    const headerOffset = getHeaderOffset();
+    if (validMarkers.length === 1) {
+        const zoom = 15;
+        map.setView(applyLatLngOffset(validMarkers[0].getLatLng(), zoom), zoom);
+    } else {
+        const group = L.featureGroup(validMarkers);
+        map.fitBounds(group.getBounds().pad(0.2), {
+            paddingTopLeft: [sidebarOffset + 16, headerOffset + 16],
+            paddingBottomRight: [16, sidebarBottom > 0 ? sidebarBottom + 16 : 16]
+        });
+    }
+}
+
+// ── Cross-tab driver assignment listener ──────────────────────────────────────
+// When the management page assigns/unassigns a driver it posts here; we update
+// the sidebar immediately without waiting for the next position packet.
+try {
+    const _driverBC = new BroadcastChannel('routario_driver_updates');
+    _driverBC.onmessage = ({ data }) => {
+        const devIdx = devices.findIndex(d => d.id === data.device_id);
+        if (devIdx < 0) return;
+        devices[devIdx] = {
+            ...devices[devIdx],
+            current_driver_id:         data.current_driver_id,
+            current_driver_name:       data.current_driver_name,
+            current_driver_avatar_url: data.current_driver_avatar_url,
+        };
+        if (!historyDeviceId) updateSidebarCard(data.device_id);
+    };
+} catch (_) {}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+
+let wsReconnectTimer = null;
+let wsConnectedUserId = null;
+
+function connectWebSocket() {
+    if (typeof initGlobalAlertWebSocket === 'function') {
+        initGlobalAlertWebSocket();
+        if (window.ws) ws = window.ws;
+        return;
+    }
+
+    const userId = localStorage.getItem('user_id');
+    if (!userId) return;
+
+    if (wsReconnectTimer) {
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = null;
+    }
+
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        if (wsConnectedUserId === userId) return;
+        ws.close(1000, 'user changed');
+    }
+
+    wsConnectedUserId = userId;
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
+    if (!token) return;
+    const wsUrl = `${WS_BASE_URL}${userId}?token=${encodeURIComponent(token)}`;
+    console.log('Connecting to WebSocket:', wsUrl);
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+        console.log('WebSocket connected');
+    };
+
+    ws.onmessage = (event) => {
+        try {
+            const message = JSON.parse(event.data);
+            handleWebSocketMessage(message);
+        } catch (e) {
+            console.error('Error parsing WS message:', e);
+        }
+    };
+
+    ws.onerror = (e) => {
+        console.error('WS Error:', e);
+    };
+
+    ws.onclose = (e) => {
+        console.log('WebSocket disconnected', e.reason);
+        if (!localStorage.getItem('auth_token') || localStorage.getItem('user_id') !== userId) {
+            return;
+        }
+        wsReconnectTimer = setTimeout(connectWebSocket, 5000);
+    };
+}
+
+window.addEventListener('beforeunload', () => {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        ws.close(1000, 'page unloading');
+    }
+});
+
+function handleWebSocketMessage(message) {
+    if (message.type === 'position_update') {
+        const devIdx = devices.findIndex(d => d.id === message.device_id);
+        if (devIdx > -1) {
+            const merged = { ...devices[devIdx], ...message.data };
+            if (message.data.sensors) {
+                merged.sensors = { ...(devices[devIdx].sensors || {}), ...message.data.sensors };
+            }
+            devices[devIdx] = merged;
+            // Don't update markers or animate anything while in history mode
+            if (!historyDeviceId) {
+                updateDeviceMarker(message.device_id, devices[devIdx]);
+                updateSidebarCard(message.device_id);
+                if (selectedDevice === message.device_id && typeof refreshSelectedDashboardRoute === 'function') {
+                    refreshSelectedDashboardRoute({ force: true });
+                }
+            }
+        } else {
+            if (typeof loadDeviceState === 'function') {
+                loadDeviceState(message.device_id);
+            }
+        }
+        updateStats();
+        refreshClusterIcons();
+    } else if (message.type === 'alert') {
+        const nids = message.notify_user_ids;
+        const myId = parseInt(localStorage.getItem('user_id'), 10);
+        if (Array.isArray(nids) && nids.length > 0 && !nids.map(Number).includes(myId)) {
+            return;
+        }
+        console.log('[WebSocket] Alert message received:', message);
+        const isCritical = message.data?.severity === 'critical' || message.data?.severity === 'high';
+        if (typeof updateAlertsButtonState === 'function') {
+            const currentCount = Array.isArray(window.loadedAlerts) ? window.loadedAlerts.length : (typeof loadedAlerts !== 'undefined' && Array.isArray(loadedAlerts) ? loadedAlerts.length : 0);
+            updateAlertsButtonState(currentCount + 1, isCritical);
+        }
+
+        const alertData = message.data || {};
+        if (Array.isArray(window.loadedAlerts)) {
+            if (!window.loadedAlerts.some(a => a.id === alertData.id)) {
+                window.loadedAlerts.unshift(alertData);
+                if (typeof loadedAlerts !== 'undefined') loadedAlerts = window.loadedAlerts;
+                const list = document.getElementById('alertsList');
+                if (list && typeof _buildAlertItem === 'function') {
+                    if (list.querySelector('.text-muted') || list.textContent.includes('No alerts')) {
+                        list.innerHTML = '';
+                    }
+                    list.insertBefore(_buildAlertItem(alertData), list.firstChild);
+                }
+                if (typeof applyDeviceAlertHighlights === 'function') {
+                    applyDeviceAlertHighlights();
+                }
+            }
+        } else if (typeof loadAlerts === 'function') {
+            loadAlerts();
+        }
+        const title = typeof getAlertDisplayTitle === 'function'
+            ? getAlertDisplayTitle(alertData)
+            : (alertData.alert_metadata?.rule_name || alertData.alert_metadata?.event_label || (alertData.alert_type ? alertData.alert_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Alert'));
+        const toastMessage = alertData.alert_metadata?.rule_condition || alertData.message || 'New alert triggered';
+
+        showAlert({
+            title,
+            message: toastMessage,
+            type: alertData.severity || 'info',
+            alertId: alertData.id || alertData.alert_id,
+        });
+    } else if (message.type === 'route_update') {
+        if (typeof applyDashboardRouteUpdate === 'function') {
+            applyDashboardRouteUpdate(message.data);
+        }
+    }
+}
+
+// ── User Location ─────────────────────────────────────────────────────────────
+
+let _locating          = false;
+let _locationMarker    = null;
+let _accuracyCircle    = null;
+let _headingMarker     = null;
+let _locationWatchId   = null;
+let _compassAvailable  = false;
+let _lastHeading       = null;
+
+function toggleUserLocation() {
+    if (_locating) {
+        _stopUserLocation();
+    } else {
+        _startUserLocation();
+    }
+}
+
+function _startUserLocation() {
+    if (!navigator.geolocation) {
+        _flashLocateBtn('error');
+        return;
+    }
+
+    _locating = true;
+    document.getElementById('locateUserBtn').classList.add('locate-active');
+
+    // Request compass on mobile if available
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+        // iOS 13+ requires explicit permission
+        DeviceOrientationEvent.requestPermission()
+            .then(state => {
+                if (state === 'granted') _listenCompass();
+            })
+            .catch(() => {});
+    } else if (window.DeviceOrientationEvent) {
+        _listenCompass();
+    }
+
+    // Start watching position
+    _locationWatchId = navigator.geolocation.watchPosition(
+        _onLocationSuccess,
+        _onLocationError,
+        { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+    );
+}
+
+function _stopUserLocation() {
+    _locating = false;
+    document.getElementById('locateUserBtn').classList.remove('locate-active');
+
+    if (_locationWatchId !== null) {
+        navigator.geolocation.clearWatch(_locationWatchId);
+        _locationWatchId = null;
+    }
+
+    window.removeEventListener('deviceorientation',        _onCompass);
+    window.removeEventListener('deviceorientationabsolute', _onCompass);
+
+    if (_locationMarker)  { map.removeLayer(_locationMarker);  _locationMarker  = null; }
+    if (_accuracyCircle)  { map.removeLayer(_accuracyCircle);  _accuracyCircle  = null; }
+    if (_headingMarker)   { map.removeLayer(_headingMarker);   _headingMarker   = null; }
+
+    _compassAvailable = false;
+    _lastHeading      = null;
+}
+
+function _onLocationSuccess(pos) {
+    const { latitude: lat, longitude: lng, accuracy, heading } = pos.coords;
+
+    const firstFix = !_locationMarker;
+
+    // ── Accuracy circle ───────────────────────────────────────────────────────
+    if (_accuracyCircle) {
+        _accuracyCircle.setLatLng([lat, lng]);
+        _accuracyCircle.setRadius(accuracy);
+    } else {
+        _accuracyCircle = L.circle([lat, lng], {
+            radius:    accuracy,
+            className: 'user-accuracy-circle',
+        }).addTo(map);
+    }
+
+    // ── Blue dot marker ───────────────────────────────────────────────────────
+    const icon = L.divIcon({
+        className: '',
+        html: `<div class="user-location-marker">
+                   <div class="user-location-pulse"></div>
+                   <div class="user-location-dot"></div>
+               </div>`,
+        iconSize:   [22, 22],
+        iconAnchor: [11, 11],
+    });
+
+    if (_locationMarker) {
+        _locationMarker.setLatLng([lat, lng]);
+        _locationMarker.setIcon(icon);
+    } else {
+        _locationMarker = L.marker([lat, lng], { icon, zIndexOffset: 500 }).addTo(map);
+    }
+
+    // Use geolocation heading if compass not available
+    if (!_compassAvailable && heading !== null && !isNaN(heading)) {
+        _renderHeadingCone(lat, lng, heading);
+    }
+
+    // ── Smooth zoom based on accuracy ─────────────────────────────────────────
+    if (firstFix) {
+        const targetZoom = _accuracyToZoom(accuracy);
+        // Fly smoothly — easeLinearity close to 1 = more linear/smooth, 
+        // duration scales with how far we need to zoom
+        const currentZoom = map.getZoom();
+        const zoomDelta   = Math.abs(targetZoom - currentZoom);
+        map.flyTo(applyLatLngOffset([lat, lng], targetZoom), targetZoom, {
+            animate:         true,
+            duration:        0.5 + zoomDelta * 0.15,
+            easeLinearity:   0.25,
+        });
+    }
+}
+
+function _onLocationError(err) {
+    console.warn('Geolocation error:', err.message);
+    _flashLocateBtn('error');
+    _stopUserLocation();
+}
+
+// Map accuracy (metres) to an appropriate zoom level
+function _accuracyToZoom(accuracy) {
+    // Find the zoom level where the accuracy circle fills ~80% of the map viewport
+    const mapSize   = map.getSize();
+    const minDim    = Math.min(mapSize.x, mapSize.y);
+    const targetPx  = minDim * 0.8;
+
+    // At zoom Z, 1 metre = (256 * 2^Z) / (2π * 6378137 * cos(lat)) pixels
+    // Rearranged: Z = log2( targetPx * 2π * R * cos(lat) / (256 * 2 * accuracy) )
+    const lat     = map.getCenter().lat;
+    const R       = 6378137;
+    const latRad  = lat * Math.PI / 180;
+    const zoom    = Math.log2(
+        (targetPx * 2 * Math.PI * R * Math.cos(latRad)) /
+        (256 * 2 * accuracy)
+    );
+
+    return Math.min(19, Math.max(11, Math.round(zoom)));
+}
+
+// ── Compass ───────────────────────────────────────────────────────────────────
+
+function _listenCompass() {
+    // 'deviceorientationabsolute' gives true north; fall back to 'deviceorientation'
+    const evtName = 'ondeviceorientationabsolute' in window
+        ? 'deviceorientationabsolute'
+        : 'deviceorientation';
+
+    window.addEventListener(evtName, _onCompass, { passive: true });
+}
+
+function _onCompass(e) {
+    // alpha = rotation around Z axis; webkitCompassHeading = iOS true-north heading
+    let heading = null;
+
+    if (e.webkitCompassHeading != null) {
+        // iOS — already true north, 0° = north
+        heading = e.webkitCompassHeading;
+    } else if (e.alpha != null) {
+        // Android absolute — convert from screen rotation
+        heading = (360 - e.alpha) % 360;
+    } else {
+        return; // relative orientation only — not reliable for compass
+    }
+
+    _compassAvailable = true;
+    _lastHeading      = heading;
+
+    if (_locationMarker) {
+        const ll = _locationMarker.getLatLng();
+        _renderHeadingCone(ll.lat, ll.lng, heading);
+    }
+}
+
+function _renderHeadingCone(lat, lng, heading) {
+    // Draw a small SVG cone above the dot to indicate facing direction
+    const coneIcon = L.divIcon({
+        className: '',
+        html: `<div style="
+                   position:relative;
+                   width:48px; height:48px;
+                   display:flex; align-items:center; justify-content:center;
+               ">
+                   <svg width="48" height="48" viewBox="0 0 48 48"
+                        style="position:absolute;top:0;left:0;transform:rotate(${heading}deg);transform-origin:24px 24px;">
+                       <path d="M24 4 L29 24 L24 21 L19 24 Z"
+                             fill="rgba(66,133,244,0.85)" stroke="white" stroke-width="1.2"/>
+                   </svg>
+               </div>`,
+        iconSize:   [48, 48],
+        iconAnchor: [24, 24],
+    });
+
+    if (_headingMarker) {
+        _headingMarker.setLatLng([lat, lng]);
+        _headingMarker.setIcon(coneIcon);
+    } else {
+        _headingMarker = L.marker([lat, lng], {
+            icon: coneIcon,
+            zIndexOffset: 499,
+            interactive: false,
+        }).addTo(map);
+    }
+}
+
+// ── Button feedback ───────────────────────────────────────────────────────────
+
+function _flashLocateBtn(type) {
+    const btn = document.getElementById('locateUserBtn');
+    const color = type === 'error' ? 'var(--accent-danger)' : '#4285f4';
+    btn.style.color       = color;
+    btn.style.borderColor = color;
+    setTimeout(() => {
+        btn.style.color       = '';
+        btn.style.borderColor = '';
+    }, 1000);
+}
