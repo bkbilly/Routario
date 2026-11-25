@@ -68,7 +68,68 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Start local time update interval (every 60s) for "time ago"
     setInterval(updateSidebarTimes, 60000);
+
+    initHeaderToolsResponsive();
 });
+
+function syncHeaderToolsPlacement() {
+    const header = document.querySelector('.header');
+    const quickTools = document.getElementById('headerQuickTools');
+    const menuSlot = document.getElementById('headerMenuToolsSlot');
+    const alertsBtn = document.getElementById('alertsBtn');
+    const menuWrap = document.querySelector('.header-menu-wrap');
+    if (!header || !quickTools || !menuSlot) return;
+
+    const toolIds = ['dashVoicePttBtn', 'dashboardRoutesBtn', 'dashboardAiCopilotWrap'];
+    const tools = toolIds.map(id => document.getElementById(id)).filter(Boolean);
+    if (!tools.length) return;
+
+    // Move all 3 into headerQuickTools temporarily to measure exact fit
+    tools.forEach(btn => quickTools.appendChild(btn));
+
+    const headerStyle = getComputedStyle(header);
+    const padX = (parseFloat(headerStyle.paddingLeft) || 0) + (parseFloat(headerStyle.paddingRight) || 0);
+    const leftGroup = header.firstElementChild;
+    const actionsGroup = quickTools.parentElement;
+    const leftRect = leftGroup ? leftGroup.getBoundingClientRect() : null;
+    const actionsRect = actionsGroup ? actionsGroup.getBoundingClientRect() : null;
+    const leftWidth = leftRect ? leftRect.width : 0;
+    const alertsWidth = alertsBtn ? alertsBtn.getBoundingClientRect().width : 0;
+    const menuWidth = menuWrap ? menuWrap.getBoundingClientRect().width : 0;
+    const quickWidth = quickTools.getBoundingClientRect().width;
+    const available = header.clientWidth - padX - leftWidth - alertsWidth - menuWidth - 28;
+    const collides = Boolean(leftRect && actionsRect && (leftRect.right + 16 > actionsRect.left));
+    const overflows = header.scrollWidth > header.clientWidth + 1;
+
+    const divider = document.getElementById('headerMenuToolsDivider');
+    const fits = !collides && !overflows && available >= quickWidth;
+
+    if (!fits) {
+        tools.forEach(btn => menuSlot.appendChild(btn));
+    }
+    if (divider) {
+        divider.style.display = fits ? 'none' : '';
+    }
+}
+
+function initHeaderToolsResponsive() {
+    syncHeaderToolsPlacement();
+    window.addEventListener('resize', syncHeaderToolsPlacement);
+
+    const header = document.querySelector('.header');
+    if (header && typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(syncHeaderToolsPlacement).observe(header);
+    }
+
+    // Re-evaluate if Routes or AI Copilot becomes visible asynchronously
+    ['dashVoicePttBtn', 'dashboardRoutesBtn', 'dashboardAiCopilotWrap'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            new MutationObserver(syncHeaderToolsPlacement).observe(el, { attributes: true, attributeFilter: ['style'] });
+        }
+    });
+}
+window.syncHeaderToolsPlacement = syncHeaderToolsPlacement;
 
 document.addEventListener('click', closePicker);
 

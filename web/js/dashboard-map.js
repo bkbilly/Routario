@@ -128,6 +128,12 @@ function initMap() {
         }
     });
 
+    map.on('dragstart', () => {
+        if (typeof stopFollowingVehicle === 'function' && followedDeviceId != null) {
+            stopFollowingVehicle();
+        }
+    });
+
     const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap_dark';
     applyTileLayer(savedTile);
     populateMapPicker();
@@ -141,6 +147,7 @@ function initMap() {
         if (devId && typeof _ensurePopupInVisibleMap === 'function') {
             _ensurePopupInVisibleMap(devId, e.popup._source.getLatLng());
         }
+        if (typeof syncSidebarActiveHighlight === 'function') syncSidebarActiveHighlight();
     });
     map.on('popupclose', (e) => {
         popupWasOpen = true;
@@ -149,7 +156,10 @@ function initMap() {
             delete _popupGridScroll[devId];
             delete _popupSensorsScroll[devId];
         }
-        setTimeout(() => { popupWasOpen = false; }, 0);
+        setTimeout(() => {
+            popupWasOpen = false;
+            if (typeof syncSidebarActiveHighlight === 'function') syncSidebarActiveHighlight();
+        }, 0);
     });
     map.on('click', () => {
         closeAllMapFlyouts();
@@ -217,6 +227,12 @@ function applyTileLayer(tileKey) {
 function populateMapPicker() {
     const flyout = document.getElementById('mapLayersFlyout');
     if (!flyout) return;
+    map.on('dragstart', () => {
+        if (typeof stopFollowingVehicle === 'function' && followedDeviceId != null) {
+            stopFollowingVehicle();
+        }
+    });
+
     const savedTile = localStorage.getItem('mapTileLayer') || 'openstreetmap_dark';
     flyout.innerHTML = Object.entries(MAP_TILES).map(([key, tile]) => `
         <label>
@@ -310,6 +326,65 @@ function togglePopupSensors(btn, deviceId) {
     }
 }
 window.togglePopupSensors = togglePopupSensors;
+
+function updateFollowPill() {
+    const pill = document.getElementById('mapFollowPill');
+    const text = document.getElementById('mapFollowText');
+    if (!pill || !text) return;
+
+    if (followedDeviceId == null || (typeof historyDeviceId !== 'undefined' && historyDeviceId)) {
+        pill.style.display = 'none';
+        return;
+    }
+
+    const dev = devices.find(d => d.id === followedDeviceId);
+    if (!dev) {
+        pill.style.display = 'none';
+        return;
+    }
+    const vehicle = (typeof VEHICLE_ICONS !== 'undefined' && (VEHICLE_ICONS[dev.vehicle_type] || VEHICLE_ICONS['other'])) || { emoji: '🚗' };
+    text.textContent = `Following: ${vehicle.emoji} ${dev.name}`;
+    pill.style.display = 'inline-flex';
+}
+
+function syncSidebarActiveHighlight() {
+    let activeId = null;
+    if (typeof followedDeviceId !== 'undefined' && followedDeviceId != null) {
+        activeId = followedDeviceId;
+    } else if (typeof markers !== 'undefined') {
+        for (const [id, m] of Object.entries(markers)) {
+            if (id !== 'history_pos' && m && typeof m.isPopupOpen === 'function' && m.isPopupOpen()) {
+                activeId = Number(id) || id;
+                break;
+            }
+        }
+    }
+    selectedDevice = activeId;
+    document.querySelectorAll('.device-card').forEach(card => {
+        const isMatch = activeId != null && card.id === `device-card-${activeId}`;
+        card.classList.toggle('active', isMatch);
+    });
+}
+window.syncSidebarActiveHighlight = syncSidebarActiveHighlight;
+
+function followVehicle(deviceId, { skipPan = false } = {}) {
+    followedDeviceId = deviceId;
+    updateFollowPill();
+    syncSidebarActiveHighlight();
+    if (!skipPan && map && markers[deviceId]) {
+        const ll = markers[deviceId].getLatLng();
+        map.panTo(applyLatLngOffset([ll.lat, ll.lng], map.getZoom()), { animate: true });
+    }
+}
+
+function stopFollowingVehicle() {
+    followedDeviceId = null;
+    updateFollowPill();
+    syncSidebarActiveHighlight();
+}
+window.followVehicle = followVehicle;
+window.stopFollowingVehicle = stopFollowingVehicle;
+window.updateFollowPill = updateFollowPill;
 
 function _getSensorIcon(key) {
     const k = String(key || '').toLowerCase();
@@ -594,6 +669,14 @@ function updateDeviceMarker(deviceId, state) {
 
         if (device && device.ignition_on !== state.ignition_on) {
             markers[deviceId].setIcon(_makeMarkerIcon(device?.vehicle_type, state.ignition_on, toHead));
+        }
+
+        if (followedDeviceId === deviceId && map && !(typeof historyDeviceId !== 'undefined' && historyDeviceId)) {
+            const prevPos = markerState[deviceId];
+            if (!prevPos || prevPos.lat !== toLat || prevPos.lng !== toLng) {
+                map.panTo(applyLatLngOffset([toLat, toLng], map.getZoom()), { animate: true });
+            }
+            updateFollowPill();
         }
 
         const prev = markerState[deviceId] || { lat: toLat, lng: toLng, heading: toHead, animFrame: null };

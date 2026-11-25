@@ -2,47 +2,47 @@
 # Python 3.10+
 
 # Core Async Runtime
-uvloop==0.22.1
+uvloop==0.23.0
 asyncio-mqtt==0.16.2
 
 # Web Framework
-fastapi==0.129.0
-uvicorn[standard]==0.40.0
-websockets==16.0
-python-multipart==0.0.22
+fastapi==0.165.0
+uvicorn[standard]==0.54.0
+websockets==17.4
+python-multipart==0.0.34
 
 # Database & ORM
-SQLAlchemy==2.0.46
-asyncpg==0.31.0          # PostgreSQL
-aiosqlite>=0.19.0        # SQLite
-aiomysql>=0.2.0          # MySQL / MariaDB
+SQLAlchemy==2.1.9
+asyncpg==0.32.0          # PostgreSQL
+aiosqlite==0.22.1        # SQLite
+aiomysql==0.3.2          # MySQL / MariaDB
 
 # Redis & Caching
-redis[hiredis]==7.1.1
+redis[hiredis]==8.2.0
 
 # Validation & Serialization
-pydantic==2.12.5
-pydantic-settings==2.12.0
+pydantic==2.14.4
+pydantic-settings==2.16.3
 
 # GIS & Spatial  (pure-Python, no PostGIS needed)
-shapely>=2.0.0
-geojson==3.2.0
-pyproj==3.7.2
-pmtiles>=3.8.0
+shapely==2.2.0
+geojson==3.3.0
+pyproj==3.8.0
+pmtiles==3.8.1
 
 # Rule Engine & Alerts
-rule-engine==4.5.3
-apprise==1.9.7
+rule-engine==5.2.1
+apprise==2.3.0
 
 # Utilities
-python-dateutil==2.9.0
-pytz==2025.2
-structlog==25.5.0
-tenacity==9.1.4
+python-dateutil==4.0.0
+pytz==2026.6
+structlog==26.1.0
+tenacity==9.2.1
 aiofiles==25.1.0
 httpx==0.28.1
-beautifulsoup4>=4.12.0
-reportlab>=4.0.0
+beautifulsoup4==4.15.0
+reportlab==5.1.2
 
 # Protocol Parsing
 construct==2.10.70
@@ -50,19 +50,19 @@ crcmod==1.7
 bcrypt==5.0.0
 
 # Geocoding (Optional)
-geopy==2.4.1
+geopy==2.5.0
 
 # Google Find Hub integration
-cryptography>=42.0.0
-gpsoauth>=1.1.1
-ecdsa>=0.18.0
-protobuf>=4.25.0
-grpcio-tools>=1.60.0
+cryptography==50.0.2
+gpsoauth==3.0.1
+ecdsa==0.19.2
+protobuf==7.36.2
+grpcio-tools==1.85.4
 firebase-messaging==0.4.5
 
-PyJWT==2.11.0
-pywebpush==2.3.0
-webauthn==2.8.0
+PyJWT==2.15.1
+pywebpush==2.5.0
+webauthn==3.0.1
 
 # SIP Voice Call Notifications
 audioop-lts==0.2.2

@@ -40,7 +40,7 @@
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/app-lock.css">
 
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Routario">
 </head>
@@ -56,6 +56,7 @@
                 </div>
             </div>
             <div class="header-actions" style="gap: 0.6rem;">
+            <div class="header-quick-tools" id="headerQuickTools"></div>
             <button class="header-gear-btn header-alerts-btn" id="alertsBtn" title="Alerts" aria-label="Alerts">
                 <i class="mdi mdi-bell-outline" id="alertsBtnIcon" style="font-size:18px;"></i>
                 <span class="map-ctrl-badge" id="alertCount"></span>
@@ -147,27 +148,29 @@
 
                 <div class="header-menu-divider"></div>
 
+                <div id="headerMenuToolsSlot" class="header-menu-tools-slot">
                 <!-- Voice PTT -->
-                <button type="button" class="header-menu-item" id="dashVoicePttBtn" onclick="pttToggleModal(); closeHeaderMenu();">
+                <button type="button" class="header-menu-item" id="dashVoicePttBtn" title="Voice PTT" onclick="pttToggleModal(); closeHeaderMenu();">
                     <span class="header-menu-item-icon"><i class="mdi mdi-microphone-message" style="font-size:15px;"></i></span>
                     <span>Voice PTT</span>
                     <span class="header-menu-badge" id="pttBadge" style="display:none; background:var(--accent-danger); color:#fff;"></span>
                 </button>
 
                 <!-- Routes -->
-                <button type="button" class="header-menu-item" id="dashboardRoutesBtn" onclick="openDashboardRoutesModal(); closeHeaderMenu();" style="display:none;">
+                <button type="button" class="header-menu-item" id="dashboardRoutesBtn" title="Routes" onclick="openDashboardRoutesModal(); closeHeaderMenu();" style="display:none;">
                     <span class="header-menu-item-icon"><i class="mdi mdi-map-marker-path" style="font-size:15px;"></i></span>
                     <span>Routes</span>
                     <span class="header-menu-badge" id="routeCount" style="display:none; background:var(--accent-primary); color:#fff;"></span>
                 </button>
 
                 <!-- AI Copilot -->
-                <button type="button" class="header-menu-item" id="dashboardAiCopilotWrap" onclick="openAiCopilotModal(); closeHeaderMenu();" style="display:none;">
+                <button type="button" class="header-menu-item" id="dashboardAiCopilotWrap" title="AI Copilot" onclick="openAiCopilotModal(); closeHeaderMenu();" style="display:none;">
                     <span class="header-menu-item-icon"><i class="mdi mdi-robot-excited-outline" style="font-size:15px;"></i></span>
                     <span>AI Copilot</span>
                 </button>
+                </div>
 
-                <div class="header-menu-divider"></div>
+                <div class="header-menu-divider" id="headerMenuToolsDivider"></div>
 
                 <button class="header-menu-item" onclick="clearDashboardCache()">
                     <span class="header-menu-item-icon">
@@ -219,6 +222,23 @@
                     </select>
                     <button class="route-panel-close-btn" id="selectedRouteCloseBtn" onclick="closeSelectedDashboardRoutePanel()" title="Close route panel" style="display:none;">
                         <i class="mdi mdi-close"></i>
+                    </button>
+                </div>
+                <div class="device-status-filters" id="deviceStatusFilters">
+                    <button type="button" class="dev-filter-chip active" data-status="all" onclick="setDeviceStatusFilter('all')" title="All vehicles">
+                        <span>All</span><span class="dev-filter-count" id="devFilterCountAll">0</span>
+                    </button>
+                    <button type="button" class="dev-filter-chip chip-moving" data-status="moving" onclick="setDeviceStatusFilter('moving')" title="Moving">
+                        <span class="dev-filter-dot"></span><span class="dev-filter-label">Moving</span><span class="dev-filter-count" id="devFilterCountMoving">0</span>
+                    </button>
+                    <button type="button" class="dev-filter-chip chip-idle" data-status="idle" onclick="setDeviceStatusFilter('idle')" title="Idling">
+                        <span class="dev-filter-dot"></span><span class="dev-filter-label">Idle</span><span class="dev-filter-count" id="devFilterCountIdle">0</span>
+                    </button>
+                    <button type="button" class="dev-filter-chip chip-stopped" data-status="stopped" onclick="setDeviceStatusFilter('stopped')" title="Stopped">
+                        <span class="dev-filter-dot"></span><span class="dev-filter-label">Stopped</span><span class="dev-filter-count" id="devFilterCountStopped">0</span>
+                    </button>
+                    <button type="button" class="dev-filter-chip chip-offline" data-status="offline" onclick="setDeviceStatusFilter('offline')" title="Offline">
+                        <span class="dev-filter-dot"></span><span class="dev-filter-label">Offline</span><span class="dev-filter-count" id="devFilterCountOffline">0</span>
                     </button>
                 </div>
                 <div id="selectedRoutePanel" class="selected-route-panel" style="display:none;"></div>
@@ -291,6 +311,15 @@
         </aside>
         <main class="main-content" style="position: relative;">
             <div id="map"></div>
+
+            <!-- Active Follow Pill -->
+            <div class="map-follow-pill" id="mapFollowPill" style="display: none;">
+                <span class="map-follow-dot"></span>
+                <span class="map-follow-text" id="mapFollowText">Following</span>
+                <button type="button" class="map-follow-close" onclick="stopFollowingVehicle()" title="Stop following">
+                    <i class="mdi mdi-close"></i>
+                </button>
+            </div>
 
             <!-- Map Control Buttons -->
             <div class="map-ctrl-group">

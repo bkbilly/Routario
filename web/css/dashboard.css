@@ -2500,8 +2500,97 @@ body.light-theme .toast-close:hover {
 .search-bar-row {
     display: flex;
     gap: 0.5rem;
-    padding: 0.75rem 0.75rem 0.625rem;
+    padding: 0.55rem 0.75rem 0.35rem;
     align-items: center;
+}
+
+.device-status-filters {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0 0.75rem 0.5rem;
+    overflow: hidden;
+}
+
+.dev-filter-chip {
+    flex: 1 0 auto;
+    height: 24px;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-family: var(--font-display);
+    font-size: 0.68rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.device-status-filters.compact .dev-filter-chip {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 0.3rem;
+}
+
+.device-status-filters.compact .dev-filter-label {
+    display: none;
+}
+
+.dev-filter-chip:hover {
+    border-color: var(--text-muted);
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.dev-filter-chip.active {
+    background: rgba(59, 130, 246, 0.16);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.dev-filter-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.dev-filter-chip.chip-moving .dev-filter-dot { background: #10b981; }
+.dev-filter-chip.chip-idle .dev-filter-dot { background: #f59e0b; }
+.dev-filter-chip.chip-stopped .dev-filter-dot { background: #3b82f6; }
+.dev-filter-chip.chip-offline .dev-filter-dot { background: #ef4444; }
+
+.dev-filter-chip.chip-moving.active {
+    background: rgba(16, 185, 129, 0.16);
+    border-color: #10b981;
+    color: #10b981;
+}
+.dev-filter-chip.chip-idle.active {
+    background: rgba(245, 158, 11, 0.16);
+    border-color: #f59e0b;
+    color: #f59e0b;
+}
+.dev-filter-chip.chip-stopped.active {
+    background: rgba(59, 130, 246, 0.16);
+    border-color: #3b82f6;
+    color: #3b82f6;
+}
+.dev-filter-chip.chip-offline.active {
+    background: rgba(239, 68, 68, 0.16);
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+.dev-filter-count {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 0.68rem;
+    font-weight: 700;
 }
 
 .search-input-wrap {
@@ -2861,8 +2950,78 @@ body.light-theme .toast-close:hover {
     flex-shrink: 0;
 }
 
-.header-menu-divider + .header-menu-divider {
+.header-menu-divider + .header-menu-divider,
+.header-menu-tools-slot:empty + .header-menu-divider {
     display: none !important;
+}
+
+.header-quick-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.header-quick-tools .header-menu-item {
+    position: relative;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    color: var(--text-secondary);
+}
+
+.header-quick-tools .header-menu-item > span:not(.header-menu-item-icon):not(.header-menu-badge) {
+    display: none;
+}
+
+.header-quick-tools .header-menu-item:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.header-quick-tools .header-menu-item-icon {
+    width: auto;
+    height: auto;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    color: inherit;
+}
+
+.header-quick-tools .header-menu-item-icon i {
+    font-size: 18px !important;
+}
+
+.header-quick-tools .header-menu-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    margin-left: 0;
+    border-radius: 50%;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    font-size: 10px;
+    line-height: 16px;
+    box-shadow: 0 0 0 2px var(--bg-card, var(--bg-secondary));
+}
+
+[data-theme="light"] .header-quick-tools .header-menu-item,
+body.light-theme .header-quick-tools .header-menu-item {
+    background: #ffffff;
+    border: 1px solid #d0dff0;
+    color: #1e40af;
+}
+
+[data-theme="light"] .header-quick-tools .header-menu-item:hover,
+body.light-theme .header-quick-tools .header-menu-item:hover {
+    background: #eff6ff;
+    border-color: #2563eb;
+    color: #2563eb;
 }
 
 .header-menu-danger {
@@ -3865,6 +4024,73 @@ path.leaflet-interactive:focus-visible,
     gap: 0.35rem;
 }
 
+
+/* Active Follow Mode Pill */
+.map-follow-pill {
+    position: absolute;
+    top: calc(70px + 1rem);
+    left: calc(50% + var(--sidebar-width) / 2);
+    transform: translateX(-50%);
+    transition: left 0.25s ease;
+    z-index: 1000;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.45rem 0.35rem 0.7rem;
+    background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    color: var(--text-primary);
+    font-size: 0.78rem;
+    font-weight: 600;
+    max-width: calc(100% - 110px);
+    white-space: nowrap;
+}
+
+.map-follow-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+    flex-shrink: 0;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.map-follow-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.map-follow-close {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: none;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.map-follow-close:hover {
+    background: var(--accent-danger);
+    color: #fff;
+}
+
+.dashboard.sidebar-hidden .map-follow-pill,
+.dashboard.sidebar-bottom-mode .map-follow-pill {
+    left: 50%;
+}
 
 /* ── Map Control Buttons (top-right) ──────────────────────────── */
 .map-ctrl-group {

@@ -187,10 +187,22 @@ function updateSearchAndSortVisibility() {
     const searchWrap = document.querySelector('.search-input-wrap');
     const sortSelect = document.getElementById('sortSelect');
     const searchInput = document.getElementById('deviceSearchInput');
+    const filterBar = document.getElementById('deviceStatusFilters');
     const routeCloseBtn = document.getElementById('selectedRouteCloseBtn');
     if (!searchRow) return;
 
     const hasMultiple = Array.isArray(devices) && devices.length > 1;
+    const hasMoreThanTwo = Array.isArray(devices) && devices.length > 2;
+    if (filterBar) {
+        filterBar.style.display = hasMoreThanTwo ? '' : 'none';
+        if (!hasMoreThanTwo && typeof activeDeviceStatusFilter !== 'undefined' && activeDeviceStatusFilter !== 'all') {
+            activeDeviceStatusFilter = 'all';
+            filterBar.querySelectorAll('.dev-filter-chip').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.status === 'all');
+            });
+        }
+    }
+
     if (!hasMultiple) {
         if (searchWrap) searchWrap.style.display = 'none';
         if (sortSelect) sortSelect.style.display = 'none';
@@ -246,6 +258,9 @@ function renderDeviceList() {
 
         list.appendChild(card);
     });
+
+    filterDevices();
+    if (typeof syncSidebarActiveHighlight === 'function') syncSidebarActiveHighlight();
 
     if (typeof updateBottomBarMaxHeight === 'function') {
         updateBottomBarMaxHeight();
@@ -352,6 +367,7 @@ function updateSidebarCard(deviceId) {
         card.classList.add(vs.cls);
     }
     applyDeviceAlertHighlights();
+    filterDevices();
 }
 
 // Function to update just the times in the sidebar (called every minute)
@@ -390,6 +406,7 @@ function updateSidebarTimes() {
     if (clusterGroup && typeof clusterGroup.refreshClusters === 'function') {
         try { clusterGroup.refreshClusters(); } catch (_) {}
     }
+    filterDevices();
 }
 
 // Select Device
@@ -409,6 +426,8 @@ async function selectDevice(deviceId, { zoom = true } = {}) {
     const device = devices.find(d => d.id === deviceId);
     if (!device?.last_latitude || !device?.last_longitude) {
         map.closePopup();
+        if (typeof stopFollowingVehicle === 'function') stopFollowingVehicle();
+        if (typeof syncSidebarActiveHighlight === 'function') syncSidebarActiveHighlight();
         const icon = (VEHICLE_ICONS[device?.vehicle_type] || VEHICLE_ICONS['other']).emoji;
         showAlert({ title: `${icon} ${device?.name || 'Device'}`, message: 'No position data yet.', type: 'info' });
         return;
@@ -417,6 +436,9 @@ async function selectDevice(deviceId, { zoom = true } = {}) {
     const marker = markers[deviceId];
     if (marker) {
         if (zoom) {
+            if (typeof followVehicle === 'function') {
+                followVehicle(deviceId, { skipPan: true });
+            }
             const hasActiveRoute = assignedRoute && typeof DASHBOARD_ACTIVE_ROUTE_STATUSES !== 'undefined'
                 && DASHBOARD_ACTIVE_ROUTE_STATUSES.has(String(assignedRoute.status || '').toLowerCase());
             if (hasActiveRoute && typeof fitDashboardRouteWithVehicle === 'function') {
@@ -493,9 +515,58 @@ function getSortedDevices() {
     return list;
 }
 
-// Filter devices based on search input
+let activeDeviceStatusFilter = 'all';
+
+function setDeviceStatusFilter(status) {
+    activeDeviceStatusFilter = status || 'all';
+    document.querySelectorAll('#deviceStatusFilters .dev-filter-chip').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.status === activeDeviceStatusFilter);
+    });
+    filterDevices();
+}
+
+function syncDeviceFilterLabels() {
+    const bar = document.getElementById('deviceStatusFilters');
+    if (!bar || bar.style.display === 'none' || bar.clientWidth === 0) return;
+    bar.classList.remove('compact');
+    if (bar.scrollWidth > bar.clientWidth + 1) {
+        bar.classList.add('compact');
+    }
+}
+
+function updateDeviceFilterCounts() {
+    const counts = { all: devices.length, moving: 0, idle: 0, stopped: 0, offline: 0 };
+    devices.forEach(d => {
+        const cls = getVehicleStatus(d).cls;
+        if (cls === 'moving') counts.moving++;
+        else if (cls === 'idle') counts.idle++;
+        else if (cls === 'stopped') counts.stopped++;
+        else counts.offline++;
+    });
+    const set = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = String(val);
+    };
+    set('devFilterCountAll', counts.all);
+    set('devFilterCountMoving', counts.moving);
+    set('devFilterCountIdle', counts.idle);
+    set('devFilterCountStopped', counts.stopped);
+    set('devFilterCountOffline', counts.offline);
+    syncDeviceFilterLabels();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const bar = document.getElementById('deviceStatusFilters');
+    if (bar && typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(syncDeviceFilterLabels).observe(bar);
+    }
+    window.addEventListener('resize', syncDeviceFilterLabels);
+});
+
+// Filter devices based on search input + active status chip
 function filterDevices() {
-    const searchTerm = document.getElementById('deviceSearchInput').value.toLowerCase().trim();
+    updateDeviceFilterCounts();
+    const searchTerm = (document.getElementById('deviceSearchInput')?.value || '').toLowerCase().trim();
     const deviceCards = document.querySelectorAll('.device-card');
 
     deviceCards.forEach(card => {
@@ -510,7 +581,11 @@ function filterDevices() {
             device?.company_name || ''
         ].join(' ').toLowerCase();
 
-        const visible = !searchTerm || searchableText.includes(searchTerm);
+        const matchesSearch = !searchTerm || searchableText.includes(searchTerm);
+        const statusCls = device ? getVehicleStatus(device).cls : 'offline';
+        const normalizedStatus = statusCls === 'pending' ? 'offline' : statusCls;
+        const matchesStatus = activeDeviceStatusFilter === 'all' || normalizedStatus === activeDeviceStatusFilter;
+        const visible = matchesSearch && matchesStatus;
 
         // ── Sidebar card ──
         card.style.display = visible ? '' : 'none';

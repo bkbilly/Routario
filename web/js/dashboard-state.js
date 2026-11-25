@@ -12,6 +12,7 @@ let devices = [];
 let markers = {};
 let polylines = {};
 let selectedDevice = null;
+let followedDeviceId = null;
 let currentUser = null;
 let ws = null;
 

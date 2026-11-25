@@ -272,11 +272,10 @@ async function retryNotificationPermission() {
 let deferredInstallPrompt = null;
 
 window.addEventListener('beforeinstallprompt', (e) => {
+  if (localStorage.getItem('pwa_install_dismissed')) return;
   e.preventDefault();
   deferredInstallPrompt = e;
-  if (!localStorage.getItem('pwa_install_dismissed')) {
-    showInstallBanner();
-  }
+  showInstallBanner();
 });
 
 window.addEventListener('appinstalled', () => {
