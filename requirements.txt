@@ -12,7 +12,7 @@ websockets==17.4
 python-multipart==0.0.34
 
 # Database & ORM
-SQLAlchemy==2.1.9
+SQLAlchemy[asyncio]==2.1.9
 asyncpg==0.32.0          # PostgreSQL
 aiosqlite==0.22.1        # SQLite
 aiomysql==0.3.2          # MySQL / MariaDB
